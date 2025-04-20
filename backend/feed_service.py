@@ -90,7 +90,8 @@ def process_feed_entries(feed_obj, parsed_feed):
             published_time = None
             if entry.get('published_parsed'):
                 try:
-                    published_time = datetime.datetime(*entry.published_parsed[:6])
+                try:
+                    published_time = datetime.datetime.fromisoformat(entry.published)
                 except (TypeError, ValueError) as e:
                     logger.warning(f"Error parsing published date: {str(e)}")
             
