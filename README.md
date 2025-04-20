@@ -72,40 +72,61 @@ podman run -d --name sheepvibes-app \
 
 ## Development
 
-(TODO: Add instructions for setting up a local development environment without Podman)
+To run the application locally for development without using Podman, follow these steps:
 
-## License
+1.  **Prerequisites:**
+    *   Ensure you have Python 3 installed.
+    *   Ensure you have `pip` (Python package installer) available.
 
-(TODO: Add License - e.g., MIT)
+2.  **Set up Backend Virtual Environment:**
+    *   Navigate to the `backend` directory:
+        ```bash
+        cd backend
+        ```
+    *   Create a virtual environment (if you haven't already):
+        ```bash
+        python -m venv venv
+        ```
+    *   Activate the virtual environment:
+        *   On Linux/macOS: `source venv/bin/activate`
+        *   On Windows (Git Bash/WSL): `source venv/Scripts/activate`
+        *   On Windows (Command Prompt): `venv\Scripts\activate.bat`
+        *   On Windows (PowerShell): `venv\Scripts\Activate.ps1`
+    *   Install the required Python packages:
+        ```bash
+        pip install -r requirements.txt
+        ```
+    *   (Optional) Install development dependencies:
+        ```bash
+        pip install -r requirements-dev.txt
+        ```
+    *   **Troubleshooting:** If you encounter errors like `ModuleNotFoundError: No module named 'pip'` after activating the environment, the virtual environment might be corrupted. Delete the `backend/venv` directory and recreate it following the steps above.
 
-## Current Implementation Status
+3.  **Run the Development Script:**
+    *   Navigate back to the project root directory:
+        ```bash
+        cd .. 
+        ```
+    *   Make the script executable (if you haven't already):
+        ```bash
+        chmod +x scripts/run_dev.sh
+        ```
+    *   Execute the script:
+        ```bash
+        ./scripts/run_dev.sh
+        ```
+    *   This will start the Flask backend development server, typically accessible at `http://localhost:5000`. The script handles activating the virtual environment and setting necessary Flask environment variables.
 
-### Backend API (Phase 0 & 1 Complete)
+4.  **Serve the Frontend:**
+    *   The backend API will be running, but you also need to serve the static frontend files (`frontend/index.html`, `frontend/style.css`, `frontend/script.js`).
+    *   You can use a simple HTTP server or a tool like VS Code's Live Server extension.
+    *   **Example using Python's built-in server (run from the project root):**
+        ```bash
+        # Make sure you are in the project root directory
+        python -m http.server --directory frontend 8000 
+        ```
+        Then access the frontend at `http://localhost:8000`. The frontend JavaScript (`script.js`) is configured to make requests to the backend API running on port 5000.
 
-The backend of SheepVibes is implemented using Flask with SQLAlchemy for database operations. It consists of:
-
-- **Database Models**: Tab, Feed, and FeedItem models defined using SQLAlchemy.
-- **Feed Service**: A module for fetching and parsing RSS/Atom feeds using feedparser, with error handling for various feed formats.
-- **Scheduled Updates**: Background job scheduler (APScheduler) to periodically check feeds for updates.
-- **API Endpoints**:
-  - `GET /api/tabs`: List all tabs
-  - `GET /api/tabs/<tab_id>/feeds`: List feeds for a specific tab
-  - `GET /api/feeds/<feed_id>/items`: List recent items for a specific feed (with pagination)
-  - `POST /api/feeds/<feed_id>/update`: Manually trigger an update for a specific feed
-
-### Testing
-
-You can test the feed fetching and processing functionality using the provided test script:
-
-```bash
-# Test with default feeds
-cd backend && source venv/bin/activate
-python test_feed.py
-
-# Test with a specific feed URL (arstechnica)
-cd backend && source venv/bin/activate
-python test_feed.py https://feeds.arstechnica.com/arstechnica/index
-```
 
 ### Environment Variables
 

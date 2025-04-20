@@ -1,7 +1,7 @@
 # Import necessary libraries
 import os
 import logging
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
@@ -177,11 +177,21 @@ def internal_error(error):
 
 # --- API Routes ---
 
-# Basic route for health check / testing
+# Serve Frontend Files
+FRONTEND_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+
 @app.route('/')
-def index():
-    """Basic root endpoint to check if the API is running."""
-    return jsonify({'status': 'SheepVibes API is running'})
+def serve_index():
+    """Serves the main index.html file."""
+    return send_from_directory(FRONTEND_FOLDER, 'index.html')
+
+@app.route('/<path:filename>')
+def serve_static_files(filename):
+    """Serves static files like CSS and JS from the frontend folder."""
+    # Basic security check: prevent accessing files outside the frontend folder
+    if ".." in filename or filename.startswith("/"):
+        return jsonify({'error': 'Invalid path'}), 400
+    return send_from_directory(FRONTEND_FOLDER, filename)
 
 # --- Tabs API Endpoints ---
 
