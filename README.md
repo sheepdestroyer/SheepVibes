@@ -3,6 +3,7 @@
 ## Project Overview
 
 SheepVibes is a self-hosted RSS/Atom feed aggregator designed to replicate the core functionality and user experience of Netvibes. 
+
 The goal is to provide a lightweight, personal dashboard where users can monitor multiple web feeds, organized into customizable topic-based tabs.
 
 Based on the visual layout and functionality of Netvibes, SheepVibes aims to deliver the following features:
