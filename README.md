@@ -117,16 +117,6 @@ To run the application locally for development without using Podman, follow thes
         ```
     *   This will start the Flask backend development server, typically accessible at `http://localhost:5000`. The script handles activating the virtual environment and setting necessary Flask environment variables.
 
-4.  **Serve the Frontend:**
-    *   The backend API will be running, but you also need to serve the static frontend files (`frontend/index.html`, `frontend/style.css`, `frontend/script.js`).
-    *   You can use a simple HTTP server or a tool like VS Code's Live Server extension.
-    *   **Example using Python's built-in server (run from the project root):**
-        ```bash
-        # Make sure you are in the project root directory
-        python -m http.server --directory frontend 8000 
-        ```
-        Then access the frontend at `http://localhost:8000`. The frontend JavaScript (`script.js`) is configured to make requests to the backend API running on port 5000.
-
 
 ### Environment Variables
 
@@ -134,9 +124,3 @@ The application supports the following environment variables:
 
 - `DATABASE_PATH`: Path to the SQLite database file (default: `backend/sheepvibes.db`)
 - `UPDATE_INTERVAL_MINUTES`: Interval in minutes for feed updates (default: 15)
-
-### Next Steps
-
-- Frontend implementation (Phase 2)
-- User interactivity features (Phase 3)
-- Refinement and deployment enhancements (Phase 4)
