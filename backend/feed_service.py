@@ -20,10 +20,9 @@ def fetch_feed(feed_url):
         
         if feed.get('bozo_exception'):
             logger.warning(f"Feed parsing error for {feed_url}: {feed.bozo_exception}")
-            # Despite having a bozo exception, there might still be usable data
             if not feed.get('entries'):
+                logger.warning(f"No entries found for feed {feed_url} with parsing error: {feed.bozo_exception}")
                 return None
-                
         return feed
     except Exception as e:
         logger.error(f"Error fetching feed from {feed_url}: {str(e)}")
