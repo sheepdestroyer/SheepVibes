@@ -21,3 +21,45 @@ Based on the visual layout and functionality of Netvibes, SheepVibes aims to del
 8.  **Lightweight & Minimal Dependencies:** The technology stack should prioritize simplicity, performance, and minimal external requirements.
 9.  **Persistence:** User configuration (added feeds, tab organization, potentially widget layout) must be saved persistently across application restarts.
 10. **Clear Documentation:** The project will include documentation covering setup, usage, and development.
+
+## Current Implementation Status
+
+### Backend API (Phase 0 & 1 Complete)
+
+The backend of SheepVibes is implemented using Flask with SQLAlchemy for database operations. It consists of:
+
+- **Database Models**: Tab, Feed, and FeedItem models defined using SQLAlchemy.
+- **Feed Service**: A module for fetching and parsing RSS/Atom feeds using feedparser, with error handling for various feed formats.
+- **Scheduled Updates**: Background job scheduler (APScheduler) to periodically check feeds for updates.
+- **API Endpoints**:
+  - `GET /api/tabs`: List all tabs
+  - `GET /api/tabs/<tab_id>/feeds`: List feeds for a specific tab
+  - `GET /api/feeds/<feed_id>/items`: List recent items for a specific feed (with pagination)
+  - `POST /api/feeds/<feed_id>/update`: Manually trigger an update for a specific feed
+
+### Testing
+
+You can test the feed fetching and processing functionality using the provided test script:
+
+```bash
+# Test with default feeds
+cd backend && source venv/bin/activate
+python test_feed.py
+
+# Test with a specific feed URL (arstechnica)
+cd backend && source venv/bin/activate
+python test_feed.py https://feeds.arstechnica.com/arstechnica/index
+```
+
+### Environment Variables
+
+The application supports the following environment variables:
+
+- `DATABASE_PATH`: Path to the SQLite database file (default: `backend/sheepvibes.db`)
+- `UPDATE_INTERVAL_MINUTES`: Interval in minutes for feed updates (default: 15)
+
+### Next Steps
+
+- Frontend implementation (Phase 2)
+- User interactivity features (Phase 3)
+- Refinement and deployment enhancements (Phase 4)
