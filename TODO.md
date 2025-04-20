@@ -4,18 +4,18 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Phase 0: Project Setup & Core Backend
 
-*   [ ] Initialize project structure (directories for backend, frontend, docs, etc.).
-*   [ ] Set up Python virtual environment (`venv`).
-*   [ ] Install initial Python dependencies (`Flask`, `feedparser`, `APScheduler`, `SQLAlchemy`).
-*   [ ] Create a basic Flask application (`app.py`).
-*   [ ] Define database schema/models (using `SQLAlchemy`):
+*   [x] Initialize project structure (directories for backend, frontend, docs, etc.).
+*   [x] Set up Python virtual environment (`venv`).
+*   [x] Install initial Python dependencies (`Flask`, `feedparser`, `APScheduler`, `SQLAlchemy`).
+*   [x] Create a basic Flask application (`app.py`).
+*   [x] Define database schema/models (using `SQLAlchemy`):
     *   `Tabs` (id, name, order)
     *   `Feeds` (id, tab_id, name, url, last_updated_time)
     *   `FeedItems` (id, feed_id, title, link, published_time, fetched_time, is_read)
-*   [ ] Implement basic database initialization logic.
-*   [ ] Create initial `Containerfile` for Podman (Python base image, install dependencies, expose port).
-*   [ ] Set up basic logging.
-*   [ ] Add `.gitignore`.
+*   [x] Implement basic database initialization logic.
+*   [x] Create initial `Containerfile` for Podman (Python base image, install dependencies, expose port).
+*   [x] Set up basic logging.
+*   [x] Add `.gitignore`.
 
 ## Phase 1: Feed Fetching & Processing
 
