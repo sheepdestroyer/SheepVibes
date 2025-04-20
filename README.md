@@ -43,10 +43,12 @@ You can test the feed fetching and processing functionality using the provided t
 
 ```bash
 # Test with default feeds
-python backend/test_feed.py
+cd backend && source venv/bin/activate
+python test_feed.py
 
 # Test with a specific feed URL (arstechnica)
-python backend/test_feed.py https://feeds.arstechnica.com/arstechnica/index
+cd backend && source venv/bin/activate
+python test_feed.py https://feeds.arstechnica.com/arstechnica/index
 ```
 
 ### Environment Variables
