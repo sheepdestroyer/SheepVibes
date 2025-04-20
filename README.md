@@ -45,8 +45,8 @@ You can test the feed fetching and processing functionality using the provided t
 # Test with default feeds
 python backend/test_feed.py
 
-# Test with a specific feed URL
-python backend/test_feed.py https://example.com/feed.rss
+# Test with a specific feed URL (arstechnica)
+python backend/test_feed.py https://feeds.arstechnica.com/arstechnica/index
 ```
 
 ### Environment Variables
