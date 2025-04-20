@@ -4,30 +4,30 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Phase 0: Project Setup & Core Backend
 
-*   [ ] Initialize project structure (directories for backend, frontend, docs, etc.).
-*   [ ] Set up Python virtual environment (`venv`).
-*   [ ] Install initial Python dependencies (`Flask`, `feedparser`, `APScheduler`, `SQLAlchemy`).
-*   [ ] Create a basic Flask application (`app.py`).
-*   [ ] Define database schema/models (using `SQLAlchemy`):
+*   [x] Initialize project structure (directories for backend, frontend, docs, etc.).
+*   [x] Set up Python virtual environment (`venv`).
+*   [x] Install initial Python dependencies (`Flask`, `feedparser`, `APScheduler`, `SQLAlchemy`).
+*   [x] Create a basic Flask application (`app.py`).
+*   [x] Define database schema/models (using `SQLAlchemy`):
     *   `Tabs` (id, name, order)
     *   `Feeds` (id, tab_id, name, url, last_updated_time)
     *   `FeedItems` (id, feed_id, title, link, published_time, fetched_time, is_read)
-*   [ ] Implement basic database initialization logic.
-*   [ ] Create initial `Containerfile` for Podman (Python base image, install dependencies, expose port).
-*   [ ] Set up basic logging.
-*   [ ] Add `.gitignore`.
+*   [x] Implement basic database initialization logic.
+*   [x] Create initial `Containerfile` for Podman (Python base image, install dependencies, expose port).
+*   [x] Set up basic logging.
+*   [x] Add `.gitignore`.
 
 ## Phase 1: Feed Fetching & Processing
 
-*   [ ] Create a service/module for fetching and parsing RSS/Atom feeds using `feedparser`.
+*   [x] Create a service/module for fetching and parsing RSS/Atom feeds using `feedparser`.
     *   Handle potential errors during fetching/parsing (timeouts, invalid URLs, bad feed formats).
-*   [ ] Implement logic to store/update feed details and new items in the database.
+*   [x] Implement logic to store/update feed details and new items in the database.
     *   Avoid duplicating existing items (check GUIDs or links).
     *   Update `last_updated_time` for the feed.
-*   [ ] Set up `APScheduler` as a background task within the Flask app (or as a separate process if preferred).
+*   [x] Set up `APScheduler` as a background task within the Flask app (or as a separate process if preferred).
     *   Schedule a recurring job to fetch updates for all configured feeds.
     *   Make the interval configurable (e.g., every 15 minutes).
-*   [ ] Implement initial backend API endpoints (using Flask Blueprints):
+*   [x] Implement initial backend API endpoints (using Flask):
     *   `GET /api/tabs`: List all tabs.
     *   `GET /api/tabs/<tab_id>/feeds`: List feeds for a specific tab.
     *   `GET /api/feeds/<feed_id>/items`: List recent items for a specific feed (with limit/pagination).
