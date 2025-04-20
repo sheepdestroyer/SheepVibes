@@ -50,6 +50,21 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 4.  **Access SheepVibes:**
     Open your web browser and navigate to `http://localhost:5000`.
 
+5.  **Rebuilding the Image:**
+    If you make changes to the application code or the `Containerfile`, you'll need to rebuild the image. A convenience script is provided:
+    ```bash
+    # Make sure it's executable first: chmod +x scripts/rebuild_container.sh
+    ./scripts/rebuild_container.sh 
+    ```
+    This script will:
+    *   Stop the running container named `sheepvibes-instance` (if it exists).
+    *   Remove the stopped container `sheepvibes-instance` (if it exists).
+    *   Remove the old image tagged `sheepvibes-app` (if it exists).
+    *   Build a new image tagged `sheepvibes-app`.
+    *   **Note:** The script assumes Podman is used and the container/image names are `sheepvibes-instance`/`sheepvibes-app`. Edit the script if your setup differs.
+
+    After rebuilding, you'll need to run the container again using the `podman run` command from step 3.
+
 ## Configuration (Environment Variables)
 
 You can configure the application by passing environment variables during the `podman run` command using the `-e` flag:
