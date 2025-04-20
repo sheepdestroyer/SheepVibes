@@ -1,29 +1,52 @@
+# Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
+# Set environment variables for non-interactive installs
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Create a non-root user and group
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin -c "App User" appuser
+
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy requirements
+# Copy the requirements file into the container at /app
 COPY backend/requirements.txt .
 
-# Install dependencies
+# Install any needed packages specified in requirements.txt
+# Use a virtual environment for better isolation (optional but good practice)
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY backend/ .
+# Copy the backend application code into the container at /app/backend
+# Ensure ownership is set before switching user if copying as root
+COPY --chown=appuser:appuser backend/ /app/backend/
 
-# Create a directory for persistent data
-RUN mkdir -p /data
+# Copy the frontend files (adjust if serving differently)
+COPY --chown=appuser:appuser frontend/ /app/frontend/
 
-# Set environment variables
-ENV FLASK_APP=app.py
-ENV FLASK_DEBUG=0
-ENV DATABASE_PATH=/data/sheepvibes.db
+# Define the directory where the database will be stored as a volume mount point
+# This directory needs to be writable by the appuser
+VOLUME /app/backend
+# Ensure the directory exists and has correct permissions *before* switching user
+# (The VOLUME instruction itself doesn't create the directory)
+RUN mkdir -p /app/backend && chown appuser:appuser /app/backend
 
-# Volume for persistent data
-VOLUME ["/data"]
+# Switch to the non-root user
+USER appuser
 
-# Expose port
+# Make port 5000 available
 EXPOSE 5000
 
-# Run the application
-CMD ["python", "app.py"]
+# Define environment variables (can be overridden at runtime)
+ENV DATABASE_PATH=/app/backend/sheepvibes.db \
+    UPDATE_INTERVAL_MINUTES=15 \
+    FLASK_APP=backend/app.py \
+    FLASK_RUN_HOST=0.0.0.0
+    # Note: FLASK_DEBUG should be 0 or unset for production
+
+# Run app.py using Flask CLI (recommended over python app.py for production servers like gunicorn/waitress later)
+# Use the virtual environment's python/flask
+CMD ["flask", "run"]

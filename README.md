@@ -1,28 +1,82 @@
 # SheepVibes
 
-## Project Overview
+A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with Flask and Vanilla JavaScript, designed to run in a Podman container.
 
-SheepVibes is a self-hosted RSS/Atom feed aggregator designed to replicate the core functionality and user experience of Netvibes. 
+## Features
 
-The goal is to provide a lightweight, personal dashboard where users can monitor multiple web feeds, organized into customizable topic-based tabs.
+*   Organize feeds into customizable tabs.
+*   Add feeds via URL.
+*   Delete feeds.
+*   Create, rename, and delete tabs.
+*   Automatic background fetching of feed updates.
+*   Mark items as read.
+*   Displays unread counts per feed and per tab.
+*   Basic persistence using a SQLite database.
 
-Based on the visual layout and functionality of Netvibes, SheepVibes aims to deliver the following features:
+## Running with Podman
 
-1.  **Dashboard Interface:** A central view displaying multiple feed sources simultaneously.
-2.  **Grid Layout:** Feeds are presented in distinct rectangular boxes (widgets or modules) arranged in a grid. The layout should be responsive or configurable.
-3.  **Feed Widgets:** Each widget represents a single RSS/Atom feed and displays:
-    *   The name/title of the feed source.
-    *   A list of the latest article titles from the feed.
-    *   Timestamps or relative times indicating when each article was published or fetched (e.g., "2:00 PM", "26 min ago", "Apr 2").
-    *   Potentially, an indicator for the number of unread items (like the counters "158", "1K+").
-    *   Controls for basic widget management (e.g., closing/removing the feed widget, potentially configuration).
-4.  **Dynamic Updates:** Feed widgets automatically refresh in the background to fetch and display the latest articles without requiring a full page reload.
-5.  **Tabbed Organization:** A tab system at the top allows users to group related feed widgets onto different dashboard pages (tabs). Users should be able to switch between tabs to view different sets of feeds.
-6.  **Feed Management:** Functionality to add new RSS/Atom feeds to the dashboard (likely associated with a specific tab) and remove existing ones.
-7.  **Self-Hosted & Containerized:** The entire application must run within a Podman container for easy deployment and management.
-8.  **Lightweight & Minimal Dependencies:** The technology stack should prioritize simplicity, performance, and minimal external requirements.
-9.  **Persistence:** User configuration (added feeds, tab organization, potentially widget layout) must be saved persistently across application restarts.
-10. **Clear Documentation:** The project will include documentation covering setup, usage, and development.
+1.  **Build the Image:**
+    Navigate to the project root directory (where the `Containerfile` is located) and run:
+    ```bash
+    podman build -t sheepvibes .
+    ```
+
+2.  **Create a Persistent Volume (Optional but Recommended):**
+    To ensure your database and configuration persist even if the container is removed, create a named volume:
+    ```bash
+    podman volume create sheepvibes-data
+    ```
+
+3.  **Run the Container:**
+    *   **With Persistent Volume:**
+        ```bash
+        podman run -d --name sheepvibes-app \
+          -p 5000:5000 \
+          -v sheepvibes-data:/app/backend \
+          --restart unless-stopped \
+          localhost/sheepvibes
+        ```
+        *   `-d`: Run in detached mode (background).
+        *   `--name sheepvibes-app`: Assign a name to the container.
+        *   `-p 5000:5000`: Map port 5000 on your host to port 5000 in the container.
+        *   `-v sheepvibes-data:/app/backend`: Mount the named volume to the `/app/backend` directory inside the container, where `sheepvibes.db` will be stored.
+        *   `--restart unless-stopped`: Automatically restart the container unless manually stopped.
+
+    *   **Without Persistent Volume (Data lost if container is removed):**
+        ```bash
+        podman run -d --name sheepvibes-app -p 5000:5000 localhost/sheepvibes
+        ```
+
+4.  **Access SheepVibes:**
+    Open your web browser and navigate to `http://localhost:5000`.
+
+## Configuration (Environment Variables)
+
+You can configure the application by passing environment variables during the `podman run` command using the `-e` flag:
+
+*   `DATABASE_PATH`: The full path *inside the container* where the SQLite database file should be stored. Defaults to `/app/backend/sheepvibes.db`. If using the recommended volume mount, this path is within the volume.
+    *   Example: `-e DATABASE_PATH=/app/backend/my_custom_name.db`
+*   `UPDATE_INTERVAL_MINUTES`: The interval (in minutes) at which the application checks feeds for updates. Defaults to `15`.
+    *   Example: `-e UPDATE_INTERVAL_MINUTES=30`
+
+**Example running with custom configuration:**
+
+```bash
+podman run -d --name sheepvibes-app \
+  -p 5000:5000 \
+  -v sheepvibes-data:/app/backend \
+  -e UPDATE_INTERVAL_MINUTES=60 \
+  --restart unless-stopped \
+  localhost/sheepvibes
+```
+
+## Development
+
+(TODO: Add instructions for setting up a local development environment without Podman)
+
+## License
+
+(TODO: Add License - e.g., MIT)
 
 ## Current Implementation Status
 
