@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
@@ -97,13 +97,68 @@ def init_db():
             db.session.commit()
             logger.info("Created default 'Home' tab")
 
-# Initialize scheduler for background tasks (will be used in Phase 1)
+# Import feed service
+from feed_service import update_all_feeds, fetch_and_update_feed
+
+# Configure the scheduler
+UPDATE_INTERVAL_MINUTES = int(os.environ.get('UPDATE_INTERVAL_MINUTES', 15))
 scheduler = BackgroundScheduler()
 
+# Define the scheduled job to update feeds
+@scheduler.scheduled_job('interval', minutes=UPDATE_INTERVAL_MINUTES, id='update_feeds')
+def scheduled_feed_update():
+    with app.app_context():
+        logger.info(f"Running scheduled feed update (every {UPDATE_INTERVAL_MINUTES} minutes)")
+        feeds_updated, new_items = update_all_feeds()
+        logger.info(f"Scheduled update completed: {feeds_updated} feeds updated, {new_items} new items")
+
+# API routes
 # Basic route for testing
 @app.route('/')
 def index():
     return jsonify({'status': 'SheepVibes API is running'})
+
+# Tabs API
+@app.route('/api/tabs', methods=['GET'])
+def get_tabs():
+    tabs = Tab.query.order_by(Tab.order).all()
+    return jsonify([tab.to_dict() for tab in tabs])
+
+# Feeds API for a specific tab
+@app.route('/api/tabs/<int:tab_id>/feeds', methods=['GET'])
+def get_feeds_for_tab(tab_id):
+    tab = Tab.query.get_or_404(tab_id)
+    feeds = Feed.query.filter_by(tab_id=tab_id).all()
+    return jsonify([feed.to_dict() for feed in feeds])
+
+# Feed items API
+@app.route('/api/feeds/<int:feed_id>/items', methods=['GET'])
+def get_feed_items(feed_id):
+    feed = Feed.query.get_or_404(feed_id)
+    
+    # Get optional limit parameter (default 20)
+    limit = request.args.get('limit', 20, type=int)
+    
+    # Get items, ordered by published time (most recent first)
+    items = FeedItem.query.filter_by(feed_id=feed_id).order_by(
+        FeedItem.published_time.desc()
+    ).limit(limit).all()
+    
+    return jsonify([item.to_dict() for item in items])
+
+# Manual feed update endpoint
+@app.route('/api/feeds/<int:feed_id>/update', methods=['POST'])
+def update_feed(feed_id):
+    feed = Feed.query.get_or_404(feed_id)
+    
+    success, new_items = fetch_and_update_feed(feed.id)
+    
+    return jsonify({
+        'success': success,
+        'feed_id': feed.id,
+        'feed_name': feed.name,
+        'new_items': new_items
+    })
 
 # Initialize and start the application
 if __name__ == '__main__':

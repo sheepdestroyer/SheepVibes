@@ -19,15 +19,15 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Phase 1: Feed Fetching & Processing
 
-*   [ ] Create a service/module for fetching and parsing RSS/Atom feeds using `feedparser`.
+*   [x] Create a service/module for fetching and parsing RSS/Atom feeds using `feedparser`.
     *   Handle potential errors during fetching/parsing (timeouts, invalid URLs, bad feed formats).
-*   [ ] Implement logic to store/update feed details and new items in the database.
+*   [x] Implement logic to store/update feed details and new items in the database.
     *   Avoid duplicating existing items (check GUIDs or links).
     *   Update `last_updated_time` for the feed.
-*   [ ] Set up `APScheduler` as a background task within the Flask app (or as a separate process if preferred).
+*   [x] Set up `APScheduler` as a background task within the Flask app (or as a separate process if preferred).
     *   Schedule a recurring job to fetch updates for all configured feeds.
     *   Make the interval configurable (e.g., every 15 minutes).
-*   [ ] Implement initial backend API endpoints (using Flask Blueprints):
+*   [x] Implement initial backend API endpoints (using Flask):
     *   `GET /api/tabs`: List all tabs.
     *   `GET /api/tabs/<tab_id>/feeds`: List feeds for a specific tab.
     *   `GET /api/feeds/<feed_id>/items`: List recent items for a specific feed (with limit/pagination).
