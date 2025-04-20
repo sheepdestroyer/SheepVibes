@@ -111,8 +111,12 @@ def process_feed_entries(feed_obj, parsed_feed):
         
         # Commit all new items in a single transaction
         if new_items_count > 0:
-            db.session.commit()
-            logger.info(f"Added {new_items_count} new items for feed '{feed_obj.name}'")
+            try:
+                db.session.commit()
+                logger.info(f"Added {new_items_count} new items for feed '{feed_obj.name}'")
+            except SQLAlchemyError as e:
+                logger.error(f"Database error committing feed items: {str(e)}")
+                db.session.rollback()
             
         return new_items_count
             
