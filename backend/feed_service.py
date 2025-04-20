@@ -89,7 +89,7 @@ def process_feed_entries(feed_obj, parsed_feed):
             # Parse published time if available
             published_time = None
             if entry.get('published_parsed'):
-                try:
+            if entry.get('published_parsed'):
                 try:
                     published_time = datetime.datetime.fromisoformat(entry.published)
                 except (TypeError, ValueError) as e:
