@@ -101,7 +101,8 @@ def init_db():
 from feed_service import update_all_feeds, fetch_and_update_feed
 
 # Configure the scheduler
-UPDATE_INTERVAL_MINUTES = int(os.environ.get('UPDATE_INTERVAL_MINUTES', 15))
+UPDATE_INTERVAL_MINUTES_DEFAULT = 15
+UPDATE_INTERVAL_MINUTES = int(os.environ.get('UPDATE_INTERVAL_MINUTES', UPDATE_INTERVAL_MINUTES_DEFAULT))
 scheduler = BackgroundScheduler()
 
 # Define the scheduled job to update feeds
