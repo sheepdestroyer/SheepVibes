@@ -18,7 +18,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 1.  **Build the Image:**
     Navigate to the project root directory (where the `Containerfile` is located) and run:
     ```bash
-    podman build -t sheepvibes .
+    podman build -t sheepvibes-app .
     ```
 
 2.  **Create a Persistent Volume (Optional but Recommended):**
@@ -30,11 +30,11 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 3.  **Run the Container:**
     *   **With Persistent Volume:**
         ```bash
-        podman run -d --name sheepvibes-app \
+        podman run -d --name sheepvibes-instance \
           -p 5000:5000 \
           -v sheepvibes-data:/app/backend \
           --restart unless-stopped \
-          localhost/sheepvibes
+          localhost/sheepvibes-app
         ```
         *   `-d`: Run in detached mode (background).
         *   `--name sheepvibes-app`: Assign a name to the container.
