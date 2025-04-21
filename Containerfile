@@ -29,10 +29,10 @@ COPY --chown=appuser:appuser frontend/ /app/frontend/
 
 # Define the directory where the database will be stored as a volume mount point
 # This directory needs to be writable by the appuser
-VOLUME /app/backend
+VOLUME /app/backend/data
 # Ensure the directory exists and has correct permissions *before* switching user
 # (The VOLUME instruction itself doesn't create the directory)
-RUN mkdir -p /app/backend && chown appuser:appuser /app/backend
+RUN mkdir -p /app/backend/data && chown appuser:appuser /app/backend/data
 
 # Switch to the non-root user
 USER appuser
@@ -41,7 +41,7 @@ USER appuser
 EXPOSE 5000
 
 # Define environment variables (can be overridden at runtime)
-ENV DATABASE_PATH=/app/backend/sheepvibes.db \
+ENV DATABASE_PATH=/app/backend/data/sheepvibes.db \
     UPDATE_INTERVAL_MINUTES=15 \
     FLASK_APP=backend/app.py \
     FLASK_RUN_HOST=0.0.0.0
