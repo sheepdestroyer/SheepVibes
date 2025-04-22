@@ -61,7 +61,8 @@ You can configure the application by passing environment variables during the `p
     *   Example: `-e DATABASE_PATH=/app/data/my_custom_name.db`
 *   `UPDATE_INTERVAL_MINUTES`: The interval (in minutes) at which the application checks feeds for updates. Defaults to `15`.
     *   Example: `-e UPDATE_INTERVAL_MINUTES=30`
-
+*   `FLASK_RUN_HOST` : The host's address the service will listen on. default to `127.0.0.1`.
+    *   Example: `-e FLASK_RUN_HOST=0.0.0.0` to serve on all addresses (There is no security!!! I wouldn't open it to internet...)
 **Example running with custom configuration:**
 
 ```bash
@@ -69,6 +70,7 @@ podman run -d --name sheepvibes-instance \
   -p 5000:5000 \
   -v sheepvibes-data:/app/data \
   -e UPDATE_INTERVAL_MINUTES=60 \
+  -e FLASK_RUN_HOST=my_private_ip
   --restart unless-stopped \
   --replace \
   ghcr.io/sheepdestroyer/sheepvibes:latest
