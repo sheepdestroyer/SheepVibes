@@ -3,6 +3,7 @@ import os
 import logging
 from flask import Flask, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
@@ -20,13 +21,38 @@ logger = logging.getLogger('sheepvibes')
 app = Flask(__name__)
 
 # Configure SQLite database URI
-# Use environment variable DATABASE_PATH or default to a file in the backend directory
-db_path = os.environ.get('DATABASE_PATH', os.path.join(os.path.abspath(os.path.dirname(__file__)), 'sheepvibes.db'))
+# Use environment variable DATABASE_PATH or default to the standard path inside the container
+default_db_path_in_container = '/app/data/sheepvibes.db'
+db_path_env = os.environ.get('DATABASE_PATH')
+
+if db_path_env:
+    db_path = db_path_env
+    logger.info(f"Using DATABASE_PATH environment variable: {db_path}")
+else:
+    # Default path logic: Check if running locally (heuristic: check if /app exists)
+    # If running locally (not in container), use a local path like 'data/sheepvibes.db'
+    # If likely in container (or /app exists), use the container default '/app/data/sheepvibes.db'
+    if not os.path.exists('/app'):
+        # Assume local development run
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        local_data_dir = os.path.join(project_root, 'data')
+        os.makedirs(local_data_dir, exist_ok=True) # Ensure local 'data' dir exists
+        db_path = os.path.join(local_data_dir, 'sheepvibes.db')
+        logger.info(f"DATABASE_PATH not set, assuming local run. Using: {db_path}")
+    else:
+        # Assume running in container or similar environment where /app exists
+        db_path = default_db_path_in_container
+        # In container, the directory /app/data should be created by Containerfile or volume mount
+        logger.info(f"DATABASE_PATH not set, assuming container run. Using default: {db_path}")
+
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Disable modification tracking
 
 # Initialize SQLAlchemy ORM extension
 db = SQLAlchemy(app)
+
+# Initialize Flask-Migrate
+migrate = Migrate(app, db)
 
 # --- Database Models ---
 

@@ -54,7 +54,7 @@ echo "Building image $IMAGE_NAME from Containerfile in $(pwd)..."
 $CONTAINER_CMD build -t "$IMAGE_NAME" -f Containerfile .
 
 echo "--- Rebuild complete for image $IMAGE_NAME ---"
-echo "You can now run the container, e.g.:"
-echo "$CONTAINER_CMD run -d --name $CONTAINER_NAME -p 5000:5000 $IMAGE_NAME"
+echo "You can now run the container using './scripts/manage_container.sh start' or manually, e.g.:"
+echo "$CONTAINER_CMD run -d --name $CONTAINER_NAME -p 5000:5000 -v sheepvibes-data:/app/data --restart unless-stopped $IMAGE_NAME"
 
 exit 0

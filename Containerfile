@@ -27,12 +27,16 @@ COPY --chown=appuser:appuser backend/ /app/backend/
 # Copy the frontend files (adjust if serving differently)
 COPY --chown=appuser:appuser frontend/ /app/frontend/
 
+# Copy the entrypoint script
+COPY scripts/entrypoint.sh /app/scripts/entrypoint.sh
+RUN chmod +x /app/scripts/entrypoint.sh
+
 # Define the directory where the database will be stored as a volume mount point
 # This directory needs to be writable by the appuser
-VOLUME /app/backend/data
+VOLUME /app/data
 # Ensure the directory exists and has correct permissions *before* switching user
 # (The VOLUME instruction itself doesn't create the directory)
-RUN mkdir -p /app/backend/data && chown appuser:appuser /app/backend/data
+RUN mkdir -p /app/data && chown appuser:appuser /app/data
 
 # Switch to the non-root user
 USER appuser
@@ -41,12 +45,12 @@ USER appuser
 EXPOSE 5000
 
 # Define environment variables (can be overridden at runtime)
-ENV DATABASE_PATH=/app/backend/data/sheepvibes.db \
+ENV DATABASE_PATH=/app/data/sheepvibes.db \
     UPDATE_INTERVAL_MINUTES=15 \
     FLASK_APP=backend/app.py \
     FLASK_RUN_HOST=0.0.0.0
     # Note: FLASK_DEBUG should be 0 or unset for production
 
-# Run app.py using Flask CLI (recommended over python app.py for production servers like gunicorn/waitress later)
-# Use the virtual environment's python/flask
-CMD ["flask", "run"]
+# Run the entrypoint script which handles migrations and starts the app
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+# CMD is removed as ENTRYPOINT now handles the execution

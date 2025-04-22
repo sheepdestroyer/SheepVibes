@@ -32,14 +32,14 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
         ```bash
         podman run -d --name sheepvibes-instance \
           -p 5000:5000 \
-          -v sheepvibes-data:/app/backend/data \
+          -v sheepvibes-data:/app/data \
           --restart unless-stopped \
           localhost/sheepvibes-app
         ```
         *   `-d`: Run in detached mode (background).
         *   `--name sheepvibes-instance`: Assign a name to the container.
         *   `-p 5000:5000`: Map port 5000 on your host to port 5000 in the container.
-        *   `-v sheepvibes-data:/app/backend/data`: Mount the named volume to the `/app/backend/data` directory inside the container, where `sheepvibes.db` will be stored.
+        *   `-v sheepvibes-data:/app/data`: Mount the named volume to the `/app/data` directory inside the container, where `sheepvibes.db` will be stored.
         *   `--restart unless-stopped`: Automatically restart the container unless manually stopped.
 
     *   **Without Persistent Volume (Data lost if container is removed):**
@@ -65,12 +65,29 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 
     After rebuilding, you'll need to run the container again using the `podman run` command from step 3.
 
+6.  **Managing the Container (Start/Stop/Restart):**
+    A convenience script is provided to easily start, stop, or restart the `sheepvibes-instance` container without needing to remember the full `podman run` options each time.
+    ```bash
+    # Make sure it's executable first: chmod +x scripts/manage_container.sh
+    
+    # Start the container (creates if it doesn't exist)
+    ./scripts/manage_container.sh start
+    
+    # Stop the running container
+    ./scripts/manage_container.sh stop
+    
+    # Restart the container
+    ./scripts/manage_container.sh restart
+    ```
+    *   This script uses the same container name (`sheepvibes-instance`), image name (`sheepvibes-app`), volume (`sheepvibes-data`), and port mapping (`5000:5000`) as defined in the script itself and used in the examples above.
+    *   It assumes Podman is used. Edit the `CONTAINER_CMD` variable within the script if you use Docker.
+
 ## Configuration (Environment Variables)
 
 You can configure the application by passing environment variables during the `podman run` command using the `-e` flag:
 
-*   `DATABASE_PATH`: The full path *inside the container* where the SQLite database file should be stored. Defaults to `/app/backend/data/sheepvibes.db`. If using the recommended volume mount, this path is within the volume.
-    *   Example: `-e DATABASE_PATH=/app/backend/data/my_custom_name.db`
+*   `DATABASE_PATH`: The full path *inside the container* where the SQLite database file should be stored. Defaults to `/app/data/sheepvibes.db`. If using the recommended volume mount, this path is within the volume.
+    *   Example: `-e DATABASE_PATH=/app/data/my_custom_name.db`
 *   `UPDATE_INTERVAL_MINUTES`: The interval (in minutes) at which the application checks feeds for updates. Defaults to `15`.
     *   Example: `-e UPDATE_INTERVAL_MINUTES=30`
 
@@ -79,7 +96,7 @@ You can configure the application by passing environment variables during the `p
 ```bash
 podman run -d --name sheepvibes-instance \
   -p 5000:5000 \
-  -v sheepvibes-data:/app/backend/data \
+  -v sheepvibes-data:/app/data \
   -e UPDATE_INTERVAL_MINUTES=60 \
   --restart unless-stopped \
   localhost/sheepvibes-app
@@ -136,5 +153,5 @@ To run the application locally for development without using Podman, follow thes
 
 The application supports the following environment variables:
 
-- `DATABASE_PATH`: Path to the SQLite database file (default: `backend/data/sheepvibes.db`)
+- `DATABASE_PATH`: Path to the SQLite database file (default: `/app/data/sheepvibes.db` inside the container, or `data/sheepvibes.db` relative to project root when run locally without the variable set).
 - `UPDATE_INTERVAL_MINUTES`: Interval in minutes for feed updates (default: 15)
