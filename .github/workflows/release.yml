@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*.*.*' # Trigger on version tags like v1.0.0
+  workflow_dispatch: # Allows manual triggering
+    inputs:
+      tag_name:
+        description: 'The tag to build and publish (e.g., v1.0.0)'
+        required: true
+        type: string
 
 jobs:
   build-and-publish:
@@ -13,15 +19,24 @@ jobs:
       packages: write # Needed to push to ghcr.io
 
     steps:
-      - name: Checkout repository
+      - name: Determine Tag
+        id: get_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "TAG=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repository at specified tag
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.get_tag.outputs.TAG }} # Checkout the specific tag
 
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Extract tag name
-        id: get_tag
-        run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT # Extracts 'vX.Y.Z' from 'refs/tags/vX.Y.Z'
+      # The 'Extract tag name' step is removed as it's handled by 'Determine Tag'
 
       - name: Build container image
         id: build-image
@@ -29,14 +44,15 @@ jobs:
           IMAGE_ID=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
           # Change all uppercase repo owner/name to lowercase for ghcr.io
           IMAGE_ID=$(echo $IMAGE_ID | tr '[:upper:]' '[:lower:]')
-          TAG=${{ steps.get_tag.outputs.TAG }}
+          TAG=${{ steps.get_tag.outputs.TAG }} # Use the determined tag
           echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_OUTPUT
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
           podman build -f Containerfile -t "${IMAGE_ID}:${TAG}" -t "${IMAGE_ID}:latest" .
+          # Note: Pushing 'latest' might overwrite the latest release if building an old tag.
 
       - name: Push container image
         run: |
           IMAGE_ID=${{ steps.build-image.outputs.IMAGE_ID }}
-          TAG=${{ steps.build-image.outputs.TAG }}
+          TAG=${{ steps.build-image.outputs.TAG }} # Use the determined tag
           podman push "${IMAGE_ID}:${TAG}"
           podman push "${IMAGE_ID}:latest"
