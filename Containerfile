@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # Set environment variables for non-interactive installs
 ENV PYTHONUNBUFFERED=1 \
