@@ -3,6 +3,7 @@ import os
 import logging
 from flask import Flask, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 
@@ -49,6 +50,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Disable modification trac
 
 # Initialize SQLAlchemy ORM extension
 db = SQLAlchemy(app)
+
+# Initialize Flask-Migrate
+migrate = Migrate(app, db)
 
 # --- Database Models ---
 

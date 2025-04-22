@@ -27,6 +27,10 @@ COPY --chown=appuser:appuser backend/ /app/backend/
 # Copy the frontend files (adjust if serving differently)
 COPY --chown=appuser:appuser frontend/ /app/frontend/
 
+# Copy the entrypoint script
+COPY scripts/entrypoint.sh /app/scripts/entrypoint.sh
+RUN chmod +x /app/scripts/entrypoint.sh
+
 # Define the directory where the database will be stored as a volume mount point
 # This directory needs to be writable by the appuser
 VOLUME /app/data
@@ -47,6 +51,6 @@ ENV DATABASE_PATH=/app/data/sheepvibes.db \
     FLASK_RUN_HOST=0.0.0.0
     # Note: FLASK_DEBUG should be 0 or unset for production
 
-# Run app.py using Flask CLI (recommended over python app.py for production servers like gunicorn/waitress later)
-# Use the virtual environment's python/flask
-CMD ["flask", "run"]
+# Run the entrypoint script which handles migrations and starts the app
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+# CMD is removed as ENTRYPOINT now handles the execution
