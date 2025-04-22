@@ -1,0 +1,42 @@
+name: Publish Release Container Image
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on version tags like v1.0.0
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # Needed to push to ghcr.io
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Extract tag name
+        id: get_tag
+        run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT # Extracts 'vX.Y.Z' from 'refs/tags/vX.Y.Z'
+
+      - name: Build container image
+        id: build-image
+        run: |
+          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
+          # Change all uppercase repo owner/name to lowercase for ghcr.io
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[:upper:]' '[:lower:]')
+          TAG=${{ steps.get_tag.outputs.TAG }}
+          echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_OUTPUT
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          podman build -f Containerfile -t "${IMAGE_ID}:${TAG}" -t "${IMAGE_ID}:latest" .
+
+      - name: Push container image
+        run: |
+          IMAGE_ID=${{ steps.build-image.outputs.IMAGE_ID }}
+          TAG=${{ steps.build-image.outputs.TAG }}
+          podman push "${IMAGE_ID}:${TAG}"
+          podman push "${IMAGE_ID}:latest"
