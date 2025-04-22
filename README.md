@@ -38,7 +38,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
         ```
         *   `-d`: Run in detached mode (background).
         *   `--name sheepvibes-instance`: Assign a name to the container.
-        *   `-p 5000:5000`: Map port 5000 on your host to port 5000 in the container.
+        *   `-p 127.0.0.1:5000:5000`: Map port 5000 on your host to port 5000 in the container. Listens locally (change it to -p 5000:5000 to listen externally, but this app not secure so don't do it)
         *   `-v sheepvibes-data:/app/data`: Mount the named volume to the `/app/data` directory inside the container, where `sheepvibes.db` will be stored.
         *   `--restart unless-stopped`: Automatically restart the container unless manually stopped.
         *   `--replace`: Automatically replace a running container by a new one
@@ -61,16 +61,14 @@ You can configure the application by passing environment variables during the `p
     *   Example: `-e DATABASE_PATH=/app/data/my_custom_name.db`
 *   `UPDATE_INTERVAL_MINUTES`: The interval (in minutes) at which the application checks feeds for updates. Defaults to `15`.
     *   Example: `-e UPDATE_INTERVAL_MINUTES=30`
-*   `FLASK_RUN_HOST` : The host's address the service will listen on. default to `127.0.0.1`.
-    *   Example: `-e FLASK_RUN_HOST=0.0.0.0` to serve on all addresses (There is no security!!! I wouldn't open it to internet...)
+      
 **Example running with custom configuration:**
 
 ```bash
 podman run -d --name sheepvibes-instance \
-  -p 5000:5000 \
+  -p 127.0.0.1:5000:5000 \
   -v sheepvibes-data:/app/data \
   -e UPDATE_INTERVAL_MINUTES=60 \
-  -e FLASK_RUN_HOST=my_private_ip
   --restart unless-stopped \
   --replace \
   ghcr.io/sheepdestroyer/sheepvibes:latest
