@@ -73,13 +73,9 @@ stop_container() {
 
 restart_container() {
   echo "--- Restarting container $CONTAINER_NAME ---"
-  if container_exists; then
-    echo "Restarting container $CONTAINER_NAME..."
-    $CONTAINER_CMD restart "$CONTAINER_NAME"
-    echo "Container $CONTAINER_NAME restarted."
-  else
-    echo "Container $CONTAINER_NAME not found. Cannot restart. Try 'start' first."
-  fi
+  # Explicitly stop and then start for more robust handling
+  stop_container
+  start_container
 }
 
 # --- Main Script ---
