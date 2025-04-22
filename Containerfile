@@ -48,7 +48,7 @@ EXPOSE 5000
 ENV DATABASE_PATH=/app/data/sheepvibes.db \
     UPDATE_INTERVAL_MINUTES=15 \
     FLASK_APP=backend/app.py \
-    FLASK_RUN_HOST=127.0.0.1
+    FLASK_RUN_HOST=0.0.0.0
     # Note: FLASK_DEBUG should be 0 or unset for production
 
 # Run the entrypoint script which handles migrations and starts the app
