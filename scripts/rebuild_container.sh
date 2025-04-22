@@ -55,6 +55,6 @@ $CONTAINER_CMD build -t "$IMAGE_NAME" -f Containerfile .
 
 echo "--- Rebuild complete for image $IMAGE_NAME ---"
 echo "You can now run the container, e.g.:"
-echo "$CONTAINER_CMD run -d --name $CONTAINER_NAME -p 5000:5000 $IMAGE_NAME"
+echo "$CONTAINER_CMD run -d --name $CONTAINER_NAME -p 5000:5000 -v sheepvibes-data:/app/backend/data $IMAGE_NAME"
 
 exit 0
