@@ -11,7 +11,7 @@ CONTAINER_NAME="sheepvibes-instance"
 VOLUME_NAME="sheepvibes-data"
 HOST_PORT="5000"
 CONTAINER_PORT="5000"
-DATA_PATH="/app/backend/data"
+DATA_PATH="/app/data" # Updated data path inside the container
 RESTART_POLICY="unless-stopped"
 # Use podman or docker
 CONTAINER_CMD="podman"
