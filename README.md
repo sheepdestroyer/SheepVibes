@@ -30,7 +30,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
     *   **With Persistent Volume:**
         ```bash
         podman run -d --name sheepvibes-instance \
-          -p 5000:5000 \
+          -p 127.0.0.1:5000:5000 \
           -v sheepvibes-data:/app/data \
           --restart unless-stopped \
           --replace \
