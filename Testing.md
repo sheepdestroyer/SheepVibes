@@ -89,7 +89,7 @@ jobs:
     - name: Run Pytest
       run: |
         cd backend
-        python -m pytest -v -x test_app.py test_feed_service.py
+        python -m pytest -v test_app.py test_feed_service.py
 ```
 
 ### Workflow Explanation
