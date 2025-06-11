@@ -25,7 +25,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
+    - name: List backend files # New step for debugging
+      run: |
+        cd backend
+        ls -la
+
     - name: Run Pytest
       run: |
         cd backend
-        pytest
+        python -m pytest -v test_app.py test_feed_service.py
