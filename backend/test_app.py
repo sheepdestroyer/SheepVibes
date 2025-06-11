@@ -16,15 +16,16 @@ def client():
     # Disable CSRF protection if it were enabled
     # app.config['WTF_CSRF_ENABLED'] = False 
 
+    with app.app_context(): # Ensure app context for create_all and drop_all
+        db.create_all() # Ensure tables are created for each test
+
     with app.test_client() as client:
-        with app.app_context():
-            # Create database tables for the test session
-            db.create_all()
-            # You could optionally seed data here if needed for all tests
         yield client # Provide the test client to the tests
-        # Teardown: drop tables after tests run (within app_context if needed)
-        # with app.app_context():
-        #     db.drop_all()
+
+   # Teardown: drop all tables after each test to ensure isolation
+    with app.app_context():
+        db.session.remove() # Ensure session is clean before dropping
+        db.drop_all()       # Drop all tables
 
 # --- Tests for /api/tabs --- 
 
