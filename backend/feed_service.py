@@ -191,6 +191,7 @@ def fetch_and_update_feed(feed_id):
     parsed_feed = fetch_feed(feed.url)
     if not parsed_feed:
         # Fetching failed (error already logged by fetch_feed)
+        logger.error(f"Fetching content for feed {feed.name} (ID: {feed_id}) failed because fetch_feed returned None.")
         return False, 0
 
     # Process entries and update DB

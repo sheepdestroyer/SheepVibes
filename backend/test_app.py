@@ -396,7 +396,8 @@ def test_mark_item_read_not_found(client):
 @patch('app.fetch_and_update_feed') 
 def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
-    mock_feed_object = MagicMock(spec=Feed) 
+    with app.app_context(): # Add app context for model specing
+        mock_feed_object = MagicMock(spec=Feed)
     mock_feed_dict = {"id": feed_id, "name": "Updated Feed", "url": "url1", "unread_count": 5}
 
     mock_fetch_and_update.return_value = mock_feed_object
@@ -407,7 +408,9 @@ def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds
     assert response.status_code == 200
     assert response.json == mock_feed_dict
     mock_fetch_and_update.assert_called_once_with(feed_id)
-    mock_feed_object.to_dict.assert_called_once()
+    # Ensure to_dict is called if the object is returned and serialized
+    if response.status_code == 200:
+        mock_feed_object.to_dict.assert_called_once()
 
 @patch('app.fetch_and_update_feed') 
 def test_update_feed_not_found(mock_fetch_and_update, client):
