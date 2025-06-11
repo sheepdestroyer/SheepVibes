@@ -52,6 +52,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 4.  **Access SheepVibes:**
     Open your web browser and navigate to `http://localhost:5000`.
 
+**Note for Developers:** The helper scripts provided in the `scripts/` directory (e.g., `manage_container.sh`, `rebuild_container.sh`) build and use a local image named `sheepvibes-app` by default, rather than the public `ghcr.io` image.
 
 ## Configuration (Environment Variables)
 
