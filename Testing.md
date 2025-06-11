@@ -45,8 +45,8 @@ Currently, there are no automated tests specifically for the frontend JavaScript
 
 For a vanilla JavaScript application like this, End-to-End (E2E) testing would be a valuable addition to ensure user interface functionality and behavior. Suitable E2E testing tools include:
 
-*   **Playwright:** ([https://playwright.dev/](https://playwright.dev/))
-*   **Cypress:** ([https://www.cypress.io/](https://www.cypress.io/))
+*   **Playwright:** [https://playwright.dev/](https://playwright.dev/)
+*   **Cypress:** [https://www.cypress.io/](https://www.cypress.io/)
 
 Implementing E2E tests would involve writing test scripts that simulate user interactions with the web interface (e.g., clicking buttons, filling forms, verifying displayed content) and checking that the application responds correctly.
 
