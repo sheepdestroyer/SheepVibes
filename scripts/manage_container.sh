@@ -49,7 +49,7 @@ start_container() {
     $CONTAINER_CMD run \
       -d \
       --name "$CONTAINER_NAME" \
-      -p "${HOST_PORT}:${CONTAINER_PORT}" \
+      -p "127.0.0.1:${HOST_PORT}:${CONTAINER_PORT}" \
       -v "${VOLUME_NAME}:${DATA_PATH}" \
       --restart "$RESTART_POLICY" \
       --replace \

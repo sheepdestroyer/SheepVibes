@@ -284,8 +284,184 @@ def test_process_feed_entries_commit_error(MockFeedItem, mock_session):
     mock_session.rollback.assert_called_once() # Rollback occurred
     # Check logs for error message
 
-# --- Placeholder for fetch_and_update_feed tests ---
-# Would involve mocking Feed.query.get and patching fetch_feed/process_feed_entries
+# --- Tests for fetch_and_update_feed ---
 
-# --- Placeholder for update_all_feeds tests ---
-# Would involve mocking Feed.query.all and patching fetch_and_update_feed
+@patch('feed_service.process_feed_entries')
+@patch('feed_service.fetch_feed')
+@patch('feed_service.db.session')
+@patch('feed_service.Feed') # To mock Feed.query.get
+@patch('feed_service.datetime')
+def test_fetch_and_update_feed_success(mock_datetime, MockFeedClass, mock_db_session, mock_fetch_feed, mock_process_feed_entries):
+    """Test successful fetch and update of a feed."""
+    feed_id = 1
+    mock_feed_instance = MagicMock(spec=Feed)
+    mock_feed_instance.id = feed_id
+    mock_feed_instance.url = "http://example.com/rss"
+    mock_feed_instance.name = "Old Name" # Test if title gets updated
+
+    # Mock db.session.get(Feed, feed_id) behavior
+    mock_db_session.get.return_value = mock_feed_instance
+
+    mock_parsed_feed = MagicMock()
+    mock_parsed_feed.feed.get.return_value = "New Feed Title" # For feed.name update
+    mock_parsed_feed.entries = [MagicMock()] # Some entries
+    mock_fetch_feed.return_value = mock_parsed_feed
+
+    mock_process_feed_entries.return_value = 5 # 5 new items processed
+
+    # Mock datetime.now(pytz.utc)
+    mock_now = datetime.datetime(2024, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    mock_datetime.now.return_value = mock_now
+
+    # Call the function
+    updated_feed = feed_service.fetch_and_update_feed(feed_id)
+
+    mock_db_session.get.assert_called_once_with(Feed, feed_id)
+    mock_fetch_feed.assert_called_once_with(mock_feed_instance.url)
+
+    # Check feed attributes update
+    assert mock_feed_instance.last_fetched == mock_now
+    assert mock_feed_instance.name == "New Feed Title" # Check title update
+
+    mock_process_feed_entries.assert_called_once_with(mock_feed_instance, mock_parsed_feed)
+    mock_db_session.add.assert_called_once_with(mock_feed_instance)
+    mock_db_session.commit.assert_called_once()
+
+    assert updated_feed == mock_feed_instance
+
+@patch('feed_service.db.session')
+@patch('feed_service.Feed') # To mock Feed.query.get
+def test_fetch_and_update_feed_not_found(MockFeedClass, mock_db_session):
+    """Test fetch_and_update_feed when the feed is not found."""
+    feed_id = 999
+    # Mock db.session.get(Feed, feed_id) to return None
+    mock_db_session.get.return_value = None
+
+    with pytest.raises(LookupError, match="Feed with ID 999 not found"):
+        feed_service.fetch_and_update_feed(feed_id)
+
+    mock_db_session.get.assert_called_once_with(Feed, feed_id)
+
+@patch('feed_service.logger')
+@patch('feed_service.fetch_feed')
+@patch('feed_service.db.session')
+@patch('feed_service.Feed') # To mock Feed.query.get
+@patch('feed_service.datetime')
+def test_fetch_and_update_feed_fetch_error(mock_datetime, MockFeedClass, mock_db_session, mock_fetch_feed, mock_logger):
+    """Test fetch_and_update_feed when feedparser returns an error or no feed."""
+    feed_id = 1
+    mock_feed_instance = MagicMock(spec=Feed)
+    mock_feed_instance.id = feed_id
+    mock_feed_instance.url = "http://example.com/broken_rss"
+
+    # Mock db.session.get(Feed, feed_id)
+    mock_db_session.get.return_value = mock_feed_instance
+
+    mock_fetch_feed.return_value = None # Simulate fetch_feed returning None on error
+
+    # Mock datetime.now(pytz.utc)
+    mock_now = datetime.datetime(2024, 1, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    mock_datetime.now.return_value = mock_now
+
+    # Call the function
+    updated_feed = feed_service.fetch_and_update_feed(feed_id)
+
+    mock_db_session.get.assert_called_once_with(Feed, feed_id)
+    mock_fetch_feed.assert_called_once_with(mock_feed_instance.url)
+
+    # Feed's last_fetched should still be updated
+    assert mock_feed_instance.last_fetched == mock_now
+
+    # process_feed_entries should not be called
+    # mock_process_feed_entries was not patched here, so no need to assert not_called
+
+    mock_db_session.add.assert_called_once_with(mock_feed_instance) # Still added to update last_fetched
+    mock_db_session.commit.assert_called_once() # Commit is still called
+
+    mock_logger.error.assert_called_once()
+    # Example: mock_logger.error.assert_called_with(f"Failed to fetch feed content for {mock_feed_instance.name} (ID: {feed_id}) from {mock_feed_instance.url}. Parser returned None.")
+
+    assert updated_feed == mock_feed_instance # Returns the feed instance even on fetch error
+
+# --- Tests for update_all_feeds ---
+
+@patch('feed_service.logger')
+@patch('feed_service.fetch_and_update_feed')
+@patch('feed_service.Feed')
+def test_update_all_feeds_success(MockFeedClass, mock_fetch_and_update, mock_logger):
+    """Test successful update of multiple feeds."""
+    mock_feed1 = MagicMock(spec=Feed, id=1, name="Feed 1")
+    mock_feed2 = MagicMock(spec=Feed, id=2, name="Feed 2")
+
+    # Mock Feed.query.all()
+    MockFeedClass.query.all.return_value = [mock_feed1, mock_feed2]
+
+    # Make fetch_and_update_feed return the feed object passed to it
+    mock_fetch_and_update.side_effect = lambda feed_obj_or_id: feed_obj_or_id if isinstance(feed_obj_or_id, Feed) else MockFeedClass.query.get(feed_obj_or_id)
+
+    feed_service.update_all_feeds()
+
+    MockFeedClass.query.all.assert_called_once()
+    assert mock_fetch_and_update.call_count == 2
+    mock_fetch_and_update.assert_any_call(mock_feed1) # Changed to pass feed object
+    mock_fetch_and_update.assert_any_call(mock_feed2) # Changed to pass feed object
+    mock_logger.info.assert_any_call("Starting update for all feeds...")
+    mock_logger.info.assert_any_call(f"Successfully updated feed: {mock_feed1.name}")
+    mock_logger.info.assert_any_call(f"Successfully updated feed: {mock_feed2.name}")
+    mock_logger.info.assert_any_call("Finished updating all feeds.")
+
+@patch('feed_service.logger')
+@patch('feed_service.fetch_and_update_feed')
+@patch('feed_service.Feed')
+def test_update_all_feeds_no_feeds(MockFeedClass, mock_fetch_and_update, mock_logger):
+    """Test update_all_feeds when there are no feeds."""
+    MockFeedClass.query.all.return_value = []
+
+    feed_service.update_all_feeds()
+
+    MockFeedClass.query.all.assert_called_once()
+    mock_fetch_and_update.assert_not_called()
+    mock_logger.info.assert_any_call("Starting update for all feeds...")
+    mock_logger.info.assert_any_call("No feeds found to update.")
+    mock_logger.info.assert_any_call("Finished updating all feeds.")
+
+
+@patch('feed_service.logger')
+@patch('feed_service.fetch_and_update_feed')
+@patch('feed_service.Feed')
+def test_update_all_feeds_error_during_update(MockFeedClass, mock_fetch_and_update, mock_logger):
+    """Test update_all_feeds when an error occurs during one of the feed updates."""
+    mock_feed1 = MagicMock(spec=Feed, id=1, name="Feed 1")
+    mock_feed2 = MagicMock(spec=Feed, id=2, name="Feed 2 (will fail)")
+    mock_feed3 = MagicMock(spec=Feed, id=3, name="Feed 3")
+
+    MockFeedClass.query.all.return_value = [mock_feed1, mock_feed2, mock_feed3]
+
+    # Simulate error for feed2
+    def fetch_side_effect(feed_obj_or_id):
+        feed_to_process = feed_obj_or_id if isinstance(feed_obj_or_id, Feed) else MockFeedClass.query.get(feed_obj_or_id)
+        if feed_to_process.id == mock_feed2.id:
+            raise Exception("Simulated update error for Feed 2")
+        return feed_to_process # Successfully "updates"
+
+    mock_fetch_and_update.side_effect = fetch_side_effect
+
+    feed_service.update_all_feeds()
+
+    MockFeedClass.query.all.assert_called_once()
+    # fetch_and_update_feed should be called for all feeds, even if one fails,
+    # as the loop in update_all_feeds continues.
+    assert mock_fetch_and_update.call_count == 3
+    mock_fetch_and_update.assert_any_call(mock_feed1)
+    mock_fetch_and_update.assert_any_call(mock_feed2)
+    mock_fetch_and_update.assert_any_call(mock_feed3)
+
+    mock_logger.info.assert_any_call("Starting update for all feeds...")
+    mock_logger.info.assert_any_call(f"Successfully updated feed: {mock_feed1.name}")
+    mock_logger.error.assert_any_call(f"Error updating feed {mock_feed2.name} (ID: {mock_feed2.id}): Exception('Simulated update error for Feed 2')")
+    mock_logger.info.assert_any_call(f"Successfully updated feed: {mock_feed3.name}")
+    mock_logger.info.assert_any_call("Finished updating all feeds.")
+# Import feed_service at the end if it's not already at the top, to ensure mocks are set up
+# For this file structure, it's imported at the top, which is fine.
+# Ensure feed_service module is imported to be tested.
+import feed_service

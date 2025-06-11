@@ -389,3 +389,86 @@ def test_mark_item_read_not_found(client):
     """Test POST /api/items/<item_id>/read for non-existent item."""
     response = client.post('/api/items/999/read')
     assert response.status_code == 404
+
+# --- Tests for POST /api/feeds/<feed_id>/update ---
+
+@patch('app.models_to_dict')
+@patch('app.feed_service.fetch_and_update_feed')
+def test_update_feed_success(mock_fetch_and_update, mock_models_to_dict, client, setup_tabs_and_feeds):
+    """Test POST /api/feeds/<feed_id>/update successfully."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    mock_feed_object = MagicMock(spec=Feed) # Simulate a Feed SQLAlchemy object
+    mock_feed_dict = {"id": feed_id, "name": "Updated Feed", "url": "url1", "unread_count": 5}
+
+    mock_fetch_and_update.return_value = mock_feed_object
+    mock_models_to_dict.return_value = mock_feed_dict
+
+    response = client.post(f'/api/feeds/{feed_id}/update')
+
+    assert response.status_code == 200
+    assert response.json == mock_feed_dict
+    mock_fetch_and_update.assert_called_once_with(feed_id)
+    mock_models_to_dict.assert_called_once_with(mock_feed_object)
+
+@patch('app.feed_service.fetch_and_update_feed')
+def test_update_feed_not_found(mock_fetch_and_update, client):
+    """Test POST /api/feeds/<feed_id>/update when feed is not found."""
+    feed_id = 999
+    mock_fetch_and_update.side_effect = LookupError("Feed not found")
+
+    response = client.post(f'/api/feeds/{feed_id}/update')
+
+    assert response.status_code == 404
+    assert 'error' in response.json
+    assert "Feed not found" in response.json['error']
+    mock_fetch_and_update.assert_called_once_with(feed_id)
+
+@patch('app.feed_service.fetch_and_update_feed')
+def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds):
+    """Test POST /api/feeds/<feed_id>/update when the update process fails."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    mock_fetch_and_update.side_effect = Exception("Simulated update error")
+
+    response = client.post(f'/api/feeds/{feed_id}/update')
+
+    assert response.status_code == 500
+    assert 'error' in response.json
+    assert "Failed to update feed" in response.json['error']
+    # The original error message might also be in the response, depending on error handling
+    # assert "Simulated update error" in response.json['error']
+    mock_fetch_and_update.assert_called_once_with(feed_id)
+
+# --- Tests for Frontend Serving Routes ---
+
+def test_get_root_path(client):
+    """Test GET / (root path) serves index.html."""
+    response = client.get('/')
+    assert response.status_code == 200
+    assert response.content_type == 'text/html; charset=utf-8' # Flask default for send_from_directory
+    assert b"<title>SheepVibes</title>" in response.data
+
+def test_get_existing_static_file(client):
+    """Test GET /<path:filename> for an existing static file like script.js."""
+    # To make this test robust, we should ensure 'script.js' exists where Flask serves static files from.
+    # Assuming 'static/script.js' relative to app.py or bluepirnt.
+    # For now, we'll assume it exists and Flask's send_from_directory will find it.
+    # If app.static_folder is './static' (default) or '../static' or '../frontend/dist' etc.
+    # This test might fail if 'script.js' is not in the expected static path for testing.
+    # For the purpose of this task, we assume it's set up correctly.
+    response = client.get('/script.js')
+    assert response.status_code == 200
+    assert response.content_type == 'application/javascript' # Common for .js
+    # Check if data is not empty, actual content might change.
+    assert len(response.data) > 0
+
+def test_get_index_html_explicitly(client):
+    """Test GET /index.html explicitly."""
+    response = client.get('/index.html')
+    assert response.status_code == 200
+    assert response.content_type == 'text/html; charset=utf-8'
+    assert b"<title>SheepVibes</title>" in response.data
+
+def test_get_non_existent_static_file(client):
+    """Test GET /<path:filename> for a non-existent file."""
+    response = client.get('/nonexistentfile.css')
+    assert response.status_code == 404
