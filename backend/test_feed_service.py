@@ -172,7 +172,7 @@ def test_process_feed_entries_new_items(MockFeedItem, mock_session):
     # Assert
     assert new_count == 2
     # Check that query for existing items was called
-    mock_session.query.assert_called_once_with(FeedItem.guid, FeedItem.link)
+    mock_session.query.assert_called_once_with(MockFeedItem.guid, MockFeedItem.link)
     mock_session.query().filter_by.assert_called_once_with(feed_id=mock_feed_db.id)
     # Check FeedItem constructor calls
     assert MockFeedItem.call_count == 2
