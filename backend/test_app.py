@@ -393,50 +393,45 @@ def test_mark_item_read_not_found(client):
 
 # --- Tests for POST /api/feeds/<feed_id>/update ---
 
-@patch('app.models_to_dict')
-@patch('app.fetch_and_update_feed') # Changed patch target
-def test_update_feed_success(mock_fetch_and_update, mock_models_to_dict, client, setup_tabs_and_feeds):
-    """Test POST /api/feeds/<feed_id>/update successfully."""
+@patch('app.fetch_and_update_feed') 
+def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
-    mock_feed_object = MagicMock(spec=Feed) # Simulate a Feed SQLAlchemy object
+    mock_feed_object = MagicMock(spec=Feed) 
     mock_feed_dict = {"id": feed_id, "name": "Updated Feed", "url": "url1", "unread_count": 5}
 
     mock_fetch_and_update.return_value = mock_feed_object
-    mock_models_to_dict.return_value = mock_feed_dict
+    mock_feed_object.to_dict.return_value = mock_feed_dict
 
     response = client.post(f'/api/feeds/{feed_id}/update')
 
     assert response.status_code == 200
     assert response.json == mock_feed_dict
     mock_fetch_and_update.assert_called_once_with(feed_id)
-    mock_models_to_dict.assert_called_once_with(mock_feed_object)
+    mock_feed_object.to_dict.assert_called_once()
 
-@patch('app.fetch_and_update_feed') # Changed patch target
+@patch('app.fetch_and_update_feed') 
 def test_update_feed_not_found(mock_fetch_and_update, client):
     """Test POST /api/feeds/<feed_id>/update when feed is not found."""
     feed_id = 999
-    mock_fetch_and_update.side_effect = LookupError("Feed not found")
+    mock_fetch_and_update.side_effect = LookupError("Feed not found") 
 
     response = client.post(f'/api/feeds/{feed_id}/update')
 
     assert response.status_code == 404
     assert 'error' in response.json
-    assert "Feed not found" in response.json['error']
+    assert "Feed not found" in response.json['error'] 
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
-@patch('app.fetch_and_update_feed') # Changed patch target
+@patch('app.fetch_and_update_feed') 
 def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds):
-    """Test POST /api/feeds/<feed_id>/update when the update process fails."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
     mock_fetch_and_update.side_effect = Exception("Simulated update error")
 
     response = client.post(f'/api/feeds/{feed_id}/update')
 
-    assert response.status_code == 500
+    assert response.status_code == 500 
     assert 'error' in response.json
-    assert "Failed to update feed" in response.json['error']
-    # The original error message might also be in the response, depending on error handling
-    # assert "Simulated update error" in response.json['error']
+    assert "Failed to update feed" in response.json['error'] 
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 # --- Tests for Frontend Serving Routes ---
