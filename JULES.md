@@ -22,45 +22,39 @@ This document lists discrepancies found during the project review, comparing doc
     *   **Description**: `README.md` `podman run` example maps to `127.0.0.1:5000` (local access only by default). The `manage_container.sh` script maps to host port `5000` without specifying an IP, which typically means `0.0.0.0:5000` (accessible externally).
     *   **Files**: `README.md`, `scripts/manage_container.sh`.
     *   **Impact**: Different default accessibility when using README command vs. script.
-    *   **Suggestion**: Align the script's default or clarify the difference in `README.md`. README already mentions how to change for external listening.
+    *   **Suggestion**: Align the script's default. README already mentions how to change for external listening.
 
-3.  **`[ ]` [Doc/Script Mismatch] `run_dev.sh` Accessibility:**
-    *   **Description**: `README.md` states `run_dev.sh` starts the server "typically accessible at `http://localhost:5000`". The `run_dev.sh` script actually runs Flask with `--host=0.0.0.0`, making it accessible on all network interfaces, not just localhost.
-    *   **Files**: `README.md`, `scripts/run_dev.sh`.
-    *   **Impact**: Documentation slightly misrepresents the server's accessibility during local development.
-    *   **Suggestion**: Update `README.md` to reflect that `run_dev.sh` makes the server available on `0.0.0.0:5000`.
-
-4.  **`[~]` [Code/Feature] Unused API Endpoint:**
+3.  **`[~]` [Code/Feature] Unused API Endpoint:**
     *   **Description**: The backend API endpoint `POST /api/feeds/<feed_id>/update` (for manual feed refresh) defined in `app.py` is not used by the frontend (`script.js`).
     *   **Files**: `backend/app.py`, `frontend/script.js`.
     *   **Impact**: Dead code/feature if not intended for other clients. If intended for UI, it's missing.
     *   **Suggestion**: Either implement a UI element to trigger this or remove the endpoint if it's not planned for use.
 
-5.  **`[~]` [Code/Robustness] Frontend Feed Prepend Heuristic:**
+4.  **`[~]` [Code/Robustness] Frontend Feed Prepend Heuristic:**
     *   **Description**: In `frontend/script.js`, the `renderFeedWidget` function uses a heuristic `const prependWidget = document.getElementById('add-feed-button').disabled;` to decide whether to prepend a newly added feed widget. This relies on the "Add Feed" button's disabled state during the operation.
     *   **Files**: `frontend/script.js`.
     *   **Impact**: Potentially fragile if the button's disabled state logic changes or is used for other purposes.
     *   **Suggestion**: Consider passing an explicit parameter to `renderFeedWidget` if the prepend/append behavior needs to be more robustly controlled.
 
-6.  **`[ ]` [Test Coverage] Missing Tests for Manual Feed Update API:**
+5.  **`[ ]` [Test Coverage] Missing Tests for Manual Feed Update API:**
     *   **Description**: `backend/test_app.py` does not include tests for the `POST /api/feeds/<feed_id>/update` endpoint.
     *   **Files**: `backend/test_app.py`, `backend/app.py`.
     *   **Impact**: Untested API endpoint.
     *   **Suggestion**: Add tests for this endpoint.
 
-7.  **`[ ]` [Test Coverage] Missing Tests for Frontend Serving Routes:**
+8.  **`[ ]` [Test Coverage] Missing Tests for Frontend Serving Routes:**
     *   **Description**: `backend/test_app.py` does not include tests for the routes that serve frontend files (`/` and `<path:filename>`).
     *   **Files**: `backend/test_app.py`, `backend/app.py`.
     *   **Impact**: Untested core functionality (serving the application itself).
     *   **Suggestion**: Add basic tests to ensure these routes return expected content (e.g., `index.html`, status codes).
 
-8.  **`[ ]` [Test Coverage] Missing Unit Tests for `feed_service` Functions:**
+9.  **`[ ]` [Test Coverage] Missing Unit Tests for `feed_service` Functions:**
     *   **Description**: The functions `fetch_and_update_feed` and `update_all_feeds` in `backend/feed_service.py` are not unit tested. Placeholders for these tests are noted in `backend/test_feed_service.py`.
     *   **Files**: `backend/feed_service.py`, `backend/test_feed_service.py`.
     *   **Impact**: Core feed updating logic lacks unit test coverage.
     *   **Suggestion**: Implement the planned unit tests for these functions.
 
-9.  **`[~]` [Clarity/Doc] Purpose of `test_feed.py`:**
+10.  **`[~]` [Clarity/Doc] Purpose of `test_feed.py`:**
     *   **Description**: The file `backend/test_feed.py` is a script for manual/integration testing rather than an automated unit test file integrated with `pytest`.
     *   **Files**: `backend/test_feed.py`.
     *   **Impact**: Its role in the testing strategy might be unclear.
