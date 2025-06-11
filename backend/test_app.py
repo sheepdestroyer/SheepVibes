@@ -453,7 +453,7 @@ def test_get_existing_static_file(client):
     # For the purpose of this task, we assume it's set up correctly.
     response = client.get('/script.js')
     assert response.status_code == 200
-    assert response.content_type == 'application/javascript' # Common for .js
+    assert response.content_type == 'text/javascript; charset=utf-8'
     # Check if data is not empty, actual content might change.
     assert len(response.data) > 0
 
