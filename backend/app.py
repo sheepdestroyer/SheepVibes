@@ -454,20 +454,16 @@ def mark_item_read(item_id):
 @app.route('/api/feeds/<int:feed_id>/update', methods=['POST'])
 def update_feed(feed_id):
     """Manually triggers an update check for a specific feed."""
-    # Ensure feed exists or return 404
-    feed = Feed.query.get_or_404(feed_id)
-    
     try:
-        success, new_items = fetch_and_update_feed(feed.id)
-        return jsonify({
-            'success': success,
-            'feed_id': feed.id,
-            'feed_name': feed.name,
-            'new_items': new_items
-        })
+        updated_feed_obj = fetch_and_update_feed(feed_id) 
+        
+        return jsonify(updated_feed_obj.to_dict())
+    except LookupError as e:
+        logger.warning(f"LookupError during manual update for feed {feed_id}: {e}")
+        return jsonify({'error': str(e)}), 404
     except Exception as e:
         logger.error(f"Error during manual update for feed {feed_id}: {e}", exc_info=True)
-        return jsonify({'error': f'Failed to update feed {feed_id}'}), 500
+        return jsonify({'error': f'Failed to update feed {feed_id}. An unexpected error occurred.'}), 500
 
 # --- Application Initialization and Startup ---
 
