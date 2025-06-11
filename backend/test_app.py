@@ -21,8 +21,8 @@ def client():
 
     with app.test_client() as client:
         yield client # Provide the test client to the tests
-
-   # Teardown: drop all tables after each test to ensure isolation
+    
+    # Teardown: drop all tables after each test to ensure isolation
     with app.app_context():
         db.session.remove() # Ensure session is clean before dropping
         db.drop_all()       # Drop all tables
@@ -394,7 +394,7 @@ def test_mark_item_read_not_found(client):
 # --- Tests for POST /api/feeds/<feed_id>/update ---
 
 @patch('app.models_to_dict')
-@patch('app.feed_service.fetch_and_update_feed')
+@patch('app.fetch_and_update_feed') # Changed patch target
 def test_update_feed_success(mock_fetch_and_update, mock_models_to_dict, client, setup_tabs_and_feeds):
     """Test POST /api/feeds/<feed_id>/update successfully."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
@@ -411,7 +411,7 @@ def test_update_feed_success(mock_fetch_and_update, mock_models_to_dict, client,
     mock_fetch_and_update.assert_called_once_with(feed_id)
     mock_models_to_dict.assert_called_once_with(mock_feed_object)
 
-@patch('app.feed_service.fetch_and_update_feed')
+@patch('app.fetch_and_update_feed') # Changed patch target
 def test_update_feed_not_found(mock_fetch_and_update, client):
     """Test POST /api/feeds/<feed_id>/update when feed is not found."""
     feed_id = 999
@@ -424,7 +424,7 @@ def test_update_feed_not_found(mock_fetch_and_update, client):
     assert "Feed not found" in response.json['error']
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
-@patch('app.feed_service.fetch_and_update_feed')
+@patch('app.fetch_and_update_feed') # Changed patch target
 def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds):
     """Test POST /api/feeds/<feed_id>/update when the update process fails."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
