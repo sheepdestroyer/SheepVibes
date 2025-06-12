@@ -9,14 +9,14 @@ set -e
 
 # Navigate to the backend directory for migrations
 cd /app/backend
-echo "Applying database migrations from $(pwd)..."
+echo "Applying database migrations from $(pwd) using app 'app'..."
 # Apply database migrations using python -m flask from venv
 # FLASK_APP is already set as an ENV variable in the Containerfile
-/opt/venv/bin/python -m flask db upgrade
+/opt/venv/bin/python -m flask --app app db upgrade
 
 # Go back to the main app directory to run the application
 cd /app
-echo "Starting Flask application from $(pwd)..."
+echo "Starting Flask application from $(pwd) using app 'backend.app'..."
 # Execute the main container command using python -m flask from venv
 # Using exec means the Flask process replaces the shell script process
-exec /opt/venv/bin/python -m flask run
+exec /opt/venv/bin/python -m flask --app backend.app run
