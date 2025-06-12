@@ -365,6 +365,7 @@ def test_fetch_and_update_feed_fetch_error(mock_datetime, MockFeedClass, mock_db
     mock_feed_instance = MagicMock(spec=Feed)
     mock_feed_instance.id = feed_id
     mock_feed_instance.url = "http://example.com/broken_rss"
+    mock_feed_instance.name = "Broken Test Feed"  # Example name for clarity in logs and assertions
 
     # Mock Feed.query.get(feed_id)
     MockFeedClass.query.get.return_value = mock_feed_instance
@@ -394,7 +395,8 @@ def test_fetch_and_update_feed_fetch_error(mock_datetime, MockFeedClass, mock_db
     # mock_db_session.add.assert_called_once_with(mock_feed_instance) # Not called directly by f_a_u_f on fetch failure
     # mock_db_session.commit.assert_called_once() # Not called
 
-    mock_logger.error.assert_called_once() # fetch_feed logs its own errors. fetch_and_update_feed logs if feed_id not found.
+    expected_log_message = f"Fetching content for feed {mock_feed_instance.name} (ID: {feed_id}) failed because fetch_feed returned None."
+    mock_logger.error.assert_called_once_with(expected_log_message)
 
     assert success is False # Returns False if fetch fails
     assert new_items_count == 0
