@@ -59,23 +59,6 @@ migrate = Migrate(app, db)
 # --- Database Models have been moved to models.py ---
 
 
-# --- Database Initialization ---
-
-def init_db():
-    """Initializes the database: creates tables and a default tab if needed."""
-    with app.app_context():
-        logger.info(f"Initializing database at: {db_path}")
-        db.create_all() # Create tables based on models
-        
-        # Create a default 'Home' tab if no tabs exist
-        if not Tab.query.first():
-            default_tab = Tab(name="Home", order=0)
-            db.session.add(default_tab)
-            db.session.commit()
-            logger.info("Created default 'Home' tab")
-        else:
-            logger.info("Database tables already exist.")
-
 # --- Feed Update Service and Scheduler ---
 
 # Import feed service functions
@@ -383,9 +366,6 @@ def update_feed(feed_id):
 # --- Application Initialization and Startup ---
 
 if __name__ == '__main__':
-    # Initialize the database (create tables, default tab)
-    init_db()
-    
     # Start the background feed update scheduler
     try:
         scheduler.start()
