@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const addTabButton = document.getElementById('add-tab-button');
     const renameTabButton = document.getElementById('rename-tab-button');
     const deleteTabButton = document.getElementById('delete-tab-button');
-    const refreshAllFeedsButton = document.getElementById('refresh-all-feeds-button'); // Added
     
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -42,47 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Error formatting date:', isoString, e);
             return 'Invalid date';
-        }
-    }
-
-    // --- Feed Refresh Logic ---
-
-    /** Handles the click event for the "Refresh All Feeds" button. */
-    async function handleRefreshAllFeeds() {
-        console.log("Refreshing all feeds...");
-        const originalButtonText = refreshAllFeedsButton.textContent;
-        refreshAllFeedsButton.disabled = true;
-        refreshAllFeedsButton.textContent = 'Refreshing...';
-
-        try {
-            const result = await fetchData('/api/feeds/update-all', { method: 'POST' });
-
-            if (result && result.message) {
-                alert(`Successfully refreshed all feeds.\nProcessed: ${result.feeds_processed}\nNew items: ${result.new_items}`);
-                console.log('All feeds refreshed:', result);
-                // If an active tab is set, reload its feeds to show new items
-                if (activeTabId) {
-                    // Stop current polling before manual refresh, then restart
-                    stopPolling();
-                    await loadFeedsForTab(activeTabId, false); // false to ensure grid is cleared and reloaded
-                    startPolling(); // Restart polling with potentially new data
-                }
-            } else if (result && result.error) {
-                // Handle cases where the API returns a JSON error object but not an HTTP error
-                alert(`Failed to refresh all feeds: ${result.error}`);
-                console.error('Error refreshing all feeds:', result.error);
-            } else if (!result) {
-                // fetchData already shows an alert for network/HTTP errors, so just log here
-                console.error('Failed to refresh all feeds. fetchData returned null.');
-            }
-        } catch (error) {
-            // This catch is mostly for unexpected errors in this function's logic,
-            // as fetchData handles its own errors including alerts.
-            console.error('Unexpected error in handleRefreshAllFeeds:', error);
-            alert('An unexpected error occurred while refreshing feeds.');
-        } finally {
-            refreshAllFeedsButton.disabled = false;
-            refreshAllFeedsButton.textContent = originalButtonText;
         }
     }
 
@@ -668,7 +626,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 handleAddFeed();
             }
         });
-        refreshAllFeedsButton.addEventListener('click', handleRefreshAllFeeds); // Added
 
         // Fetch initial tabs to start the application
         await initializeTabs();

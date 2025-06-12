@@ -349,26 +349,6 @@ def mark_item_read(item_id):
 
 # --- Manual Feed Update Endpoint ---
 
-@app.route('/api/feeds/update-all', methods=['POST'])
-def api_update_all_feeds():
-    """
-    Triggers an update for all feeds in the system.
-    Returns the count of processed feeds and new items.
-    """
-    logger.info("Received request to update all feeds.")
-    try:
-        processed_count, new_items_count = update_all_feeds()
-        logger.info(f"All feeds update process completed. Processed: {processed_count}, New Items: {new_items_count}")
-        return jsonify({
-            'message': 'All feeds updated successfully.',
-            'feeds_processed': processed_count,
-            'new_items': new_items_count
-        }), 200
-    except Exception as e:
-        logger.error(f"Error during /api/feeds/update-all: {str(e)}", exc_info=True)
-        # Consistent error response with other parts of the API
-        return jsonify({'error': 'An error occurred while updating all feeds.'}), 500
-
 @app.route('/api/feeds/<int:feed_id>/update', methods=['POST'])
 def update_feed(feed_id):
     """Manually triggers an update check for a specific feed."""
