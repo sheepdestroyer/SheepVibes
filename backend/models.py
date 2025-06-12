@@ -85,13 +85,34 @@ class FeedItem(db.Model):
 
     def to_dict(self):
         """Returns a dictionary representation of the feed item."""
+        published_ts_iso = None
+        if self.published_time:
+            dt_published = self.published_time
+            if dt_published.tzinfo is None or dt_published.tzinfo.utcoffset(dt_published) is None:
+                # Naive datetime, assume UTC and make it aware
+                dt_published = dt_published.replace(tzinfo=timezone.utc)
+            else:
+                # Aware datetime, convert to UTC
+                dt_published = dt_published.astimezone(timezone.utc)
+            published_ts_iso = dt_published.isoformat()
+
+        # fetched_time is non-nullable
+        dt_fetched = self.fetched_time
+        if dt_fetched.tzinfo is None or dt_fetched.tzinfo.utcoffset(dt_fetched) is None:
+            # Naive datetime, assume UTC and make it aware
+            dt_fetched = dt_fetched.replace(tzinfo=timezone.utc)
+        else:
+            # Aware datetime, convert to UTC
+            dt_fetched = dt_fetched.astimezone(timezone.utc)
+        fetched_ts_iso = dt_fetched.isoformat()
+
         return {
             'id': self.id,
             'feed_id': self.feed_id,
             'title': self.title,
             'link': self.link,
-            'published_time': self.published_time.isoformat() if self.published_time else None,
-            'fetched_time': self.fetched_time.isoformat(),
+            'published_time': published_ts_iso,
+            'fetched_time': fetched_ts_iso,
             'is_read': self.is_read,
             'guid': self.guid
         }
