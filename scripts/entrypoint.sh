@@ -8,7 +8,7 @@ set -e
 . /opt/venv/bin/activate
 
 # Navigate to the backend directory where Flask app and migrations are
-cd /app/backend
+cd /app
 
 echo "Applying database migrations..."
 # Apply database migrations using python -m flask from venv
