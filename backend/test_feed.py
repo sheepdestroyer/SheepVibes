@@ -6,8 +6,9 @@ This script can be used to test feed fetching and processing without running the
 import pytest # Added import
 import sys
 import logging
-from app import app, db, Feed, Tab # Ensured app, db are imported
-import feed_service
+from .app import app # Import app for context
+from .models import db, Feed, Tab # Import models
+from . import feed_service # Import feed_service relatively
 
 # Set up logging to console
 logging.basicConfig(

@@ -1,13 +1,17 @@
 # Import necessary libraries
 import feedparser
 import datetime
+from datetime import timezone # Import timezone
 import time
-import logging
+import logging # Standard logging
 from dateutil import parser as date_parser # Use dateutil for robust date parsing
 from sqlalchemy.exc import IntegrityError
 
-# Import database models and session from the main app file
-from app import db, Feed, FeedItem, logger # Assuming logger is configured in app.py
+# Import database models from the new models.py
+from .models import db, Feed, FeedItem
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 # --- Helper Functions ---
 
@@ -24,7 +28,7 @@ def parse_published_time(entry):
         # feedparser already parsed it
         try:
             # Convert feedparser's time struct to datetime
-            return datetime.datetime.fromtimestamp(time.mktime(entry.published_parsed))
+            return datetime.datetime(*entry.published_parsed[:6])
         except (TypeError, ValueError):
             pass # Fall through to dateutil parsing
     
@@ -155,7 +159,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     # Commit all new items for this feed at once
     try:
         # Update the feed's last updated time
-        feed_db_obj.last_updated_time = datetime.datetime.utcnow()
+        feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         db.session.commit()
         logger.info(f"Added {new_items_count} new items for feed: {feed_db_obj.name}")
     except IntegrityError as e:
@@ -183,7 +187,7 @@ def fetch_and_update_feed(feed_id):
         - success (bool): True if the feed was fetched and processed successfully, False otherwise.
         - new_items_count (int): The number of new items added.
     """
-    feed = Feed.query.get(feed_id)
+    feed = db.session.get(Feed, feed_id)
     if not feed:
         logger.error(f"Feed with ID {feed_id} not found for update.")
         return False, 0

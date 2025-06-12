@@ -4,7 +4,8 @@ from unittest.mock import patch, MagicMock
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
-from app import app, db, Tab, Feed, FeedItem # Import necessary models
+from .app import app # Import the app instance
+from .models import db, Tab, Feed, FeedItem # Import models directly
 
 @pytest.fixture
 def client():
@@ -71,7 +72,7 @@ def test_create_tab_success(client):
     
     # Verify in DB
     with app.app_context():
-        tab = Tab.query.get(response.json['id'])
+        tab = db.session.get(Tab, response.json['id'])
         assert tab is not None
         assert tab.name == 'New Tab'
 
@@ -118,7 +119,7 @@ def test_rename_tab_success(client):
     
     # Verify in DB
     with app.app_context():
-        tab = Tab.query.get(tab_id)
+        tab = db.session.get(Tab, tab_id)
         assert tab.name == 'New Name'
 
 def test_rename_tab_not_found(client):
@@ -160,7 +161,7 @@ def test_delete_tab_success(client):
     
     # Verify in DB
     with app.app_context():
-        tab = Tab.query.get(tab1_id)
+        tab = db.session.get(Tab, tab1_id)
         assert tab is None
         assert Tab.query.count() == 1
 
@@ -231,8 +232,8 @@ def test_get_feeds_for_tab_not_found(client):
     assert response.status_code == 404
 
 # Mock feed fetching/processing for add/delete tests
-@patch('app.fetch_feed') # Patch fetch_feed imported in app.py
-@patch('app.process_feed_entries') # Patch process_feed_entries imported in app.py
+@patch('backend.app.fetch_feed') # Patch fetch_feed where it's used in app.py
+@patch('backend.app.process_feed_entries') # Patch process_feed_entries where it's used in app.py
 def test_add_feed_success(mock_process_entries, mock_fetch, client, setup_tabs_and_feeds):
     """Test POST /api/feeds successfully adding a feed."""
     # Arrange
@@ -256,16 +257,16 @@ def test_add_feed_success(mock_process_entries, mock_fetch, client, setup_tabs_a
     assert 'id' in response.json
     mock_fetch.assert_called_once_with(feed_url)
     # Check that process_feed_entries was called after commit (need feed ID)
-    assert mock_process_entries.call_count == 1 
+    assert mock_process_entries.call_count == 1
     
     # Verify in DB
     with app.app_context():
-        feed = Feed.query.get(response.json['id'])
+        feed = db.session.get(Feed, response.json['id'])
         assert feed is not None
         assert feed.url == feed_url
         assert feed.tab_id == tab1_id
 
-@patch('app.fetch_feed')
+@patch('backend.app.fetch_feed')
 def test_add_feed_fetch_fails(mock_fetch, client, setup_tabs_and_feeds):
     """Test POST /api/feeds when initial fetch fails (should still add)."""
     tab1_id = setup_tabs_and_feeds["tab1_id"]
@@ -279,7 +280,7 @@ def test_add_feed_fetch_fails(mock_fetch, client, setup_tabs_and_feeds):
     assert response.json['url'] == feed_url
     mock_fetch.assert_called_once_with(feed_url)
 
-@patch('app.fetch_feed')
+@patch('backend.app.fetch_feed')
 def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     """Test POST /api/feeds with a duplicate URL."""
     tab1_id = setup_tabs_and_feeds["tab1_id"]
@@ -292,7 +293,8 @@ def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     assert 'already exists' in response.json['error']
     mock_fetch.assert_not_called() # Should check DB before fetching
 
-def test_add_feed_invalid_tab(client):
+@patch('backend.app.fetch_feed') # Also needs patch if fetch_feed is involved in error path
+def test_add_feed_invalid_tab(mock_fetch_unused, client): # mock_fetch_unused if not directly used but to be consistent
     """Test POST /api/feeds with a non-existent tab_id."""
     response = client.post('/api/feeds', json={'url': 'some_url', 'tab_id': 999})
     assert response.status_code == 404
@@ -305,8 +307,8 @@ def test_delete_feed_success(client, setup_tabs_and_feeds):
     
     # Verify items exist before delete
     with app.app_context():
-        assert FeedItem.query.get(item1_id) is not None
-        assert FeedItem.query.get(item2_id) is not None
+        assert db.session.get(FeedItem, item1_id) is not None
+        assert db.session.get(FeedItem, item2_id) is not None
         
     response = client.delete(f'/api/feeds/{feed1_id}')
     
@@ -315,9 +317,9 @@ def test_delete_feed_success(client, setup_tabs_and_feeds):
     
     # Verify feed and associated items are deleted (due to cascade)
     with app.app_context():
-        assert Feed.query.get(feed1_id) is None
-        assert FeedItem.query.get(item1_id) is None
-        assert FeedItem.query.get(item2_id) is None
+        assert db.session.get(Feed, feed1_id) is None
+        assert db.session.get(FeedItem, item1_id) is None
+        assert db.session.get(FeedItem, item2_id) is None
 
 def test_delete_feed_not_found(client):
     """Test DELETE /api/feeds/<id> for non-existent feed."""
@@ -356,7 +358,7 @@ def test_mark_item_read_success(client, setup_tabs_and_feeds):
     
     # Verify initial state
     with app.app_context():
-        assert FeedItem.query.get(item1_id).is_read == False
+        assert db.session.get(FeedItem, item1_id).is_read == False
         
     response = client.post(f'/api/items/{item1_id}/read')
     
@@ -366,7 +368,7 @@ def test_mark_item_read_success(client, setup_tabs_and_feeds):
     
     # Verify state change in DB
     with app.app_context():
-        assert FeedItem.query.get(item1_id).is_read == True
+        assert db.session.get(FeedItem, item1_id).is_read == True
 
 def test_mark_item_read_already_read(client, setup_tabs_and_feeds):
     """Test POST /api/items/<item_id>/read for an already read item."""
@@ -374,7 +376,7 @@ def test_mark_item_read_already_read(client, setup_tabs_and_feeds):
     
     # Verify initial state
     with app.app_context():
-        assert FeedItem.query.get(item2_id).is_read == True
+        assert db.session.get(FeedItem, item2_id).is_read == True
         
     response = client.post(f'/api/items/{item2_id}/read')
     
@@ -384,7 +386,7 @@ def test_mark_item_read_already_read(client, setup_tabs_and_feeds):
     
     # Verify state didn't change
     with app.app_context():
-        assert FeedItem.query.get(item2_id).is_read == True
+        assert db.session.get(FeedItem, item2_id).is_read == True
 
 def test_mark_item_read_not_found(client):
     """Test POST /api/items/<item_id>/read for non-existent item."""
@@ -393,7 +395,7 @@ def test_mark_item_read_not_found(client):
 
 # --- Tests for POST /api/feeds/<feed_id>/update ---
 
-@patch('app.fetch_and_update_feed') 
+@patch('backend.app.fetch_and_update_feed')
 def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
     with app.app_context(): # Add app context for model specing
@@ -409,10 +411,10 @@ def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds
     assert response.json == mock_feed_dict
     mock_fetch_and_update.assert_called_once_with(feed_id)
     # Ensure to_dict is called if the object is returned and serialized
-    if response.status_code == 200:
+    if response.status_code == 200: # Check if call happened only on success
         mock_feed_object.to_dict.assert_called_once()
 
-@patch('app.fetch_and_update_feed') 
+@patch('backend.app.fetch_and_update_feed')
 def test_update_feed_not_found(mock_fetch_and_update, client):
     """Test POST /api/feeds/<feed_id>/update when feed is not found."""
     feed_id = 999
@@ -422,10 +424,10 @@ def test_update_feed_not_found(mock_fetch_and_update, client):
 
     assert response.status_code == 404
     assert 'error' in response.json
-    assert "Feed not found" in response.json['error'] 
+    assert "Feed not found" in response.json['error']
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
-@patch('app.fetch_and_update_feed') 
+@patch('backend.app.fetch_and_update_feed')
 def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
     mock_fetch_and_update.side_effect = Exception("Simulated update error")
