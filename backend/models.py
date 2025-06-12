@@ -1,6 +1,7 @@
 import datetime
 from datetime import timezone # Import timezone
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import validates
 
 # Initialize SQLAlchemy ORM extension
 # This will be initialized with the app in app.py using db.init_app(app)
@@ -76,6 +77,16 @@ class FeedItem(db.Model):
     is_read = db.Column(db.Boolean, nullable=False, default=False, index=True) # Add index
     guid = db.Column(db.String, nullable=True, unique=True) # GUID should be unique
 
+    @validates('published_time', 'fetched_time')
+    def validate_datetime_utc(self, key, dt):
+        if dt is None:
+            return None
+        if dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None:
+            # Aware datetime, convert to UTC and make naive for storage
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        # Naive datetime, assume it's already UTC
+        return dt
+
     # Define relationships (optional but helpful)
     # feed = db.relationship('Feed', back_populates='items')
 
@@ -83,36 +94,39 @@ class FeedItem(db.Model):
     # Or rely on processing logic to prevent duplicates
     # __table_args__ = (db.UniqueConstraint('feed_id', 'link', name='_feed_link_uc'),)
 
+    def _to_utc_iso_string(self, dt_val: datetime.datetime) -> str | None:
+        """
+        Converts a datetime object to a UTC ISO string, replacing +00:00 with Z.
+        Handles naive (assumed UTC) and timezone-aware datetime objects.
+        """
+        if dt_val is None:
+            return None
+
+        # At this point, dt_val from DB is naive UTC due to the validator.
+        # If dt_val is directly passed (e.g. not from DB and still aware),
+        # it needs conversion.
+        if dt_val.tzinfo is None:
+            # Naive datetime from DB (assumed UTC), make it aware UTC
+            dt_val_utc = dt_val.replace(tzinfo=timezone.utc)
+        else:
+            # Aware datetime (e.g. passed directly, not from DB), convert to UTC
+            dt_val_utc = dt_val.astimezone(timezone.utc)
+
+        iso_string = dt_val_utc.isoformat()
+        return iso_string.replace('+00:00', 'Z')
+
     def to_dict(self):
         """Returns a dictionary representation of the feed item."""
-        published_ts_iso = None
-        if self.published_time:
-            dt_published = self.published_time
-            if dt_published.tzinfo is None or dt_published.tzinfo.utcoffset(dt_published) is None:
-                # Naive datetime, assume UTC and make it aware
-                dt_published = dt_published.replace(tzinfo=timezone.utc)
-            else:
-                # Aware datetime, convert to UTC
-                dt_published = dt_published.astimezone(timezone.utc)
-            published_ts_iso = dt_published.isoformat()
-
-        # fetched_time is non-nullable
-        dt_fetched = self.fetched_time
-        if dt_fetched.tzinfo is None or dt_fetched.tzinfo.utcoffset(dt_fetched) is None:
-            # Naive datetime, assume UTC and make it aware
-            dt_fetched = dt_fetched.replace(tzinfo=timezone.utc)
-        else:
-            # Aware datetime, convert to UTC
-            dt_fetched = dt_fetched.astimezone(timezone.utc)
-        fetched_ts_iso = dt_fetched.isoformat()
+        published_ts_iso = self._to_utc_iso_string(self.published_time)
+        fetched_ts_iso = self._to_utc_iso_string(self.fetched_time)
 
         return {
             'id': self.id,
             'feed_id': self.feed_id,
             'title': self.title,
             'link': self.link,
-            'published_time': published_ts_iso,
-            'fetched_time': fetched_ts_iso,
+            'published_time': published_ts_iso, # Use the new helper method
+            'fetched_time': fetched_ts_iso, # Use the new helper method
             'is_read': self.is_read,
             'guid': self.guid
         }
