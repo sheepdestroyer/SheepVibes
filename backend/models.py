@@ -83,36 +83,36 @@ class FeedItem(db.Model):
     # Or rely on processing logic to prevent duplicates
     # __table_args__ = (db.UniqueConstraint('feed_id', 'link', name='_feed_link_uc'),)
 
-    def to_dict(self):
-        """Returns a dictionary representation of the feed item."""
-        published_ts_iso = None
-        if self.published_time:
-            dt_published = self.published_time
-            if dt_published.tzinfo is None or dt_published.tzinfo.utcoffset(dt_published) is None:
-                # Naive datetime, assume UTC and make it aware
-                dt_published = dt_published.replace(tzinfo=timezone.utc)
-            else:
-                # Aware datetime, convert to UTC
-                dt_published = dt_published.astimezone(timezone.utc)
-            published_ts_iso = dt_published.isoformat()
+    def _to_utc_iso_string(self, dt_val: datetime.datetime) -> str | None:
+        """
+        Converts a datetime object to a UTC ISO string, replacing +00:00 with Z.
+        Handles naive (assumed UTC) and timezone-aware datetime objects.
+        """
+        if dt_val is None:
+            return None
 
-        # fetched_time is non-nullable
-        dt_fetched = self.fetched_time
-        if dt_fetched.tzinfo is None or dt_fetched.tzinfo.utcoffset(dt_fetched) is None:
+        if dt_val.tzinfo is None or dt_val.tzinfo.utcoffset(dt_val) is None:
             # Naive datetime, assume UTC and make it aware
-            dt_fetched = dt_fetched.replace(tzinfo=timezone.utc)
+            dt_val_utc = dt_val.replace(tzinfo=timezone.utc)
         else:
             # Aware datetime, convert to UTC
-            dt_fetched = dt_fetched.astimezone(timezone.utc)
-        fetched_ts_iso = dt_fetched.isoformat()
+            dt_val_utc = dt_val.astimezone(timezone.utc)
+
+        iso_string = dt_val_utc.isoformat()
+        return iso_string.replace('+00:00', 'Z')
+
+    def to_dict(self):
+        """Returns a dictionary representation of the feed item."""
+        published_ts_iso = self._to_utc_iso_string(self.published_time)
+        fetched_ts_iso = self._to_utc_iso_string(self.fetched_time)
 
         return {
             'id': self.id,
             'feed_id': self.feed_id,
             'title': self.title,
             'link': self.link,
-            'published_time': published_ts_iso,
-            'fetched_time': fetched_ts_iso,
+            'published_time': published_ts_iso, # Use the new helper method
+            'fetched_time': fetched_ts_iso, # Use the new helper method
             'is_read': self.is_read,
             'guid': self.guid
         }

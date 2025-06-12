@@ -17,6 +17,18 @@ def client():
     # Disable CSRF protection if it were enabled
     # app.config['WTF_CSRF_ENABLED'] = False 
 
+    # Reset Flask app's internal state for consistent behavior across tests
+    app._got_first_request = False
+
+    # Remove the existing SQLAlchemy extension instance if it exists
+    # This is to allow re-initialization with the test database URI
+    if 'sqlalchemy' in app.extensions:
+        del app.extensions['sqlalchemy']
+
+    # Re-initialize db with the app after test config is set.
+    # This ensures that the db extension uses the test configuration.
+    db.init_app(app)
+
     with app.app_context(): # Ensure app context for create_all and drop_all
         db.create_all() # Ensure tables are created for each test
 
@@ -522,3 +534,112 @@ def test_update_all_feeds_exception(mock_update_all_feeds, client):
     # return jsonify({'error': 'An error occurred while updating all feeds.'}), 500
     assert 'error' in data
     assert data['error'] == 'An error occurred while updating all feeds.'
+
+# --- Tests for Model Methods ---
+
+def test_feed_item_to_dict_serialization(client): # client fixture ensures app_context and db setup
+    """
+    Tests the to_dict() method of the FeedItem model, focusing on datetime serialization.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    with app.app_context():
+        # Setup: Create a Tab and a Feed to associate with FeedItems
+        # Minimal setup, not using setup_tabs_and_feeds to keep test focused
+        test_tab = Tab.query.first()
+        if not test_tab:
+            test_tab = Tab(name="Test Tab for Serialization")
+            db.session.add(test_tab)
+            db.session.commit()
+
+        test_feed = Feed.query.filter_by(tab_id=test_tab.id).first()
+        if not test_feed:
+            test_feed = Feed(tab_id=test_tab.id, name="Test Feed for Serialization", url="http://example.com/rss")
+            db.session.add(test_feed)
+            db.session.commit()
+
+        # Scenario 1: Naive datetimes (assumed UTC)
+        dt_naive_published = datetime(2023, 1, 1, 10, 30, 0)
+        dt_naive_fetched = datetime(2023, 1, 1, 11, 0, 0)
+        item_naive = FeedItem(
+            feed_id=test_feed.id,
+            title="Naive Datetime Test",
+            link="http://example.com/naive",
+            published_time=dt_naive_published,
+            fetched_time=dt_naive_fetched,
+            guid="guid-naive-serialization"
+        )
+        db.session.add(item_naive)
+        db.session.commit() # Commit to get item_naive.id and allow to_dict() to work if it queries DB
+
+        dict_naive = item_naive.to_dict()
+        assert isinstance(dict_naive['published_time'], str)
+        assert dict_naive['published_time'] == "2023-01-01T10:30:00Z"
+        assert isinstance(dict_naive['fetched_time'], str)
+        assert dict_naive['fetched_time'] == "2023-01-01T11:00:00Z"
+        db.session.delete(item_naive) # Clean up item
+        db.session.commit()
+
+        # Scenario 2: Aware datetimes (EST and PST)
+        # EST is UTC-5, PST is UTC-8
+        tz_est = timezone(timedelta(hours=-5))
+        tz_pst = timezone(timedelta(hours=-8))
+        dt_aware_published_est = datetime(2023, 3, 15, 12, 0, 0, tzinfo=tz_est) # 17:00 UTC
+        dt_aware_fetched_pst = datetime(2023, 3, 15, 9, 0, 0, tzinfo=tz_pst)   # 17:00 UTC
+
+        item_aware = FeedItem(
+            feed_id=test_feed.id,
+            title="Aware Datetime Test",
+            link="http://example.com/aware",
+            published_time=dt_aware_published_est,
+            fetched_time=dt_aware_fetched_pst,
+            guid="guid-aware-serialization"
+        )
+        db.session.add(item_aware)
+        db.session.commit()
+        # Expire and refresh to ensure the attribute is loaded from the DB
+        # according to the column type's rules (especially for DateTime with timezone)
+        db.session.expire(item_aware, ['published_time', 'fetched_time'])
+        # Accessing item_aware.published_time now will trigger a reload from DB.
+        # No need to explicitly refresh if session.expire is used before access.
+
+        dict_aware = item_aware.to_dict()
+        assert isinstance(dict_aware['published_time'], str)
+        assert dict_aware['published_time'] == "2023-03-15T17:00:00Z"
+        assert isinstance(dict_aware['fetched_time'], str)
+        assert dict_aware['fetched_time'] == "2023-03-15T17:00:00Z"
+        db.session.delete(item_aware)
+        db.session.commit()
+
+        # Scenario 3: published_time is None, fetched_time is aware UTC
+        dt_aware_fetched_utc = datetime(2023, 5, 20, 14, 0, 0, tzinfo=timezone.utc)
+        item_none_published = FeedItem(
+            feed_id=test_feed.id,
+            title="None Published Test",
+            link="http://example.com/none-published",
+            published_time=None,
+            fetched_time=dt_aware_fetched_utc,
+            guid="guid-none-published-serialization"
+        )
+        db.session.add(item_none_published)
+        db.session.commit()
+
+        dict_none_published = item_none_published.to_dict()
+        assert dict_none_published['published_time'] is None
+        assert isinstance(dict_none_published['fetched_time'], str)
+        assert dict_none_published['fetched_time'] == "2023-05-20T14:00:00Z"
+        db.session.delete(item_none_published)
+        db.session.commit()
+
+        # Clean up dummy Tab and Feed if they were created by this test
+        # Note: This is a simplified cleanup. If other tests create these,
+        # this might be too aggressive or fail.
+        # The `client` fixture should handle overall DB cleanup (drop_all).
+        # For now, this specific cleanup is removed as client fixture handles it.
+        # feed_to_delete = Feed.query.get(test_feed.id)
+        # if feed_to_delete:
+        #     db.session.delete(feed_to_delete)
+        # tab_to_delete = Tab.query.get(test_tab.id)
+        # if tab_to_delete:
+        #     db.session.delete(tab_to_delete)
+        # db.session.commit()
