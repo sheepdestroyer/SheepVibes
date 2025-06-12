@@ -1,6 +1,7 @@
 import datetime
 from datetime import timezone # Import timezone
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import validates
 
 # Initialize SQLAlchemy ORM extension
 # This will be initialized with the app in app.py using db.init_app(app)
@@ -76,6 +77,16 @@ class FeedItem(db.Model):
     is_read = db.Column(db.Boolean, nullable=False, default=False, index=True) # Add index
     guid = db.Column(db.String, nullable=True, unique=True) # GUID should be unique
 
+    @validates('published_time', 'fetched_time')
+    def validate_datetime_utc(self, key, dt):
+        if dt is None:
+            return None
+        if dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None:
+            # Aware datetime, convert to UTC and make naive for storage
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        # Naive datetime, assume it's already UTC
+        return dt
+
     # Define relationships (optional but helpful)
     # feed = db.relationship('Feed', back_populates='items')
 
@@ -91,11 +102,14 @@ class FeedItem(db.Model):
         if dt_val is None:
             return None
 
-        if dt_val.tzinfo is None or dt_val.tzinfo.utcoffset(dt_val) is None:
-            # Naive datetime, assume UTC and make it aware
+        # At this point, dt_val from DB is naive UTC due to the validator.
+        # If dt_val is directly passed (e.g. not from DB and still aware),
+        # it needs conversion.
+        if dt_val.tzinfo is None:
+            # Naive datetime from DB (assumed UTC), make it aware UTC
             dt_val_utc = dt_val.replace(tzinfo=timezone.utc)
         else:
-            # Aware datetime, convert to UTC
+            # Aware datetime (e.g. passed directly, not from DB), convert to UTC
             dt_val_utc = dt_val.astimezone(timezone.utc)
 
         iso_string = dt_val_utc.isoformat()
