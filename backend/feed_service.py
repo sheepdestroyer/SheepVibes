@@ -24,28 +24,48 @@ def parse_published_time(entry):
     Returns:
         A datetime object representing the published time, or None if parsing fails.
     """
+    datetime_obj = None
     if hasattr(entry, 'published_parsed') and entry.published_parsed:
         # feedparser already parsed it
         try:
             # Convert feedparser's time struct to datetime
-            return datetime.datetime(*entry.published_parsed[:6])
+            datetime_obj = datetime.datetime(*entry.published_parsed[:6])
         except (TypeError, ValueError):
-            pass # Fall through to dateutil parsing
+            # Fall through to dateutil parsing if conversion fails
+            datetime_obj = None # Ensure it's None to proceed
+            
+    if not datetime_obj: # If feedparser didn't provide or conversion failed
+        # Try common date fields using dateutil.parser for more flexibility
+        date_fields = ['published', 'updated', 'created']
+        for field in date_fields:
+            if hasattr(entry, field):
+                field_value = getattr(entry, field)
+                if not field_value: # Skip if field exists but is empty
+                    continue
+                try:
+                    # Use dateutil.parser for robust parsing of various formats
+                    datetime_obj = date_parser.parse(field_value)
+                    if datetime_obj: # Stop if successfully parsed
+                        break 
+                except (ValueError, TypeError, OverflowError) as e:
+                    logger.debug(f"dateutil.parser failed for field '{field}' with value '{field_value}': {e}")
+                    # Ignore parsing errors for this field and try the next
+                    datetime_obj = None # Reset on error
+                    continue
     
-    # Try common date fields using dateutil.parser for more flexibility
-    date_fields = ['published', 'updated', 'created']
-    for field in date_fields:
-        if hasattr(entry, field):
-            try:
-                # Use dateutil.parser for robust parsing of various formats
-                return date_parser.parse(getattr(entry, field))
-            except (ValueError, TypeError, OverflowError):
-                # Ignore parsing errors for this field and try the next
-                continue
-                
-    # If no date field is found or parsed successfully
-    logger.warning(f"Could not parse published time for entry: {entry.get('link', '[no link]')}")
-    return None
+    # Ensure the datetime object is UTC aware
+    if datetime_obj:
+        if datetime_obj.tzinfo is None or datetime_obj.tzinfo.utcoffset(datetime_obj) is None:
+            # If timezone is naive or effectively naive (e.g. tzlocal() that isn't UTC), make it UTC
+            datetime_obj = datetime_obj.replace(tzinfo=timezone.utc)
+        else:
+            # If timezone aware, convert to UTC
+            datetime_obj = datetime_obj.astimezone(timezone.utc)
+    else:
+        # If no date field is found or parsed successfully
+        logger.warning(f"Could not parse published time for entry: {entry.get('link', '[no link]')}")
+
+    return datetime_obj
 
 # --- Core Feed Processing Functions ---
 
