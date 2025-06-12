@@ -4,31 +4,28 @@ The backend of SheepVibes is written in Python and uses the `pytest` framework f
 
 ### Setup
 
-1.  Navigate to the backend directory:
+1.  Navigate to the backend directory. Install the necessary development dependencies within a Python virtual environment, including `pytest`:
     ```bash
     cd backend
+    python -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt -r requirements-dev.txt
     ```
-2.  Install the necessary development dependencies, including `pytest`:
-    ```bash
-    pip install -r requirements-dev.txt
-    ```
-    It's recommended to do this within a Python virtual environment. The main application dependencies should also be installed if not already:
-    ```bash
-    pip install -r requirements.txt
-    ```
+
 
 ### Running Tests
 
 To run the backend tests:
 
-1.  Ensure you are in the `backend` directory.
+1.  Ensure you are in the `backend` directory, and have activated the venv.
 2.  Execute `pytest`:
     ```bash
-    pytest
+    pytest -v
     ```
     Alternatively, you can run pytest as a module, which can be more robust in some environments:
     ```bash
-    python -m pytest
+    python -m pytest -v
     ```
 
 The tests will run and output the results to your console. They cover:
