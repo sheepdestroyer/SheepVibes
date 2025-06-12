@@ -47,7 +47,8 @@ EXPOSE 5000
 # Define environment variables (can be overridden at runtime)
 ENV DATABASE_PATH=/app/data/sheepvibes.db \
     UPDATE_INTERVAL_MINUTES=15 \
-    FLASK_APP=backend/app.py \
+    FLASK_APP=backend.app \
+    PYTHONPATH=/app \
     FLASK_RUN_HOST=0.0.0.0
     # Note: FLASK_DEBUG should be 0 or unset for production
 

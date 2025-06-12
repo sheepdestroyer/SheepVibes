@@ -54,6 +54,10 @@ fi
 export FLASK_APP=app.py
 export FLASK_DEBUG=1 # Enable debug mode (reloader and debugger)
 
+# Apply database migrations
+echo "Applying database migrations..."
+python -m flask db upgrade
+
 # Run the Flask development server
 echo "Starting Flask development server on http://0.0.0.0:5000 (Press CTRL+C to stop)"
 # Use python -m flask run to ensure it uses the venv's flask
