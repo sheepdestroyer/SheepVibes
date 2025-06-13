@@ -45,8 +45,9 @@ class Feed(db.Model):
     url = db.Column(db.String(500), nullable=False) # URL of the feed
     last_updated_time = db.Column(db.DateTime, default=lambda: datetime.datetime.now(timezone.utc)) # Last time feed was successfully fetched
     # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
-    # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems
-    items = db.relationship('FeedItem', backref='feed', lazy=True, cascade='all, delete-orphan')
+    # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
+    # lazy='dynamic' allows for further querying on the relationship.
+    items = db.relationship('FeedItem', backref='feed', lazy='dynamic', cascade='all, delete-orphan')
 
     def to_dict(self):
         """Serializes the Feed object to a dictionary, including unread count."""
@@ -87,16 +88,10 @@ class FeedItem(db.Model):
         # Naive datetime, assume it's already UTC
         return dt
 
-    # Define relationships (optional but helpful)
-    # feed = db.relationship('Feed', back_populates='items')
-
-    # Add a unique constraint for feed_id and link (if guid is null)?
-    # Or rely on processing logic to prevent duplicates
-    # __table_args__ = (db.UniqueConstraint('feed_id', 'link', name='_feed_link_uc'),)
-
-    def _to_utc_iso_string(self, dt_val: datetime.datetime) -> str | None:
+    @staticmethod
+    def to_iso_z_string(dt_val: datetime.datetime | None) -> str | None:
         """
-        Converts a datetime object to a UTC ISO string, replacing +00:00 with Z.
+        Converts a datetime object to a UTC ISO string with 'Z' suffix.
         Handles naive (assumed UTC) and timezone-aware datetime objects.
         """
         if dt_val is None:
@@ -117,16 +112,13 @@ class FeedItem(db.Model):
 
     def to_dict(self):
         """Returns a dictionary representation of the feed item."""
-        published_ts_iso = self._to_utc_iso_string(self.published_time)
-        fetched_ts_iso = self._to_utc_iso_string(self.fetched_time)
-
         return {
             'id': self.id,
             'feed_id': self.feed_id,
             'title': self.title,
             'link': self.link,
-            'published_time': published_ts_iso, # Use the new helper method
-            'fetched_time': fetched_ts_iso, # Use the new helper method
+            'published_time': FeedItem.to_iso_z_string(self.published_time),
+            'fetched_time': FeedItem.to_iso_z_string(self.fetched_time),
             'is_read': self.is_read,
             'guid': self.guid
         }

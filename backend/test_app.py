@@ -229,14 +229,89 @@ def setup_tabs_and_feeds(client):
                 "feed1_id": feed1.id, "feed2_id": feed2.id, "feed3_id": feed3.id,
                 "item1_id": item1.id, "item2_id": item2.id, "item3_id": item3.id}
 
-def test_get_feeds_for_tab(client, setup_tabs_and_feeds):
-    """Test GET /api/tabs/<tab_id>/feeds."""
+def test_get_feeds_for_tab_with_items(client, setup_tabs_and_feeds):
+    """Test GET /api/tabs/<tab_id>/feeds returns feeds bundled with their items."""
     tab1_id = setup_tabs_and_feeds["tab1_id"]
+    
+    # Act
     response = client.get(f'/api/tabs/{tab1_id}/feeds')
+    
+    # Assert
     assert response.status_code == 200
-    assert len(response.json) == 2
-    feed_names = {feed['name'] for feed in response.json}
-    assert feed_names == {"Feed 1", "Feed 2"}
+    data = response.json
+    assert len(data) == 2 # Feed 1 and Feed 2 are in Tab 1
+    
+    # Sort data by feed name to have a predictable order for testing
+    data.sort(key=lambda x: x['name'])
+    
+    feed1_data = data[0]
+    assert feed1_data['name'] == 'Feed 1'
+    assert 'items' in feed1_data
+    assert len(feed1_data['items']) == 2 # Item 1.1 and 1.2
+    item_titles1 = {item['title'] for item in feed1_data['items']}
+    assert item_titles1 == {'Item 1.1', 'Item 1.2'}
+    
+    feed2_data = data[1]
+    assert feed2_data['name'] == 'Feed 2'
+    assert 'items' in feed2_data
+    assert len(feed2_data['items']) == 1 # Item 2.1
+    item_titles2 = {item['title'] for item in feed2_data['items']}
+    assert item_titles2 == {'Item 2.1'}
+
+def test_get_feeds_for_tab_with_items_and_limit(client, setup_tabs_and_feeds):
+    """Test the limit parameter on GET /api/tabs/<tab_id>/feeds."""
+    tab1_id = setup_tabs_and_feeds["tab1_id"]
+    
+    # Act
+    response = client.get(f'/api/tabs/{tab1_id}/feeds?limit=1')
+    
+    # Assert
+    assert response.status_code == 200
+    data = response.json
+    assert len(data) == 2
+    
+    data.sort(key=lambda x: x['name'])
+    
+    feed1_data = data[0]
+    assert feed1_data['name'] == 'Feed 1'
+    assert len(feed1_data['items']) == 1 # Limited to 1
+    
+    feed2_data = data[1]
+    assert feed2_data['name'] == 'Feed 2'
+    assert len(feed2_data['items']) == 1 # Limited to 1
+
+def test_get_feeds_for_tab_with_feed_having_no_items(client, setup_tabs_and_feeds):
+    """Test GET /api/tabs/<tab_id>/feeds for a tab with a feed that has no items."""
+    tab2_id = setup_tabs_and_feeds["tab2_id"]
+
+    # Act
+    response = client.get(f'/api/tabs/{tab2_id}/feeds')
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json
+    assert len(data) == 1 # Only Feed 3 is in Tab 2
+
+    feed3_data = data[0]
+    assert feed3_data['name'] == 'Feed 3'
+    assert 'items' in feed3_data
+    assert len(feed3_data['items']) == 0 # Feed 3 has no items
+
+def test_get_feeds_for_tab_with_no_feeds(client):
+    """Test GET /api/tabs/<tab_id>/feeds for a tab that has no feeds."""
+    # Arrange: Create a new tab with no feeds
+    with app.app_context():
+        new_tab = Tab(name="Empty Tab", order=0)
+        db.session.add(new_tab)
+        db.session.commit()
+        tab_id = new_tab.id
+
+    # Act
+    response = client.get(f'/api/tabs/{tab_id}/feeds')
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json == []
 
 def test_get_feeds_for_tab_not_found(client):
     """Test GET /api/tabs/<tab_id>/feeds for non-existent tab."""
@@ -336,32 +411,6 @@ def test_delete_feed_success(client, setup_tabs_and_feeds):
 def test_delete_feed_not_found(client):
     """Test DELETE /api/feeds/<id> for non-existent feed."""
     response = client.delete('/api/feeds/999')
-    assert response.status_code == 404
-
-def test_get_feed_items(client, setup_tabs_and_feeds):
-    """Test GET /api/feeds/<feed_id>/items."""
-    feed1_id = setup_tabs_and_feeds["feed1_id"]
-    response = client.get(f'/api/feeds/{feed1_id}/items')
-    assert response.status_code == 200
-    assert len(response.json) == 2
-    # Items should be ordered by published_time desc (or fetched_time desc if null)
-    # Assuming Item 1.2 was fetched/published later for this test setup
-    item_titles = [item['title'] for item in response.json]
-    # Order depends on how test data was added and default sorting
-    # Let's check presence instead of strict order for simplicity here
-    assert set(item_titles) == {"Item 1.1", "Item 1.2"}
-    assert response.json[0]['is_read'] in [True, False] # Check boolean value
-
-def test_get_feed_items_limit(client, setup_tabs_and_feeds):
-    """Test GET /api/feeds/<feed_id>/items with limit parameter."""
-    feed1_id = setup_tabs_and_feeds["feed1_id"]
-    response = client.get(f'/api/feeds/{feed1_id}/items?limit=1')
-    assert response.status_code == 200
-    assert len(response.json) == 1
-
-def test_get_feed_items_feed_not_found(client):
-    """Test GET /api/feeds/<feed_id>/items for non-existent feed."""
-    response = client.get('/api/feeds/999/items')
     assert response.status_code == 404
 
 def test_mark_item_read_success(client, setup_tabs_and_feeds):
@@ -646,15 +695,22 @@ def test_feed_item_to_dict_serialization(client): # client fixture ensures app_c
         db.session.delete(item_none_published)
         db.session.commit()
 
-        # Clean up dummy Tab and Feed if they were created by this test
-        # Note: This is a simplified cleanup. If other tests create these,
-        # this might be too aggressive or fail.
-        # The `client` fixture should handle overall DB cleanup (drop_all).
-        # For now, this specific cleanup is removed as client fixture handles it.
-        # feed_to_delete = Feed.query.get(test_feed.id)
-        # if feed_to_delete:
-        #     db.session.delete(feed_to_delete)
-        # tab_to_delete = Tab.query.get(test_tab.id)
-        # if tab_to_delete:
-        #     db.session.delete(tab_to_delete)
-        # db.session.commit()
+def test_to_iso_z_string_static_method():
+    """Tests the FeedItem.to_iso_z_string static method directly."""
+    from datetime import datetime, timezone, timedelta
+
+    # 1. Test with a naive datetime (assumed to be UTC)
+    naive_dt = datetime(2023, 1, 1, 12, 0, 0)
+    assert FeedItem.to_iso_z_string(naive_dt) == "2023-01-01T12:00:00Z"
+
+    # 2. Test with a timezone-aware datetime (not UTC)
+    tz_est = timezone(timedelta(hours=-5))
+    aware_dt_est = datetime(2023, 3, 15, 10, 0, 0, tzinfo=tz_est) # This is 15:00 UTC
+    assert FeedItem.to_iso_z_string(aware_dt_est) == "2023-03-15T15:00:00Z"
+
+    # 3. Test with a timezone-aware UTC datetime
+    aware_dt_utc = datetime(2023, 5, 20, 14, 30, 0, tzinfo=timezone.utc)
+    assert FeedItem.to_iso_z_string(aware_dt_utc) == "2023-05-20T14:30:00Z"
+
+    # 4. Test with None input
+    assert FeedItem.to_iso_z_string(None) is None

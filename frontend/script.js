@@ -8,11 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const addTabButton = document.getElementById('add-tab-button');
     const renameTabButton = document.getElementById('rename-tab-button');
     const deleteTabButton = document.getElementById('delete-tab-button');
-    const refreshAllFeedsButton = document.getElementById('refresh-all-feeds-button'); // Added
+    const refreshAllFeedsButton = document.getElementById('refresh-all-feeds-button');
     
     // State variables
     let activeTabId = null; // ID of the currently selected tab
     let allTabs = []; // Cache of tab data fetched from the API
+    const loadedTabs = new Set(); // Cache to track which tabs have been loaded
 
     // --- Helper Functions ---
 
@@ -46,42 +47,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Real-Time Update Logic (SSE) ---
 
     /** Initializes the Server-Sent Events (SSE) connection to receive real-time updates. */
-    function initializeSSE() {
+    async function initializeSSE() {
         console.log('Initializing SSE connection...');
         const eventSource = new EventSource('/api/stream');
 
         eventSource.onmessage = async (event) => {
+            if (!event.data) return;
+            
             try {
                 const data = JSON.parse(event.data);
                 console.log('SSE message received (feeds updated):', data);
 
-                // Create a more subtle notification instead of an alert.
-                // For now, an alert demonstrates functionality.
                 if (data.new_items > 0) {
-                    console.log(`Feeds updated in background. New items: ${data.new_items}`);
-                    // Optionally, alert the user or show a less intrusive notification.
-                    // alert(`Feeds updated. New items found: ${data.new_items}`);
+                    console.log(`Feeds updated in background. Found ${data.new_items} new items. Refreshing UI.`);
+                    // 1. Reload tab data to update unread counts on all tab buttons
+                    await initializeTabs(true);
+
+                    // 2. If the updated content affects a tab that is already loaded (specifically the active one),
+                    // clear its content and reload it.
+                    if (activeTabId && loadedTabs.has(activeTabId)) {
+                        // Remove existing widgets for the active tab
+                        document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                        loadedTabs.delete(activeTabId); // Mark tab as not loaded
+                        await loadFeedsForTab(activeTabId); // Reload its content
+                    }
+                } else {
+                    console.log('SSE update received: No new items found.');
                 }
-
-                // Refresh the UI to reflect the updates
-                // 1. Reload tabs to update unread counts everywhere
-                await initializeTabs(true); // 'true' keeps the active tab
-
-                // 2. If a tab is active, reload its feeds to show new items
-                if (activeTabId) {
-                    await loadFeedsForTab(activeTabId);
-                }
-
             } catch (e) {
-                console.error('Error parsing SSE message data:', e);
+                console.error('Error parsing SSE message data:', event.data, e);
             }
         };
 
         eventSource.onerror = (err) => {
             console.error('EventSource failed:', err);
-            // The browser will automatically attempt to reconnect on most errors.
-            // If the server closes the connection, it might stop.
-            // You can add logic to show a 'disconnected' status to the user.
         };
     }
 
@@ -89,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** Handles the click event for the "Refresh All Feeds" button. */
     async function handleRefreshAllFeeds() {
-        console.log("Refreshing all feeds...");
+        console.log("Triggering refresh for all feeds...");
         const originalButtonText = refreshAllFeedsButton.textContent;
         refreshAllFeedsButton.disabled = true;
         refreshAllFeedsButton.textContent = 'Refreshing...';
@@ -98,20 +97,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await fetchData('/api/feeds/update-all', { method: 'POST' });
 
             if (result && result.message) {
-                alert(`Successfully triggered refresh for all feeds.\nProcessed: ${result.feeds_processed}\nNew items: ${result.new_items}`);
-                console.log('All feeds refresh triggered:', result);
-                // No need to manually reload here; the SSE event will handle it.
+                console.log('All feeds refresh triggered successfully:', result);
             } else if (result && result.error) {
-                // Handle cases where the API returns a JSON error object but not an HTTP error
                 alert(`Failed to refresh all feeds: ${result.error}`);
                 console.error('Error refreshing all feeds:', result.error);
             } else if (!result) {
-                // fetchData already shows an alert for network/HTTP errors, so just log here
                 console.error('Failed to refresh all feeds. fetchData returned null.');
             }
         } catch (error) {
-            // This catch is mostly for unexpected errors in this function's logic,
-            // as fetchData handles its own errors including alerts.
             console.error('Unexpected error in handleRefreshAllFeeds:', error);
             alert('An unexpected error occurred while refreshing feeds.');
         } finally {
@@ -224,14 +217,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Renders a single feed widget.
-     * @param {object} feed - The feed object from the API (including unread_count).
-     * @param {Array<object>} items - An array of feed item objects from the API.
+     * Renders a single feed widget and appends it to the main grid.
+     * @param {object} feed - The feed object from the API (including unread_count and items).
      */
-    function renderFeedWidget(feed, items) {
+    function renderFeedWidget(feed) {
         const widget = document.createElement('div');
         widget.classList.add('feed-widget');
         widget.dataset.feedId = feed.id;
+        widget.dataset.tabId = feed.tab_id; // Associate widget with a tab
 
         const deleteButton = document.createElement('button');
         deleteButton.classList.add('delete-feed-button');
@@ -250,18 +243,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (badge) {
             titleElement.appendChild(badge);
         }
-        // Set text content after appending badge to avoid overwriting it
         titleElement.prepend(feed.name);
-
 
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
 
+        // Append the whole widget to the grid
         feedGrid.appendChild(widget);
 
         // Render items
-        if (items && items.length > 0) {
-            items.forEach(item => {
+        if (feed.items && feed.items.length > 0) {
+            feed.items.forEach(item => {
                 const listItem = document.createElement('li');
                 listItem.dataset.itemId = item.id;
                 listItem.classList.add(item.is_read ? 'read' : 'unread');
@@ -289,61 +281,60 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {number} tabId - The ID of the tab to load feeds for.
      */
     async function loadFeedsForTab(tabId) {
-        feedGrid.innerHTML = '<p>Loading feeds...</p>';
-        const feeds = await fetchData(`/api/tabs/${tabId}/feeds`);
+        // Show a loading message only if the grid is completely empty
+        if (feedGrid.children.length === 0) {
+            feedGrid.innerHTML = '<p>Loading feeds...</p>';
+        }
 
-        feedGrid.innerHTML = ''; // Clear the grid before rendering new feeds
+        const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds`);
 
-        if (feeds === null) {
+        // If we were showing a global loading message, clear it.
+        if (feedGrid.querySelector('p')) {
+            feedGrid.innerHTML = '';
+        }
+
+        if (feedsWithItems === null) {
             feedGrid.innerHTML = '<p>Error loading feeds. Please check the console or try again.</p>';
             return;
         }
 
-        if (feeds && feeds.length > 0) {
-            // Fetch items concurrently
-            await Promise.all(feeds.map(async (feed) => {
-                const items = await fetchData(`/api/feeds/${feed.id}/items?limit=10`); // Limit fetch
-                if (items !== null) {
-                    renderFeedWidget(feed, items);
-                }
-            }));
-
-            // Handle empty state if all feeds loaded but no items were found
-            if (feedGrid.children.length === 0) {
-                 feedGrid.innerHTML = '<p>Feeds loaded, but no items found or items failed to load.</p>';
-            }
-        } else {
-            // No feeds found for the tab (not an error)
+        if (feedsWithItems && feedsWithItems.length > 0) {
+            feedsWithItems.forEach(feed => {
+                renderFeedWidget(feed);
+            });
+        } else if (feedGrid.children.length === 0) {
+            // Only show 'no feeds' if the entire grid is empty after attempting to load
             feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
         }
+
+        loadedTabs.add(tabId); // Mark this tab's content as loaded
     }
 
     // --- Tab Switching Logic ---
 
     /**
-     * Sets the specified tab as active, updates UI and loads its feeds.
+     * Sets the specified tab as active, loads its content if needed, and shows/hides widgets.
      * @param {number} tabId - The ID of the tab to activate.
      */
-    function setActiveTab(tabId) {
-        if (activeTabId === tabId && feedGrid.children.length > 0) {
-            // Do nothing if the tab is already active and populated,
-            // unless we are forcing a reload (which is handled by the caller).
-            // This just avoids re-selecting an already selected tab visually.
-            return;
+    async function setActiveTab(tabId) {
+        activeTabId = tabId;
+
+        // Update active class on tab buttons
+        tabsContainer.querySelectorAll('button').forEach(button => {
+            button.classList.toggle('active', button.dataset.tabId == tabId);
+        });
+
+        // Load content if it's not cached
+        if (!loadedTabs.has(tabId)) {
+            await loadFeedsForTab(tabId);
         }
 
-        activeTabId = tabId;
-        const buttons = tabsContainer.querySelectorAll('button');
-        buttons.forEach(button => {
-            if (button.dataset.tabId == tabId) {
-                button.classList.add('active');
-            } else {
-                button.classList.remove('active');
-            }
+        // Show/hide widgets based on the active tab
+        feedGrid.querySelectorAll('.feed-widget').forEach(widget => {
+            widget.style.display = widget.dataset.tabId == tabId ? 'block' : 'none';
         });
-        deleteTabButton.disabled = allTabs.length <= 1;
 
-        loadFeedsForTab(tabId);
+        deleteTabButton.disabled = allTabs.length <= 1;
     }
 
     /**
@@ -386,10 +377,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newFeedData) {
             console.log('Feed added:', newFeedData);
             feedUrlInput.value = '';
-            // Reload the current tab to show the new feed
-            await loadFeedsForTab(activeTabId);
-            // also reload tabs to update unread counts if necessary
-            await initializeTabs(true);
+            // Invalidate and reload the current tab to show the new feed
+            if (loadedTabs.has(activeTabId)) {
+                document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                loadedTabs.delete(activeTabId);
+            }
+            await setActiveTab(activeTabId); // Reload and display the current tab
+            await initializeTabs(true); // Update unread counts
         } else {
             console.error('Failed to add feed.');
         }
@@ -511,7 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newTabData) {
             console.log('Tab added:', newTabData);
             await initializeTabs();
-            setActiveTab(newTabData.id);
+            await setActiveTab(newTabData.id);
         } else {
             console.error('Failed to add tab.');
         }
@@ -569,6 +563,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (result && result.success) {
             console.log(`Tab ${activeTabId} deleted successfully.`);
+            // Remove the deleted tab's widgets from the DOM
+            document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+            loadedTabs.delete(activeTabId);
             activeTabId = null;
             await initializeTabs();
         } else {
@@ -586,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentActiveId = isUpdate ? activeTabId : null;
         const tabs = await fetchData('/api/tabs');
         if (tabs) {
-            activeTabId = currentActiveId; // Restore active tab before rendering
+            activeTabId = currentActiveId; // Restore active tab ID before rendering
             renderTabs(tabs);
         } else {
             renderTabs([]);
