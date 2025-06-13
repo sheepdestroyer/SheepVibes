@@ -10,6 +10,17 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      # Start a Redis service container for the job
+      redis:
+        image: redis:alpine
+        # Health check to ensure Redis is ready before tests run
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

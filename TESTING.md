@@ -16,19 +16,30 @@ The backend of SheepVibes is written in Python and uses the `pytest` framework f
 
 ### Running Tests
 
-To run the backend tests (Always in a venv!):
+The backend tests require a running Redis instance for caching checks.
 
-1.  Ensure you are in the `backend` directory, and have activated the venv.
-2.  Execute `pytest`:
+1.  **Start Redis**
+    Before running the tests, start a Redis container. The `--rm` flag will ensure it is automatically removed when stopped.
     ```bash
+    # Using Podman
+    podman run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine
+
+    # Or using Docker
+    # docker run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine
+    ```
+
+2.  **Run Pytest**
+    Ensure you are in the `backend` directory with the virtual environment activated. The test suite is configured via `pytest.ini` to automatically connect to Redis on `localhost:6379`.
+    ```bash
+    # From the 'backend' directory
     python -m pytest -v
     ```
 
-The tests will run and output the results to your console. They cover:
-*   API endpoints (defined in `test_app.py`).
-*   Feed processing and service logic (defined in `test_feed_service.py`).
-
-The tests are configured to use an in-memory SQLite database, so they do not affect your development or production database.
+3.  **Stop Redis**
+    After you've finished testing, you can stop the Redis container.
+    ```bash
+    podman stop sheepvibes-test-redis
+    ```
 
 ## Frontend Testing
 
@@ -56,13 +67,24 @@ name: Run Backend Tests
 
 on:
   push:
-    branches: [ ** ]
+    branches: [ '**' ]
   pull_request:
     branches: [ main ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    
+    services:
+      # Start a Redis service container for the job
+      redis:
+        image: redis:alpine
+        # Health check to ensure Redis is ready before tests run
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
     - name: Checkout code
@@ -94,16 +116,13 @@ jobs:
 *   **`jobs:`**: Defines one or more jobs to run.
     *   **`test:`**: The name of the job.
         *   `runs-on: ubuntu-latest`: Specifies that the job should run on the latest version of Ubuntu provided by GitHub.
+        *   **`services:`**: Defines external services to be run in containers for the job.
+            *   `redis:`: A service named `redis` is started using the `redis:alpine` image. It includes a health check to ensure tests don't start until Redis is responsive. This service is automatically available to the job runner at `localhost:6379`.
         *   **`steps:`**: A sequence of tasks to be executed.
             1.  **`Checkout code`**: Uses the standard `actions/checkout@v4` action to download the repository's code into the runner.
             2.  **`Set up Python 3.13`**: Uses the `actions/setup-python@v5` action to install the specified Python version (3.13 in this case).
             3.  **`Install dependencies`**: Executes shell commands to upgrade pip and install the project's runtime and development dependencies from the `requirements.txt` and `requirements-dev.txt` files located in the `backend` directory.
-            4.  **`Run Pytest`**: Changes to the `backend` directory and then runs `python -m pytest -v -x test_app.py test_feed_service.py` to execute the test suite.
-                *   The `-v` flag increases verbosity.
-                *   The `-x` flag (fail fast) will stop the test run immediately upon the first test failure.
-                *   Certain tests known to be unstable in CI (`test_parse_published_time_invalid_date_string`, `test_process_feed_entries_duplicate_items`, `test_process_feed_entries_commit_error` and `test_process_feed_entries_no_guid_or_link` in `test_feed_service.py`) have been marked with `@pytest.mark.skip` directly in the test file. These tests will be reported as 'skipped' by pytest and require further investigation to resolve their underlying issues. They are skipped to allow the rest of the test suite to run reliably in the CI environment.
-                *   This command targets specific test files (`test_app.py` and `test_feed_service.py`) to ensure that only correctly structured and intended test files are executed.
-                *   Using `python -m pytest` is a more robust way to invoke pytest, especially in CI environments.
+            4.  **`Run Pytest`**: Changes to the `backend` directory and then runs `python -m pytest -v`. The tests automatically connect to the Redis service thanks to the configuration in `pytest.ini`.
 
 ### Accessing Workflow Results
 
