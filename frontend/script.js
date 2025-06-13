@@ -13,8 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // State variables
     let activeTabId = null; // ID of the currently selected tab
     let allTabs = []; // Cache of tab data fetched from the API
-    let pollingIntervalId = null; // ID for the feed update polling interval
-    const POLLING_INTERVAL_MS = 5 * 60 * 1000; // Poll feeds every 5 minutes
 
     // --- Helper Functions ---
 
@@ -60,12 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result && result.message) {
                 alert(`Successfully refreshed all feeds.\nProcessed: ${result.feeds_processed}\nNew items: ${result.new_items}`);
                 console.log('All feeds refreshed:', result);
-                // If an active tab is set, reload its feeds to show new items
                 if (activeTabId) {
-                    // Stop current polling before manual refresh, then restart
-                    stopPolling();
-                    await loadFeedsForTab(activeTabId, false); // false to ensure grid is cleared and reloaded
-                    startPolling(); // Restart polling with potentially new data
+                    await loadFeedsForTab(activeTabId);
                 }
             } else if (result && result.error) {
                 // Handle cases where the API returns a JSON error object but not an HTTP error
@@ -394,9 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         deleteTabButton.disabled = allTabs.length <= 1;
 
-        loadFeedsForTab(tabId, false).then(() => {
-            startPolling();
-        });
+        loadFeedsForTab(tabId);
     }
 
     /**
@@ -667,9 +659,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await initializeTabs();
         // Polling starts automatically when the first tab is activated within initializeTabs/renderTabs
     }
-
-    // Add listener to stop polling when the user navigates away or closes the tab
-    window.addEventListener('beforeunload', stopPolling);
 
     // Start the application initialization process
     initialize();
