@@ -601,29 +601,30 @@ def test_stream_endpoint_content_type(client):
     response.close()
 
 # --- Tests for Caching ---
-@patch('backend.app.Tab.query')
-def test_get_tabs_caching(mock_query, client):
+def test_get_tabs_caching(client):
     """Verify that the get_tabs endpoint is cached."""
-    # Arrange: Mock the chain of calls that leads to getting data
-    mock_order_by = MagicMock()
-    mock_all = MagicMock(return_value=[]) # Return an empty list of tabs
-    mock_query.order_by.return_value = mock_order_by
-    mock_order_by.all = mock_all
+    # Use with patch() to ensure it runs within the app context
+    with patch('backend.app.Tab.query') as mock_query:
+        # Arrange: Mock the chain of calls that leads to getting data
+        mock_order_by = MagicMock()
+        mock_all = MagicMock(return_value=[]) # Return an empty list of tabs
+        mock_query.order_by.return_value = mock_order_by
+        mock_order_by.all = mock_all
 
-    # Act: Call the endpoint twice
-    client.get('/api/tabs') # First call, should trigger the query
-    client.get('/api/tabs') # Second call, should hit the cache
+        # Act: Call the endpoint twice
+        client.get('/api/tabs') # First call, should trigger the query
+        client.get('/api/tabs') # Second call, should hit the cache
 
-    # Assert: The database query should have only been called once
-    mock_query.order_by.assert_called_once()
-    mock_order_by.all.assert_called_once()
+        # Assert: The database query should have only been called once
+        mock_query.order_by.assert_called_once()
+        mock_order_by.all.assert_called_once()
 
-    # Now, clear the cache and call it again
-    with app.app_context():
-        cache.clear()
-    
-    client.get('/api/tabs') # Third call, should trigger query again
-    assert mock_order_by.all.call_count == 2 # Check it was called a second time
+        # Now, clear the cache and call it again
+        with app.app_context():
+            cache.clear()
+        
+        client.get('/api/tabs') # Third call, should trigger query again
+        assert mock_order_by.all.call_count == 2 # Check it was called a second time
 
 
 # --- Tests for Model Methods ---
