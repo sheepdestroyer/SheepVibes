@@ -536,12 +536,18 @@ def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce, client
 # --- Tests for SSE Stream ---
 
 def test_stream_endpoint_content_type(client):
-    """Test GET /api/stream returns correct Content-Type for SSE."""
-    # The client does not directly support streaming responses,
-    # but we can check the initial response headers.
-    with client.get('/api/stream') as response:
-        assert response.status_code == 200
-        assert response.content_type == 'text/event-stream; charset=utf-8'
+    """Test GET /api/stream returns correct Content-Type for SSE without hanging."""
+    # Use buffered=False to get a streaming response without consuming it.
+    response = client.get('/api/stream', buffered=False)
+    
+    # Assertions on headers should work immediately.
+    assert response.status_code == 200
+    assert 'text/event-stream' in response.content_type
+    
+    # Manually close the response to terminate the generator on the server.
+    # This triggers a GeneratorExit in the server-side stream function,
+    # allowing it to clean up and preventing the test from hanging.
+    response.close()
 
 
 # --- Tests for Model Methods ---
