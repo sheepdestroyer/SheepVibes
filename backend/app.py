@@ -1,6 +1,7 @@
 # Import necessary libraries
 import os
 import logging
+import atexit
 from flask import Flask, jsonify, request, send_from_directory
 # Removed SQLAlchemy direct import, will get `db` from models
 from flask_migrate import Migrate # Added for database migrations
@@ -82,6 +83,13 @@ def scheduled_feed_update():
             logger.info(f"Scheduled update completed: {feeds_updated} feeds updated, {new_items} new items")
         except Exception as e:
             logger.error(f"Error during scheduled feed update: {e}", exc_info=True)
+
+# Start the scheduler in the global scope for WSGI servers and register a cleanup function.
+try:
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown())
+except (KeyboardInterrupt, SystemExit):
+    scheduler.shutdown()
 
 # --- Error Handlers ---
 
@@ -386,16 +394,8 @@ def update_feed(feed_id):
 # --- Application Initialization and Startup ---
 
 if __name__ == '__main__':
-    # Start the background feed update scheduler
-    try:
-        scheduler.start()
-        logger.info("Background scheduler started.")
-    except Exception as e:
-        logger.error(f"Failed to start scheduler: {e}", exc_info=True)
-    
-    # Start the Flask development server
-    # Note: For production, use a proper WSGI server like Gunicorn or Waitress
-    # The Flask CLI (`flask run`) is used when running in the container via Containerfile CMD
+    # Start the Flask development server for local testing.
+    # The scheduler is already started in the global scope.
     is_debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
     logger.info(f"Starting Flask app (Debug mode: {is_debug_mode})")
     app.run(host='0.0.0.0', port=5000, debug=is_debug_mode)
