@@ -9,6 +9,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
+from sqlalchemy import func, select # Added for optimized query
 
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
@@ -276,31 +277,54 @@ def delete_tab(tab_id):
 def get_feeds_for_tab(tab_id):
     """
     Returns a list of feeds for a tab, including recent items for each feed.
-    This is more efficient for the frontend than making N+1 requests.
+    This is highly optimized to prevent the N+1 query problem.
     """
     # Ensure tab exists, or return 404.
     db.get_or_404(Tab, tab_id)
 
-    # Get feeds for the tab.
-    feeds = Feed.query.filter_by(tab_id=tab_id).all()
-    
     # Get limit for items from query string, default to 10.
     limit = request.args.get('limit', 10, type=int)
 
+    # Query 1: Get all feeds for the given tab.
+    feeds = Feed.query.filter_by(tab_id=tab_id).all()
+    if not feeds:
+        return jsonify([])
+
+    feed_ids = [feed.id for feed in feeds]
+
+    # Query 2: Get the top N items for ALL those feeds in a single, efficient query.
+    # Use a window function to rank items within each feed.
+    ranked_items_subq = select(
+        FeedItem,
+        func.row_number().over(
+            partition_by=FeedItem.feed_id,
+            order_by=[FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()]
+        ).label('rank')
+    ).filter(FeedItem.feed_id.in_(feed_ids)).subquery()
+
+    # Select from the subquery to filter by the rank.
+    top_items_query = select(ranked_items_subq).filter(ranked_items_subq.c.rank <= limit)
+    
+    top_items_results = db.session.execute(top_items_query).all()
+
+    # Group the fetched items by feed_id for efficient lookup.
+    items_by_feed = {}
+    for item_row in top_items_results:
+        # Create a temporary FeedItem object to use its to_dict() method,
+        # which correctly handles datetime serialization.
+        item_data = {c.name: getattr(item_row, c.name) for c in FeedItem.__table__.columns}
+        item_obj = FeedItem(**item_data)
+        
+        feed_id = item_obj.feed_id
+        if feed_id not in items_by_feed:
+            items_by_feed[feed_id] = []
+        items_by_feed[feed_id].append(item_obj.to_dict())
+
+    # Build the final response, combining feeds with their items.
     response_data = []
     for feed in feeds:
-        # Get base feed data from its to_dict() method.
         feed_dict = feed.to_dict()
-        
-        # Query for recent items for this specific feed.
-        # With lazy='dynamic', feed.items is a query object.
-        recent_items = feed.items.order_by(
-            FeedItem.published_time.desc().nullslast(),
-            FeedItem.fetched_time.desc()
-        ).limit(limit).all()
-
-        # Serialize items and add to the feed dictionary.
-        feed_dict['items'] = [item.to_dict() for item in recent_items]
+        feed_dict['items'] = items_by_feed.get(feed.id, [])
         response_data.append(feed_dict)
 
     return jsonify(response_data)
