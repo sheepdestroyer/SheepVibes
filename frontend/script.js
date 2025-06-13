@@ -184,83 +184,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Renders a single feed widget or updates an existing one.
-     * During updates, only prepends new items not already present.
+     * Renders a single feed widget.
      * @param {object} feed - The feed object from the API (including unread_count).
      * @param {Array<object>} items - An array of feed item objects from the API.
-     * @param {boolean} [isUpdate=false] - Indicates if this is an update to an existing widget.
      */
-    function renderFeedWidget(feed, items, isUpdate = false) {
-        let widget = feedGrid.querySelector(`.feed-widget[data-feed-id="${feed.id}"]`);
-        let itemList;
-        let titleElement;
+    function renderFeedWidget(feed, items) {
+        const widget = document.createElement('div');
+        widget.classList.add('feed-widget');
+        widget.dataset.feedId = feed.id;
 
-        if (widget) {
-            // Widget exists, update title and items
-            titleElement = widget.querySelector('h2');
-            itemList = widget.querySelector('ul');
-            // Don't clear innerHTML on update, we'll prepend new items
-        } else {
-            // Create new widget if it doesn't exist
-            isUpdate = false; // Cannot be an update if widget is new
-            widget = document.createElement('div');
-            widget.classList.add('feed-widget');
-            widget.dataset.feedId = feed.id;
+        const deleteButton = document.createElement('button');
+        deleteButton.classList.add('delete-feed-button');
+        deleteButton.textContent = 'X';
+        deleteButton.title = 'Delete Feed';
+        deleteButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleDeleteFeed(feed.id);
+        });
+        widget.appendChild(deleteButton);
 
-            // ... (delete button setup) ...
-            const deleteButton = document.createElement('button');
-            deleteButton.classList.add('delete-feed-button');
-            deleteButton.textContent = 'X';
-            deleteButton.title = 'Delete Feed';
-            deleteButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handleDeleteFeed(feed.id);
-            });
-            widget.appendChild(deleteButton);
-
-            titleElement = document.createElement('h2');
-            widget.appendChild(titleElement);
-
-            itemList = document.createElement('ul');
-            widget.appendChild(itemList);
-
-            // Prepend new widgets when added manually, append otherwise (e.g., initial load)
-            // This logic might need refinement depending on desired order
-            const prependWidget = document.getElementById('add-feed-button').disabled; // Heuristic: prepend if add button was just used
-            if (prependWidget) {
-                 feedGrid.prepend(widget);
-            } else {
-                 feedGrid.appendChild(widget);
-            }
-        }
-
-        // Update title text and badge (remove old badge first)
-        const oldBadge = titleElement.querySelector('.unread-count-badge');
-        if(oldBadge) oldBadge.remove();
-        titleElement.textContent = feed.name;
+        const titleElement = document.createElement('h2');
+        widget.appendChild(titleElement);
+        
         const badge = createBadge(feed.unread_count);
         if (badge) {
             titleElement.appendChild(badge);
         }
+        // Set text content after appending badge to avoid overwriting it
+        titleElement.prepend(feed.name);
+
+
+        const itemList = document.createElement('ul');
+        widget.appendChild(itemList);
+
+        feedGrid.appendChild(widget);
 
         // Render items
         if (items && items.length > 0) {
-            // Get IDs of items currently displayed in this widget
-            const existingItemIds = new Set();
-            if (isUpdate) {
-                itemList.querySelectorAll('li[data-item-id]').forEach(li => {
-                    existingItemIds.add(li.dataset.itemId);
-                });
-            }
-
-            let prependedItemsCount = 0;
             items.forEach(item => {
-                // If it's an update, only add items that are not already displayed
-                if (isUpdate && existingItemIds.has(String(item.id))) {
-                    return; // Skip already displayed item
-                }
-
-                // Create list item elements
                 const listItem = document.createElement('li');
                 listItem.dataset.itemId = item.id;
                 listItem.classList.add(item.is_read ? 'read' : 'unread');
@@ -276,22 +237,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 timestamp.textContent = formatDate(item.published_time || item.fetched_time);
                 listItem.appendChild(timestamp);
 
-                // Prepend new items during updates, append otherwise
-                if (isUpdate) {
-                    itemList.prepend(listItem);
-                    prependedItemsCount++;
-                } else {
-                    itemList.appendChild(listItem);
-                }
+                itemList.appendChild(listItem);
             });
-
-            if (isUpdate && prependedItemsCount > 0) {
-                 console.log(`Prepended ${prependedItemsCount} new items to feed ${feed.id}`);
-                 // Optional: Add visual indication of update?
-            }
-
-        } else if (!isUpdate) {
-            // Only show "No items" message if it's not an update (i.e., initial render)
+        } else {
             itemList.innerHTML = '<li>No items found for this feed.</li>';
         }
     }
@@ -299,83 +247,48 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Loads and renders all feeds for a given tab ID.
      * @param {number} tabId - The ID of the tab to load feeds for.
-     * @param {boolean} [isPollingUpdate=false] - Indicates if the call is from the polling mechanism.
      */
-    async function loadFeedsForTab(tabId, isPollingUpdate = false) {
-        if (!isPollingUpdate) {
-            feedGrid.innerHTML = '<p>Loading feeds...</p>';
-        }
+    async function loadFeedsForTab(tabId) {
+        feedGrid.innerHTML = '<p>Loading feeds...</p>';
         const feeds = await fetchData(`/api/tabs/${tabId}/feeds`);
 
-        // Only clear the grid completely on initial load/tab switch, not during polling
-        if (!isPollingUpdate) {
-             feedGrid.innerHTML = '';
-        }
+        feedGrid.innerHTML = ''; // Clear the grid before rendering new feeds
 
-        if (feeds === null && !isPollingUpdate) {
+        if (feeds === null) {
             feedGrid.innerHTML = '<p>Error loading feeds. Please check the console or try again.</p>';
             return;
         }
 
         if (feeds && feeds.length > 0) {
-            // Sort feeds (optional, could be based on name, last update, etc.)
-            // feeds.sort((a, b) => a.name.localeCompare(b.name));
-
             // Fetch items concurrently
             await Promise.all(feeds.map(async (feed) => {
                 const items = await fetchData(`/api/feeds/${feed.id}/items?limit=10`); // Limit fetch
                 if (items !== null) {
-                    // Pass feed object and items. Pass `isPollingUpdate` to indicate if it's an update.
-                    renderFeedWidget(feed, items, isPollingUpdate);
+                    renderFeedWidget(feed, items);
                 }
             }));
 
-            // Handle empty state only on initial load
-            if (!isPollingUpdate && feedGrid.children.length === 0) {
+            // Handle empty state if all feeds loaded but no items were found
+            if (feedGrid.children.length === 0) {
                  feedGrid.innerHTML = '<p>Feeds loaded, but no items found or items failed to load.</p>';
             }
-        } else if (!isPollingUpdate) {
+        } else {
             // No feeds found for the tab (not an error)
             feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
-        }
-        // If polling and feeds is null/empty, existing widgets are kept.
-    }
-
-    // --- Polling Logic ---
-
-    /** Starts the periodic polling to check for feed updates for the active tab. */
-    function startPolling() {
-        stopPolling();
-        if (activeTabId) {
-            console.log(`Starting polling for tab ${activeTabId} every ${POLLING_INTERVAL_MS / 1000} seconds`);
-            pollingIntervalId = setInterval(async () => {
-                if (activeTabId) {
-                    console.log(`Polling update for tab ${activeTabId}...`);
-                    await loadFeedsForTab(activeTabId, true);
-                }
-            }, POLLING_INTERVAL_MS);
-        } else {
-            console.log("No active tab, polling not started.");
-        }
-    }
-
-    /** Stops the periodic polling. */
-    function stopPolling() {
-        if (pollingIntervalId) {
-            console.log("Stopping polling.");
-            clearInterval(pollingIntervalId);
-            pollingIntervalId = null;
         }
     }
 
     // --- Tab Switching Logic ---
 
     /**
-     * Sets the specified tab as active, updates UI, loads its feeds, and starts polling.
+     * Sets the specified tab as active, updates UI and loads its feeds.
      * @param {number} tabId - The ID of the tab to activate.
      */
     function setActiveTab(tabId) {
-        if (activeTabId === tabId) return;
+        if (activeTabId === tabId && feedGrid.children.length > 0) {
+            // Do nothing if the tab is already active and populated
+            return;
+        }
 
         activeTabId = tabId;
         const buttons = tabsContainer.querySelectorAll('button');
@@ -392,12 +305,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Switches the active tab, stopping polling for the old tab first.
+     * Switches the active tab.
      * @param {number} tabId - The ID of the tab to switch to.
      */
     function switchTab(tabId) {
         if (tabId !== activeTabId) {
-            stopPolling();
             setActiveTab(tabId);
         }
     }
@@ -432,7 +344,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newFeedData) {
             console.log('Feed added:', newFeedData);
             feedUrlInput.value = '';
-            await initializeTabs(); // Reload tabs to include the new feed
+            // Reload the current tab to show the new feed
+            await loadFeedsForTab(activeTabId);
+            // also reload tabs to update unread counts if necessary
+            await initializeTabs(true);
         } else {
             console.error('Failed to add feed.');
         }
@@ -459,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (feedGrid.children.length === 0) {
                 feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
             }
-            await initializeTabs();
+            await initializeTabs(true);
         } else {
             console.error(`Failed to delete feed ${feedId}.`);
             if (widget) widget.style.opacity = '1';
@@ -535,7 +450,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleAddTab() {
         const newTabName = prompt('Enter the name for the new tab:');
         if (!newTabName || !newTabName.trim()) {
-            alert('Tab name cannot be empty.');
             return;
         }
 
@@ -571,7 +485,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentTab = allTabs.find(t => t.id === activeTabId);
         const newTabName = prompt('Enter the new name for the tab:', currentTab ? currentTab.name : '');
         if (!newTabName || !newTabName.trim()) {
-            alert('Tab name cannot be empty.');
             return;
         }
         if (currentTab && newTabName.trim() === currentTab.name) {
@@ -587,18 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (updatedTabData) {
             console.log('Tab renamed:', updatedTabData);
-            const tabButton = tabsContainer.querySelector(`button[data-tab-id="${activeTabId}"]`);
-            if (tabButton) {
-                const oldBadge = tabButton.querySelector('.unread-count-badge');
-                if(oldBadge) oldBadge.remove();
-                tabButton.textContent = updatedTabData.name;
-                const badge = createBadge(updatedTabData.unread_count);
-                if (badge) tabButton.appendChild(badge);
-            }
-            const tabIndex = allTabs.findIndex(t => t.id === activeTabId);
-            if (tabIndex > -1) {
-                allTabs[tabIndex].name = updatedTabData.name;
-            }
+            await initializeTabs(true);
         } else {
             console.error('Failed to rename tab.');
         }
@@ -625,7 +527,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (result && result.success) {
             console.log(`Tab ${activeTabId} deleted successfully.`);
-            stopPolling();
             activeTabId = null;
             await initializeTabs();
         } else {
@@ -635,14 +536,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initial Load ---
 
-    /** Fetches the initial list of tabs from the API and renders them. */
-    async function initializeTabs() {
+    /** 
+     * Fetches the list of tabs from the API and renders them.
+     * @param {boolean} [isUpdate=false] - If true, keeps the current active tab.
+     */
+    async function initializeTabs(isUpdate = false) {
+        const currentActiveId = isUpdate ? activeTabId : null;
         const tabs = await fetchData('/api/tabs');
         if (tabs) {
+            activeTabId = currentActiveId; // Restore active tab before rendering
             renderTabs(tabs);
         } else {
             renderTabs([]);
-            stopPolling();
         }
     }
 
@@ -658,11 +563,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 handleAddFeed();
             }
         });
-        refreshAllFeedsButton.addEventListener('click', handleRefreshAllFeeds); // Added
+        refreshAllFeedsButton.addEventListener('click', handleRefreshAllFeeds);
 
         // Fetch initial tabs to start the application
         await initializeTabs();
-        // Polling starts automatically when the first tab is activated within initializeTabs/renderTabs
     }
 
     // Start the application initialization process
