@@ -44,10 +44,10 @@ class MessageAnnouncer:
                     msg = q.get(timeout=1.0)
                     yield msg
                 except queue.Empty:
-                    # This is expected if no messages are announced. We just
-                    # continue the loop. This gives the server a chance to
-                    # notice the client has disconnected and process GeneratorExit.
-                    pass
+                    # Send a heartbeat comment to keep the connection alive
+                    # and, crucially, to provide a yield point for GeneratorExit
+                    # to be raised when the client disconnects.
+                    yield ": heartbeat\n\n"
         except GeneratorExit:
             # This is triggered when the client disconnects
             self.listeners.remove(q)
