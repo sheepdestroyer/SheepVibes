@@ -1,0 +1,4 @@
+# Podman Quadlet to define a dedicated, isolated network for SheepVibes services.
+
+[Network]
+Driver=bridge

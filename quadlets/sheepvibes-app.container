@@ -1,0 +1,37 @@
+# Podman Quadlet for the SheepVibes application
+
+[Unit]
+Description=SheepVibes Application Container
+Wants=network.target
+After=network.target
+
+# Depend on Redis and the database volume being ready
+Wants=redis.service
+After=redis.service
+Wants=sheepvibes-db-volume.service
+After=sheepvibes-db-volume.service
+
+[Container]
+# Use the locally built image
+Image=localhost/sheepvibes-app:latest
+ContainerName=sheepvibes-app
+Network=sheepvibes.network
+PublishPort=127.0.0.1:5000:5000
+Volume=sheepvibes-db-volume.volume:/app/data
+
+# Environment variables
+Environment=DATABASE_PATH=/app/data/sheepvibes.db
+# Connect to Redis using its container name as the hostname
+Environment=CACHE_REDIS_URL=redis://sheepvibes-redis:6379/0
+Environment=FLASK_APP=backend.app
+Environment=PYTHONPATH=/app
+Environment=UPDATE_INTERVAL_MINUTES=15
+Environment=FLASK_RUN_HOST=0.0.0.0
+
+[Service]
+Restart=always
+TimeoutStartSec=90
+
+# Before starting the app, ensure the redis image is pulled.
+# This prevents race conditions on a fresh system setup.
+ExecStartPre=/usr/bin/podman pull docker.io/redis:alpine
