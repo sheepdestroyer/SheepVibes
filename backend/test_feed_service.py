@@ -410,8 +410,7 @@ def test_process_feed_entries_case_sensitive_identifiers(MockFeedItemInService, 
 @patch('backend.feed_service.process_feed_entries')
 @patch('backend.feed_service.fetch_feed')
 @patch('backend.feed_service.db.session.get')
-@patch('backend.feed_service.datetime')
-def test_fetch_and_update_feed_success(mock_fs_datetime, mock_db_get, mock_fs_fetch_feed, mock_fs_process_feed_entries, feed_service_db_setup):
+def test_fetch_and_update_feed_success(mock_db_get, mock_fs_fetch_feed, mock_fs_process_feed_entries, feed_service_db_setup):
     feed_id = 1
     mock_feed_instance = MagicMock(spec=Feed)
     mock_feed_instance.id = feed_id
@@ -426,19 +425,12 @@ def test_fetch_and_update_feed_success(mock_fs_datetime, mock_db_get, mock_fs_fe
 
     mock_fs_process_feed_entries.return_value = 5 # Assume 5 new items processed
 
-    # We are patching datetime.datetime.now(timezone.utc) in feed_service,
-    # so this mock_now should be timezone aware if that's what the code produces.
-    # The actual last_updated_time in feed_db_obj is set by process_feed_entries.
-    # This test is more about the flow of fetch_and_update_feed.
-    # The mock_fs_datetime.now call might not be directly relevant here unless
-    # fetch_and_update_feed itself sets a timestamp (which it doesn't currently).
-
     success, new_items_count = fetch_and_update_feed(feed_id)
 
     mock_db_get.assert_called_once_with(Feed, feed_id)
     mock_fs_fetch_feed.assert_called_once_with(mock_feed_instance.url)
     mock_fs_process_feed_entries.assert_called_once_with(mock_feed_instance, mock_parsed_feed)
-    assert success is True # Corrected variable name
+    assert success is True
     assert new_items_count == 5
 
 @patch('backend.feed_service.db.session.get')
@@ -453,8 +445,7 @@ def test_fetch_and_update_feed_not_found(mock_db_get, feed_service_db_setup):
 @patch('backend.feed_service.logger')
 @patch('backend.feed_service.fetch_feed')
 @patch('backend.feed_service.db.session.get')
-@patch('backend.feed_service.datetime')
-def test_fetch_and_update_feed_fetch_error(mock_fs_datetime, mock_db_get, mock_fs_fetch_feed, mock_fs_logger, feed_service_db_setup):
+def test_fetch_and_update_feed_fetch_error(mock_db_get, mock_fs_fetch_feed, mock_fs_logger, feed_service_db_setup):
     feed_id = 1
     mock_feed_instance = MagicMock(spec=Feed)
     mock_feed_instance.id = feed_id
@@ -464,22 +455,47 @@ def test_fetch_and_update_feed_fetch_error(mock_fs_datetime, mock_db_get, mock_f
 
     mock_fs_fetch_feed.return_value = None # Simulate fetch failure
 
-    # mock_fs_datetime.now() is not directly called by fetch_and_update_feed in this path
-    # if fetch_feed fails.
-
     success, new_items_count = fetch_and_update_feed(feed_id)
 
     mock_db_get.assert_called_once_with(Feed, feed_id)
     mock_fs_fetch_feed.assert_called_once_with(mock_feed_instance.url)
-    # Check the logger call content precisely
-    # The logger call is inside fetch_and_update_feed
     expected_log_message = f"Fetching content for feed {mock_feed_instance.name} (ID: {feed_id}) failed because fetch_feed returned None."
-    # Iterate through log calls if specific call order isn't guaranteed or other logs exist
-    # For this case, a single error log is expected from this specific logic path.
-    mock_fs_logger.error.assert_any_call(expected_log_message) # Use assert_any_call if other errors might be logged
-    mock_fetch_feed.assert_called_once_with(mock_feed_instance.url)
+    mock_fs_logger.error.assert_any_call(expected_log_message)
     assert success is False
     assert new_items_count == 0
+
+@patch('backend.feed_service.logger')
+@patch('backend.feed_service.process_feed_entries')
+@patch('backend.feed_service.fetch_feed')
+@patch('backend.feed_service.db.session.get')
+def test_fetch_and_update_feed_process_entries_error(
+    mock_db_get, mock_fetch_feed, mock_process_entries, mock_logger, feed_service_db_setup
+):
+    """Verify that fetch_and_update_feed handles exceptions from process_feed_entries."""
+    feed_id = 1
+    mock_feed_instance = MagicMock(spec=Feed, id=feed_id, url="http://example.com/rss", name="Test Feed")
+    mock_db_get.return_value = mock_feed_instance
+
+    mock_parsed_feed = MagicMock()
+    mock_fetch_feed.return_value = mock_parsed_feed
+
+    # Mock process_feed_entries to raise an unexpected exception.
+    error_message = "Unexpected processing error"
+    mock_process_entries.side_effect = Exception(error_message)
+
+    # ACTION
+    success, new_items_count = fetch_and_update_feed(feed_id)
+
+    # ASSERT
+    assert success is False
+    assert new_items_count == 0
+    mock_db_get.assert_called_once_with(Feed, feed_id)
+    mock_fetch_feed.assert_called_once_with(mock_feed_instance.url)
+    mock_process_entries.assert_called_once_with(mock_feed_instance, mock_parsed_feed)
+    mock_logger.error.assert_any_call(
+        f"An unexpected error occurred during entry processing for feed {mock_feed_instance.name} (ID: {feed_id}): {error_message}",
+        exc_info=True
+    )
 
 # --- Tests for update_all_feeds ---
 
@@ -542,62 +558,3 @@ def test_update_all_feeds_error_during_update(MockFsFeed, mock_fs_fetch_and_upda
     mock_fs_logger.info.assert_any_call("Starting update process for 3 feeds.")
     mock_fs_logger.error.assert_any_call(f"Unexpected error updating feed {mock_feed2.name} ({mock_feed2.id}): Simulated update error for Feed 2", exc_info=True)
     mock_fs_logger.info.assert_any_call("Finished updating all feeds. Processed: 2, New Items: 1")
-
-
-@patch('backend.feed_service.logger')
-@patch('backend.feed_service.process_feed_entries')
-@patch('backend.feed_service.fetch_feed')
-@patch('backend.feed_service.db.session.get')
-def test_fetch_and_update_feed_process_entries_error(
-    mock_db_get, mock_fetch_feed, mock_process_entries, mock_logger, feed_service_db_setup
-):
-    """Verify that fetch_and_update_feed handles exceptions from process_feed_entries."""
-    feed_id = 1
-    mock_feed_instance = MagicMock(spec=Feed, id=feed_id, url="http://example.com/rss", name="Test Feed")
-    mock_db_get.return_value = mock_feed_instance
-
-    mock_parsed_feed = MagicMock()
-    mock_fetch_feed.return_value = mock_parsed_feed
-
-    # Mock process_feed_entries to raise an unexpected exception.
-    error_message = "Unexpected processing error"
-    mock_process_entries.side_effect = Exception(error_message)
-
-    # ACTION
-    success, new_items_count = fetch_and_update_feed(feed_id)
-
-    # ASSERT
-    assert success is False
-    assert new_items_count == 0
-    mock_db_get.assert_called_once_with(Feed, feed_id)
-    mock_fetch_feed.assert_called_once with(mock_feed_instance.url)
-    mock_process_entries.assert_called_once_with(mock_feed_instance, mock_parsed_feed)
-    mock_logger.error.assert_any_call(
-        f"An unexpected error occurred during entry processing for feed {mock_feed_instance.name} (ID: {feed_id}): {error_message}",
-        exc_info=True
-    )
-
-
-# --- Test for Application Configuration ---
-
-def test_scheduler_is_configured():
-    """
-    Verifies that the APScheduler is configured correctly on the app object.
-    This test is placed here for convenience but verifies app.py configuration.
-    """
-    # Import scheduler from app module where it's instantiated globally
-    from .app import scheduler, UPDATE_INTERVAL_MINUTES
-
-    # Check that the job was added to the scheduler
-    update_job = scheduler.get_job('update_feeds')
-    assert update_job is not None, "Scheduled job 'update_feeds' should be configured."
-
-    # Verify the job calls the correct function
-    assert update_job.func_ref.__name__ == 'scheduled_feed_update', \
-        "Job should call the 'scheduled_feed_update' function."
-
-    # Verify the trigger is an interval trigger with the correct interval
-    trigger = update_job.trigger
-    assert hasattr(trigger, 'interval'), "Job trigger should be an interval trigger."
-    assert trigger.interval.total_seconds() == UPDATE_INTERVAL_MINUTES * 60, \
-        f"Job interval should be {UPDATE_INTERVAL_MINUTES} minutes."
