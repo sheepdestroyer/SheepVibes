@@ -3,6 +3,7 @@ import datetime
 from datetime import timezone # Ensure timezone is imported
 import time
 from unittest.mock import MagicMock, patch, call, ANY
+from collections import namedtuple
 from sqlalchemy.exc import IntegrityError
 
 from .feed_service import parse_published_time, fetch_feed, process_feed_entries, fetch_and_update_feed, update_all_feeds
@@ -128,30 +129,23 @@ def test_fetch_feed_exception(mock_feedparser_parse):
 # --- Helper for creating mock entries ---
 def create_mock_entry(id=None, link=None, title=None, published=None):
     entry = MagicMock()
-    entry.get.side_effect = lambda key, default=None: getattr(entry, key, default)
+    # Explicitly set attributes that a feedparser entry might have.
+    # Set to None if not provided.
     entry.id = id
     entry.link = link
     entry.title = title
-    entry.published = published # String representation
-    # Set published_parsed to None by default for these tests,
-    # so parse_published_time relies on string parsing
-    entry.published_parsed = None
+    entry.published = published
+    entry.published_parsed = None # For simplicity, we primarily test string parsing.
+    entry.updated = None
+    entry.created = None
 
-    # Ensure other date fields are not set unless specified by the test
-    if not hasattr(entry, 'updated'):
-        del entry.updated # Use delattr if it might exist from previous mock setup
-    if not hasattr(entry, 'created'):
-        del entry.created
-
-    # Special handling for get to simulate feedparser entry
+    # A safe side_effect for the .get() method that doesn't use getattr on the mock.
     def get_side_effect(key, default=None):
-        if key == 'id': return entry.id
-        if key == 'link': return entry.link
-        if key == 'title': return entry.title
-        if key == 'published': return entry.published
-        # for other fields like 'updated', 'created', they might not be set on purpose
-        return getattr(entry, key, default)
+        if hasattr(entry, key):
+            return getattr(entry, key)
+        return default
     entry.get.side_effect = get_side_effect
+
     return entry
 
 # --- Fixture for tests needing DB setup for feed_service ---
@@ -211,12 +205,13 @@ def test_process_feed_entries_duplicate_items(MockFeedItemInService, mock_db_ses
         create_mock_entry(id="guid3", link="link3", title="Title 3 (new)"),
     ]
     
-    # Mock the query to return existing items. The function queries for guid and link columns.
+    # Mock the query to return existing items.
+    # Use a namedtuple to simulate SQLAlchemy's KeyedTuple, which allows attribute access.
+    Row = namedtuple('Row', ['guid', 'link'])
     mock_query = MagicMock()
-    # Create mock rows that look like (guid, link) tuples.
     mock_query.all.return_value = [
-        ('guid1', 'some_other_link'),
-        ('some_other_guid', 'link2')
+        Row(guid='guid1', link='some_other_link'),
+        Row(guid='some_other_guid', link='link2')
     ]
     # This chain mocks `db.session.query(FeedItem.guid, FeedItem.link).filter_by(...)`
     mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
