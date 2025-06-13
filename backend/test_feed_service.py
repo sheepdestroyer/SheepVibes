@@ -313,6 +313,98 @@ def test_process_feed_entries_commit_error(MockFeedItemInService, mock_db_sessio
     # The session should have been rolled back upon error.
     mock_db_session_in_service.rollback.assert_called_once()
 
+
+@patch('backend.feed_service.db.session')
+@patch('backend.feed_service.logger')
+def test_process_feed_entries_updates_feed_title(mock_logger, mock_db_session, feed_service_db_setup):
+    """Verify that the feed's name is updated if a new title is found in the feed data."""
+    # To correctly mock an object with attributes, create the mock first
+    # and then set its attributes directly.
+    mock_feed_db = MagicMock(spec=Feed)
+    mock_feed_db.id = 1
+    mock_feed_db.name = "Old Feed Name"
+
+    parsed_feed = MagicMock()
+    parsed_feed.entries = [] # No entries needed for this test
+
+    # Mock parsed_feed to have a feed attribute with a new title.
+    # The feed's 'feed' attribute is a dict-like object.
+    # Using a real dictionary's get method as the side_effect is a robust pattern.
+    parsed_feed.feed = MagicMock()
+    parsed_feed.feed.get.side_effect = {'title': "New Feed Name"}.get
+
+    # Mock the DB query for existing items to return nothing
+    mock_query = MagicMock()
+    mock_query.all.return_value = []
+    mock_db_session.query.return_value.filter_by.return_value = mock_query
+
+    # ACTION
+    process_feed_entries(mock_feed_db, parsed_feed)
+
+    # ASSERT
+    assert mock_feed_db.name == "New Feed Name"
+    mock_logger.info.assert_any_call("Updating feed title for 'Old Feed Name' to 'New Feed Name'")
+    mock_db_session.commit.assert_called_once()
+
+
+@patch('backend.feed_service.db.session')
+@patch('backend.feed_service.FeedItem', new_callable=MagicMock)
+def test_process_feed_entries_duplicate_link_new_guid(MockFeedItemInService, mock_db_session_in_service, feed_service_db_setup):
+    """Verify that an entry with a new GUID but existing link is treated as a duplicate."""
+    mock_feed_db = MagicMock(spec=Feed, id=1, name="Test Feed")
+    parsed_feed = MagicMock()
+    # This entry has a new GUID but a link that already exists in the DB.
+    parsed_feed.entries = [
+        create_mock_entry(id="new_guid", link="existing_link", title="This is a duplicate"),
+    ]
+
+    # Mock query to return the existing item's identifiers
+    Row = namedtuple('Row', ['guid', 'link'])
+    mock_query = MagicMock()
+    mock_query.all.return_value = [Row(guid='old_guid', link='existing_link')]
+    mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
+
+    # ACTION
+    new_count = process_feed_entries(mock_feed_db, parsed_feed)
+
+    # ASSERT
+    assert new_count == 0
+    MockFeedItemInService.assert_not_called()
+    mock_db_session_in_service.add.assert_not_called()
+    mock_db_session_in_service.commit.assert_called_once()
+
+
+@patch('backend.feed_service.db.session')
+@patch('backend.feed_service.FeedItem', new_callable=MagicMock)
+def test_process_feed_entries_case_sensitive_identifiers(MockFeedItemInService, mock_db_session_in_service, feed_service_db_setup):
+    """Verify that GUID and link comparisons are case-sensitive."""
+    mock_feed_db = MagicMock(spec=Feed, id=1, name="Test Feed")
+    parsed_feed = MagicMock()
+    # Entries whose GUID/link differs only by case from existing ones.
+    parsed_feed.entries = [
+        create_mock_entry(id="GUID1", link="link1", title="New item, case-sensitive guid"),
+        create_mock_entry(id="guid2", link="LINK2", title="New item, case-sensitive link"),
+    ]
+
+    # Mock DB returns the lowercase versions.
+    Row = namedtuple('Row', ['guid', 'link'])
+    mock_query = MagicMock()
+    mock_query.all.return_value = [Row(guid='guid1', link='some_link'), Row(guid='some_guid', link='link2')]
+    mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
+
+    mock_item_instances = [MagicMock(), MagicMock()]
+    MockFeedItemInService.side_effect = mock_item_instances
+    
+    # ACTION
+    new_count = process_feed_entries(mock_feed_db, parsed_feed)
+
+    # ASSERT
+    assert new_count == 2
+    assert MockFeedItemInService.call_count == 2
+    mock_db_session_in_service.add.assert_has_calls([call(mock_item_instances[0]), call(mock_item_instances[1])])
+    mock_db_session_in_service.commit.assert_called_once()
+
+
 # --- Tests for fetch_and_update_feed ---
 
 @patch('backend.feed_service.process_feed_entries')
@@ -449,3 +541,37 @@ def test_update_all_feeds_error_during_update(MockFsFeed, mock_fs_fetch_and_upda
     mock_fs_logger.info.assert_any_call("Starting update process for 3 feeds.")
     mock_fs_logger.error.assert_any_call(f"Unexpected error updating feed {mock_feed2.name} ({mock_feed2.id}): Simulated update error for Feed 2", exc_info=True)
     mock_fs_logger.info.assert_any_call("Finished updating all feeds. Processed: 2, New Items: 1")
+
+
+@patch('backend.feed_service.logger')
+@patch('backend.feed_service.process_feed_entries')
+@patch('backend.feed_service.fetch_feed')
+@patch('backend.feed_service.db.session.get')
+def test_fetch_and_update_feed_process_entries_error(
+    mock_db_get, mock_fetch_feed, mock_process_entries, mock_logger, feed_service_db_setup
+):
+    """Verify that fetch_and_update_feed handles exceptions from process_feed_entries."""
+    feed_id = 1
+    mock_feed_instance = MagicMock(spec=Feed, id=feed_id, url="http://example.com/rss", name="Test Feed")
+    mock_db_get.return_value = mock_feed_instance
+
+    mock_parsed_feed = MagicMock()
+    mock_fetch_feed.return_value = mock_parsed_feed
+
+    # Mock process_feed_entries to raise an unexpected exception.
+    error_message = "Unexpected processing error"
+    mock_process_entries.side_effect = Exception(error_message)
+
+    # ACTION
+    success, new_items_count = fetch_and_update_feed(feed_id)
+
+    # ASSERT
+    assert success is False
+    assert new_items_count == 0
+    mock_db_get.assert_called_once_with(Feed, feed_id)
+    mock_fetch_feed.assert_called_once_with(mock_feed_instance.url)
+    mock_process_entries.assert_called_once_with(mock_feed_instance, mock_parsed_feed)
+    mock_logger.error.assert_any_call(
+        f"An unexpected error occurred during entry processing for feed {mock_feed_instance.name} (ID: {feed_id}): {error_message}",
+        exc_info=True
+    )

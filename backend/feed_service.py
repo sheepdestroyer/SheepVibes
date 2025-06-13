@@ -118,8 +118,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     Returns:
         The number of new items added to the database for this feed.
     """
-    if not parsed_feed or not parsed_feed.entries:
-        logger.info(f"No entries to process for feed: {feed_db_obj.name} ({feed_db_obj.id})")
+    if not parsed_feed:
+        logger.error(f"process_feed_entries called with a null parsed_feed for feed ID {feed_db_obj.id if feed_db_obj else 'Unknown'}")
         return 0
 
     new_items_count = 0
@@ -130,6 +130,12 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     existing_items = db.session.query(FeedItem.guid, FeedItem.link).filter_by(feed_id=feed_db_obj.id).all()
     existing_guids = {item.guid for item in existing_items if item.guid}
     existing_links = {item.link for item in existing_items if item.link}
+
+    # Update feed title if it has changed
+    new_title = parsed_feed.feed.get('title')
+    if new_title and new_title.strip() and new_title != feed_db_obj.name:
+        logger.info(f"Updating feed title for '{feed_db_obj.name}' to '{new_title}'")
+        feed_db_obj.name = new_title
 
     logger.info(f"Processing {len(parsed_feed.entries)} entries for feed: {feed_db_obj.name}")
 
@@ -234,11 +240,15 @@ def fetch_and_update_feed(feed_id):
         return False, 0
 
     # Process entries and update DB
-    new_items = process_feed_entries(feed, parsed_feed)
-    # process_feed_entries handles its own logging and commits
-    
-    # Consider success even if 0 new items, as long as fetch/process didn't error out
-    return True, new_items 
+    try:
+        new_items = process_feed_entries(feed, parsed_feed)
+        # process_feed_entries handles its own logging and commits
+        
+        # Consider success even if 0 new items, as long as fetch/process didn't error out
+        return True, new_items
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during entry processing for feed {feed.name} (ID: {feed_id}): {e}", exc_info=True)
+        return False, 0
 
 def update_all_feeds():
     """Iterates through all feeds in the database, fetches updates, and processes entries.
