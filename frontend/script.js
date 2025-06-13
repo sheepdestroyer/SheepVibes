@@ -440,14 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newFeedData) {
             console.log('Feed added:', newFeedData);
             feedUrlInput.value = '';
-            const items = await fetchData(`/api/feeds/${newFeedData.id}/items?limit=10`);
-            if (items !== null) {
-                if (feedGrid.querySelector('p')) {
-                    feedGrid.innerHTML = '';
-                }
-                renderFeedWidget(newFeedData, items, true);
-            }
-            await initializeTabs();
+            await initializeTabs(); // Reload tabs to include the new feed
         } else {
             console.error('Failed to add feed.');
         }
