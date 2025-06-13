@@ -280,6 +280,39 @@ def test_get_feeds_for_tab_with_items_and_limit(client, setup_tabs_and_feeds):
     assert feed2_data['name'] == 'Feed 2'
     assert len(feed2_data['items']) == 1 # Limited to 1
 
+def test_get_feeds_for_tab_with_feed_having_no_items(client, setup_tabs_and_feeds):
+    """Test GET /api/tabs/<tab_id>/feeds for a tab with a feed that has no items."""
+    tab2_id = setup_tabs_and_feeds["tab2_id"]
+
+    # Act
+    response = client.get(f'/api/tabs/{tab2_id}/feeds')
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json
+    assert len(data) == 1 # Only Feed 3 is in Tab 2
+
+    feed3_data = data[0]
+    assert feed3_data['name'] == 'Feed 3'
+    assert 'items' in feed3_data
+    assert len(feed3_data['items']) == 0 # Feed 3 has no items
+
+def test_get_feeds_for_tab_with_no_feeds(client):
+    """Test GET /api/tabs/<tab_id>/feeds for a tab that has no feeds."""
+    # Arrange: Create a new tab with no feeds
+    with app.app_context():
+        new_tab = Tab(name="Empty Tab", order=0)
+        db.session.add(new_tab)
+        db.session.commit()
+        tab_id = new_tab.id
+
+    # Act
+    response = client.get(f'/api/tabs/{tab_id}/feeds')
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json == []
+
 def test_get_feeds_for_tab_not_found(client):
     """Test GET /api/tabs/<tab_id>/feeds for non-existent tab."""
     response = client.get('/api/tabs/999/feeds')
