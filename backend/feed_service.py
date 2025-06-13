@@ -118,8 +118,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     Returns:
         The number of new items added to the database for this feed.
     """
-    if not parsed_feed or not parsed_feed.entries:
-        logger.info(f"No entries to process for feed: {feed_db_obj.name} ({feed_db_obj.id})")
+    if not parsed_feed:
+        logger.error(f"process_feed_entries called with a null parsed_feed for feed ID {feed_db_obj.id if feed_db_obj else 'Unknown'}")
         return 0
 
     new_items_count = 0
