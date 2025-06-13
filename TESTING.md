@@ -47,16 +47,16 @@ Implementing E2E tests would involve writing test scripts that simulate user int
 
 To ensure code quality and catch regressions early, it's highly recommended to automate the execution of backend tests using GitHub Actions. This section proposes a workflow that runs the tests on every push to the `main` branch and on every pull request targeting `main`.
 
-### Proposed Workflow File
+### Workflow File
 
-Create a new file named `.github/workflows/run-tests.yml` with the following content:
+The Github automatic workflow is defined in the file named `.github/workflows/run-tests.yml` with the following content:
 
 ```yaml
 name: Run Backend Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ ** ]
   pull_request:
     branches: [ main ]
 
@@ -82,14 +82,14 @@ jobs:
     - name: Run Pytest
       run: |
         cd backend
-        python -m pytest -v test_app.py test_feed_service.py
+        python -m pytest -v
 ```
 
 ### Workflow Explanation
 
 *   **`name: Run Backend Tests`**: The name of the workflow as it will appear in the GitHub Actions UI.
 *   **`on:`**: Defines the triggers for the workflow.
-    *   `push: branches: [ main ]`: Runs when changes are pushed to the `main` branch.
+    *   `push: branches: [ ** ]`: Runs when changes are pushed to any branch.
     *   `pull_request: branches: [ main ]`: Runs when a pull request is opened or updated that targets the `main` branch.
 *   **`jobs:`**: Defines one or more jobs to run.
     *   **`test:`**: The name of the job.
