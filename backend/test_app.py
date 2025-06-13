@@ -477,14 +477,11 @@ def test_update_feed_not_found(mock_fetch_and_update, client):
     feed_id = 999
     # fetch_and_update_feed now returns a tuple (success, count)
     mock_fetch_and_update.return_value = (False, 0)
-    # The endpoint catches LookupError from db.get_or_404 after the update fails
-    # Let's mock db.get_or_404 to raise the error
-    with patch('backend.app.db.get_or_404', side_effect=LookupError("Feed not found")):
-        response = client.post(f'/api/feeds/{feed_id}/update')
+    # The endpoint calls get_or_404, which handles the 404 response.
+    response = client.post(f'/api/feeds/{feed_id}/update')
 
     assert response.status_code == 404
-    assert 'error' in response.json
-    assert "Feed not found" in response.json['error']
+    assert 'error' in response.json # Our custom 404 handler should return JSON
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 @patch('backend.app.fetch_and_update_feed')
@@ -610,35 +607,44 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
         client.get(f'/api/tabs/{tab1_id}/feeds')
         client.get(f'/api/tabs/{tab2_id}/feeds')
 
+        # Use patch to mock the invalidation functions to check if they are called
         with patch('backend.app.invalidate_tabs_cache') as mock_invalidate_tabs, \
              patch('backend.app.invalidate_tab_feeds_cache') as mock_invalidate_tab_feeds:
 
-            # Action 1: Add a feed. Should invalidate specific tab feeds and main tabs list.
-            with patch('backend.app.fetch_feed'), patch('backend.app.process_feed_entries', return_value=1):
-                 client.post('/api/feeds', json={'url': 'http://new.com/rss', 'tab_id': tab2_id})
-            
+            # Action 1: Add a feed with new items. Should invalidate specific tab feeds.
+            with patch('backend.app.fetch_feed') as mock_fetch, \
+                 patch('backend.app.process_feed_entries', return_value=1):
+                # Configure the mock to return a valid string for the feed name
+                mock_fetch.return_value.feed.get.return_value = "A mock title"
+                client.post('/api/feeds', json={'url': 'http://new.com/rss', 'tab_id': tab2_id})
             mock_invalidate_tab_feeds.assert_called_once_with(tab2_id)
-            # invalidate_tab_feeds_cache calls invalidate_tabs_cache, so no direct call expected.
-            # However, if process_feed_entries returns 0, it would be called.
-            # Let's adjust for the direct call in the else branch for coverage.
-            with patch('backend.app.process_feed_entries', return_value=0):
-                 client.post('/api/feeds', json={'url': 'http://new2.com/rss', 'tab_id': tab2_id})
-            mock_invalidate_tabs.assert_called_once()
             
             # Reset mocks for next action
             mock_invalidate_tabs.reset_mock()
             mock_invalidate_tab_feeds.reset_mock()
 
-            # Action 2: Mark an item as read. Should invalidate specific tab feeds.
+            # Action 2: Add a feed with no new items. Should invalidate only tabs.
+            with patch('backend.app.fetch_feed') as mock_fetch_2, \
+                 patch('backend.app.process_feed_entries', return_value=0):
+                mock_fetch_2.return_value.feed.get.return_value = "Another mock title"
+                client.post('/api/feeds', json={'url': 'http://new2.com/rss', 'tab_id': tab2_id})
+            mock_invalidate_tabs.assert_called_once()
+            mock_invalidate_tab_feeds.assert_not_called()
+            
+            # Reset mocks for next action
+            mock_invalidate_tabs.reset_mock()
+            mock_invalidate_tab_feeds.reset_mock()
+
+            # Action 3: Mark an item as read. Should invalidate specific tab feeds.
             client.post(f'/api/items/{item1_id}/read')
             mock_invalidate_tab_feeds.assert_called_once_with(tab1_id)
-            mock_invalidate_tabs.assert_called_once() # It's called internally by invalidate_tab_feeds_cache
+            mock_invalidate_tabs.assert_called_once() # It's called internally
 
             # Reset mocks
             mock_invalidate_tabs.reset_mock()
             mock_invalidate_tab_feeds.reset_mock()
 
-            # Action 3: Create a new tab. Should invalidate only the main tabs list.
+            # Action 4: Create a new tab. Should invalidate only the main tabs list.
             client.post('/api/tabs', json={'name': 'Newest Tab'})
             mock_invalidate_tabs.assert_called_once()
             mock_invalidate_tab_feeds.assert_not_called()
