@@ -540,15 +540,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log(`Adding tab: ${newTabName}`);
+        addTabButton.disabled = true;
+        addTabButton.textContent = 'Adding...';
+
         const newTabData = await fetchData('/api/tabs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newTabName.trim() }),
         });
 
+        addTabButton.disabled = false;
+        addTabButton.textContent = 'Add Tab';
+
         if (newTabData) {
             console.log('Tab added:', newTabData);
-            stopPolling();
             await initializeTabs();
             setActiveTab(newTabData.id);
         } else {

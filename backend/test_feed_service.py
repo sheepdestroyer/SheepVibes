@@ -569,9 +569,34 @@ def test_fetch_and_update_feed_process_entries_error(
     assert success is False
     assert new_items_count == 0
     mock_db_get.assert_called_once_with(Feed, feed_id)
-    mock_fetch_feed.assert_called_once_with(mock_feed_instance.url)
+    mock_fetch_feed.assert_called_once with(mock_feed_instance.url)
     mock_process_entries.assert_called_once_with(mock_feed_instance, mock_parsed_feed)
     mock_logger.error.assert_any_call(
         f"An unexpected error occurred during entry processing for feed {mock_feed_instance.name} (ID: {feed_id}): {error_message}",
         exc_info=True
     )
+
+
+# --- Test for Application Configuration ---
+
+def test_scheduler_is_configured():
+    """
+    Verifies that the APScheduler is configured correctly on the app object.
+    This test is placed here for convenience but verifies app.py configuration.
+    """
+    # Import scheduler from app module where it's instantiated globally
+    from .app import scheduler, UPDATE_INTERVAL_MINUTES
+
+    # Check that the job was added to the scheduler
+    update_job = scheduler.get_job('update_feeds')
+    assert update_job is not None, "Scheduled job 'update_feeds' should be configured."
+
+    # Verify the job calls the correct function
+    assert update_job.func_ref.__name__ == 'scheduled_feed_update', \
+        "Job should call the 'scheduled_feed_update' function."
+
+    # Verify the trigger is an interval trigger with the correct interval
+    trigger = update_job.trigger
+    assert hasattr(trigger, 'interval'), "Job trigger should be an interval trigger."
+    assert trigger.interval.total_seconds() == UPDATE_INTERVAL_MINUTES * 60, \
+        f"Job interval should be {UPDATE_INTERVAL_MINUTES} minutes."
