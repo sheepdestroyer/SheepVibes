@@ -22,3 +22,6 @@ PublishPort=127.0.0.1:6379:6379
 [Service]
 Restart=always
 TimeoutStartSec=90
+
+# Before starting, ensure the image is pulled. This prevents race conditions on a fresh system setup.
+ExecStartPre=/usr/bin/podman pull docker.io/redis:alpine

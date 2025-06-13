@@ -18,12 +18,51 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 
 The recommended way to run SheepVibes is as a `systemd` user service using Podman's Quadlet files. This setup ensures that the application and its Redis cache start automatically on boot and are managed reliably.
 
-**Quick Start:**
-1.  Build the app image: `./scripts/rebuild_container.sh`mk
-2.  Copy quadlets: `mkdir -p ~/.config/containers/systemd/ && cp quadlets/* ~/.config/containers/systemd/`
-3.  Reload systemd: `systemctl --user daemon-reload`
-4.  Start the service: `systemctl --user start sheepvibes-app.service`
-5.  (Optional) Enable autostart on boot: `loginctl enable-linger $(whoami)`
+### Quick Start Guide
+
+1.  **Build the Application Image**
+    Run the build script to create the container image.
+    ```bash
+    ./scripts/rebuild_container.sh
+    ```
+
+2.  **Install Systemd Unit Files**
+    Copy the quadlet files (which define the services, network, and volumes) to the correct systemd user directory.
+    ```bash
+    mkdir -p ~/.config/containers/systemd/
+    cp quadlets/* ~/.config/containers/systemd/
+    ```
+
+3.  **Reload Systemd and Verify**
+    Tell systemd to reload its configuration to detect the new files, then verify that it has recognized the new services. This is a crucial step.
+    ```bash
+    systemctl --user daemon-reload
+    systemctl --user list-unit-files 'sheepvibes*'
+    ```
+    The output of the `list-unit-files` command should look similar to this, confirming the services are available:
+    ```
+    UNIT FILE                          STATE    VENDOR PRESET
+    sheepvibes-app.service             disabled enabled      
+    sheepvibes.network                 disabled enabled      
+    redis.service                      disabled enabled      
+    sheepvibes-db-volume.service       disabled enabled      
+    sheepvibes-redis-volume.service    disabled enabled
+    ```
+    If you see this output, you can proceed. If the files are not listed, see the **Troubleshooting** section below.
+
+4.  **Start the Application**
+    Start the main application service. Systemd will automatically start its dependencies (the Redis container, network, and volumes).
+    ```bash
+    systemctl --user start sheepvibes-app.service
+    ```
+    You can check the status of all related services with: `systemctl --user status 'sheepvibes*' redis.service`
+
+5.  **(Optional) Enable Auto-start on Boot**
+    To have the services start automatically when you log in, enable the main service. For this to work on system startup (before you log in), you must also enable lingering for your user.
+    ```bash
+    systemctl --user enable sheepvibes-app.service
+    loginctl enable-linger $(whoami)
+    ```
 
 ## Manual Deployment with Podman
 
@@ -81,3 +120,20 @@ You can configure the application by passing environment variables. When using t
     ```bash
     systemctl --user restart sheepvibes-app.service
     ```
+
+## Troubleshooting
+
+### Error: `Unit ... not found`
+
+If you run a `systemctl --user` command and receive an error like `Failed to start sheepvibes-app.service: Unit sheepvibes-app.service not found`, it means `systemd` was unable to generate the service file from the quadlet definitions.
+
+This is typically caused by one of two issues:
+1.  **Files in wrong location:** The quadlet files (e.g., `sheepvibes-app.container`) were not placed in `~/.config/containers/systemd/`.
+2.  **Systemd not reloaded:** `systemctl --user daemon-reload` was not executed after the files were copied.
+
+To resolve this, carefully follow these steps:
+1.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for all `.container`, `.network`, and `.volume` files. If any are missing, copy them again: `cp quadlets/* ~/.config/containers/systemd/`.
+2.  **Reload the systemd daemon:** Run `systemctl --user daemon-reload`.
+3.  **Check if the service is now visible:** Run `systemctl --user list-unit-files 'sheepvibes*'` to confirm.
+
+If the services are still not found, check that the `podman-quadlet` package (or your distribution's equivalent) is installed.

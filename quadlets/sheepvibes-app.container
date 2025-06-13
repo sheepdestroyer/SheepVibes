@@ -34,7 +34,3 @@ Environment=FLASK_RUN_HOST=0.0.0.0
 [Service]
 Restart=always
 TimeoutStartSec=90
-
-# Before starting the app, ensure the redis image is pulled.
-# This prevents race conditions on a fresh system setup.
-ExecStartPre=/usr/bin/podman pull docker.io/redis:alpine
