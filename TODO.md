@@ -67,9 +67,9 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Add UI elements for creating, deleting, and renaming tabs.
     *   [x] Implement JS to interact with the corresponding API endpoints and update the UI.
 *   [x] **Dynamic Updates (Backend-driven):**
-    *   [x] The backend uses `APScheduler` to automatically fetch feed updates on a regular, configurable interval. This is the primary mechanism for refreshing data.
-    *   [x] The frontend was simplified to remove its own inefficient polling mechanism. It now loads fresh data on explicit user actions (e.g., switching tabs, manual refresh).
-    *   [ ] *Future Upgrade Consideration:* Implement Server-Sent Events (SSE) to push updates to the client for a real-time experience.
+    *   [x] The backend uses `APScheduler` to automatically fetch feed updates on a regular, configurable interval.
+    *   [x] The backend pushes notifications to connected clients using Server-Sent Events (SSE) when updates are complete.
+    *   [x] The frontend listens for SSE events and automatically refreshes the UI to display new content in near real-time.
 *   [x] Implement "unread" status (if desired):
     *   [x] Add `is_read` flag to `FeedItems` model (default: false).
     *   [x] Add API endpoint `POST /api/items/<item_id>/read` or similar.
