@@ -86,7 +86,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] **Empty States:** Handle cases where a feed has no items or a tab has no feeds. Display informative messages.
 *   [x] **Optimization:**
     *   [x] Optimize database queries.
-    *   [x] Implement backend caching for frequently accessed data.
+    *   [x] Implement backend caching (Redis) with granular invalidation.
     *   [x] Minimize frontend re-renders.
 *   [x] **Documentation:**
     *   [x] Write `README.md` covering setup instructions (building/running with Podman), configuration, and basic usage.

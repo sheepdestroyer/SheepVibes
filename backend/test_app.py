@@ -461,29 +461,26 @@ def test_mark_item_read_not_found(client):
 @patch('backend.app.fetch_and_update_feed')
 def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
-    with app.app_context(): # Add app context for model specing
-        mock_feed_object = MagicMock(spec=Feed)
-    mock_feed_dict = {"id": feed_id, "name": "Updated Feed", "url": "url1", "unread_count": 5}
-
-    mock_fetch_and_update.return_value = mock_feed_object
-    mock_feed_object.to_dict.return_value = mock_feed_dict
-
+    # Mock the return values of fetch_and_update_feed
+    mock_fetch_and_update.return_value = (True, 1) # success, num_new_items
+    
     response = client.post(f'/api/feeds/{feed_id}/update')
 
     assert response.status_code == 200
-    assert response.json == mock_feed_dict
+    # The endpoint now refetches the object to serialize it
+    assert response.json['id'] == feed_id
     mock_fetch_and_update.assert_called_once_with(feed_id)
-    # Ensure to_dict is called if the object is returned and serialized
-    if response.status_code == 200: # Check if call happened only on success
-        mock_feed_object.to_dict.assert_called_once()
 
 @patch('backend.app.fetch_and_update_feed')
 def test_update_feed_not_found(mock_fetch_and_update, client):
     """Test POST /api/feeds/<feed_id>/update when feed is not found."""
     feed_id = 999
-    mock_fetch_and_update.side_effect = LookupError("Feed not found") 
-
-    response = client.post(f'/api/feeds/{feed_id}/update')
+    # fetch_and_update_feed now returns a tuple (success, count)
+    mock_fetch_and_update.return_value = (False, 0)
+    # The endpoint catches LookupError from db.get_or_404 after the update fails
+    # Let's mock db.get_or_404 to raise the error
+    with patch('backend.app.db.get_or_404', side_effect=LookupError("Feed not found")):
+        response = client.post(f'/api/feeds/{feed_id}/update')
 
     assert response.status_code == 404
     assert 'error' in response.json
@@ -601,30 +598,66 @@ def test_stream_endpoint_content_type(client):
     response.close()
 
 # --- Tests for Caching ---
-def test_get_tabs_caching(client):
-    """Verify that the get_tabs endpoint is cached."""
-    # The 'client' fixture provides the app context needed for this test.
+def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
+    """Test the granular cache invalidation logic."""
     with app.app_context():
-        # Patch the Tab.query object within the app context.
-        with patch('backend.app.Tab.query') as mock_query:
-            # Arrange: Mock the chain of calls that leads to getting data
-            mock_order_by = MagicMock()
-            mock_all = MagicMock(return_value=[]) # Return an empty list of tabs
-            mock_query.order_by.return_value = mock_order_by
-            mock_order_by.all = mock_all
+        tab1_id = setup_tabs_and_feeds["tab1_id"]
 
-            # Act: Call the endpoint twice
-            client.get('/api/tabs') # First call, should trigger the query
-            client.get('/api/tabs') # Second call, should hit the cache
-
-            # Assert: The database query should have only been called once
-            mock_order_by.all.assert_called_once()
-
-            # Now, clear the cache and call it again
-            cache.clear()
+        # 1. Test caching for get_tabs and get_feeds_for_tab
+        with patch('backend.app.Tab.query') as mock_tab_query, \
+             patch('backend.app.Feed.query') as mock_feed_query:
             
-            client.get('/api/tabs') # Third call, should trigger query again
-            assert mock_order_by.all.call_count == 2 # Check it was called a second time
+            mock_tab_query.order_by.return_value.all.return_value = []
+            mock_feed_query.filter_by.return_value.all.return_value = []
+
+            # First call - should execute queries
+            client.get('/api/tabs')
+            client.get(f'/api/tabs/{tab1_id}/feeds')
+            assert mock_tab_query.order_by.all.call_count == 1
+            assert mock_feed_query.filter_by.all.call_count == 1
+
+            # Second call - should be cached
+            client.get('/api/tabs')
+            client.get(f'/api/tabs/{tab1_id}/feeds')
+            assert mock_tab_query.order_by.all.call_count == 1, "get_tabs should be cached"
+            assert mock_feed_query.filter_by.all.call_count == 1, "get_feeds_for_tab should be cached"
+
+        # 2. Test invalidation after adding a new feed (to a different tab)
+        # This should invalidate get_tabs but not the cache for tab1's feeds.
+        tab2_id = setup_tabs_and_feeds["tab2_id"]
+        with patch('backend.app.Tab.query') as mock_tab_query, \
+             patch('backend.app.Feed.query') as mock_feed_query, \
+             patch('backend.app.fetch_feed'): # mock external call
+            
+            mock_tab_query.order_by.return_value.all.return_value = []
+            mock_feed_query.filter_by.return_value.all.return_value = []
+
+            client.post('/api/feeds', json={'url': 'http://new.com/rss', 'tab_id': tab2_id})
+            
+            # Call again: get_tabs should be fresh, get_feeds_for_tab(tab1_id) should be cached
+            client.get('/api/tabs')
+            client.get(f'/api/tabs/{tab1_id}/feeds')
+            
+            assert mock_tab_query.order_by.all.call_count == 1, "get_tabs should be re-queried"
+            assert mock_feed_query.filter_by.all.call_count == 0, "get_feeds_for_tab(tab1) should still be cached"
+
+        # 3. Test invalidation after marking an item read in tab1
+        # This should invalidate both get_tabs and get_feeds_for_tab(tab1_id)
+        item_id = setup_tabs_and_feeds['item1_id']
+        with patch('backend.app.Tab.query') as mock_tab_query, \
+             patch('backend.app.Feed.query') as mock_feed_query:
+
+            mock_tab_query.order_by.return_value.all.return_value = []
+            mock_feed_query.filter_by.return_value.all.return_value = []
+            
+            client.post(f'/api/items/{item_id}/read')
+
+            # Call again: both should be fresh
+            client.get('/api/tabs')
+            client.get(f'/api/tabs/{tab1_id}/feeds')
+
+            assert mock_tab_query.order_by.all.call_count == 1
+            assert mock_feed_query.filter_by.all.call_count == 1
 
 
 # --- Tests for Model Methods ---

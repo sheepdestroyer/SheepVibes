@@ -19,38 +19,45 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 1.  **Prerequisites:**
     *   Podman installed.
 
+2.  **Run Redis (Required for Caching):**
+    This application uses Redis for caching. You need a running Redis instance.
+    ```bash
+    podman run -d --name sheepvibes-redis -p 6379:6379 redis:alpine
+    ```
 
-2.  **Create a Persistent Volume (Optional but Recommended):**
+3.  **Create a Persistent Volume (Optional but Recommended):**
     To ensure your database and configuration persist even if the container is removed, create a named volume:
     ```bash
     podman volume create sheepvibes-data
     ```
 
 
-3.  **Run the Container:**
+4.  **Run the Container:**
     *   **With Persistent Volume:**
         ```bash
         podman run -d --name sheepvibes-instance \
           -p 127.0.0.1:5000:5000 \
           -v sheepvibes-data:/app/data \
           --restart unless-stopped \
+          --network=host \
           --replace \
           ghcr.io/sheepdestroyer/sheepvibes:latest
         ```
         *   `-d`: Run in detached mode (background).
         *   `--name sheepvibes-instance`: Assign a name to the container.
-        *   `-p 127.0.0.1:5000:5000`: Map port 5000 on your host to port 5000 in the container. Listens locally (change it to -p 5000:5000 to listen externally, but this app not secure so don't do it)
-        *   `-v sheepvibes-data:/app/data`: Mount the named volume to the `/app/data` directory inside the container, where `sheepvibes.db` will be stored.
+        *   `-p 127.0.0.1:5000:5000`: Map port 5000 on your host to port 5000 in the container. Listens locally (change it to `-p 5000:5000` to listen externally, but this app is not secure so don't do it).
+        *   `-v sheepvibes-data:/app/data`: Mount the named volume to the `/app/data` directory inside the container, where `sheepvibes.db` is stored.
         *   `--restart unless-stopped`: Automatically restart the container unless manually stopped.
-        *   `--replace`: Automatically replace a running container by a new one
+        *   `--network=host`: Allows the app container to connect to Redis running on `localhost`. For production, networking should be handled more securely.
+        *   `--replace`: Automatically replace a running container by a new one.
 
     *   **Without Persistent Volume (Data lost if container is removed):**
         ```bash
-        podman run -d --name sheepvibes-instance -p 5000:5000 ghcr.io/sheepdestroyer/sheepvibes:latest
+        podman run -d --name sheepvibes-instance -p 5000:5000 --network=host ghcr.io/sheepdestroyer/sheepvibes:latest
         ```
 
 
-4.  **Access SheepVibes:**
+5.  **Access SheepVibes:**
     Open your web browser and navigate to `http://localhost:5000`.
 
 **Note for Developers:** The helper scripts provided in the `scripts/` directory (e.g., `manage_container.sh`, `rebuild_container.sh`) build and use a local image named `sheepvibes-app` by default, rather than the public `ghcr.io` image.
@@ -59,10 +66,12 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 
 You can configure the application by passing environment variables during the `podman run` command using the `-e` flag:
 
-*   `DATABASE_PATH`: The full path *inside the container* where the SQLite database file should be stored. Defaults to `/app/data/sheepvibes.db`. If using the recommended volume mount, this path is within the volume.
+*   `DATABASE_PATH`: The full path *inside the container* where the SQLite database file should be stored. Defaults to `/app/data/sheepvibes.db`.
     *   Example: `-e DATABASE_PATH=/app/data/my_custom_name.db`
 *   `UPDATE_INTERVAL_MINUTES`: The interval (in minutes) at which the application checks feeds for updates. Defaults to `15`.
     *   Example: `-e UPDATE_INTERVAL_MINUTES=30`
+*   `CACHE_REDIS_URL`: The connection URL for the Redis server used for caching.
+    *   Example: `-e CACHE_REDIS_URL=redis://127.0.0.1:6379/1`
       
 **Example running with custom configuration:**
 
@@ -70,7 +79,9 @@ You can configure the application by passing environment variables during the `p
 podman run -d --name sheepvibes-instance \
   -p 127.0.0.1:5000:5000 \
   -v sheepvibes-data:/app/data \
+  --network=host \
   -e UPDATE_INTERVAL_MINUTES=60 \
+  -e CACHE_REDIS_URL=redis://127.0.0.1:6379/1 \
   --restart unless-stopped \
   --replace \
   ghcr.io/sheepdestroyer/sheepvibes:latest
@@ -83,6 +94,7 @@ To run the application locally for development without using Podman, follow thes
 1.  **Prerequisites:**
     *   Ensure you have Python 3 installed.
     *   Ensure you have `pip` (Python package installer) available.
+    *   Ensure you have a Redis server running and accessible.
 
 
 2.  **Set up Backend Virtual Environment:**
@@ -118,6 +130,7 @@ To run the application locally for development without using Podman, follow thes
     *   The application supports the following environment variables:
         - `DATABASE_PATH`: Path to the SQLite database file (default: `/app/data/sheepvibes.db` inside the container, or `data/sheepvibes.db` relative to project root when run locally without the variable set).
         - `UPDATE_INTERVAL_MINUTES`: Interval in minutes for feed updates (default: 15)
+        - `CACHE_REDIS_URL`: Redis connection URL (default: `redis://localhost:6379/0`)
 
 
 4.  **Rebuilding the Image:**

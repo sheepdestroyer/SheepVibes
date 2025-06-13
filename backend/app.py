@@ -99,9 +99,8 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Disable modification tracking
 
 # --- Cache Configuration ---
-# Use a simple in-memory cache. For multi-worker setups, each worker gets its own cache.
-# For shared cache, use 'redis' or 'memcached'.
-app.config['CACHE_TYPE'] = 'SimpleCache'
+app.config["CACHE_TYPE"] = "RedisCache"
+app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
 app.config['CACHE_DEFAULT_TIMEOUT'] = 300 # 5 minutes default timeout
 
 cache = Cache(app)
@@ -112,8 +111,39 @@ db.init_app(app)
 # Initialize Flask-Migrate
 migrate = Migrate(app, db)
 
-# --- Database Models have been moved to models.py ---
+# --- Cache Key Generation and Invalidation ---
 
+def get_version(key, default=1):
+    """Gets a version number for a cache key from the cache."""
+    return cache.get(key) or default
+
+def make_tabs_cache_key(*args, **kwargs):
+    """Creates a cache key for the main tabs list, incorporating a version."""
+    version = get_version('tabs_version')
+    return f'view/tabs/v{version}'
+
+def make_tab_feeds_cache_key(tab_id):
+    """Creates a cache key for a specific tab's feeds, incorporating version and query params."""
+    tabs_version = get_version('tabs_version') # For unread counts
+    tab_version = get_version(f'tab_{tab_id}_version')
+    query_string = request.query_string.decode().replace('&', '_') # Sanitize for key
+    return f'view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/?{query_string}'
+
+def invalidate_tabs_cache():
+    """Invalidates the tabs list cache by incrementing its version."""
+    version_key = 'tabs_version'
+    new_version = get_version(version_key) + 1
+    cache.set(version_key, new_version)
+    logger.info(f"Invalidated tabs cache. New version: {new_version}")
+
+def invalidate_tab_feeds_cache(tab_id):
+    """Invalidates a specific tab's feed cache and the main tabs list cache."""
+    version_key = f'tab_{tab_id}_version'
+    new_version = get_version(version_key) + 1
+    cache.set(version_key, new_version)
+    logger.info(f"Invalidated cache for tab {tab_id}. New version: {new_version}")
+    # Also invalidate the main tabs list because unread counts will have changed.
+    invalidate_tabs_cache()
 
 # --- Feed Update Service and Scheduler ---
 
@@ -137,8 +167,9 @@ def scheduled_feed_update():
             feeds_updated, new_items = update_all_feeds()
             logger.info(f"Scheduled update completed: {feeds_updated} feeds updated, {new_items} new items")
             # Invalidate the cache after updates
-            cache.clear()
-            logger.info("Cache cleared after scheduled update.")
+            if new_items > 0:
+                cache.clear()
+                logger.info("Cache cleared after scheduled update found new items.")
             
             # Announce the update to any listening clients
             event_data = {'feeds_processed': feeds_updated, 'new_items': new_items}
@@ -197,7 +228,7 @@ def stream():
 # --- Tabs API Endpoints ---
 
 @app.route('/api/tabs', methods=['GET'])
-@cache.cached()
+@cache.cached(make_cache_key=make_tabs_cache_key)
 def get_tabs():
     """Returns a list of all tabs, ordered by their 'order' field."""
     tabs = Tab.query.order_by(Tab.order).all()
@@ -226,8 +257,8 @@ def create_tab():
         new_tab = Tab(name=tab_name, order=new_order)
         db.session.add(new_tab)
         db.session.commit()
-        cache.clear()
-        logger.info(f"Created new tab '{new_tab.name}' with id {new_tab.id}, cache cleared.")
+        invalidate_tabs_cache()
+        logger.info(f"Created new tab '{new_tab.name}' with id {new_tab.id}.")
         return jsonify(new_tab.to_dict()), 201 # Created
     except Exception as e:
         db.session.rollback()
@@ -257,8 +288,8 @@ def rename_tab(tab_id):
         original_name = tab.name
         tab.name = new_name
         db.session.commit()
-        cache.clear()
-        logger.info(f"Renamed tab {tab_id} from '{original_name}' to '{new_name}', cache cleared.")
+        invalidate_tabs_cache()
+        logger.info(f"Renamed tab {tab_id} from '{original_name}' to '{new_name}'.")
         return jsonify(tab.to_dict()), 200 # OK
     except Exception as e:
         db.session.rollback()
@@ -280,8 +311,8 @@ def delete_tab(tab_id):
         # Associated feeds/items are deleted due to cascade settings in the model
         db.session.delete(tab)
         db.session.commit()
-        cache.clear()
-        logger.info(f"Deleted tab '{tab_name}' with id {tab_id}, cache cleared.")
+        invalidate_tabs_cache()
+        logger.info(f"Deleted tab '{tab_name}' with id {tab_id}.")
         return jsonify({'message': f'Tab {tab_id} deleted successfully'}), 200 # OK
     except Exception as e:
         db.session.rollback()
@@ -291,7 +322,7 @@ def delete_tab(tab_id):
 # --- Feeds API Endpoints ---
 
 @app.route('/api/tabs/<int:tab_id>/feeds', methods=['GET'])
-@cache.cached()
+@cache.cached(make_cache_key=make_tab_feeds_cache_key)
 def get_feeds_for_tab(tab_id):
     """
     Returns a list of feeds for a tab, including recent items for each feed.
@@ -403,18 +434,23 @@ def add_feed():
         )
         db.session.add(new_feed)
         db.session.commit() # Commit to get the new_feed.id
-        cache.clear()
-        logger.info(f"Added new feed '{new_feed.name}' with id {new_feed.id} to tab {tab_id}, cache cleared.")
-
+        
         # Trigger initial fetch and processing of items for the new feed
+        num_new_items = 0
         if parsed_feed:
             try:
-                process_feed_entries(new_feed, parsed_feed)
-                logger.info(f"Processed initial items for feed {new_feed.id}")
+                num_new_items = process_feed_entries(new_feed, parsed_feed)
+                logger.info(f"Processed initial {num_new_items} items for feed {new_feed.id}")
             except Exception as proc_e:
                 # Log error during initial processing but don't fail the add operation
                 logger.error(f"Error processing initial items for feed {new_feed.id}: {proc_e}", exc_info=True)
         
+        if num_new_items > 0:
+            invalidate_tab_feeds_cache(tab_id)
+        else:
+            invalidate_tabs_cache() # At least invalidate for unread count change potential
+        
+        logger.info(f"Added new feed '{new_feed.name}' with id {new_feed.id} to tab {tab_id}.")
         return jsonify(new_feed.to_dict()), 201 # Created
 
     except Exception as e:
@@ -428,14 +464,13 @@ def delete_feed(feed_id):
     # Find feed or return 404
     feed = db.get_or_404(Feed, feed_id)
     try:
+        tab_id = feed.tab_id
         feed_name = feed.name
         # Associated items are deleted due to cascade settings
         db.session.delete(feed)
         db.session.commit()
-        cache.clear()
-        logger.info(f"Deleted feed '{feed_name}' with id {feed_id}, cache cleared.")
-        # Return 204 No Content might be more appropriate for DELETE
-        # return '', 204
+        invalidate_tab_feeds_cache(tab_id)
+        logger.info(f"Deleted feed '{feed_name}' with id {feed_id}.")
         return jsonify({'message': f'Feed {feed_id} deleted successfully'}), 200 # OK
     except Exception as e:
         db.session.rollback()
@@ -457,12 +492,11 @@ def mark_item_read(item_id):
         return jsonify({'message': 'Item already marked as read'}), 200 # OK
 
     try:
+        tab_id = item.feed.tab_id
         item.is_read = True
         db.session.commit()
-        cache.clear()
-        logger.info(f"Marked item {item_id} as read, cache cleared.")
-        # Return 204 No Content might be more appropriate
-        # return '', 204
+        invalidate_tab_feeds_cache(tab_id)
+        logger.info(f"Marked item {item_id} as read.")
         return jsonify({'message': f'Item {item_id} marked as read'}), 200 # OK
     except Exception as e:
         db.session.rollback()
@@ -482,8 +516,9 @@ def api_update_all_feeds():
     try:
         processed_count, new_items_count = update_all_feeds()
         logger.info(f"All feeds update process completed. Processed: {processed_count}, New Items: {new_items_count}")
-        cache.clear()
-        logger.info("Cache cleared after manual 'update-all'.")
+        if new_items_count > 0:
+            cache.clear()
+            logger.info("Cache cleared after manual 'update-all' found new items.")
         # Announce the update to listening clients
         event_data = {'feeds_processed': processed_count, 'new_items': new_items_count}
         msg = f"data: {json.dumps(event_data)}\n\n"
@@ -502,10 +537,15 @@ def api_update_all_feeds():
 def update_feed(feed_id):
     """Manually triggers an update check for a specific feed."""
     try:
-        updated_feed_obj = fetch_and_update_feed(feed_id)
-        cache.clear()
-        logger.info(f"Cache cleared after manual update for feed {feed_id}.")
+        success, new_items = fetch_and_update_feed(feed_id)
+        if success and new_items > 0:
+            feed = db.session.get(Feed, feed_id)
+            invalidate_tab_feeds_cache(feed.tab_id)
+            logger.info(f"Cache invalidated for tab {feed.tab_id} after manual update of feed {feed_id}.")
         
+        # We need to return the full feed object, so refetch it.
+        # This is okay as this endpoint is not for high-frequency use.
+        updated_feed_obj = db.get_or_404(Feed, feed_id)
         return jsonify(updated_feed_obj.to_dict())
     except LookupError as e:
         logger.warning(f"LookupError during manual update for feed {feed_id}: {e}")
