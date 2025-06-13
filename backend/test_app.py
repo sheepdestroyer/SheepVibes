@@ -229,14 +229,56 @@ def setup_tabs_and_feeds(client):
                 "feed1_id": feed1.id, "feed2_id": feed2.id, "feed3_id": feed3.id,
                 "item1_id": item1.id, "item2_id": item2.id, "item3_id": item3.id}
 
-def test_get_feeds_for_tab(client, setup_tabs_and_feeds):
-    """Test GET /api/tabs/<tab_id>/feeds."""
+def test_get_feeds_for_tab_with_items(client, setup_tabs_and_feeds):
+    """Test GET /api/tabs/<tab_id>/feeds returns feeds bundled with their items."""
     tab1_id = setup_tabs_and_feeds["tab1_id"]
+    
+    # Act
     response = client.get(f'/api/tabs/{tab1_id}/feeds')
+    
+    # Assert
     assert response.status_code == 200
-    assert len(response.json) == 2
-    feed_names = {feed['name'] for feed in response.json}
-    assert feed_names == {"Feed 1", "Feed 2"}
+    data = response.json
+    assert len(data) == 2 # Feed 1 and Feed 2 are in Tab 1
+    
+    # Sort data by feed name to have a predictable order for testing
+    data.sort(key=lambda x: x['name'])
+    
+    feed1_data = data[0]
+    assert feed1_data['name'] == 'Feed 1'
+    assert 'items' in feed1_data
+    assert len(feed1_data['items']) == 2 # Item 1.1 and 1.2
+    item_titles1 = {item['title'] for item in feed1_data['items']}
+    assert item_titles1 == {'Item 1.1', 'Item 1.2'}
+    
+    feed2_data = data[1]
+    assert feed2_data['name'] == 'Feed 2'
+    assert 'items' in feed2_data
+    assert len(feed2_data['items']) == 1 # Item 2.1
+    item_titles2 = {item['title'] for item in feed2_data['items']}
+    assert item_titles2 == {'Item 2.1'}
+
+def test_get_feeds_for_tab_with_items_and_limit(client, setup_tabs_and_feeds):
+    """Test the limit parameter on GET /api/tabs/<tab_id>/feeds."""
+    tab1_id = setup_tabs_and_feeds["tab1_id"]
+    
+    # Act
+    response = client.get(f'/api/tabs/{tab1_id}/feeds?limit=1')
+    
+    # Assert
+    assert response.status_code == 200
+    data = response.json
+    assert len(data) == 2
+    
+    data.sort(key=lambda x: x['name'])
+    
+    feed1_data = data[0]
+    assert feed1_data['name'] == 'Feed 1'
+    assert len(feed1_data['items']) == 1 # Limited to 1
+    
+    feed2_data = data[1]
+    assert feed2_data['name'] == 'Feed 2'
+    assert len(feed2_data['items']) == 1 # Limited to 1
 
 def test_get_feeds_for_tab_not_found(client):
     """Test GET /api/tabs/<tab_id>/feeds for non-existent tab."""
@@ -336,32 +378,6 @@ def test_delete_feed_success(client, setup_tabs_and_feeds):
 def test_delete_feed_not_found(client):
     """Test DELETE /api/feeds/<id> for non-existent feed."""
     response = client.delete('/api/feeds/999')
-    assert response.status_code == 404
-
-def test_get_feed_items(client, setup_tabs_and_feeds):
-    """Test GET /api/feeds/<feed_id>/items."""
-    feed1_id = setup_tabs_and_feeds["feed1_id"]
-    response = client.get(f'/api/feeds/{feed1_id}/items')
-    assert response.status_code == 200
-    assert len(response.json) == 2
-    # Items should be ordered by published_time desc (or fetched_time desc if null)
-    # Assuming Item 1.2 was fetched/published later for this test setup
-    item_titles = [item['title'] for item in response.json]
-    # Order depends on how test data was added and default sorting
-    # Let's check presence instead of strict order for simplicity here
-    assert set(item_titles) == {"Item 1.1", "Item 1.2"}
-    assert response.json[0]['is_read'] in [True, False] # Check boolean value
-
-def test_get_feed_items_limit(client, setup_tabs_and_feeds):
-    """Test GET /api/feeds/<feed_id>/items with limit parameter."""
-    feed1_id = setup_tabs_and_feeds["feed1_id"]
-    response = client.get(f'/api/feeds/{feed1_id}/items?limit=1')
-    assert response.status_code == 200
-    assert len(response.json) == 1
-
-def test_get_feed_items_feed_not_found(client):
-    """Test GET /api/feeds/<feed_id>/items for non-existent feed."""
-    response = client.get('/api/feeds/999/items')
     assert response.status_code == 404
 
 def test_mark_item_read_success(client, setup_tabs_and_feeds):
