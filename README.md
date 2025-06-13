@@ -14,140 +14,70 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 *   Displays unread counts per feed and per tab.
 *   Basic persistence using a database.
 
-## Running with Podman
+## Deployment with systemd (Recommended)
 
-1.  **Prerequisites:**
-    *   Podman installed.
+The recommended way to run SheepVibes is as a `systemd` user service using Podman's Quadlet files. This setup ensures that the application and its Redis cache start automatically on boot and are managed reliably.
 
+**Quick Start:**
+1.  Build the app image: `./scripts/rebuild_container.sh`mk
+2.  Copy quadlets: `mkdir -p ~/.config/containers/systemd/ && cp quadlets/* ~/.config/containers/systemd/`
+3.  Reload systemd: `systemctl --user daemon-reload`
+4.  Start the service: `systemctl --user start sheepvibes-app.service`
+5.  (Optional) Enable autostart on boot: `loginctl enable-linger $(whoami)`
 
-2.  **Create a Persistent Volume (Optional but Recommended):**
-    To ensure your database and configuration persist even if the container is removed, create a named volume:
+## Manual Deployment with Podman
+
+If you prefer to manage the containers manually for development or testing, you can use the `podman run` commands directly.
+
+1.  **Run Redis:**
     ```bash
-    podman volume create sheepvibes-data
+    podman run -d --name sheepvibes-redis -p 127.0.0.1:6379:6379 --restart unless-stopped redis:alpine
     ```
 
-
-3.  **Run the Container:**
-    *   **With Persistent Volume:**
-        ```bash
-        podman run -d --name sheepvibes-instance \
-          -p 127.0.0.1:5000:5000 \
-          -v sheepvibes-data:/app/data \
-          --restart unless-stopped \
-          --replace \
-          ghcr.io/sheepdestroyer/sheepvibes:latest
-        ```
-        *   `-d`: Run in detached mode (background).
-        *   `--name sheepvibes-instance`: Assign a name to the container.
-        *   `-p 127.0.0.1:5000:5000`: Map port 5000 on your host to port 5000 in the container. Listens locally (change it to -p 5000:5000 to listen externally, but this app not secure so don't do it)
-        *   `-v sheepvibes-data:/app/data`: Mount the named volume to the `/app/data` directory inside the container, where `sheepvibes.db` will be stored.
-        *   `--restart unless-stopped`: Automatically restart the container unless manually stopped.
-        *   `--replace`: Automatically replace a running container by a new one
-
-    *   **Without Persistent Volume (Data lost if container is removed):**
-        ```bash
-        podman run -d --name sheepvibes-instance -p 5000:5000 ghcr.io/sheepdestroyer/sheepvibes:latest
-        ```
-
-
-4.  **Access SheepVibes:**
-    Open your web browser and navigate to `http://localhost:5000`.
-
-**Note for Developers:** The helper scripts provided in the `scripts/` directory (e.g., `manage_container.sh`, `rebuild_container.sh`) build and use a local image named `sheepvibes-app` by default, rather than the public `ghcr.io` image.
+2.  **Run the Application:**
+    Ensure you have built the application image first using `./scripts/rebuild_container.sh`.
+    ```bash
+    podman run -d --name sheepvibes-app \
+      -p 127.0.0.1:5000:5000 \
+      -v sheepvibes-data:/app/data \
+      --restart unless-stopped \
+      --network=host \
+      localhost/sheepvibes-app:latest
+    ```
+    *   `--network=host`: This is a simple way for the app container to find Redis at `localhost:6379` during development. For production, a dedicated Podman network is recommended (as used in the Quadlets).
 
 ## Configuration (Environment Variables)
 
-You can configure the application by passing environment variables during the `podman run` command using the `-e` flag:
+You can configure the application by passing environment variables. When using the Quadlets, you can modify the `Environment=` lines in `quadlets/sheepvibes-app.container`. For manual runs, use the `-e` flag with `podman run`.
 
-*   `DATABASE_PATH`: The full path *inside the container* where the SQLite database file should be stored. Defaults to `/app/data/sheepvibes.db`. If using the recommended volume mount, this path is within the volume.
-    *   Example: `-e DATABASE_PATH=/app/data/my_custom_name.db`
+*   `DATABASE_PATH`: The full path *inside the container* where the SQLite database file should be stored. Defaults to `/app/data/sheepvibes.db`.
 *   `UPDATE_INTERVAL_MINUTES`: The interval (in minutes) at which the application checks feeds for updates. Defaults to `15`.
-    *   Example: `-e UPDATE_INTERVAL_MINUTES=30`
-      
-**Example running with custom configuration:**
-
-```bash
-podman run -d --name sheepvibes-instance \
-  -p 127.0.0.1:5000:5000 \
-  -v sheepvibes-data:/app/data \
-  -e UPDATE_INTERVAL_MINUTES=60 \
-  --restart unless-stopped \
-  --replace \
-  ghcr.io/sheepdestroyer/sheepvibes:latest
-```
+*   `CACHE_REDIS_URL`: The connection URL for the Redis server. The Quadlet default is `redis://sheepvibes-redis:6379/0`, which uses the container's hostname. For manual runs, you might use `redis://localhost:6379/0`.
 
 ## Development
 
-To run the application locally for development without using Podman, follow these steps:
-
 1.  **Prerequisites:**
-    *   Ensure you have Python 3 installed.
-    *   Ensure you have `pip` (Python package installer) available.
-
+    *   Ensure you have Python 3, `pip`, and a running Redis server.
 
 2.  **Set up Backend Virtual Environment:**
-    *   Navigate to the `backend` directory:
-        ```bash
-        cd backend
-        ```
-    *   Create a virtual environment (if you haven't already):
-        ```bash
-        python -m venv venv
-        ```
-    *   Activate the virtual environment:
-        *   On Linux/macOS: `source venv/bin/activate`
-        *   On Windows (Git Bash/WSL): `source venv/Scripts/activate`
-        *   On Windows (Command Prompt): `venv\Scripts\activate.bat`
-        *   On Windows (PowerShell): `venv\Scripts\Activate.ps1`
-    *   Install the required Python packages:
-        ```bash
-        pip install -r requirements.txt
-        ```
-    *   (Optional) Install development dependencies:
-        ```bash
-        pip install -r requirements-dev.txt
-        ```
+    *   Navigate to the `backend` directory: `cd backend`
+    *   Create a virtual environment: `python -m venv venv`
+    *   Activate it: `source venv/bin/activate`
+    *   Install dependencies: `pip install -r requirements.txt && pip install -r requirements-dev.txt`
 
+3.  **Run the Development Server:**
+    The `run_dev.sh` script starts the Flask backend server, which is useful for rapid development.
+    ```bash
+    ./scripts/run_dev.sh
+    ```
 
-3.  **Run the Development Script:**
-        ```bash
-        ./scripts/run_dev.sh
-        ```
-    *   This will start the Flask backend development server, typically accessible at `http://localhost:5000`. The script handles activating the virtual environment and setting necessary Flask environment variables.
-
-    *   The application supports the following environment variables:
-        - `DATABASE_PATH`: Path to the SQLite database file (default: `/app/data/sheepvibes.db` inside the container, or `data/sheepvibes.db` relative to project root when run locally without the variable set).
-        - `UPDATE_INTERVAL_MINUTES`: Interval in minutes for feed updates (default: 15)
-
-
-4.  **Rebuilding the Image:**
-    If you make changes to the application code or the `Containerfile`, you'll need to rebuild the image. A convenience script is provided:
+4.  **Rebuilding the Container Image:**
+    If you make changes to the application code or the `Containerfile`, you must rebuild the image. This script handles the process of building the `localhost/sheepvibes-app` image, which the `systemd` service uses. It no longer manages running containers.
     ```bash
     # Make sure it's executable first: chmod +x scripts/rebuild_container.sh
-    ./scripts/rebuild_container.sh 
+    ./scripts/rebuild_container.sh
     ```
-    This script will:
-    *   Stop the running container named `sheepvibes-instance` (if it exists).
-    *   Remove the stopped container `sheepvibes-instance` (if it exists).
-    *   Remove the old image tagged `sheepvibes-app` (if it exists).
-    *   Build a new image tagged `sheepvibes-app`.
-    *   **Note:** The script assumes Podman is used and the container/image names are `sheepvibes-instance`/`sheepvibes-app`. Edit the script if your setup differs.
-
-    After rebuilding, you'll need to run the container again using the `podman run` command from step 3.
-
-5.  **Managing the Container (Start/Stop/Restart):**
-    A convenience script is provided to easily start, stop, or restart the `sheepvibes-instance` container without needing to remember the full `podman run` options each time.
+    After rebuilding the image, if you are using systemd, you must restart the service to use the new image:
     ```bash
-    # Make sure it's executable first: chmod +x scripts/manage_container.sh
-    
-    # Start the container (creates if it doesn't exist)
-    ./scripts/manage_container.sh start
-    
-    # Stop the running container
-    ./scripts/manage_container.sh stop
-    
-    # Restart the container
-    ./scripts/manage_container.sh restart
+    systemctl --user restart sheepvibes-app.service
     ```
-    *   This script uses the same container name (`sheepvibes-instance`), image name (`sheepvibes-app`), volume (`sheepvibes-data`), and port mapping (`5000:5000`) as defined in the script itself and used in the examples above.
-    *   It assumes Podman is used. Edit the `CONTAINER_CMD` variable within the script if you use Docker.

@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
-from .app import app # Import the app instance
+from .app import app, cache # Import the app and cache instance
 from .models import db, Tab, Feed, FeedItem # Import models directly
 
 @pytest.fixture
@@ -14,6 +14,7 @@ def client():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['CACHE_TYPE'] = 'simple' # Use simple in-memory cache for tests
     # Disable CSRF protection if it were enabled
     # app.config['WTF_CSRF_ENABLED'] = False 
 
@@ -31,6 +32,7 @@ def client():
 
     with app.app_context(): # Ensure app context for create_all and drop_all
         db.create_all() # Ensure tables are created for each test
+        cache.clear()   # Clear cache before each test run for isolation
 
     with app.test_client() as client:
         yield client # Provide the test client to the tests
@@ -459,34 +461,23 @@ def test_mark_item_read_not_found(client):
 @patch('backend.app.fetch_and_update_feed')
 def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
-    with app.app_context(): # Add app context for model specing
-        mock_feed_object = MagicMock(spec=Feed)
-    mock_feed_dict = {"id": feed_id, "name": "Updated Feed", "url": "url1", "unread_count": 5}
-
-    mock_fetch_and_update.return_value = mock_feed_object
-    mock_feed_object.to_dict.return_value = mock_feed_dict
-
+    # Mock the return values of fetch_and_update_feed
+    mock_fetch_and_update.return_value = (True, 1) # success, num_new_items
+    
     response = client.post(f'/api/feeds/{feed_id}/update')
 
     assert response.status_code == 200
-    assert response.json == mock_feed_dict
+    # The endpoint now refetches the object to serialize it
+    assert response.json['id'] == feed_id
     mock_fetch_and_update.assert_called_once_with(feed_id)
-    # Ensure to_dict is called if the object is returned and serialized
-    if response.status_code == 200: # Check if call happened only on success
-        mock_feed_object.to_dict.assert_called_once()
 
 @patch('backend.app.fetch_and_update_feed')
 def test_update_feed_not_found(mock_fetch_and_update, client):
     """Test POST /api/feeds/<feed_id>/update when feed is not found."""
     feed_id = 999
-    mock_fetch_and_update.side_effect = LookupError("Feed not found") 
-
     response = client.post(f'/api/feeds/{feed_id}/update')
-
     assert response.status_code == 404
-    assert 'error' in response.json
-    assert "Feed not found" in response.json['error']
-    mock_fetch_and_update.assert_called_once_with(feed_id)
+    mock_fetch_and_update.assert_not_called()
 
 @patch('backend.app.fetch_and_update_feed')
 def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds):
@@ -597,6 +588,57 @@ def test_stream_endpoint_content_type(client):
     # This triggers a GeneratorExit in the server-side stream function,
     # allowing it to clean up and preventing the test from hanging.
     response.close()
+
+# --- Tests for Caching ---
+def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
+    """Tests the granular cache invalidation by checking its effects."""
+    with app.app_context():
+        tab1_id = setup_tabs_and_feeds["tab1_id"]
+        item1_id = setup_tabs_and_feeds["item1_id"]
+
+        # --- Test /api/tabs/{id}/feeds caching and invalidation ---
+        with patch('backend.app.db.session.execute') as mock_execute:
+            # 1. Prime the cache (this call will execute the query).
+            client.get(f'/api/tabs/{tab1_id}/feeds')
+
+            # 2. Assert query was called once initially.
+            initial_call_count = mock_execute.call_count
+            assert initial_call_count > 0
+
+            # 3. Call again and assert the query was NOT re-executed (cache hit).
+            client.get(f'/api/tabs/{tab1_id}/feeds')
+            assert mock_execute.call_count == initial_call_count
+
+        # 4. Invalidate the cache by marking an item as read.
+        client.post(f'/api/items/{item1_id}/read')
+
+        # 5. Assert the query IS re-executed on the next call (cache miss).
+        with patch('backend.app.db.session.execute') as mock_execute_after_invalidation:
+            client.get(f'/api/tabs/{tab1_id}/feeds')
+            mock_execute_after_invalidation.assert_called()
+
+        # --- Test /api/tabs caching and invalidation ---
+        with patch('backend.app.Tab.query') as mock_tab_query:
+            # Mock the query result
+            mock_tab_query.order_by.return_value.all.return_value = []
+
+            # 1. Prime cache for /api/tabs
+            client.get('/api/tabs')
+            # 2. Assert it was called
+            mock_tab_query.order_by.return_value.all.assert_called_once()
+
+            # 3. Assert a second call is a cache hit
+            client.get('/api/tabs')
+            mock_tab_query.order_by.return_value.all.assert_called_once()
+        
+        # 4. Invalidate by creating a new tab
+        client.post('/api/tabs', json={'name': 'A New Tab'})
+
+        # 5. Assert the next call is a cache miss
+        with patch('backend.app.Tab.query') as mock_tab_query_after_invalidation:
+            mock_tab_query_after_invalidation.order_by.return_value.all.return_value = []
+            client.get('/api/tabs')
+            mock_tab_query_after_invalidation.order_by.return_value.all.assert_called_once()
 
 
 # --- Tests for Model Methods ---
