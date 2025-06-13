@@ -41,12 +41,11 @@ The recommended way to run SheepVibes is as a `systemd` user service using Podma
     ```
     The output of the `list-unit-files` command should look similar to this, confirming the services are available:
     ```
-    UNIT FILE                          STATE    VENDOR PRESET
-    sheepvibes-app.service             disabled enabled      
-    sheepvibes.network                 disabled enabled      
-    redis.service                      disabled enabled      
-    sheepvibes-db-volume.service       disabled enabled      
-    sheepvibes-redis-volume.service    disabled enabled
+    UNIT FILE                              STATE     PRESET
+    sheepvibes-app.service                 generated -
+    sheepvibes-db-volume-volume.service    generated -
+    sheepvibes-network.service             generated -
+    sheepvibes-redis-volume-volume.service generated -
     ```
     If you see this output, you can proceed. If the files are not listed, see the **Troubleshooting** section below.
 

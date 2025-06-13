@@ -5,15 +5,15 @@ Description=Redis container for SheepVibes
 Wants=network.target
 After=network.target
 # Depends on the volume service being started first
-Wants=sheepvibes-redis-volume.service
-After=sheepvibes-redis-volume.service
+Wants=sheepvibes-redis-volume-volume.service
+After=sheepvibes-redis-volume-volume.service
 
 [Container]
 ContainerName=sheepvibes-redis
 Image=docker.io/redis:alpine
 Network=sheepvibes.network
 # Mount the named volume into the container's data directory
-Volume=sheepvibes-redis-volume.volume:/data
+Volume=sheepvibes-redis-volume:/data
 
 # Expose the Redis port to the host for debugging or external tools if needed.
 # For container-to-container communication, this is not strictly necessary.
