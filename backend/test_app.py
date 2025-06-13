@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
-from .app import app # Import the app instance
+from .app import app, cache # Import the app and cache instance
 from .models import db, Tab, Feed, FeedItem # Import models directly
 
 @pytest.fixture
@@ -14,6 +14,7 @@ def client():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['CACHE_TYPE'] = 'simple' # Use simple in-memory cache for tests
     # Disable CSRF protection if it were enabled
     # app.config['WTF_CSRF_ENABLED'] = False 
 
@@ -31,6 +32,7 @@ def client():
 
     with app.app_context(): # Ensure app context for create_all and drop_all
         db.create_all() # Ensure tables are created for each test
+        cache.clear()   # Clear cache before each test run for isolation
 
     with app.test_client() as client:
         yield client # Provide the test client to the tests
@@ -597,6 +599,31 @@ def test_stream_endpoint_content_type(client):
     # This triggers a GeneratorExit in the server-side stream function,
     # allowing it to clean up and preventing the test from hanging.
     response.close()
+
+# --- Tests for Caching ---
+@patch('backend.app.Tab.query')
+def test_get_tabs_caching(mock_query, client):
+    """Verify that the get_tabs endpoint is cached."""
+    # Arrange: Mock the chain of calls that leads to getting data
+    mock_order_by = MagicMock()
+    mock_all = MagicMock(return_value=[]) # Return an empty list of tabs
+    mock_query.order_by.return_value = mock_order_by
+    mock_order_by.all = mock_all
+
+    # Act: Call the endpoint twice
+    client.get('/api/tabs') # First call, should trigger the query
+    client.get('/api/tabs') # Second call, should hit the cache
+
+    # Assert: The database query should have only been called once
+    mock_query.order_by.assert_called_once()
+    mock_order_by.all.assert_called_once()
+
+    # Now, clear the cache and call it again
+    with app.app_context():
+        cache.clear()
+    
+    client.get('/api/tabs') # Third call, should trigger query again
+    assert mock_order_by.all.call_count == 2 # Check it was called a second time
 
 
 # --- Tests for Model Methods ---

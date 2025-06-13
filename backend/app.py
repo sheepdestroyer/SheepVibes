@@ -10,6 +10,7 @@ from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 from sqlalchemy import func, select # Added for optimized query
+from flask_caching import Cache # Added for caching
 
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
@@ -97,6 +98,14 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Disable modification tracking
 
+# --- Cache Configuration ---
+# Use a simple in-memory cache. For multi-worker setups, each worker gets its own cache.
+# For shared cache, use 'redis' or 'memcached'.
+app.config['CACHE_TYPE'] = 'SimpleCache'
+app.config['CACHE_DEFAULT_TIMEOUT'] = 300 # 5 minutes default timeout
+
+cache = Cache(app)
+
 # Initialize SQLAlchemy ORM extension with the app
 db.init_app(app)
 
@@ -127,6 +136,10 @@ def scheduled_feed_update():
         try:
             feeds_updated, new_items = update_all_feeds()
             logger.info(f"Scheduled update completed: {feeds_updated} feeds updated, {new_items} new items")
+            # Invalidate the cache after updates
+            cache.clear()
+            logger.info("Cache cleared after scheduled update.")
+            
             # Announce the update to any listening clients
             event_data = {'feeds_processed': feeds_updated, 'new_items': new_items}
             msg = f"data: {json.dumps(event_data)}\n\n"
@@ -184,6 +197,7 @@ def stream():
 # --- Tabs API Endpoints ---
 
 @app.route('/api/tabs', methods=['GET'])
+@cache.cached()
 def get_tabs():
     """Returns a list of all tabs, ordered by their 'order' field."""
     tabs = Tab.query.order_by(Tab.order).all()
@@ -212,7 +226,8 @@ def create_tab():
         new_tab = Tab(name=tab_name, order=new_order)
         db.session.add(new_tab)
         db.session.commit()
-        logger.info(f"Created new tab '{new_tab.name}' with id {new_tab.id} and order {new_tab.order}")
+        cache.clear()
+        logger.info(f"Created new tab '{new_tab.name}' with id {new_tab.id}, cache cleared.")
         return jsonify(new_tab.to_dict()), 201 # Created
     except Exception as e:
         db.session.rollback()
@@ -242,7 +257,8 @@ def rename_tab(tab_id):
         original_name = tab.name
         tab.name = new_name
         db.session.commit()
-        logger.info(f"Renamed tab {tab_id} from '{original_name}' to '{new_name}'")
+        cache.clear()
+        logger.info(f"Renamed tab {tab_id} from '{original_name}' to '{new_name}', cache cleared.")
         return jsonify(tab.to_dict()), 200 # OK
     except Exception as e:
         db.session.rollback()
@@ -264,7 +280,8 @@ def delete_tab(tab_id):
         # Associated feeds/items are deleted due to cascade settings in the model
         db.session.delete(tab)
         db.session.commit()
-        logger.info(f"Deleted tab '{tab_name}' with id {tab_id} and its associated feeds")
+        cache.clear()
+        logger.info(f"Deleted tab '{tab_name}' with id {tab_id}, cache cleared.")
         return jsonify({'message': f'Tab {tab_id} deleted successfully'}), 200 # OK
     except Exception as e:
         db.session.rollback()
@@ -274,6 +291,7 @@ def delete_tab(tab_id):
 # --- Feeds API Endpoints ---
 
 @app.route('/api/tabs/<int:tab_id>/feeds', methods=['GET'])
+@cache.cached()
 def get_feeds_for_tab(tab_id):
     """
     Returns a list of feeds for a tab, including recent items for each feed.
@@ -385,7 +403,8 @@ def add_feed():
         )
         db.session.add(new_feed)
         db.session.commit() # Commit to get the new_feed.id
-        logger.info(f"Added new feed '{new_feed.name}' with id {new_feed.id} to tab {tab_id}")
+        cache.clear()
+        logger.info(f"Added new feed '{new_feed.name}' with id {new_feed.id} to tab {tab_id}, cache cleared.")
 
         # Trigger initial fetch and processing of items for the new feed
         if parsed_feed:
@@ -413,7 +432,8 @@ def delete_feed(feed_id):
         # Associated items are deleted due to cascade settings
         db.session.delete(feed)
         db.session.commit()
-        logger.info(f"Deleted feed '{feed_name}' with id {feed_id}")
+        cache.clear()
+        logger.info(f"Deleted feed '{feed_name}' with id {feed_id}, cache cleared.")
         # Return 204 No Content might be more appropriate for DELETE
         # return '', 204
         return jsonify({'message': f'Feed {feed_id} deleted successfully'}), 200 # OK
@@ -439,7 +459,8 @@ def mark_item_read(item_id):
     try:
         item.is_read = True
         db.session.commit()
-        logger.info(f"Marked item {item_id} as read")
+        cache.clear()
+        logger.info(f"Marked item {item_id} as read, cache cleared.")
         # Return 204 No Content might be more appropriate
         # return '', 204
         return jsonify({'message': f'Item {item_id} marked as read'}), 200 # OK
@@ -461,6 +482,8 @@ def api_update_all_feeds():
     try:
         processed_count, new_items_count = update_all_feeds()
         logger.info(f"All feeds update process completed. Processed: {processed_count}, New Items: {new_items_count}")
+        cache.clear()
+        logger.info("Cache cleared after manual 'update-all'.")
         # Announce the update to listening clients
         event_data = {'feeds_processed': processed_count, 'new_items': new_items_count}
         msg = f"data: {json.dumps(event_data)}\n\n"
@@ -479,7 +502,9 @@ def api_update_all_feeds():
 def update_feed(feed_id):
     """Manually triggers an update check for a specific feed."""
     try:
-        updated_feed_obj = fetch_and_update_feed(feed_id) 
+        updated_feed_obj = fetch_and_update_feed(feed_id)
+        cache.clear()
+        logger.info(f"Cache cleared after manual update for feed {feed_id}.")
         
         return jsonify(updated_feed_obj.to_dict())
     except LookupError as e:
