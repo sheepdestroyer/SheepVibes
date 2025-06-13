@@ -48,8 +48,12 @@ def parse_published_time(entry):
                         parsed_dt = date_parser.parse(field_value)
                         if parsed_dt: # If parsing is successful, break from loop
                             break
-                    except (ValueError, TypeError, OverflowError) as e:
-                        logger.debug(f"Failed to parse date field '{field}' for entry {entry.get('link', '[no link]')}: {e}")
+                    except (ValueError, TypeError, OverflowError) as e: # Keep common exceptions for specific logging
+                        logger.debug(f"Specific parsing error for date field '{field}' for entry {entry.get('link', '[no link]')} ({type(e).__name__}): {e}")
+                        # Ignore parsing errors for this field and try the next
+                        continue
+                    except Exception as e: # Catch any other exceptions during parsing
+                        logger.warning(f"Generic parsing error for date field '{field}' for entry {entry.get('link', '[no link]')} ({type(e).__name__}): {e}")
                         # Ignore parsing errors for this field and try the next
                         continue
 
@@ -140,22 +144,33 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             logger.warning(f"Skipping entry with no link or guid in feed {feed_db_obj.name}: '{title[:50]}...'")
             continue
 
-        # Check for duplicates based on GUID or link within this batch and existing DB items
-        is_duplicate = False
-        if guid:
-            if guid in existing_guids or guid in processed_guids:
-                is_duplicate = True
-            else:
-                processed_guids.add(guid)
-        elif link: # Only check link if GUID is missing
-            if link in existing_links or link in processed_links:
-                is_duplicate = True
-            else:
-                processed_links.add(link)
+        # Check for duplicates based on GUID or link against DB content and then batch content
 
-        if is_duplicate:
-            # logger.debug(f"Skipping duplicate item (GUID: {guid}, Link: {link}) for feed {feed_db_obj.name}")
+        # Check against DB content
+        if guid and guid in existing_guids:
+            # logger.debug(f"Skipping item with existing GUID in DB: {guid} for feed {feed_db_obj.name}")
             continue
+        # If GUID is new or missing, check link against DB.
+        # An item with a new GUID should still be skipped if its link is a known duplicate in the DB.
+        if link and link in existing_links:
+            # logger.debug(f"Skipping item with existing Link in DB: {link} (GUID: {guid}) for feed {feed_db_obj.name}")
+            continue
+
+        # Check against current batch content (processed_guids and processed_links)
+        # An item is a duplicate if its GUID is already processed in this batch OR its Link is already processed.
+        if guid and guid in processed_guids:
+            # logger.debug(f"Skipping item with GUID already processed in this batch: {guid} for feed {feed_db_obj.name}")
+            continue
+        if link and link in processed_links: # Check link even if GUID is new for this batch
+            # logger.debug(f"Skipping item with Link already processed in this batch: {link} (GUID: {guid}) for feed {feed_db_obj.name}")
+            continue
+
+        # If the item is not a duplicate by any of the above checks, then it's new.
+        # Add its identifiers to the processed sets for this batch.
+        if guid:
+            processed_guids.add(guid)
+        if link: # Add link to processed_links for all new items with links
+            processed_links.add(link)
 
         # Parse published time
         published_time = parse_published_time(entry)

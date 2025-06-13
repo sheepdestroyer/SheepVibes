@@ -16,14 +16,10 @@ The backend of SheepVibes is written in Python and uses the `pytest` framework f
 
 ### Running Tests
 
-To run the backend tests:
+To run the backend tests (Always in a venv!):
 
 1.  Ensure you are in the `backend` directory, and have activated the venv.
 2.  Execute `pytest`:
-    ```bash
-    pytest -v
-    ```
-    Alternatively, you can run pytest as a module, which can be more robust in some environments:
     ```bash
     python -m pytest -v
     ```
