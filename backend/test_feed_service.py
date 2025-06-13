@@ -319,8 +319,7 @@ def test_process_feed_entries_commit_error(MockFeedItemInService, mock_db_sessio
 def test_process_feed_entries_updates_feed_title(mock_logger, mock_db_session, feed_service_db_setup):
     """Verify that the feed's name is updated if a new title is found in the feed data."""
     # To correctly mock an object with attributes, create the mock first
-    # and then set its attributes directly. This is more reliable than using kwargs
-    # in the constructor, especially for attributes that might conflict with mock's own properties (like 'name').
+    # and then set its attributes directly.
     mock_feed_db = MagicMock(spec=Feed)
     mock_feed_db.id = 1
     mock_feed_db.name = "Old Feed Name"
@@ -329,10 +328,10 @@ def test_process_feed_entries_updates_feed_title(mock_logger, mock_db_session, f
     parsed_feed.entries = [] # No entries needed for this test
 
     # Mock parsed_feed to have a feed attribute with a new title.
-    # Be specific about the mock's behavior for clarity.
+    # The feed's 'feed' attribute is a dict-like object.
+    # Using a real dictionary's get method as the side_effect is a robust pattern.
     parsed_feed.feed = MagicMock()
-    # Configure .get() to only return the title when asked for 'title'.
-    parsed_feed.feed.get.side_effect = lambda key, default=None: "New Feed Name" if key == 'title' else default
+    parsed_feed.feed.get.side_effect = {'title': "New Feed Name"}.get
 
     # Mock the DB query for existing items to return nothing
     mock_query = MagicMock()
