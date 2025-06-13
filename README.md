@@ -16,8 +16,8 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 
 ## Deployment with systemd (Recommended)
 
-The recommended way to run SheepVibes is as a `systemd` user service using Podman's Quadlet files. 
-This setup ensures that the application and its Redis cache start automatically on boot and are managed reliably.
+The recommended way to run SheepVibes is as a `systemd` user service using Podman's Quadlet files.  
+This setup ensures that the application and its Redis cache start automatically on boot and are managed reliably.  
 On Fedora, you will need podman and podlet packages.
 
 ### Quick Start Guide
