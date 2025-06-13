@@ -19,6 +19,9 @@ Network=sheepvibes.network
 PublishPort=127.0.0.1:5000:5000
 Volume=sheepvibes-db-volume.volume:/app/data
 
+# This tells systemd to stop the redis.service when this service is stopped.                                                                                                                                       
+StopWhenUnneeded=true 
+
 # Environment variables
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
 # Connect to Redis using its container name as the hostname
