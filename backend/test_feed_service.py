@@ -477,6 +477,7 @@ def test_fetch_and_update_feed_fetch_error(mock_fs_datetime, mock_db_get, mock_f
     # Iterate through log calls if specific call order isn't guaranteed or other logs exist
     # For this case, a single error log is expected from this specific logic path.
     mock_fs_logger.error.assert_any_call(expected_log_message) # Use assert_any_call if other errors might be logged
+    mock_fetch_feed.assert_called_once_with(mock_feed_instance.url)
     assert success is False
     assert new_items_count == 0
 
