@@ -45,8 +45,9 @@ class Feed(db.Model):
     url = db.Column(db.String(500), nullable=False) # URL of the feed
     last_updated_time = db.Column(db.DateTime, default=lambda: datetime.datetime.now(timezone.utc)) # Last time feed was successfully fetched
     # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
-    # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems
-    items = db.relationship('FeedItem', backref='feed', lazy=True, cascade='all, delete-orphan')
+    # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
+    # lazy='dynamic' allows for further querying on the relationship.
+    items = db.relationship('FeedItem', backref='feed', lazy='dynamic', cascade='all, delete-orphan')
 
     def to_dict(self):
         """Serializes the Feed object to a dictionary, including unread count."""

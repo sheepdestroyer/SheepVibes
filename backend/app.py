@@ -274,11 +274,36 @@ def delete_tab(tab_id):
 
 @app.route('/api/tabs/<int:tab_id>/feeds', methods=['GET'])
 def get_feeds_for_tab(tab_id):
-    """Returns a list of feeds associated with a specific tab."""
-    # Ensure tab exists, or return 404
-    tab = db.get_or_404(Tab, tab_id)
+    """
+    Returns a list of feeds for a tab, including recent items for each feed.
+    This is more efficient for the frontend than making N+1 requests.
+    """
+    # Ensure tab exists, or return 404.
+    db.get_or_404(Tab, tab_id)
+
+    # Get feeds for the tab.
     feeds = Feed.query.filter_by(tab_id=tab_id).all()
-    return jsonify([feed.to_dict() for feed in feeds])
+    
+    # Get limit for items from query string, default to 10.
+    limit = request.args.get('limit', 10, type=int)
+
+    response_data = []
+    for feed in feeds:
+        # Get base feed data from its to_dict() method.
+        feed_dict = feed.to_dict()
+        
+        # Query for recent items for this specific feed.
+        # With lazy='dynamic', feed.items is a query object.
+        recent_items = feed.items.order_by(
+            FeedItem.published_time.desc().nullslast(),
+            FeedItem.fetched_time.desc()
+        ).limit(limit).all()
+
+        # Serialize items and add to the feed dictionary.
+        feed_dict['items'] = [item.to_dict() for item in recent_items]
+        response_data.append(feed_dict)
+
+    return jsonify(response_data)
 
 @app.route('/api/feeds', methods=['POST'])
 def add_feed():
@@ -367,23 +392,6 @@ def delete_feed(feed_id):
         raise e # Let 500 handler manage response
 
 # --- Feed Items API Endpoints ---
-
-@app.route('/api/feeds/<int:feed_id>/items', methods=['GET'])
-def get_feed_items(feed_id):
-    """Returns a list of recent items for a specific feed."""
-    # Ensure feed exists or return 404
-    feed = db.get_or_404(Feed, feed_id)
-    
-    # Get optional limit parameter from query string (default 20)
-    limit = request.args.get('limit', 20, type=int)
-    
-    # Fetch items, ordered by published time (most recent first), limited
-    items = FeedItem.query.filter_by(feed_id=feed_id).order_by(
-        FeedItem.published_time.desc().nullslast(), # Handle null published times
-        FeedItem.fetched_time.desc() # Secondary sort by fetch time
-    ).limit(limit).all()
-    
-    return jsonify([item.to_dict() for item in items])
 
 @app.route('/api/items/<int:item_id>/read', methods=['POST'])
 def mark_item_read(item_id):

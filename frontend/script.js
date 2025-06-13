@@ -51,29 +51,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const eventSource = new EventSource('/api/stream');
 
         eventSource.onmessage = async (event) => {
+            // SSE comments (like heartbeats) should not trigger 'onmessage'.
+            // If we get a message, it should have data.
+            if (!event.data) {
+                return;
+            }
+            
             try {
                 const data = JSON.parse(event.data);
                 console.log('SSE message received (feeds updated):', data);
 
-                // Create a more subtle notification instead of an alert.
-                // For now, an alert demonstrates functionality.
+                // Only refresh the UI if the update actually found new items.
                 if (data.new_items > 0) {
-                    console.log(`Feeds updated in background. New items: ${data.new_items}`);
-                    // Optionally, alert the user or show a less intrusive notification.
-                    // alert(`Feeds updated. New items found: ${data.new_items}`);
-                }
+                    console.log(`Feeds updated in background. Found ${data.new_items} new items. Refreshing UI.`);
+                    
+                    // Refresh the UI to reflect the updates
+                    // 1. Reload tabs to update unread counts everywhere
+                    await initializeTabs(true); // 'true' keeps the active tab
 
-                // Refresh the UI to reflect the updates
-                // 1. Reload tabs to update unread counts everywhere
-                await initializeTabs(true); // 'true' keeps the active tab
-
-                // 2. If a tab is active, reload its feeds to show new items
-                if (activeTabId) {
-                    await loadFeedsForTab(activeTabId);
+                    // 2. If a tab is active, reload its feeds to show new items
+                    if (activeTabId) {
+                        await loadFeedsForTab(activeTabId);
+                    }
+                } else {
+                    console.log('SSE update received: No new items found.');
                 }
 
             } catch (e) {
-                console.error('Error parsing SSE message data:', e);
+                console.error('Error parsing SSE message data:', event.data, e);
             }
         };
 
@@ -89,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** Handles the click event for the "Refresh All Feeds" button. */
     async function handleRefreshAllFeeds() {
-        console.log("Refreshing all feeds...");
+        console.log("Triggering refresh for all feeds...");
         const originalButtonText = refreshAllFeedsButton.textContent;
         refreshAllFeedsButton.disabled = true;
         refreshAllFeedsButton.textContent = 'Refreshing...';
@@ -98,9 +103,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await fetchData('/api/feeds/update-all', { method: 'POST' });
 
             if (result && result.message) {
-                alert(`Successfully triggered refresh for all feeds.\nProcessed: ${result.feeds_processed}\nNew items: ${result.new_items}`);
-                console.log('All feeds refresh triggered:', result);
-                // No need to manually reload here; the SSE event will handle it.
+                // SUCCESS: The successful refresh will be communicated via SSE, so no alert is needed here.
+                // The UI will update automatically when the SSE message arrives.
+                console.log('All feeds refresh triggered successfully:', result);
             } else if (result && result.error) {
                 // Handle cases where the API returns a JSON error object but not an HTTP error
                 alert(`Failed to refresh all feeds: ${result.error}`);
@@ -225,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Renders a single feed widget.
-     * @param {object} feed - The feed object from the API (including unread_count).
+     * @param {object} feed - The feed object from the API (including unread_count and items).
      * @param {Array<object>} items - An array of feed item objects from the API.
      */
     function renderFeedWidget(feed, items) {
@@ -285,33 +290,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Loads and renders all feeds for a given tab ID.
+     * Loads and renders all feeds for a given tab ID by making one efficient API call.
      * @param {number} tabId - The ID of the tab to load feeds for.
      */
     async function loadFeedsForTab(tabId) {
         feedGrid.innerHTML = '<p>Loading feeds...</p>';
-        const feeds = await fetchData(`/api/tabs/${tabId}/feeds`);
+        const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds?limit=10`);
 
         feedGrid.innerHTML = ''; // Clear the grid before rendering new feeds
 
-        if (feeds === null) {
+        if (feedsWithItems === null) {
             feedGrid.innerHTML = '<p>Error loading feeds. Please check the console or try again.</p>';
             return;
         }
 
-        if (feeds && feeds.length > 0) {
-            // Fetch items concurrently
-            await Promise.all(feeds.map(async (feed) => {
-                const items = await fetchData(`/api/feeds/${feed.id}/items?limit=10`); // Limit fetch
-                if (items !== null) {
-                    renderFeedWidget(feed, items);
-                }
-            }));
-
-            // Handle empty state if all feeds loaded but no items were found
-            if (feedGrid.children.length === 0) {
-                 feedGrid.innerHTML = '<p>Feeds loaded, but no items found or items failed to load.</p>';
-            }
+        if (feedsWithItems && feedsWithItems.length > 0) {
+            feedsWithItems.forEach(feed => {
+                // The 'items' are now bundled with the 'feed' object from the API.
+                renderFeedWidget(feed, feed.items);
+            });
         } else {
             // No feeds found for the tab (not an error)
             feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
