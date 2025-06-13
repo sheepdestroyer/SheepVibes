@@ -318,24 +318,30 @@ def test_process_feed_entries_commit_error(MockFeedItemInService, mock_db_sessio
 @patch('backend.feed_service.logger')
 def test_process_feed_entries_updates_feed_title(mock_logger, mock_db_session, feed_service_db_setup):
     """Verify that the feed's name is updated if a new title is found in the feed data."""
-    # Use a real spec'd mock to check attribute assignment
-    mock_feed_db = MagicMock(spec=Feed, id=1, name="Old Feed Name")
-    
+    # To correctly mock an object with attributes, create the mock first
+    # and then set its attributes directly. This is more reliable than using kwargs
+    # in the constructor, especially for attributes that might conflict with mock's own properties (like 'name').
+    mock_feed_db = MagicMock(spec=Feed)
+    mock_feed_db.id = 1
+    mock_feed_db.name = "Old Feed Name"
+
     parsed_feed = MagicMock()
     parsed_feed.entries = [] # No entries needed for this test
-    
-    # Mock parsed_feed to have a feed attribute with a new title
+
+    # Mock parsed_feed to have a feed attribute with a new title.
+    # Be specific about the mock's behavior for clarity.
     parsed_feed.feed = MagicMock()
-    parsed_feed.feed.get.return_value = "New Feed Name"
-    
+    # Configure .get() to only return the title when asked for 'title'.
+    parsed_feed.feed.get.side_effect = lambda key, default=None: "New Feed Name" if key == 'title' else default
+
     # Mock the DB query for existing items to return nothing
     mock_query = MagicMock()
     mock_query.all.return_value = []
     mock_db_session.query.return_value.filter_by.return_value = mock_query
-    
+
     # ACTION
     process_feed_entries(mock_feed_db, parsed_feed)
-    
+
     # ASSERT
     assert mock_feed_db.name == "New Feed Name"
     mock_logger.info.assert_any_call("Updating feed title for 'Old Feed Name' to 'New Feed Name'")
