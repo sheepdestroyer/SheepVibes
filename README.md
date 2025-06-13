@@ -137,4 +137,4 @@ To resolve this, carefully follow these steps:
 2.  **Reload the systemd daemon:** Run `systemctl --user daemon-reload`.
 3.  **Check if the service is now visible:** Run `systemctl --user list-unit-files 'sheepvibes*'` to confirm.
 
-If the services are still not found, check that the `podman-quadlet` package (or your distribution's equivalent) is installed.
+If the services are still not found, check that the `podlet` or `podman-quadlet` package (your distribution's equivalent) is installed.
