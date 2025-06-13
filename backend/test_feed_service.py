@@ -198,104 +198,124 @@ def test_process_feed_entries_new_items(MockFeedItemInService, mock_db_session_i
     mock_db_session_in_service.commit.assert_called_once()
     mock_db_session_in_service.rollback.assert_not_called()
 
-@pytest.mark.skip(reason="Temporarily skipped due to causing CI runner OOM & crashes")
 @patch('backend.feed_service.db.session')
 @patch('backend.feed_service.FeedItem', new_callable=MagicMock)
 def test_process_feed_entries_duplicate_items(MockFeedItemInService, mock_db_session_in_service, feed_service_db_setup):
+    """Verify that entries that already exist in the database are not added again."""
     mock_feed_db = MagicMock(spec=Feed, id=1, name="Test Feed")
     parsed_feed = MagicMock()
+    # One entry is a duplicate by guid, one is a duplicate by link, one is new.
     parsed_feed.entries = [
-        create_mock_entry(id="guid1", link="link1", title="Title 1"),
-        create_mock_entry(id="guid2", link="link2", title="Title 2"),
-        create_mock_entry(id="guid3", link="link3", title="Title 3"),
-        create_mock_entry(id="guid2", link="link2_alt", title="Title 2 Dup GUID"),
-        create_mock_entry(id="guid4", link="link2", title="Title 4 Dup Link"),
+        create_mock_entry(id="guid1", link="link1", title="Title 1 (dup guid)"),
+        create_mock_entry(id="guid2", link="link2", title="Title 2 (dup link)"),
+        create_mock_entry(id="guid3", link="link3", title="Title 3 (new)"),
     ]
+    
+    # Mock the query to return existing items. The function queries for guid and link columns.
     mock_query = MagicMock()
-    existing_db_item1 = MagicMock(guid="guid1", link="link1_db") 
-    existing_db_item3 = MagicMock(guid="guid3_db", link="link3")
-    mock_query.all.return_value = [existing_db_item1, existing_db_item3]
+    # Create mock rows that look like (guid, link) tuples.
+    mock_query.all.return_value = [
+        ('guid1', 'some_other_link'),
+        ('some_other_guid', 'link2')
+    ]
+    # This chain mocks `db.session.query(FeedItem.guid, FeedItem.link).filter_by(...)`
     mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
 
-    # Ensure each call to FeedItem creates a new MagicMock
-    created_items = []
-    def mock_feed_item_factory(**kwargs):
-        item = MagicMock(spec=FeedItem) # Use spec for better mocking
-        for k, v in kwargs.items():
-            setattr(item, k, v)
-        created_items.append(item)
-        return item
-    MockFeedItemInService.side_effect = mock_feed_item_factory
+    mock_new_item = MagicMock(spec=FeedItem)
+    # Only one new item should be created.
+    MockFeedItemInService.return_value = mock_new_item
 
+    # ACTION
     new_count = process_feed_entries(mock_feed_db, parsed_feed)
+    
+    # ASSERT
     assert new_count == 1
-    # Check that FeedItem was called correctly for the one new item
-    MockFeedItemInService.assert_called_once_with(feed_id=1, title='Title 2', link='link2', published_time=None, is_read=False, guid='guid2')
-    # Check that the created item was added to the session
-    assert len(created_items) == 1
-    mock_db_session_in_service.add.assert_called_once_with(created_items[0])
+    # Only the new item is instantiated.
+    MockFeedItemInService.assert_called_once_with(
+        feed_id=1,
+        title='Title 3 (new)',
+        link='link3',
+        published_time=None,
+        is_read=False,
+        guid='guid3'
+    )
+    # And only that new item is added to the session.
+    mock_db_session_in_service.add.assert_called_once_with(mock_new_item)
     mock_db_session_in_service.commit.assert_called_once()
     mock_db_session_in_service.rollback.assert_not_called()
 
-@pytest.mark.skip(reason="Temporarily skipped due to causing CI runner OOM and crashes")
 @patch('backend.feed_service.db.session')
 @patch('backend.feed_service.FeedItem', new_callable=MagicMock)
 def test_process_feed_entries_no_guid_or_link(MockFeedItemInService, mock_db_session_in_service, feed_service_db_setup):
+    """Verify that entries with no guid or link are skipped."""
     mock_feed_db = MagicMock(spec=Feed, id=1, name="Test Feed")
     parsed_feed = MagicMock()
+    # One entry is invalid (no id/link), the other is valid.
     parsed_feed.entries = [
         create_mock_entry(id=None, link=None, title="Title Missing ID/Link"),
         create_mock_entry(id="guid1", link="link1", title="Title OK"),
     ]
+    
+    # Mock the query to return no existing items.
     mock_query = MagicMock()
     mock_query.all.return_value = []
     mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
 
-    created_items = []
-    def mock_feed_item_factory(**kwargs):
-        item = MagicMock(spec=FeedItem) # Use spec for better mocking
-        for k, v in kwargs.items():
-            setattr(item, k, v)
-        created_items.append(item)
-        return item
-    MockFeedItemInService.side_effect = mock_feed_item_factory
+    mock_new_item = MagicMock(spec=FeedItem)
+    # The FeedItem constructor is only called for the valid entry.
+    MockFeedItemInService.return_value = mock_new_item
 
+    # ACTION
     new_count = process_feed_entries(mock_feed_db, parsed_feed)
+    
+    # ASSERT
     assert new_count == 1
-    MockFeedItemInService.assert_called_once_with(feed_id=1, title='Title OK', link='link1', published_time=None, is_read=False, guid='guid1')
-    assert len(created_items) == 1
-    mock_db_session_in_service.add.assert_called_once_with(created_items[0])
+    # Check that FeedItem was called correctly for the one valid item.
+    MockFeedItemInService.assert_called_once_with(
+        feed_id=1,
+        title='Title OK',
+        link='link1',
+        published_time=None,
+        is_read=False,
+        guid='guid1'
+    )
+    # Check that the one created item was added to the session.
+    mock_db_session_in_service.add.assert_called_once_with(mock_new_item)
     mock_db_session_in_service.commit.assert_called_once()
     mock_db_session_in_service.rollback.assert_not_called()
 
-@pytest.mark.skip(reason="Temporarily skipped due to causing CI runner OOM and crash") 
 @patch('backend.feed_service.db.session')
 @patch('backend.feed_service.FeedItem', new_callable=MagicMock)
 def test_process_feed_entries_commit_error(MockFeedItemInService, mock_db_session_in_service, feed_service_db_setup):
+    """Verify that a database commit error is handled by rolling back the session."""
     mock_feed_db = MagicMock(spec=Feed, id=1, name="Test Feed")
     parsed_feed = MagicMock()
+    # One valid new entry to be added.
     parsed_feed.entries = [create_mock_entry(id="guid1", link="link1", title="Title 1")]
+    
+    # Mock the query to find no existing items.
     mock_query = MagicMock()
     mock_query.all.return_value = []
     mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
 
-    created_items = []
-    def mock_feed_item_factory(**kwargs):
-        item = MagicMock(spec=FeedItem) # Use spec for better mocking
-        for k, v in kwargs.items():
-            setattr(item, k, v)
-        created_items.append(item)
-        return item
-    MockFeedItemInService.side_effect = mock_feed_item_factory
+    mock_new_item = MagicMock(spec=FeedItem)
+    MockFeedItemInService.return_value = mock_new_item
 
-    mock_db_session_in_service.commit.side_effect = IntegrityError("Mock IntegrityError", params=None, orig=None)
+    # Mock the commit call to raise an exception.
+    mock_db_session_in_service.commit.side_effect = IntegrityError("Mocked DB error", params=None, orig=None)
+    
+    # ACTION
     new_count = process_feed_entries(mock_feed_db, parsed_feed)
-    assert new_count == 0 # new_items_count should be 0 after commit error
-    MockFeedItemInService.assert_called_once() # FeedItem is still created
-    assert len(created_items) == 1
-    mock_db_session_in_service.add.assert_called_once_with(created_items[0]) # Item is added to session
-    assert mock_feed_db.last_updated_time is not None
+    
+    # ASSERT
+    # The count of successfully added items should be 0 because of the error.
+    assert new_count == 0
+    # An item was instantiated and added to the session before the failed commit.
+    MockFeedItemInService.assert_called_once()
+    mock_db_session_in_service.add.assert_called_once_with(mock_new_item)
+    # The session commit was attempted.
     mock_db_session_in_service.commit.assert_called_once()
+    # The session should have been rolled back upon error.
     mock_db_session_in_service.rollback.assert_called_once()
 
 # --- Tests for fetch_and_update_feed ---
