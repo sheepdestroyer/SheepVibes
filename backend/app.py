@@ -536,23 +536,17 @@ def api_update_all_feeds():
 @app.route('/api/feeds/<int:feed_id>/update', methods=['POST'])
 def update_feed(feed_id):
     """Manually triggers an update check for a specific feed."""
+    feed = db.get_or_404(Feed, feed_id)
     try:
-        success, new_items = fetch_and_update_feed(feed_id)
+        success, new_items = fetch_and_update_feed(feed.id)
         if success and new_items > 0:
-            feed = db.session.get(Feed, feed_id)
             invalidate_tab_feeds_cache(feed.tab_id)
-            logger.info(f"Cache invalidated for tab {feed.tab_id} after manual update of feed {feed_id}.")
+            logger.info(f"Cache invalidated for tab {feed.tab_id} after manual update of feed {feed.id}.")
         
-        # We need to return the full feed object, so refetch it.
-        # This is okay as this endpoint is not for high-frequency use.
-        updated_feed_obj = db.get_or_404(Feed, feed_id)
-        return jsonify(updated_feed_obj.to_dict())
-    except LookupError as e:
-        logger.warning(f"LookupError during manual update for feed {feed_id}: {e}")
-        return jsonify({'error': str(e)}), 404
+        return jsonify(feed.to_dict())
     except Exception as e:
-        logger.error(f"Error during manual update for feed {feed_id}: {e}", exc_info=True)
-        return jsonify({'error': f'Failed to update feed {feed_id}. An unexpected error occurred.'}), 500
+        logger.error(f"Error during manual update for feed {feed.id}: {e}", exc_info=True)
+        return jsonify({'error': f'Failed to update feed {feed.id}. An unexpected error occurred.'}), 500
 
 # --- Application Initialization and Startup ---
 
