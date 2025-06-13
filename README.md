@@ -18,11 +18,9 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 
 The recommended way to run SheepVibes is as a `systemd` user service using Podman's Quadlet files. This setup ensures that the application and its Redis cache start automatically on boot and are managed reliably.
 
-For detailed instructions, please see the readme in the `quadlets/` directory: [quadlets/README.md](quadlets/README.md).
-
 **Quick Start:**
-1.  Build the app image: `./scripts/rebuild_container.sh`
-2.  Copy quadlets: `cp quadlets/* ~/.config/containers/systemd/`
+1.  Build the app image: `./scripts/rebuild_container.sh`mk
+2.  Copy quadlets: `mkdir -p ~/.config/containers/systemd/ && cp quadlets/* ~/.config/containers/systemd/`
 3.  Reload systemd: `systemctl --user daemon-reload`
 4.  Start the service: `systemctl --user start sheepvibes-app.service`
 5.  (Optional) Enable autostart on boot: `loginctl enable-linger $(whoami)`
