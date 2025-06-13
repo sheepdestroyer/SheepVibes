@@ -10,6 +10,8 @@ Wants=redis.service
 After=redis.service
 Wants=sheepvibes-db-volume-volume.service
 After=sheepvibes-db-volume-volume.service
+# If nothing requires this service, it can be stopped.
+StopWhenUnneeded=true
 
 [Container]
 # Use the locally built image
@@ -18,9 +20,6 @@ ContainerName=sheepvibes-app
 Network=sheepvibes.network
 PublishPort=127.0.0.1:5000:5000
 Volume=sheepvibes-db-volume:/app/data
-
-# This tells systemd to stop the redis.service when this service is stopped.                                                                                                                                       
-StopWhenUnneeded=true 
 
 # Environment variables
 Environment=DATABASE_PATH=/app/data/sheepvibes.db

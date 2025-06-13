@@ -7,6 +7,8 @@ After=network.target
 # Depends on the volume service being started first
 Wants=sheepvibes-redis-volume-volume.service
 After=sheepvibes-redis-volume-volume.service
+# Bind the lifecycle of redis to the main app service
+PartOf=sheepvibes-app.service
 
 [Container]
 ContainerName=sheepvibes-redis
@@ -22,6 +24,3 @@ PublishPort=127.0.0.1:6379:6379
 [Service]
 Restart=always
 TimeoutStartSec=90
-
-# Before starting, ensure the image is pulled. This prevents race conditions on a fresh system setup.
-ExecStartPre=/usr/bin/podman pull docker.io/redis:alpine
