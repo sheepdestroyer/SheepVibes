@@ -14,7 +14,7 @@ if [ ! -d "$VENV_DIR" ]; then
   echo "  cd backend"
   echo "  python -m venv $VENV_DIR"
   echo "  source $VENV_DIR/bin/activate  # (or appropriate activation command for your shell)"
-  echo "  pip install -r requirements.txt"
+  echo "  pip install -r requirements.txt -r requirements-dev.txt"
   echo "  cd .."
   exit 1
 fi
@@ -22,29 +22,29 @@ fi
 echo "Activating virtual environment..."
 source "$VENV_DIR/bin/activate"
 
-# Check if Flask is installed within the virtual environment
-# First, check if pip itself is working
-if ! pip --version &> /dev/null; then
-  echo "Error: 'pip' command is not working within the virtual environment."
-  echo "The virtual environment at 'backend/$VENV_DIR' might be corrupted."
-  echo "Try deleting the '$VENV_DIR' directory and recreating it:"
-  echo "  rm -rf backend/$VENV_DIR"
-  echo "  cd backend"
-  echo "  python -m venv $VENV_DIR"
-  echo "  source $VENV_DIR/bin/activate"
-  echo "  pip install -r requirements.txt"
-  echo "  cd .."
-  # Deactivate before exiting
-  deactivate
-  exit 1
+# Check if required commands are available
+if ! command -v redis-cli &> /dev/null; then
+    echo "Error: 'redis-cli' is not installed or not in your PATH."
+    echo "Please install Redis to run the development server."
+    deactivate
+    exit 1
 fi
 
-# Now check for flask
+# Check if Redis server is running
+if ! redis-cli ping &> /dev/null; then
+    echo "Error: Cannot connect to Redis server. Is it running?"
+    echo "Please start Redis before running the development server."
+    deactivate
+    exit 1
+fi
+
+
+# Check if Flask is installed within the virtual environment
 if ! pip show flask &> /dev/null; then
   echo "Error: 'flask' module not found in the virtual environment."
   echo "Please ensure dependencies are installed:"
   echo "  (Virtual environment should be active)"
-  echo "  pip install -r backend/requirements.txt"
+  echo "  pip install -r backend/requirements.txt -r backend/requirements-dev.txt"
   # Deactivate before exiting
   deactivate
   exit 1
