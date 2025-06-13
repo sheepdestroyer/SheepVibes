@@ -2,7 +2,9 @@
 import os
 import logging
 import atexit
-from flask import Flask, jsonify, request, send_from_directory
+import queue
+import json
+from flask import Flask, jsonify, request, send_from_directory, Response
 # Removed SQLAlchemy direct import, will get `db` from models
 from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -20,6 +22,49 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger('sheepvibes')
+
+class MessageAnnouncer:
+    """A simple message announcer that uses server-sent events."""
+    def __init__(self):
+        self.listeners = []
+
+    def listen(self):
+        """
+        Listens for messages, yielding them to the client.
+        This is a generator function that maintains a connection.
+        """
+        q = queue.Queue(maxsize=5)
+        self.listeners.append(q)
+        try:
+            while True:
+                try:
+                    # Using a timeout on get() makes the loop non-blocking from the
+                    # perspective of the wsgi server, allowing it to handle client
+                    # disconnects gracefully.
+                    msg = q.get(timeout=1.0)
+                    yield msg
+                except queue.Empty:
+                    # Send a heartbeat comment to keep the connection alive
+                    # and, crucially, to provide a yield point for GeneratorExit
+                    # to be raised when the client disconnects.
+                    yield ": heartbeat\n\n"
+        except GeneratorExit:
+            # This is triggered when the client disconnects
+            self.listeners.remove(q)
+
+    def announce(self, msg):
+        """Announces a message to all listeners."""
+        # Use a copy of the list to avoid issues if a client disconnects
+        # during iteration.
+        for q in list(self.listeners):
+            try:
+                q.put_nowait(msg)
+            except queue.Full:
+                # Client's queue is full, drop the message.
+                logger.warning("A client's SSE message queue was full. Dropping message.")
+                pass
+
+announcer = MessageAnnouncer()
 
 # Initialize Flask application
 app = Flask(__name__)
@@ -81,6 +126,10 @@ def scheduled_feed_update():
         try:
             feeds_updated, new_items = update_all_feeds()
             logger.info(f"Scheduled update completed: {feeds_updated} feeds updated, {new_items} new items")
+            # Announce the update to any listening clients
+            event_data = {'feeds_processed': feeds_updated, 'new_items': new_items}
+            msg = f"data: {json.dumps(event_data)}\n\n"
+            announcer.announce(msg=msg)
         except Exception as e:
             logger.error(f"Error during scheduled feed update: {e}", exc_info=True)
 
@@ -124,6 +173,12 @@ def serve_static_files(filename):
     if ".." in filename or filename.startswith("/"):
         return jsonify({'error': 'Invalid path'}), 400
     return send_from_directory(FRONTEND_FOLDER, filename)
+
+# --- SSE Stream Endpoint ---
+@app.route('/api/stream')
+def stream():
+    """Endpoint for Server-Sent Events (SSE) to stream updates."""
+    return Response(announcer.listen(), mimetype='text/event-stream')
 
 # --- Tabs API Endpoints ---
 
@@ -367,6 +422,10 @@ def api_update_all_feeds():
     try:
         processed_count, new_items_count = update_all_feeds()
         logger.info(f"All feeds update process completed. Processed: {processed_count}, New Items: {new_items_count}")
+        # Announce the update to listening clients
+        event_data = {'feeds_processed': processed_count, 'new_items': new_items_count}
+        msg = f"data: {json.dumps(event_data)}\n\n"
+        announcer.announce(msg=msg)
         return jsonify({
             'message': 'All feeds updated successfully.',
             'feeds_processed': processed_count,

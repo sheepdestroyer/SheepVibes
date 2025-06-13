@@ -9,6 +9,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 *   Delete feeds.
 *   Create, rename, and delete tabs.
 *   Automatic background fetching of feed updates.
+*   Real-time UI updates when feeds are refreshed in the background, powered by Server-Sent Events (SSE).
 *   Mark items as read.
 *   Displays unread counts per feed and per tab.
 *   Basic persistence using a database.

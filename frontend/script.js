@@ -43,6 +43,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Real-Time Update Logic (SSE) ---
+
+    /** Initializes the Server-Sent Events (SSE) connection to receive real-time updates. */
+    function initializeSSE() {
+        console.log('Initializing SSE connection...');
+        const eventSource = new EventSource('/api/stream');
+
+        eventSource.onmessage = async (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('SSE message received (feeds updated):', data);
+
+                // Create a more subtle notification instead of an alert.
+                // For now, an alert demonstrates functionality.
+                if (data.new_items > 0) {
+                    console.log(`Feeds updated in background. New items: ${data.new_items}`);
+                    // Optionally, alert the user or show a less intrusive notification.
+                    // alert(`Feeds updated. New items found: ${data.new_items}`);
+                }
+
+                // Refresh the UI to reflect the updates
+                // 1. Reload tabs to update unread counts everywhere
+                await initializeTabs(true); // 'true' keeps the active tab
+
+                // 2. If a tab is active, reload its feeds to show new items
+                if (activeTabId) {
+                    await loadFeedsForTab(activeTabId);
+                }
+
+            } catch (e) {
+                console.error('Error parsing SSE message data:', e);
+            }
+        };
+
+        eventSource.onerror = (err) => {
+            console.error('EventSource failed:', err);
+            // The browser will automatically attempt to reconnect on most errors.
+            // If the server closes the connection, it might stop.
+            // You can add logic to show a 'disconnected' status to the user.
+        };
+    }
+
     // --- Feed Refresh Logic ---
 
     /** Handles the click event for the "Refresh All Feeds" button. */
@@ -56,11 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await fetchData('/api/feeds/update-all', { method: 'POST' });
 
             if (result && result.message) {
-                alert(`Successfully refreshed all feeds.\nProcessed: ${result.feeds_processed}\nNew items: ${result.new_items}`);
-                console.log('All feeds refreshed:', result);
-                if (activeTabId) {
-                    await loadFeedsForTab(activeTabId);
-                }
+                alert(`Successfully triggered refresh for all feeds.\nProcessed: ${result.feeds_processed}\nNew items: ${result.new_items}`);
+                console.log('All feeds refresh triggered:', result);
+                // No need to manually reload here; the SSE event will handle it.
             } else if (result && result.error) {
                 // Handle cases where the API returns a JSON error object but not an HTTP error
                 alert(`Failed to refresh all feeds: ${result.error}`);
@@ -286,7 +326,9 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function setActiveTab(tabId) {
         if (activeTabId === tabId && feedGrid.children.length > 0) {
-            // Do nothing if the tab is already active and populated
+            // Do nothing if the tab is already active and populated,
+            // unless we are forcing a reload (which is handled by the caller).
+            // This just avoids re-selecting an already selected tab visually.
             return;
         }
 
@@ -567,6 +609,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Fetch initial tabs to start the application
         await initializeTabs();
+        
+        // Start listening for real-time updates from the server
+        initializeSSE();
     }
 
     // Start the application initialization process
