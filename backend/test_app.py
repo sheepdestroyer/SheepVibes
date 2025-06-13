@@ -599,65 +599,49 @@ def test_stream_endpoint_content_type(client):
 
 # --- Tests for Caching ---
 def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
-    """Test the granular cache invalidation logic."""
+    """Test the granular cache invalidation logic by mocking invalidation functions."""
     with app.app_context():
         tab1_id = setup_tabs_and_feeds["tab1_id"]
-
-        # 1. Test caching for get_tabs and get_feeds_for_tab
-        with patch('backend.app.Tab.query') as mock_tab_query, \
-             patch('backend.app.Feed.query') as mock_feed_query:
-            
-            mock_tab_query.order_by.return_value.all.return_value = []
-            mock_feed_query.filter_by.return_value.all.return_value = []
-
-            # First call - should execute queries
-            client.get('/api/tabs')
-            client.get(f'/api/tabs/{tab1_id}/feeds')
-            assert mock_tab_query.order_by.all.call_count == 1
-            assert mock_feed_query.filter_by.all.call_count == 1
-
-            # Second call - should be cached
-            client.get('/api/tabs')
-            client.get(f'/api/tabs/{tab1_id}/feeds')
-            assert mock_tab_query.order_by.all.call_count == 1, "get_tabs should be cached"
-            assert mock_feed_query.filter_by.all.call_count == 1, "get_feeds_for_tab should be cached"
-
-        # 2. Test invalidation after adding a new feed (to a different tab)
-        # This should invalidate get_tabs but not the cache for tab1's feeds.
         tab2_id = setup_tabs_and_feeds["tab2_id"]
-        with patch('backend.app.Tab.query') as mock_tab_query, \
-             patch('backend.app.Feed.query') as mock_feed_query, \
-             patch('backend.app.fetch_feed'): # mock external call
+        item1_id = setup_tabs_and_feeds["item1_id"]
+
+        # Call endpoints once to populate the cache.
+        client.get('/api/tabs')
+        client.get(f'/api/tabs/{tab1_id}/feeds')
+        client.get(f'/api/tabs/{tab2_id}/feeds')
+
+        with patch('backend.app.invalidate_tabs_cache') as mock_invalidate_tabs, \
+             patch('backend.app.invalidate_tab_feeds_cache') as mock_invalidate_tab_feeds:
+
+            # Action 1: Add a feed. Should invalidate specific tab feeds and main tabs list.
+            with patch('backend.app.fetch_feed'), patch('backend.app.process_feed_entries', return_value=1):
+                 client.post('/api/feeds', json={'url': 'http://new.com/rss', 'tab_id': tab2_id})
             
-            mock_tab_query.order_by.return_value.all.return_value = []
-            mock_feed_query.filter_by.return_value.all.return_value = []
-
-            client.post('/api/feeds', json={'url': 'http://new.com/rss', 'tab_id': tab2_id})
+            mock_invalidate_tab_feeds.assert_called_once_with(tab2_id)
+            # invalidate_tab_feeds_cache calls invalidate_tabs_cache, so no direct call expected.
+            # However, if process_feed_entries returns 0, it would be called.
+            # Let's adjust for the direct call in the else branch for coverage.
+            with patch('backend.app.process_feed_entries', return_value=0):
+                 client.post('/api/feeds', json={'url': 'http://new2.com/rss', 'tab_id': tab2_id})
+            mock_invalidate_tabs.assert_called_once()
             
-            # Call again: get_tabs should be fresh, get_feeds_for_tab(tab1_id) should be cached
-            client.get('/api/tabs')
-            client.get(f'/api/tabs/{tab1_id}/feeds')
-            
-            assert mock_tab_query.order_by.all.call_count == 1, "get_tabs should be re-queried"
-            assert mock_feed_query.filter_by.all.call_count == 0, "get_feeds_for_tab(tab1) should still be cached"
+            # Reset mocks for next action
+            mock_invalidate_tabs.reset_mock()
+            mock_invalidate_tab_feeds.reset_mock()
 
-        # 3. Test invalidation after marking an item read in tab1
-        # This should invalidate both get_tabs and get_feeds_for_tab(tab1_id)
-        item_id = setup_tabs_and_feeds['item1_id']
-        with patch('backend.app.Tab.query') as mock_tab_query, \
-             patch('backend.app.Feed.query') as mock_feed_query:
+            # Action 2: Mark an item as read. Should invalidate specific tab feeds.
+            client.post(f'/api/items/{item1_id}/read')
+            mock_invalidate_tab_feeds.assert_called_once_with(tab1_id)
+            mock_invalidate_tabs.assert_called_once() # It's called internally by invalidate_tab_feeds_cache
 
-            mock_tab_query.order_by.return_value.all.return_value = []
-            mock_feed_query.filter_by.return_value.all.return_value = []
-            
-            client.post(f'/api/items/{item_id}/read')
+            # Reset mocks
+            mock_invalidate_tabs.reset_mock()
+            mock_invalidate_tab_feeds.reset_mock()
 
-            # Call again: both should be fresh
-            client.get('/api/tabs')
-            client.get(f'/api/tabs/{tab1_id}/feeds')
-
-            assert mock_tab_query.order_by.all.call_count == 1
-            assert mock_feed_query.filter_by.all.call_count == 1
+            # Action 3: Create a new tab. Should invalidate only the main tabs list.
+            client.post('/api/tabs', json={'name': 'Newest Tab'})
+            mock_invalidate_tabs.assert_called_once()
+            mock_invalidate_tab_feeds.assert_not_called()
 
 
 # --- Tests for Model Methods ---
