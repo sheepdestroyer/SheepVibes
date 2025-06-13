@@ -695,15 +695,22 @@ def test_feed_item_to_dict_serialization(client): # client fixture ensures app_c
         db.session.delete(item_none_published)
         db.session.commit()
 
-        # Clean up dummy Tab and Feed if they were created by this test
-        # Note: This is a simplified cleanup. If other tests create these,
-        # this might be too aggressive or fail.
-        # The `client` fixture should handle overall DB cleanup (drop_all).
-        # For now, this specific cleanup is removed as client fixture handles it.
-        # feed_to_delete = Feed.query.get(test_feed.id)
-        # if feed_to_delete:
-        #     db.session.delete(feed_to_delete)
-        # tab_to_delete = Tab.query.get(test_tab.id)
-        # if tab_to_delete:
-        #     db.session.delete(tab_to_delete)
-        # db.session.commit()
+def test_to_iso_z_string_static_method():
+    """Tests the FeedItem.to_iso_z_string static method directly."""
+    from datetime import datetime, timezone, timedelta
+
+    # 1. Test with a naive datetime (assumed to be UTC)
+    naive_dt = datetime(2023, 1, 1, 12, 0, 0)
+    assert FeedItem.to_iso_z_string(naive_dt) == "2023-01-01T12:00:00Z"
+
+    # 2. Test with a timezone-aware datetime (not UTC)
+    tz_est = timezone(timedelta(hours=-5))
+    aware_dt_est = datetime(2023, 3, 15, 10, 0, 0, tzinfo=tz_est) # This is 15:00 UTC
+    assert FeedItem.to_iso_z_string(aware_dt_est) == "2023-03-15T15:00:00Z"
+
+    # 3. Test with a timezone-aware UTC datetime
+    aware_dt_utc = datetime(2023, 5, 20, 14, 30, 0, tzinfo=timezone.utc)
+    assert FeedItem.to_iso_z_string(aware_dt_utc) == "2023-05-20T14:30:00Z"
+
+    # 4. Test with None input
+    assert FeedItem.to_iso_z_string(None) is None
