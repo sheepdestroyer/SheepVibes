@@ -310,15 +310,22 @@ def get_feeds_for_tab(tab_id):
     # Group the fetched items by feed_id for efficient lookup.
     items_by_feed = {}
     for item_row in top_items_results:
-        # Create a temporary FeedItem object to use its to_dict() method,
-        # which correctly handles datetime serialization.
-        item_data = {c.name: getattr(item_row, c.name) for c in FeedItem.__table__.columns}
-        item_obj = FeedItem(**item_data)
+        # Directly serialize the row to a dict, avoiding ORM object creation.
+        item_dict = {
+            'id': item_row.id,
+            'feed_id': item_row.feed_id,
+            'title': item_row.title,
+            'link': item_row.link,
+            'published_time': FeedItem.to_iso_z_string(item_row.published_time),
+            'fetched_time': FeedItem.to_iso_z_string(item_row.fetched_time),
+            'is_read': item_row.is_read,
+            'guid': item_row.guid
+        }
         
-        feed_id = item_obj.feed_id
+        feed_id = item_row.feed_id
         if feed_id not in items_by_feed:
             items_by_feed[feed_id] = []
-        items_by_feed[feed_id].append(item_obj.to_dict())
+        items_by_feed[feed_id].append(item_dict)
 
     # Build the final response, combining feeds with their items.
     response_data = []
