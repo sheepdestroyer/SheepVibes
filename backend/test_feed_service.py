@@ -71,7 +71,7 @@ def test_parse_published_time_no_valid_field():
     entry.get.side_effect = side_effect_get
     assert parse_published_time(entry) is None
 
-@pytest.mark.skip(reason="Temporarily skipped due to causing CI runner crashes")
+# @pytest.mark.skip(reason="Temporarily skipped due to causing CI runner crashes") # Unskipping this test
 def test_parse_published_time_invalid_date_string():
     entry = MagicMock()
     entry.published_parsed = None
@@ -198,7 +198,7 @@ def test_process_feed_entries_new_items(MockFeedItemInService, mock_db_session_i
     mock_db_session_in_service.commit.assert_called_once()
     mock_db_session_in_service.rollback.assert_not_called()
 
-@pytest.mark.skip(reason="Temporarily skipped due to causing CI runner crashes")
+# @pytest.mark.skip(reason="Temporarily skipped due to causing CI runner crashes") # Unskipping this test
 @patch('backend.feed_service.db.session')
 @patch('backend.feed_service.FeedItem', new_callable=MagicMock)
 def test_process_feed_entries_duplicate_items(MockFeedItemInService, mock_db_session_in_service, feed_service_db_setup):
@@ -216,12 +216,24 @@ def test_process_feed_entries_duplicate_items(MockFeedItemInService, mock_db_ses
     existing_db_item3 = MagicMock(guid="guid3_db", link="link3")
     mock_query.all.return_value = [existing_db_item1, existing_db_item3]
     mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
-    mock_item_instance = MagicMock()
-    MockFeedItemInService.return_value = mock_item_instance
+
+    # Ensure each call to FeedItem creates a new MagicMock
+    created_items = []
+    def mock_feed_item_factory(**kwargs):
+        item = MagicMock(spec=FeedItem) # Use spec for better mocking
+        for k, v in kwargs.items():
+            setattr(item, k, v)
+        created_items.append(item)
+        return item
+    MockFeedItemInService.side_effect = mock_feed_item_factory
+
     new_count = process_feed_entries(mock_feed_db, parsed_feed)
     assert new_count == 1
+    # Check that FeedItem was called correctly for the one new item
     MockFeedItemInService.assert_called_once_with(feed_id=1, title='Title 2', link='link2', published_time=None, is_read=False, guid='guid2')
-    mock_db_session_in_service.add.assert_called_once_with(mock_item_instance)
+    # Check that the created item was added to the session
+    assert len(created_items) == 1
+    mock_db_session_in_service.add.assert_called_once_with(created_items[0])
     mock_db_session_in_service.commit.assert_called_once()
     mock_db_session_in_service.rollback.assert_not_called()
 
@@ -238,16 +250,25 @@ def test_process_feed_entries_no_guid_or_link(MockFeedItemInService, mock_db_ses
     mock_query = MagicMock()
     mock_query.all.return_value = []
     mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
-    mock_item_instance = MagicMock()
-    MockFeedItemInService.return_value = mock_item_instance
+
+    created_items = []
+    def mock_feed_item_factory(**kwargs):
+        item = MagicMock(spec=FeedItem) # Use spec for better mocking
+        for k, v in kwargs.items():
+            setattr(item, k, v)
+        created_items.append(item)
+        return item
+    MockFeedItemInService.side_effect = mock_feed_item_factory
+
     new_count = process_feed_entries(mock_feed_db, parsed_feed)
     assert new_count == 1
     MockFeedItemInService.assert_called_once_with(feed_id=1, title='Title OK', link='link1', published_time=None, is_read=False, guid='guid1')
-    mock_db_session_in_service.add.assert_called_once_with(mock_item_instance)
+    assert len(created_items) == 1
+    mock_db_session_in_service.add.assert_called_once_with(created_items[0])
     mock_db_session_in_service.commit.assert_called_once()
     mock_db_session_in_service.rollback.assert_not_called()
 
-@pytest.mark.skip(reason="Temporarily skipped due to high memory usage and causing unresponsiveness")
+# @pytest.mark.skip(reason="Temporarily skipped due to causing CI runner crashes") # Unskipping this test
 @patch('backend.feed_service.db.session')
 @patch('backend.feed_service.FeedItem', new_callable=MagicMock)
 def test_process_feed_entries_commit_error(MockFeedItemInService, mock_db_session_in_service, feed_service_db_setup):
@@ -257,13 +278,22 @@ def test_process_feed_entries_commit_error(MockFeedItemInService, mock_db_sessio
     mock_query = MagicMock()
     mock_query.all.return_value = []
     mock_db_session_in_service.query.return_value.filter_by.return_value = mock_query
-    mock_item_instance = MagicMock()
-    MockFeedItemInService.return_value = mock_item_instance
+
+    created_items = []
+    def mock_feed_item_factory(**kwargs):
+        item = MagicMock(spec=FeedItem) # Use spec for better mocking
+        for k, v in kwargs.items():
+            setattr(item, k, v)
+        created_items.append(item)
+        return item
+    MockFeedItemInService.side_effect = mock_feed_item_factory
+
     mock_db_session_in_service.commit.side_effect = IntegrityError("Mock IntegrityError", params=None, orig=None)
     new_count = process_feed_entries(mock_feed_db, parsed_feed)
-    assert new_count == 0
-    MockFeedItemInService.assert_called_once()
-    mock_db_session_in_service.add.assert_called_once_with(mock_item_instance)
+    assert new_count == 0 # new_items_count should be 0 after commit error
+    MockFeedItemInService.assert_called_once() # FeedItem is still created
+    assert len(created_items) == 1
+    mock_db_session_in_service.add.assert_called_once_with(created_items[0]) # Item is added to session
     assert mock_feed_db.last_updated_time is not None
     mock_db_session_in_service.commit.assert_called_once()
     mock_db_session_in_service.rollback.assert_called_once()
