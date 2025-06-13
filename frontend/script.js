@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
             feedGrid.innerHTML = '<p>Loading feeds...</p>';
         }
 
-        const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds?limit=10`);
+        const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds`);
 
         // If we were showing a global loading message, clear it.
         if (feedGrid.querySelector('p')) {
