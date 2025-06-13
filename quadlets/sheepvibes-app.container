@@ -10,8 +10,6 @@ Wants=redis.service
 After=redis.service
 Wants=sheepvibes-db-volume-volume.service
 After=sheepvibes-db-volume-volume.service
-# If nothing requires this service, it can be stopped.
-StopWhenUnneeded=true
 
 [Container]
 # Use the locally built image

@@ -9,6 +9,8 @@ Wants=sheepvibes-redis-volume-volume.service
 After=sheepvibes-redis-volume-volume.service
 # Bind the lifecycle of redis to the main app service
 PartOf=sheepvibes-app.service
+# If nothing requires this service, it can be stopped.
+StopWhenUnneeded=true
 
 [Container]
 ContainerName=sheepvibes-redis
