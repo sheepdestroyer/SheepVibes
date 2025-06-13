@@ -48,3 +48,4 @@ backend/venv/
 # OS specific
 .DS_Store
 Thumbs.db
+.aider*
