@@ -37,8 +37,17 @@ class MessageAnnouncer:
         self.listeners.append(q)
         try:
             while True:
-                msg = q.get()
-                yield msg
+                try:
+                    # Using a timeout on get() makes the loop non-blocking from the
+                    # perspective of the wsgi server, allowing it to handle client
+                    # disconnects gracefully.
+                    msg = q.get(timeout=1.0)
+                    yield msg
+                except queue.Empty:
+                    # This is expected if no messages are announced. We just
+                    # continue the loop. This gives the server a chance to
+                    # notice the client has disconnected and process GeneratorExit.
+                    pass
         except GeneratorExit:
             # This is triggered when the client disconnects
             self.listeners.remove(q)
