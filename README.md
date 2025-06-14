@@ -226,6 +226,43 @@ To resolve this, carefully follow these steps:
 
 If the services are still not found, check that the `podlet` or `podman-quadlet` package (your distribution's equivalent) is installed. Also ensure your systemd user instance is running correctly.
 
+### Error: `unable to open database file` (or similar database errors)
+
+If the application logs (viewable with `journalctl --user -u sheepvibes-app.service -f`) show errors like "unable to open database file", "database is locked", or other SQLite errors, it often points to issues with the data directory on the host (`~/sheepvibes_data`) or how the container interacts with it.
+
+*   **Host Directory Permissions**:
+    The application needs to write to the data directory (`~/sheepvibes_data` by default). The deployment script attempts to set open permissions (0777) on this directory for diagnostic purposes. You can verify its permissions on the host machine by running:
+    ```bash
+    ls -ld ~/sheepvibes_data
+    ```
+    Ensure your user (and the user inside the container, if relevant) has write access.
+
+*   **SELinux Issues**:
+    If your system uses SELinux, it might be preventing the container from accessing the data directory.
+    1.  Check SELinux status:
+        ```bash
+        sestatus
+        ```
+    2.  If SELinux is in `enforcing` mode, you can temporarily set it to `permissive` mode for testing.
+        **Warning**: This reduces system security and should only be used for diagnostics. Revert to enforcing mode immediately after testing.
+        ```bash
+        sudo setenforce 0
+        # After testing, revert with:
+        # sudo setenforce 1
+        ```
+    3.  If permissive mode resolves the issue, SELinux policies are likely the cause. The `:Z` flag on the volume mount in `quadlets/sheepvibes-app.container` (e.g., `Volume=%h/sheepvibes_data:/app/data:Z`) attempts to instruct Podman to relabel the host directory so the container can use it. This is usually sufficient. You can check the current context of the directory with:
+        ```bash
+        ls -lZ ~/sheepvibes_data
+        ```
+        It should typically have a context like `container_file_t`.
+    4.  Consult your system's SELinux documentation for information on how to permanently allow access if the `:Z` flag is not working as expected or if you need a more specific context (e.g., using `chcon` or `semanage fcontext`). Sometimes, restoring the default context or explicitly setting `container_file_t` can help:
+        ```bash
+        # Example: To set container_file_t (use with caution)
+        # sudo chcon -R -t container_file_t ~/sheepvibes_data
+        # To restore default context (often safer if unsure)
+        # sudo restorecon -R -v ~/sheepvibes_data
+        ```
+
 ## Contributing
 
 (Contributions are welcome. Please open an issue or PR.)
