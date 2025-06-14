@@ -8,15 +8,15 @@ ENV PYTHONUNBUFFERED=1 \
 # Create a secure, non-root system user with a non-login shell
 RUN useradd --system --create-home --shell /bin/nologin --user-group appuser
 
-# Copy the requirements file into the container at /app
-COPY backend/requirements.txt .
-
 # Use a virtual environment for better isolation (optional but good practice)
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Set the working directory in the container
 WORKDIR /app
+
+# Copy the requirements file into the container at /app
+COPY backend/requirements.txt .
 
 # Install dependencies into the virtual environment
 RUN pip install --no-cache-dir -r requirements.txt
@@ -29,11 +29,12 @@ COPY --chown=appuser:appuser frontend/ /app/frontend/
 
 # Copy the entrypoint script & Make it script executable
 COPY --chown=appuser:appuser scripts/entrypoint.sh /app/scripts/entrypoint.sh
-RUN chmod +x /app/scripts/entrypoint.sh
 
-# Ensure the data directory exists and has correct permissions *before* switching user
+# Ensure the data directory exists and that files have correct permissions *before* switching user
 # (The VOLUME instruction itself doesn't create the directory)
-RUN mkdir -p /app/data && chown -R appuser:appuser /app
+RUN mkdir -p /app/data && \
+    chown -R appuser:appuser /app && \
+    chmod +x /app/scripts/entrypoint.sh
 
 # Switch to the non-root user
 USER appuser
