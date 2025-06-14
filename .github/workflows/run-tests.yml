@@ -14,11 +14,11 @@ jobs:
       # Start a Redis service container for the job
       redis:
         image: redis:alpine
-        # Pass command to bind to all interfaces, which also disables protected mode.
-        command: redis-server --bind 0.0.0.0
-        # Health check to ensure Redis is ready before tests run
+        # Pass a password to redis-server to disable protected mode.
+        # The health check must also use the password to connect.
         options: >-
-          --health-cmd "redis-cli ping"
+          --requirepass 'sheepvibes-test'
+          --health-cmd "redis-cli -a 'sheepvibes-test' ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5

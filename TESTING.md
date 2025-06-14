@@ -16,20 +16,20 @@ The backend of SheepVibes is written in Python and uses the `pytest` framework f
 
 ### Running Tests
 
-The backend tests require a running Redis instance for caching checks.
+The backend tests require a running Redis instance for caching checks. The test suite is configured to connect to a Redis instance protected by a password.
 
 1.  **Start Redis**
-    Before running the tests, start a Redis container. The `--rm` flag will ensure it is automatically removed when stopped.
+    Before running the tests, start a Redis container with the required password. The `--rm` flag will ensure it is automatically removed when stopped.
     ```bash
     # Using Podman
-    podman run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine
+    podman run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine --requirepass "sheepvibes-test"
 
     # Or using Docker
-    # docker run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine
+    # docker run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine --requirepass "sheepvibes-test"
     ```
 
 2.  **Run Pytest**
-    Ensure you are in the `backend` directory with the virtual environment activated. The test suite is configured via `pytest.ini` to automatically connect to Redis on `localhost:6379`.
+    Ensure you are in the `backend` directory with the virtual environment activated. The test suite is configured via `pytest.ini` to automatically connect to Redis on `localhost:6379` using the password `sheepvibes-test`.
     ```bash
     # From the 'backend' directory
     python -m pytest -v
@@ -79,9 +79,11 @@ jobs:
       # Start a Redis service container for the job
       redis:
         image: redis:alpine
-        # Health check to ensure Redis is ready before tests run
+        # Pass a password to redis-server to disable protected mode.
+        # The health check must also use the password to connect.
         options: >-
-          --health-cmd "redis-cli ping"
+          --requirepass 'sheepvibes-test'
+          --health-cmd "redis-cli -a 'sheepvibes-test' ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
