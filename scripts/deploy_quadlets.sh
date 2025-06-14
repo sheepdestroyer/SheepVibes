@@ -36,11 +36,14 @@ if [ $? -ne 0 ]; then
     echo "Error creating directory ${DATA_DIR}. Please check permissions."
     exit 1
 fi
+echo "Applying diagnostic permissions (0777) to directory ${DATA_DIR}..."
+chmod 0777 "${DATA_DIR}" # Diagnostic: Ensure directory is world-writable
 echo "Attempting to pre-create database file on host and set permissions: ${DATA_DIR}/sheepvibes.db"
 touch "${DATA_DIR}/sheepvibes.db"
-chmod 0666 "${DATA_DIR}/sheepvibes.db" # Diagnostic: Make file writable by user/group/other
-echo "Listing host data directory after pre-creation:"
-ls -l "${DATA_DIR}/" # Diagnostic: Show the created file and its permissions
+chmod 0666 "${DATA_DIR}/sheepvibes.db" # Diagnostic: Make file writable
+echo "Listing host data directory permissions and contents after setup:"
+ls -ld "${DATA_DIR}/" # Diagnostic
+ls -l "${DATA_DIR}/"  # Diagnostic
 echo "Target directories ensured."
 echo ""
 

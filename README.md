@@ -26,22 +26,25 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Setup Instructions
 
-> **Important Note for `feature/host-db-prep` Branch Users:**
-> If you are using the `deploy_quadlets.sh` script from the `feature/host-db-prep` branch, please be aware that it includes a special diagnostic step. This step pre-creates the `sheepvibes.db` file in `~/sheepvibes_data` and sets its permissions to `0666` (writable by user, group, and others) on the host. This is intended for testing purposes to help diagnose database access issues and is specific to the script on this branch. For production, use the script from the `main` branch.
+> **Important Note for `feature/host-dir-writable` Branch Users:**
+> The `deploy_quadlets.sh` script obtained from the `feature/host-dir-writable` branch includes **enhanced diagnostic steps**. It will:
+> 1. Make the `~/sheepvibes_data` directory world-writable (`chmod 0777`).
+> 2. Pre-create the `sheepvibes.db` file in `~/sheepvibes_data` with open permissions (`chmod 0666`) on the host.
+> This is for testing purposes ONLY to help diagnose database access issues, particularly "attempt to write a readonly database" errors. This behavior is specific to the script on this branch. For production, use the script from the `main` branch once issues are resolved.
 
 1.  **Obtain the Deployment Script**:
 
-    If you are testing the `feature/host-db-prep` branch and have cloned the repository, the script is available at `scripts/deploy_quadlets.sh`.
+    If you are testing the `feature/host-dir-writable` branch and have cloned the repository, the script is available at `scripts/deploy_quadlets.sh`.
 
     Alternatively, you can download the version of the script specific to this branch using `curl` or `wget`:
 
-    Using `curl` (for `feature/host-db-prep` branch):
+    Using `curl` (for `feature/host-dir-writable` branch):
     ```bash
-    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/host-db-prep/scripts/deploy_quadlets.sh
+    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/host-dir-writable/scripts/deploy_quadlets.sh
     ```
-    Or using `wget` (for `feature/host-db-prep` branch):
+    Or using `wget` (for `feature/host-dir-writable` branch):
     ```bash
-    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/host-db-prep/scripts/deploy_quadlets.sh
+    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/host-dir-writable/scripts/deploy_quadlets.sh
     ```
     For the stable version, always refer to the `main` branch:
     ```bash
@@ -110,7 +113,7 @@ This section describes how to set up SheepVibes for local development and testin
     git clone https://github.com/sheepdestroyer/sheepvibes.git
     cd sheepvibes
     # If testing this specific feature, checkout the branch:
-    # git checkout feature/host-db-prep
+    # git checkout feature/host-dir-writable
     ```
 
 2.  **Build the Image**:
