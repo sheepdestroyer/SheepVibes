@@ -2,8 +2,6 @@
 
 [Unit]
 Description=Redis container for SheepVibes
-Requires=sheepvibes.network
-After=sheepvibes.network
 
 # Bind the lifecycle of redis to the main app service
 PartOf=sheepvibes-app.service
