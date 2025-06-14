@@ -14,15 +14,12 @@ jobs:
       # Start a Redis service container for the job
       redis:
         image: redis:alpine
-        # Use a command to directly start redis-server with a password.
-        # This is more explicit and reliable than using an environment variable.
-        command: redis-server --requirepass 'sheepvibes-test'
         # Expose port 6379 on the service container to be mapped to the host
         ports:
           - 6379/tcp
-        # The health check must also use the password to connect.
+        # Health check for a passwordless Redis service.
         options: >-
-          --health-cmd "redis-cli -a 'sheepvibes-test' ping"
+          --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5

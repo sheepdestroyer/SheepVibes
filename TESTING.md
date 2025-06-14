@@ -16,20 +16,20 @@ The backend of SheepVibes is written in Python and uses the `pytest` framework f
 
 ### Running Tests
 
-The backend tests require a running Redis instance for caching checks. The test suite is configured to connect to a Redis instance protected by a password.
+The backend tests require a running Redis instance for caching checks.
 
 1.  **Start Redis**
-    Before running the tests, start a Redis container with the required password. The `--rm` flag will ensure it is automatically removed when stopped.
+    Before running the tests, start a Redis container. The `--rm` flag will ensure it is automatically removed when stopped.
     ```bash
     # Using Podman
-    podman run -d --rm --name sheepvibes-test-redis -p 6379:6379 -e REDIS_PASSWORD="sheepvibes-test" redis:alpine
+    podman run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine
 
     # Or using Docker
-    # docker run -d --rm --name sheepvibes-test-redis -p 6379:6379 -e REDIS_PASSWORD="sheepvibes-test" redis:alpine
+    # docker run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine
     ```
 
 2.  **Run Pytest**
-    Ensure you are in the `backend` directory with the virtual environment activated. The test suite is configured via `pytest.ini` to automatically connect to Redis on `localhost:6379` using the password `sheepvibes-test`.
+    Ensure you are in the `backend` directory with the virtual environment activated. The test suite is configured via `pytest.ini` to automatically connect to Redis on `localhost:6379`.
     ```bash
     # From the 'backend' directory
     python -m pytest -v
@@ -79,11 +79,12 @@ jobs:
       # Start a Redis service container for the job
       redis:
         image: redis:alpine
-        env:
-          REDIS_PASSWORD: 'sheepvibes-test'
-        # The health check must use the password to connect.
+        # Expose port 6379 on the service container to be mapped to the host
+        ports:
+          - 6379/tcp
+        # Health check for a passwordless Redis service.
         options: >-
-          --health-cmd "redis-cli -a 'sheepvibes-test' ping"
+          --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -104,6 +105,9 @@ jobs:
         pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
     - name: Run Pytest
+      env:
+        # Pass the dynamically assigned Redis host port to the tests.
+        CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
       run: |
         cd backend
         python -m pytest -v
