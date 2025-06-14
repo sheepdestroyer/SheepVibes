@@ -2,6 +2,8 @@
 
 [Unit]
 Description=Redis container for SheepVibes
+Requires=sheepvibes.network
+After=sheepvibes.network
 
 # Bind the lifecycle of redis to the main app service
 PartOf=sheepvibes-app.service
@@ -12,7 +14,7 @@ StopWhenUnneeded=true
 [Container]
 ContainerName=sheepvibes-redis
 Image=docker.io/redis:alpine
-Network=sheepvibes
+Network=sheepvibes.network
 # Mount the named volume into the container's data directory
 Volume=sheepvibes-redis.volume:/data
 
