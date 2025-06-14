@@ -63,8 +63,8 @@ echo ""
 
 # --- Fetch and Download Quadlet Files ---
 echo "Fetching quadlet file list from GitHub (${REPO}, branch: ${BRANCH})..."
-# Modified to fetch all .container, .network, and .volume files.
-DOWNLOAD_URLS=$(curl -sSL "${QUADLET_FILES_URL}" | jq -r '.[] | select(.type == "file" and (.name | test("\\.(container|network|volume)$"))) | .download_url // empty')
+# Modified to fetch all .container, .network, and .volume files ; and added cache-control headers to prevent getting a stale file list.
+DOWNLOAD_URLS=$(curl -sSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${QUADLET_FILES_URL}" | jq -r '.[] | select(.type == "file" and (.name | test("\\.(container|network|volume)$"))) | .download_url // empty')
 
 if [ -z "$DOWNLOAD_URLS" ]; then
   echo "No downloadable quadlet files found or error fetching from GitHub repository ${REPO} (branch: ${BRANCH})."
@@ -78,7 +78,7 @@ SUCCESS_DOWNLOAD=false
 for DL_URL in $DOWNLOAD_URLS; do
   FILENAME="${DL_URL##*/}"
   echo "Downloading ${FILENAME}..."
-  if curl -sSL "${DL_URL}" -o "${QUADLET_DIR}/${FILENAME}"; then
+  if curl -sSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${DL_URL}" -o "${QUADLET_DIR}/${FILENAME}"; then
     echo "${FILENAME} downloaded successfully."
     SUCCESS_DOWNLOAD=true
   else
