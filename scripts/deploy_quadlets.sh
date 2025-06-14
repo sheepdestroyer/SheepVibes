@@ -5,7 +5,7 @@ set -e
 
 # --- Configuration ---
 REPO="sheepdestroyer/sheepvibes"
-BRANCH="fix/quadlet-deployment-refinements" # Or specify a tag/commit if preferred
+BRANCH="feature/standalone-quadlet-script" # Or specify a tag/commit if preferred
 QUADLET_DIR="${HOME}/.config/containers/systemd"
 DATA_DIR="${HOME}/sheepvibes_data"
 QUADLET_FILES_URL="https://api.github.com/repos/${REPO}/contents/quadlets?ref=${BRANCH}"

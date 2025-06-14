@@ -16,34 +16,45 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 
 ## Production Deployment (Quadlets)
 
-This section describes how to deploy SheepVibes using Podman Quadlets for systemd user services. The deployment script will download the necessary Quadlet files directly from GitHub.
+This section describes how to deploy SheepVibes using Podman Quadlets for systemd user services. The `deploy_quadlets.sh` script, available in this repository, will download the necessary Quadlet files directly from this branch on GitHub.
 
 ### Prerequisites
 
 - Podman installed on your server.
 - `curl` and `jq` installed (the deployment script will check for these).
+- Git (if you are cloning this branch to get the script).
 
 ### Setup Instructions
 
-> **Note:** The `deploy_quadlets.sh` script is currently configured to download the necessary quadlet files from the `fix/quadlet-deployment-refinements` development branch to ensure the latest fixes and configurations are applied during this testing phase. Once this branch is merged into `main`, the script will be updated to download from `main`. The download URLs below point to the script on the `main` branch, which will then internally use the `fix/quadlet-deployment-refinements` branch for fetching the quadlets themselves.
+1.  **Obtain the Deployment Script**:
 
-1.  **Download the Deployment Script**:
-    Download the `deploy_quadlets.sh` script from the SheepVibes GitHub repository's `main` branch. You can use `curl` or `wget`.
+    If you have cloned the `feature/standalone-quadlet-script` branch of this repository, the script is available at `scripts/deploy_quadlets.sh`.
+
+    Alternatively, you can download it directly from the `feature/standalone-quadlet-script` branch using `curl` or `wget`:
 
     Using `curl`:
     ```bash
-    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
+    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/standalone-quadlet-script/scripts/deploy_quadlets.sh
     ```
     Or using `wget`:
     ```bash
-    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
+    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/standalone-quadlet-script/scripts/deploy_quadlets.sh
     ```
 
 2.  **Make the Script Executable and Run It**:
-    This script will fetch the necessary Quadlet files from GitHub (from the `fix/quadlet-deployment-refinements` branch, as noted above), copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
+    If you downloaded the script, navigate to its location. If you cloned the repository, navigate to the repository root.
+    The script will fetch the necessary Quadlet files from this GitHub branch (`feature/standalone-quadlet-script`), copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
+
     ```bash
-    chmod +x deploy_quadlets.sh
-    ./deploy_quadlets.sh
+    # If you cloned the repo:
+    # cd path/to/sheepvibes
+    chmod +x scripts/deploy_quadlets.sh
+    scripts/deploy_quadlets.sh
+    ```
+    ```bash
+    # If you downloaded the script directly:
+    # chmod +x deploy_quadlets.sh
+    # ./deploy_quadlets.sh
     ```
     The script will check for `curl` and `jq`, guide you through the process, and inform you of the next steps.
 
@@ -77,9 +88,11 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
     sudo loginctl enable-linger $(whoami)
     ```
 
-*(Optional) If you want to inspect the full codebase or contribute, you can clone the repository:*
+*(Optional) If you want to inspect the full codebase or contribute, you can clone the repository (if you haven't already):*
 ```bash
 git clone https://github.com/sheepdestroyer/sheepvibes.git
+# Then checkout this branch if needed:
+# git checkout feature/standalone-quadlet-script
 ```
 
 ### Accessing the Application
@@ -102,6 +115,8 @@ This section describes how to set up SheepVibes for local development and testin
     ```bash
     git clone https://github.com/sheepdestroyer/sheepvibes.git
     cd sheepvibes
+    # For development on this feature, checkout the branch:
+    # git checkout feature/standalone-quadlet-script
     ```
 
 2.  **Build the Image**:
@@ -204,7 +219,7 @@ This is typically caused by one of two issues:
 2.  **Systemd not reloaded:** `systemctl --user daemon-reload` was not executed after the files were copied or updated. The script should remind you of this.
 
 To resolve this, carefully follow these steps:
-1.  **Run the deployment script:** Ensure `./deploy_quadlets.sh` (after downloading and `chmod +x`) completed successfully.
+1.  **Run the deployment script:** Ensure `./scripts/deploy_quadlets.sh` (if cloned) or `./deploy_quadlets.sh` (if downloaded directly) completed successfully after `chmod +x`.
 2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes-app.container`, `sheepvibes-redis.container`, and `sheepvibes.network`.
 3.  **Reload the systemd daemon:** Run `systemctl --user daemon-reload`.
 4.  **Check if the service is now visible:** Run `systemctl --user list-unit-files 'sheepvibes*'` to confirm.
