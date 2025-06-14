@@ -2,8 +2,6 @@
 
 [Unit]
 Description=SheepVibes Application Container
-#Requires=sheepvibes.network
-#After=sheepvibes.network
 
 # Depend on sheepvibes-redis
 Requires=sheepvibes-redis.service
@@ -13,7 +11,7 @@ After=sheepvibes-redis.service
 # Use the locally built image
 Image=ghcr.io/sheepdestroyer/sheepvibes:latest
 ContainerName=sheepvibes-app
-#Network=sheepvibes
+Network=sheepvibes-network.network
 PublishPort=127.0.0.1:5000:5000
 Volume=sheepvibes-db.volume:/app/data
 
