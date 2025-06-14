@@ -32,11 +32,14 @@ def client():
     # Get the Redis URL set by pytest-env from pytest.ini
     redis_url = os.environ.get('CACHE_REDIS_URL')
     
-    # IMPORTANT: In a CI environment (like GitHub Actions), service containers are
-    # reached by their label name (e.g., 'redis'), not 'localhost'. We detect the
-    # CI environment and swap the hostname accordingly.
-    if os.environ.get('CI') == 'true' and redis_url:
-        redis_url = redis_url.replace('localhost', 'redis')
+    # In a CI environment, GitHub Actions maps the service port to a dynamic
+    # port on the host. We check for this port (passed as an env var by the
+    # workflow) and update the connection URL accordingly.
+    ci_redis_port = os.environ.get('CACHE_REDIS_PORT')
+    if ci_redis_port and redis_url:
+        # The URL from pytest.ini is 'redis://:password@localhost:6379/0'
+        # We replace the standard port with the dynamic one from the CI env.
+        redis_url = redis_url.replace('6379', ci_redis_port, 1)
         
     app.config['CACHE_REDIS_URL'] = redis_url
 

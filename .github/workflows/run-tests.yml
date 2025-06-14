@@ -16,6 +16,9 @@ jobs:
         image: redis:alpine
         env:
           REDIS_PASSWORD: 'sheepvibes-test'
+        # Expose port 6379 on the service container to be mapped to the host
+        ports:
+          - 6379/tcp
         # The health check must use the password to connect.
         options: >-
           --health-cmd "redis-cli -a 'sheepvibes-test' ping"
@@ -39,6 +42,9 @@ jobs:
         pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
     - name: Run Pytest
+      env:
+        # Pass the dynamically assigned Redis host port to the tests.
+        CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
       run: |
         cd backend
         python -m pytest -v
