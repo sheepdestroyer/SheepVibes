@@ -3,7 +3,7 @@ feedparser==6.0.11
 APScheduler==3.11.0
 SQLAlchemy==2.0.40
 Flask-SQLAlchemy==3.1.1
-Flask-Migrate==4.0.7 # Added for database migrations
+Flask-Migrate==4.1.0 # Added for database migrations
 python-dateutil
 gunicorn
 Flask-Caching>=2.1.0
