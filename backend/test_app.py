@@ -1,6 +1,7 @@
 import pytest
 import json
 from unittest.mock import patch, MagicMock
+import os
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
@@ -10,24 +11,31 @@ from .models import db, Tab, Feed, FeedItem # Import models directly
 @pytest.fixture
 def client():
     """Configures the Flask app for testing and provides a test client."""
-    # Use an in-memory SQLite database for testing
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    # Base test config
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    # Disable CSRF protection if it were enabled
-    # app.config['WTF_CSRF_ENABLED'] = False 
-
+    
+    # Use an in-memory SQLite database for testing
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    
     # Reset Flask app's internal state for consistent behavior across tests
     app._got_first_request = False
 
-    # Remove the existing SQLAlchemy extension instance if it exists
-    # This is to allow re-initialization with the test database URI
+    # --- Re-initialize extensions for test environment ---
+
+    # Remove existing extension instances to allow re-initialization with test-specific config
     if 'sqlalchemy' in app.extensions:
         del app.extensions['sqlalchemy']
+    if 'cache' in app.extensions:
+        del app.extensions['cache']
+    
+    # Update config from environment (set by pytest-env) before re-initializing cache.
+    # This ensures the test-specific password-protected Redis URL is used.
+    app.config['CACHE_REDIS_URL'] = os.environ.get('CACHE_REDIS_URL')
 
-    # Re-initialize db with the app after test config is set.
-    # This ensures that the db extension uses the test configuration.
+    # Re-initialize extensions with the updated app config
     db.init_app(app)
+    cache.init_app(app)
 
     with app.app_context(): # Ensure app context for create_all and drop_all
         db.create_all() # Ensure tables are created for each test

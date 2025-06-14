@@ -103,13 +103,16 @@ app.config["CACHE_TYPE"] = "RedisCache"
 app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
 app.config['CACHE_DEFAULT_TIMEOUT'] = 300 # 5 minutes default timeout
 
-cache = Cache(app)
+cache = Cache()
 
 # Initialize SQLAlchemy ORM extension with the app
 db.init_app(app)
 
 # Initialize Flask-Migrate
 migrate = Migrate(app, db)
+
+# Initialize the cache with the app config
+cache.init_app(app)
 
 # --- Cache Key Generation and Invalidation ---
 
