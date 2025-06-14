@@ -2,8 +2,8 @@
 
 [Unit]
 Description=SheepVibes Application Container
-Requires=sheepvibes.network
-After=sheepvibes.network
+#Requires=sheepvibes.network
+#After=sheepvibes.network
 
 # Depend on sheepvibes-redis
 Requires=sheepvibes-redis.service
