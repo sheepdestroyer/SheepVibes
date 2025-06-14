@@ -20,7 +20,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Prerequisites
 
-- `podman`, `curl` and `jq` installed (the deployment script will check for these).
+- `podman` and `curl` installed (the deployment script will check for these).
 - Git (optional, if you prefer to clone the repository).
 
 ### Setup Instructions
@@ -36,7 +36,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 2.  **Make the Script Executable and Run It**:
     Navigate to where you downloaded the script (or the repository root if cloned).
-    The script will fetch the necessary Quadlet files from GitHub (from the `main` branch, as defined within the script itself, unless you are using a modified version from a feature branch that specifies otherwise), copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
+    The script will fetch the necessary `sheepvibes.pod` file from GitHub (from the `main` branch, as defined within the script itself, unless you are using a modified version from a feature branch that specifies otherwise) and copy it to `~/.config/containers/systemd/`. Volume management is now handled by the pod definition using named volumes.
 
     ```bash
     chmod +x deploy_quadlets.sh # Or scripts/deploy_quadlets.sh if cloned
@@ -52,22 +52,22 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
         ```
     -   Start the application:
         ```bash
-        systemctl --user start sheepvibes-app.service
+        systemctl --user start sheepvibes.service
         ```
     -   Check the status of the main application and its Redis dependency:
         ```bash
-        systemctl --user status sheepvibes-app.service sheepvibes-redis.service
+        systemctl --user status sheepvibes.service
         ```
     -   View logs (follow):
         ```bash
-        journalctl --user -u sheepvibes-app.service -f
+        journalctl --user -u sheepvibes.service -f
         ```
-    The `sheepvibes-redis.service` (for caching) and `sheepvibes.network` (for container communication) will be started automatically as dependencies of `sheepvibes-app.service`. The application data will be stored in managed volumes `sheepvibes-db.volume` and `sheepvibes-redis.volume`.
+    The `sheepvibes-redis` container now runs within the same pod and is managed as part of `sheepvibes.service`. Network communication between the app and Redis occurs over `localhost` within the pod. Application data and Redis data are stored in managed volumes (`sheepvibes-db` and `sheepvibes-redis`) defined within the pod.
 
 4.  **Enable Auto-start (Optional)**:
     To start SheepVibes automatically when your user logs in, enable the service:
     ```bash
-    systemctl --user enable sheepvibes-app.service
+    systemctl --user enable sheepvibes.service
     ```
     Note: For user services to start automatically on boot *without* requiring a login, you may need to enable lingering for your user. This typically requires root privileges:
     ```bash
@@ -76,7 +76,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Accessing the Application
 
-Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per `sheepvibes-app.container` PublishPort setting). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the downloaded `quadlets/sheepvibes-app.container` file (e.g., change to `0.0.0.0:5000:5000`) *before* running the deployment script, or re-run the script after modification (it will overwrite existing quadlet files), then reload/restart the systemd service.
+Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per the `PublishPort` setting in the `[Pod]` section of the `quadlets/sheepvibes.pod` file). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the downloaded `quadlets/sheepvibes.pod` file (in the `[Pod]` section) (e.g., change to `0.0.0.0:5000:5000`) *before* running the deployment script, or re-run the script after modification (it will overwrite existing quadlet files), then reload/restart the systemd service.
 
 ## Local Development
 
@@ -106,7 +106,7 @@ This section describes how to set up SheepVibes for local development and testin
     # Make sure it's executable first: chmod +x scripts/rebuild_container.sh
     ./scripts/rebuild_container.sh
     ```
-    After rebuilding the image, if you are using systemd for production, you must restart the service to use the new image: `systemctl --user restart sheepvibes-app.service`
+    After rebuilding the image, if you are using systemd for production, you must restart the service to use the new image: `systemctl --user restart sheepvibes.service`
 
 
 ### Running Locally with Podman
@@ -171,14 +171,14 @@ This section is for developers who want to work on the Python backend or JavaScr
 ## Configuration (Environment Variables)
 
 You can configure the application by passing environment variables.
-- When using Quadlets (via `deploy_quadlets.sh`), the script downloads default quadlet files. To customize, you would need to download them manually, edit the `Environment=` lines in `sheepvibes-app.container`, place them in `~/.config/containers/systemd/` *before* running `systemctl --user daemon-reload`, or modify them after deployment and then run `systemctl --user daemon-reload && systemctl --user restart sheepvibes-app.service`.
+- When using Quadlets (via `deploy_quadlets.sh`), the script downloads the default `sheepvibes.pod` file. To customize, you would need to download it manually, edit the `Environment=` lines for the respective container within the `quadlets/sheepvibes.pod` file, place it in `~/.config/containers/systemd/` *before* running `systemctl --user daemon-reload`, or modify it after deployment and then run `systemctl --user daemon-reload && systemctl --user restart sheepvibes.service`.
 - When using `podman run` directly, use the `-e` flag.
 - When running the backend directly, set them in your shell environment.
 
 *   `DATABASE_PATH`: The full path *inside the container* (or on the host if running directly) where the SQLite database file should be stored. Defaults to `/app/data/sheepvibes.db` (container) or `backend/sheepvibes.db` (direct script).
 *   `UPDATE_INTERVAL_MINUTES`: The interval (in minutes) at which the application checks feeds for updates. Defaults to `15`.
 *   `CACHE_REDIS_URL`: The connection URL for the Redis server.
-    *   Quadlet default (downloaded by script): `redis://sheepvibes-redis:6379/0`
+    *   Quadlet default (downloaded by script): `redis://localhost:6379/0`
     *   `podman run` dev example: `redis://sheepvibes-redis-dev:6379/0`
     *   Direct script: `redis://localhost:6379/0` (if Redis is on host)
 *   `FLASK_APP`: Path to the Flask application. Defaults to `backend.app`.
@@ -189,15 +189,15 @@ You can configure the application by passing environment variables.
 
 ### Error: `Unit ... not found` during Quadlet deployment
 
-If you run a `systemctl --user` command and receive an error like `Failed to start sheepvibes-app.service: Unit sheepvibes-app.service not found`, it means `systemd` was unable to generate the service file from the quadlet definitions.
+If you run a `systemctl --user` command and receive an error like `Failed to start sheepvibes.service: Unit sheepvibes.service not found`, it means `systemd` was unable to generate the service file from the quadlet definitions.
 
 This is typically caused by one of two issues:
-1.  **Files not downloaded or in wrong location:** The `deploy_quadlets.sh` script should handle downloading to `~/.config/containers/systemd/`. Verify the script ran successfully and that files like `sheepvibes-app.container` are present there.
+1.  **Files not downloaded or in wrong location:** The `deploy_quadlets.sh` script should handle downloading `sheepvibes.pod` to `~/.config/containers/systemd/`. Verify the script ran successfully and that the `sheepvibes.pod` file is present there.
 2.  **Systemd not reloaded:** `systemctl --user daemon-reload` was not executed after the files were copied or updated. The script should remind you of this.
 
 To resolve this, carefully follow these steps:
 1.  **Run the deployment script:** Ensure `./deploy_quadlets.sh` (after downloading and `chmod +x`) completed successfully.
-2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes-app.container`, `sheepvibes-redis.container`, and `sheepvibes.network`.
+2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes.pod`.
 3.  **Reload the systemd daemon:** Run `systemctl --user daemon-reload`.
 4.  **Check if the service is now visible:** Run `systemctl --user list-unit-files 'sheepvibes*'` to confirm.
 
@@ -205,40 +205,27 @@ If the services are still not found, check that the `podlet` or `podman-quadlet`
 
 ### Error: `unable to open database file` (or similar database errors)
 
-If the application logs (viewable with `journalctl --user -u sheepvibes-app.service -f`) show errors like "unable to open database file", "database is locked", or other SQLite errors, it often points to issues with the data directory on the host (`~/sheepvibes_data`) or how the container interacts with it.
+If the application logs (viewable with `journalctl --user -u sheepvibes.service -f`) show errors like "unable to open database file", "database is locked", or other SQLite errors, it often points to issues with volume permissions or SELinux.
 
-*   **Host Directory Permissions**:
-    Ensure the data directory (`~/sheepvibes_data` in development mode) is writable by your user. 
-    The user running the container (which is your user when using systemd user services) needs write access.
+*   **Volume Permissions & SELinux**:
+    The application uses named volumes (`sheepvibes-db`, `sheepvibes-redis`) as defined in `quadlets/sheepvibes.pod`. Podman manages these volumes.
+    If SELinux is in `enforcing` mode (check with `sestatus`), Podman typically handles the necessary labeling for named volumes automatically, especially if the `Volume` line in the `.pod` file includes `:Z` or `:z` (e.g., `Volume=sheepvibes-db.volume:/app/data:Z`). This instructs Podman to manage SELinux labels for the volume content.
 
-*   **SELinux Issues**:
-    If SELinux is in `enforcing` mode (check with `sestatus`), the container might be denied access to the `~/sheepvibes_data` directory. The `:Z` flag on the `Volume` line in `quadlets/sheepvibes-app.container` (e.g., `Volume=%h/sheepvibes_data:/app/data:Z`) instructs Podman to automatically relabel the host directory to a context like `container_file_t`, which is usually sufficient.
-  If issues persist:
-    1.  **Verify Directory Context**: Check the current SELinux context of the data directory:
+    If you suspect SELinux issues with volume access:
+    1.  **Check Audit Log**: Look for AVC denials in the audit log that might indicate SELinux blocking access:
         ```bash
-        ls -lZ ~/sheepvibes_data
+        sudo ausearch -m avc -ts recent
         ```
-        It should ideally have a context like `container_file_t` or similar that containers can access.
-    2.  **Set Permanent Context**: If the context is incorrect or missing, the recommended solution is to define a permanent SELinux context rule for the directory and its contents. Replace `YOUR_USERNAME` with your actual username:
-        ```bash
-        sudo semanage fcontext -a -t container_file_t "/home/YOUR_USERNAME/sheepvibes_data(/.*)?"
-        ```
-        Then apply this context rule:
-        ```bash
-        sudo restorecon -Rv ~/sheepvibes_data
-        ```
-    3.  **Temporary Context (for testing, does not survive relabeling/reboot)**:
-        ```bash
-        sudo chcon -Rt container_file_t ~/sheepvibes_data
-        ```
-    4.  **Permissive Mode (for diagnosis ONLY)**: As a last resort for quick diagnosis, you can temporarily set SELinux to permissive mode. **Warning**: This significantly lowers system security and should only be used for brief testing. Revert to enforcing mode immediately after.
+    2.  **Ensure Podman Manages Labels**: Verify your `quadlets/sheepvibes.pod` file uses `:Z` or `:z` on its volume mounts if SELinux is enabled. For example: `Volume=sheepvibes-db.volume:/app/data:Z`.
+    3.  **Permissive Mode (for diagnosis ONLY)**: As a last resort for quick diagnosis, you can temporarily set SELinux to permissive mode. **Warning**: This significantly lowers system security and should only be used for brief testing. Revert to enforcing mode immediately after.
         ```bash
         sudo setenforce 0
         # After testing, revert with:
         # sudo setenforce 1
         ```
-        If permissive mode works, it confirms an SELinux policy issue, and you should apply a permanent context fix as described above.
-        
+        If permissive mode resolves the issue, it strongly suggests an SELinux policy problem. Ensure your Podman version is up-to-date and that the volume definitions in your `.pod` file are correctly configured for SELinux. In rare cases, specific policies might need adjustment, but this is less common with named volumes than host directory mounts.
+        For development mode (using `podman run` with host mounts like `-v ./dev_data:/app/data:Z`), the `:Z` flag is also crucial for SELinux. Ensure the source directory (`./dev_data`) exists and has appropriate underlying filesystem permissions.
+
 ## Contributing
 (Contributions are welcome. Please open an issue or PR.)
 
