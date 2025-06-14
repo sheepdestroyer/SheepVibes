@@ -14,6 +14,8 @@ from flask_caching import Cache # Added for caching
 
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
+from .opml_utils import parse_opml, generate_opml # Added for OPML import and export
+from sqlalchemy.orm import joinedload # Added for eager loading for OPML export
 
 # Set up logging configuration
 logging.basicConfig(
@@ -182,11 +184,25 @@ def scheduled_feed_update():
             logger.error(f"Error during scheduled feed update: {e}", exc_info=True)
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
-try:
-    scheduler.start()
-    atexit.register(lambda: scheduler.shutdown())
-except (KeyboardInterrupt, SystemExit):
-    scheduler.shutdown()
+# Ensure the scheduler doesn't start if the app is being run by Flask's reloader in debug mode,
+# as that can lead to multiple schedulers.
+if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    try:
+        scheduler.start()
+        # Ensure shutdown is registered only once
+        if not hasattr(atexit, '_registered_scheduler_shutdown'):
+            atexit.register(lambda: scheduler.shutdown())
+            setattr(atexit, '_registered_scheduler_shutdown', True) # Use setattr for safety
+        logger.info("Background scheduler started.")
+    except (KeyboardInterrupt, SystemExit): # Handle cases where the app is shut down abruptly
+        logger.info("Scheduler shutdown requested via KeyboardInterrupt/SystemExit.")
+        if scheduler.running:
+             scheduler.shutdown()
+    except Exception as e: # Catch other potential errors during scheduler start
+        logger.error(f"Failed to start the background scheduler: {e}", exc_info=True)
+else:
+    logger.info("Background scheduler not started in Flask debug reloader process.")
+
 
 # --- Error Handlers ---
 
@@ -267,7 +283,7 @@ def create_tab():
         db.session.rollback()
         logger.error(f"Error creating tab '{tab_name}': {str(e)}", exc_info=True)
         # Let the 500 handler manage the response
-        raise e
+        raise # Reraise the original exception
 
 @app.route('/api/tabs/<int:tab_id>', methods=['PUT'])
 def rename_tab(tab_id):
@@ -297,7 +313,7 @@ def rename_tab(tab_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error renaming tab {tab_id} to '{new_name}': {str(e)}", exc_info=True)
-        raise e # Let 500 handler manage response
+        raise # Reraise
 
 @app.route('/api/tabs/<int:tab_id>', methods=['DELETE'])
 def delete_tab(tab_id):
@@ -320,7 +336,7 @@ def delete_tab(tab_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting tab {tab_id}: {str(e)}", exc_info=True)
-        raise e # Let 500 handler manage response
+        raise # Reraise
 
 # --- Feeds API Endpoints ---
 
@@ -459,7 +475,7 @@ def add_feed():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error adding feed {feed_url}: {str(e)}", exc_info=True)
-        raise e # Let 500 handler manage response
+        raise # Reraise
 
 @app.route('/api/feeds/<int:feed_id>', methods=['DELETE'])
 def delete_feed(feed_id):
@@ -478,9 +494,166 @@ def delete_feed(feed_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting feed {feed_id}: {str(e)}", exc_info=True)
-        raise e # Let 500 handler manage response
+        raise # Reraise
+
+# --- OPML Import Endpoint ---
+
+@app.route('/api/opml/import', methods=['POST'])
+def opml_import():
+    """Imports feeds from an OPML file."""
+    if 'file' not in request.files:
+        logger.warning("OPML import attempt with no file part.")
+        return jsonify({'error': 'No file part in the request'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        logger.warning("OPML import attempt with no selected file.")
+        return jsonify({'error': 'No selected file'}), 400
+
+    if not file or not file.filename.lower().endswith('.opml'):
+        logger.warning(f"OPML import attempt with invalid file type: {file.filename}")
+        return jsonify({'error': 'Invalid file type. Please upload an OPML file.'}), 400
+
+    try:
+        # Read as bytes first to handle potential encoding issues, then decode
+        opml_bytes = file.read()
+        opml_content = opml_bytes.decode('utf-8')
+    except UnicodeDecodeError:
+        logger.warning(f"OPML file {file.filename} is not UTF-8 encoded. Attempting latin-1.")
+        try:
+            opml_content = opml_bytes.decode('latin-1') # Common fallback
+        except Exception as e:
+            logger.error(f"Error reading or decoding OPML file {file.filename}: {e}", exc_info=True)
+            return jsonify({'error': 'Error reading or decoding OPML file. Ensure it is UTF-8 or Latin-1 encoded.'}), 500
+    except Exception as e:
+        logger.error(f"Error reading OPML file {file.filename}: {e}", exc_info=True)
+        return jsonify({'error': 'Error reading OPML file'}), 500
+
+    if not opml_content.strip():
+        logger.warning("OPML import attempt with empty file content.")
+        return jsonify({'error': 'OPML file is empty'}), 400
+
+    try:
+        parsed_feeds = parse_opml(opml_content)
+    except Exception as e: # Catching broad exception from parse_opml itself
+        logger.error(f"Error parsing OPML content from file {file.filename}: {e}", exc_info=True)
+        return jsonify({'error': f'Error parsing OPML file: {str(e)}'}), 500
+
+    if not parsed_feeds:
+        logger.info(f"OPML file {file.filename} parsed, but no feeds found or it contained no valid feed entries.")
+        return jsonify({'message': 'OPML processed, but no new feeds to import.', 'new_feeds_added': 0, 'new_tabs_created': 0}), 200
+
+    logger.info(f"Successfully parsed OPML file {file.filename}. Found {len(parsed_feeds)} potential feeds.")
+
+    new_feeds_count = 0
+    new_tabs_count = 0
+    affected_tab_ids = set()
+    default_tab_name = "Imported Feeds" # Default tab name if not specified in OPML
+
+    try:
+        for feed_data in parsed_feeds:
+            xml_url = feed_data.get('xmlUrl')
+            feed_title = feed_data.get('title')
+            # Use 'outline' value for tab name, fallback to default_tab_name if empty or not present
+            outline_name = feed_data.get('outline') if feed_data.get('outline') and feed_data.get('outline').strip() else default_tab_name
+
+            if not xml_url:
+                logger.warning(f"Skipping feed due to missing xmlUrl in OPML entry: {feed_data}")
+                continue
+
+            # Find or create Tab
+            tab = Tab.query.filter_by(name=outline_name).first()
+            if not tab:
+                max_order = db.session.query(db.func.max(Tab.order)).scalar()
+                new_order = (max_order or -1) + 1
+                tab = Tab(name=outline_name, order=new_order)
+                db.session.add(tab)
+                db.session.flush()
+                new_tabs_count += 1
+                logger.info(f"Creating new tab '{outline_name}' (ID: {tab.id}) for OPML import.")
+
+            affected_tab_ids.add(tab.id)
+
+            # Check if Feed already exists by URL (globally)
+            existing_feed = Feed.query.filter_by(url=xml_url).first()
+            if not existing_feed:
+                new_feed_name = feed_title if feed_title and feed_title.strip() else xml_url
+
+                if new_feed_name == xml_url: # Indicates original title was missing or empty
+                    try:
+                        parsed_feed_info = fetch_feed(xml_url)
+                        if parsed_feed_info and parsed_feed_info.feed:
+                            fetched_title = parsed_feed_info.feed.get('title')
+                            if fetched_title and fetched_title.strip():
+                                new_feed_name = fetched_title
+                    except Exception as fetch_exc:
+                        logger.warning(f"Could not fetch title for {xml_url} during OPML import: {fetch_exc}. Using URL as name.")
+
+                feed = Feed(name=new_feed_name, url=xml_url, tab_id=tab.id)
+                db.session.add(feed)
+                new_feeds_count += 1
+                logger.info(f"Adding new feed '{new_feed_name}' ({xml_url}) to tab '{tab.name}' (ID: {tab.id}) from OPML.")
+            else:
+                logger.info(f"Feed with URL '{xml_url}' already exists (ID: {existing_feed.id} in Tab ID: {existing_feed.tab_id}), skipping.")
+
+        if new_feeds_count > 0 or new_tabs_count > 0:
+            db.session.commit()
+            logger.info(f"OPML import successful from file {file.filename}: {new_feeds_count} new feeds added, {new_tabs_count} new tabs created.")
+            for tab_id_iter in affected_tab_ids:
+                invalidate_tab_feeds_cache(tab_id_iter)
+            if not affected_tab_ids and new_tabs_count > 0 :
+                 invalidate_tabs_cache()
+
+        return jsonify({
+            'message': 'OPML import processed successfully.',
+            'new_feeds_added': new_feeds_count,
+            'new_tabs_created': new_tabs_count
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Database error during OPML import from file {file.filename}: {e}", exc_info=True)
+        return jsonify({'error': 'An error occurred while saving imported feeds to the database.'}), 500
 
 # --- Feed Items API Endpoints ---
+
+# --- OPML Export Endpoint ---
+@app.route('/api/opml/export', methods=['GET'])
+def opml_export():
+    """Exports all tabs and feeds as an OPML file."""
+    try:
+        # Fetch all tabs and eagerly load their associated feeds
+        # Order by Tab.order and then by Feed.id (or Feed.name) for consistent output
+        tabs_with_feeds = Tab.query.options(
+            joinedload(Tab.feeds)
+        ).order_by(Tab.order).all()
+
+        # It's good practice to also order feeds within each tab if generate_opml doesn't handle it
+        # However, generate_opml iterates over tab.feeds which should be ordered if Tab.feeds relationship has an order_by
+        # If not, and order is important, feeds might need sorting here or in generate_opml
+        # For now, assume default order or order by ID from DB is sufficient.
+
+        if not tabs_with_feeds:
+            logger.info("OPML Export: No tabs found to export.")
+            # Return an empty OPML structure or a message
+            empty_opml_xml = generate_opml([]) # Assuming generate_opml can handle empty list
+            return Response(empty_opml_xml, mimetype='application/xml', headers={'Content-Disposition': 'attachment; filename=sheepvibes_empty.opml'})
+
+        opml_xml_string = generate_opml(tabs_with_feeds)
+
+        logger.info(f"Successfully generated OPML for {len(tabs_with_feeds)} tabs.")
+
+        return Response(
+            opml_xml_string,
+            mimetype='application/xml',
+            headers={'Content-Disposition': 'attachment; filename=sheepvibes_feeds.opml'}
+        )
+    except Exception as e:
+        logger.error(f"Error during OPML export: {e}", exc_info=True)
+        # Let the global 500 error handler manage the response
+        # but provide a more specific JSON error if possible for API consistency
+        return jsonify({'error': f'Failed to generate OPML export: {str(e)}'}), 500
+
 
 @app.route('/api/items/<int:item_id>/read', methods=['POST'])
 def mark_item_read(item_id):
@@ -555,9 +728,18 @@ def update_feed(feed_id):
 
 if __name__ == '__main__':
     # Start the Flask development server for local testing.
-    # The scheduler is already started in the global scope.
-    is_debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
-    logger.info(f"Starting Flask app (Debug mode: {is_debug_mode})")
-    app.run(host='0.0.0.0', port=5000, debug=is_debug_mode)
-    
-    logger.info("SheepVibes application finished.")
+    # The scheduler is started above, considering debug mode.
+    # Determine debug mode status from Flask app config or environment variable.
+    is_debug_mode = app.debug or os.environ.get('FLASK_DEBUG', '0') == '1'
+
+    if __name__ == '__main__':
+        # This block runs when the script is executed directly (e.g., `python -m backend.app`)
+        logger.info(f"Starting Flask development server on http://0.0.0.0:5000 (Debug: {is_debug_mode})")
+        # The `WERKZEUG_RUN_MAIN` check for scheduler start should handle reloader.
+        app.run(host='0.0.0.0', port=5000, debug=is_debug_mode)
+        logger.info("SheepVibes Flask development server stopped.")
+    else:
+        # This block runs if imported by a WSGI server like Gunicorn
+        # Gunicorn will handle starting the app, so no app.run() here.
+        # Scheduler should have been started above if not in Werkzeug reloader process.
+        logger.info("SheepVibes application configured and ready for WSGI server.")

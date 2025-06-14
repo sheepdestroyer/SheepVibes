@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const renameTabButton = document.getElementById('rename-tab-button');
     const deleteTabButton = document.getElementById('delete-tab-button');
     const refreshAllFeedsButton = document.getElementById('refresh-all-feeds-button');
+    const importOpmlButton = document.getElementById('import-opml-btn');
+    const opmlFileInput = document.getElementById('opml-file-input');
+    const exportOpmlButton = document.getElementById('export-opml-btn');
+    const opmlStatusMessageDiv = document.getElementById('opml-status-message');
     
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -609,6 +613,109 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Start listening for real-time updates from the server
         initializeSSE();
+
+        // OPML Actions
+        importOpmlButton.addEventListener('click', () => opmlFileInput.click());
+        opmlFileInput.addEventListener('change', handleImportOpml);
+        exportOpmlButton.addEventListener('click', handleExportOpml);
+    }
+
+    // --- OPML Functions ---
+
+    /**
+     * Displays a status message in the OPML status div and clears it after a delay.
+     * @param {string} message - The message to display.
+     * @param {boolean} [isError=false] - True if the message is an error (styles it differently).
+     */
+    function showOpmlStatus(message, isError = false) {
+        opmlStatusMessageDiv.textContent = message;
+        opmlStatusMessageDiv.className = 'status-message'; // Reset classes
+        if (isError) {
+            opmlStatusMessageDiv.classList.add('error');
+        } else {
+            opmlStatusMessageDiv.classList.add('success');
+        }
+        opmlStatusMessageDiv.style.display = 'block';
+
+        setTimeout(() => {
+            opmlStatusMessageDiv.textContent = '';
+            opmlStatusMessageDiv.style.display = 'none';
+            opmlStatusMessageDiv.className = 'status-message'; // Clear classes
+        }, 5000); // Clear message after 5 seconds
+    }
+
+    /** Handles the OPML file selection for import. */
+    async function handleImportOpml() {
+        const file = opmlFileInput.files[0];
+        if (!file) {
+            showOpmlStatus('No file selected.', true);
+            return;
+        }
+
+        console.log(`Importing OPML file: ${file.name}`);
+        showOpmlStatus(`Importing ${file.name}...`);
+
+        const formData = new FormData();
+        formData.append('file', file); // Changed 'opml_file' to 'file' to match backend expectations
+
+        try {
+            const response = await fetch('/api/opml/import', {
+                method: 'POST',
+                body: formData,
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                console.log('OPML Import successful:', result);
+                showOpmlStatus(`OPML imported: ${result.new_feeds_added || 0} feeds added, ${result.new_tabs_created || 0} tabs created. Refreshing...`, false);
+                // Refresh tabs and current feeds
+                await initializeTabs(true); // Update tab list (unread counts, new tabs)
+                if (activeTabId) { // If a tab is active, reload its content
+                    loadedTabs.delete(activeTabId); // Mark as not loaded to force refresh
+                    await setActiveTab(activeTabId);
+                } else if (allTabs.length > 0) { // If no tab was active but tabs exist, activate the first one
+                    await setActiveTab(allTabs[0].id);
+                }
+            } else {
+                console.error('OPML Import failed:', result);
+                showOpmlStatus(`Error importing OPML: ${result.error || 'Unknown error'}`, true);
+            }
+        } catch (error) {
+            console.error('Error during OPML import fetch:', error);
+            showOpmlStatus(`Network or unexpected error during import: ${error.message}`, true);
+        } finally {
+            opmlFileInput.value = null; // Clear file input
+        }
+    }
+
+    /** Handles the click event for the "Export OPML" button. */
+    async function handleExportOpml() {
+        console.log('Exporting OPML...');
+        showOpmlStatus('Exporting OPML...');
+
+        try {
+            const response = await fetch('/api/opml/export');
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'sheepvibes_feeds.opml';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showOpmlStatus('OPML export started successfully.', false);
+            } else {
+                const result = await response.json();
+                console.error('OPML Export failed:', result);
+                showOpmlStatus(`Error exporting OPML: ${result.error || 'Unknown error'}`, true);
+            }
+        } catch (error) {
+            console.error('Error during OPML export fetch:', error);
+            showOpmlStatus(`Network or unexpected error during export: ${error.message}`, true);
+        }
     }
 
     // Start the application initialization process

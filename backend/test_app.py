@@ -2,6 +2,7 @@ import pytest
 import json
 from unittest.mock import patch, MagicMock
 import os
+import xml.etree.ElementTree as ET
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
@@ -773,3 +774,190 @@ def test_to_iso_z_string_static_method():
 
     # 4. Test with None input
     assert FeedItem.to_iso_z_string(None) is None
+
+# --- Tests for OPML Endpoints ---
+import io
+
+def test_import_opml_no_file(client):
+    """Test POST /api/opml/import without a file."""
+    response = client.post('/api/opml/import')
+    assert response.status_code == 400
+    json_data = response.get_json()
+    assert 'error' in json_data
+    assert 'No file part' in json_data['error']
+
+def test_import_opml_empty_filename(client):
+    """Test POST /api/opml/import with an empty filename."""
+    data = {'file': (io.BytesIO(b""), "")}
+    response = client.post('/api/opml/import', data=data, content_type='multipart/form-data')
+    assert response.status_code == 400
+    json_data = response.get_json()
+    assert 'error' in json_data
+    assert 'No selected file' in json_data['error']
+
+def test_import_opml_invalid_file_type(client):
+    """Test POST /api/opml/import with a non-OPML file extension (e.g. .txt)."""
+    data = {'file': (io.BytesIO(b"some text data"), "test.txt")}
+    response = client.post('/api/opml/import', data=data, content_type='multipart/form-data')
+    assert response.status_code == 400
+    json_data = response.get_json()
+    assert 'error' in json_data
+    assert 'Invalid file type' in json_data['error']
+
+def test_import_opml_invalid_file_content(client):
+    """Test POST /api/opml/import with a .opml file that has malformed XML."""
+    opml_content = b"<opml version='2.0'><body><outline text='Test Feed' xmlUrl='http://example.com/rss'" # Missing closing tags
+    data = {'file': (io.BytesIO(opml_content), 'test.opml')}
+    response = client.post('/api/opml/import', data=data, content_type='multipart/form-data')
+    assert response.status_code == 500 # opml_utils.parse_opml catches Exception and returns [], app returns 500 if parse_opml fails badly
+    json_data = response.get_json()
+    assert 'error' in json_data
+    # This error message comes from parse_opml's broad exception.
+    # Depending on exact parsing error, it might be more specific.
+    assert 'Error parsing OPML file' in json_data['error']
+
+
+def test_import_opml_success_new_tabs_and_feeds(client):
+    """Test successful OPML import creating new tabs and feeds."""
+    opml_content = """<?xml version="1.0" encoding="UTF-8"?>
+    <opml version="2.0">
+        <head><title>Test Import</title></head>
+        <body>
+            <outline text="Tech News">
+                <outline text="Feed A" title="Feed A" type="rss" xmlUrl="http://example.com/feedA.xml"/>
+            </outline>
+            <outline text="Blogs">
+                <outline text="Feed B" title="Feed B" xmlUrl="http://example.com/feedB.xml"/>
+                <outline text="Feed C" title="Feed C" xmlUrl="http://example.com/feedC.xml"/>
+            </outline>
+            <outline text="Feed D No Tab" title="Feed D No Tab" xmlUrl="http://example.com/feedD.xml"/>
+        </body>
+    </opml>""".encode('utf-8')
+    data = {'file': (io.BytesIO(opml_content), 'import.opml')}
+
+    response = client.post('/api/opml/import', data=data, content_type='multipart/form-data')
+    assert response.status_code == 200
+    json_data = response.get_json()
+    assert json_data['new_feeds_added'] == 4
+    assert json_data['new_tabs_created'] == 3 # "Tech News", "Blogs", and "Imported Feeds" for "Feed D No Tab"
+
+    with app.app_context():
+        assert Tab.query.count() == 3
+        tech_tab = Tab.query.filter_by(name="Tech News").first()
+        assert tech_tab is not None
+        assert Feed.query.filter_by(tab_id=tech_tab.id, url="http://example.com/feedA.xml").count() == 1
+
+        blogs_tab = Tab.query.filter_by(name="Blogs").first()
+        assert blogs_tab is not None
+        assert Feed.query.filter_by(tab_id=blogs_tab.id, url="http://example.com/feedB.xml").count() == 1
+        assert Feed.query.filter_by(tab_id=blogs_tab.id, url="http://example.com/feedC.xml").count() == 1
+
+        default_tab = Tab.query.filter_by(name="Imported Feeds").first() # Default name from app.py
+        assert default_tab is not None
+        assert Feed.query.filter_by(tab_id=default_tab.id, url="http://example.com/feedD.xml").count() == 1
+
+        assert Feed.query.count() == 4
+
+
+def test_import_opml_existing_feeds_not_duplicated(client, setup_tabs_and_feeds):
+    """Test OPML import does not duplicate existing feeds (by URL)."""
+    tab1_id = setup_tabs_and_feeds['tab1_id']
+    # url1 and url2 already exist from setup_tabs_and_feeds
+    opml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <opml version="2.0">
+        <body>
+            <outline text="Tab 1">
+                <outline text="Existing Feed 1" xmlUrl="url1"/>
+                <outline text="New Feed In Tab 1" xmlUrl="http://example.com/newInTab1.xml"/>
+            </outline>
+        </body>
+    </opml>""".encode('utf-8')
+    data = {'file': (io.BytesIO(opml_content), 'import_existing.opml')}
+
+    initial_feed_count = 0
+    with app.app_context():
+        initial_feed_count = Feed.query.count() # Should be 3 from setup
+
+    response = client.post('/api/opml/import', data=data, content_type='multipart/form-data')
+    assert response.status_code == 200
+    json_data = response.get_json()
+    assert json_data['new_feeds_added'] == 1 # Only newInTab1.xml
+    assert json_data['new_tabs_created'] == 0 # "Tab 1" already exists
+
+    with app.app_context():
+        assert Tab.query.filter_by(name="Tab 1").one().id == tab1_id # Ensure it used existing tab
+        assert Feed.query.count() == initial_feed_count + 1
+        assert Feed.query.filter_by(url="url1").count() == 1 # Still only one
+        assert Feed.query.filter_by(url="http://example.com/newInTab1.xml").count() == 1
+
+
+def test_export_opml_empty(client):
+    """Test GET /api/opml/export when the database is empty."""
+    response = client.get('/api/opml/export')
+    assert response.status_code == 200
+    assert response.mimetype == 'application/xml'
+    assert 'attachment; filename=sheepvibes_empty.opml' in response.headers['Content-Disposition']
+
+    xml_data = response.data.decode('utf-8')
+    assert "<opml version=\"2.0\">" in xml_data
+    assert "<body></body>" in xml_data or "<body>\n</body>" in xml_data # Check for empty body
+
+def test_export_opml_with_data(client, setup_tabs_and_feeds):
+    """Test GET /api/opml/export with data in the database."""
+    response = client.get('/api/opml/export')
+    assert response.status_code == 200
+    assert response.mimetype == 'application/xml'
+    assert 'attachment; filename=sheepvibes_feeds.opml' in response.headers['Content-Disposition']
+
+    xml_data = response.data.decode('utf-8')
+
+    # Basic structural checks
+    assert "<opml version=\"2.0\">" in xml_data
+    assert "<title>SheepVibes Feeds</title>" in xml_data
+
+    # Check for tab and feed data (names and URLs from setup_tabs_and_feeds)
+    assert "text=\"Tab 1\"" in xml_data
+    assert "title=\"Tab 1\"" in xml_data
+    assert "text=\"Feed 1\"" in xml_data
+    assert "xmlUrl=\"url1\"" in xml_data
+    assert "text=\"Feed 2\"" in xml_data
+    assert "xmlUrl=\"url2\"" in xml_data
+
+    assert "text=\"Tab 2\"" in xml_data
+    assert "text=\"Feed 3\"" in xml_data
+    assert "xmlUrl=\"url3\"" in xml_data
+
+    # More robust parsing with ET is good, but string checks cover basics
+    try:
+        root = ET.fromstring(xml_data)
+        body = root.find('body')
+        assert body is not None
+        tab_outlines = body.findall('outline')
+        assert len(tab_outlines) == 2 # Tab 1 and Tab 2
+
+        # Example check for first tab from setup_tabs_and_feeds (order might vary based on retrieval)
+        # This assumes Tab 1 is first. If order is not guaranteed, more complex check needed.
+        # The app orders by Tab.order, setup_tabs_and_feeds has Tab 1 order 0, Tab 2 order 1
+
+        tab1_xml = None
+        tab2_xml = None
+        for t_xml in tab_outlines:
+            if t_xml.get('text') == "Tab 1":
+                tab1_xml = t_xml
+            elif t_xml.get('text') == "Tab 2":
+                tab2_xml = t_xml
+
+        assert tab1_xml is not None
+        assert tab2_xml is not None
+
+        feeds_in_tab1 = tab1_xml.findall('outline')
+        assert len(feeds_in_tab1) == 2
+        feed_urls_tab1 = {f.get('xmlUrl') for f in feeds_in_tab1}
+        assert {"url1", "url2"} == feed_urls_tab1
+
+        feeds_in_tab2 = tab2_xml.findall('outline')
+        assert len(feeds_in_tab2) == 1
+        assert feeds_in_tab2[0].get('xmlUrl') == "url3"
+
+    except ET.ParseError as e:
+        pytest.fail(f"Exported OPML is not valid XML: {e}\n{xml_data}")

@@ -23,6 +23,12 @@
             <button id="add-feed-button">Add Feed</button>
             <button id="refresh-all-feeds-button">Refresh All Feeds</button>
         </div>
+        <div id="opml-actions-section">
+            <button id="import-opml-btn">Import OPML</button>
+            <input type="file" id="opml-file-input" accept=".opml,.xml" style="display: none;">
+            <button id="export-opml-btn">Export OPML</button>
+            <div id="opml-status-message" class="status-message"></div>
+        </div>
     </header>
     <main id="feed-grid">
         <!-- Feed widgets will be loaded here -->
