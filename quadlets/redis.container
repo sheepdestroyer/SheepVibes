@@ -17,7 +17,7 @@ ContainerName=sheepvibes-redis
 Image=docker.io/redis:alpine
 Network=sheepvibes.network
 # Mount the named volume into the container's data directory
-Volume=sheepvibes-redis-volume:/data
+Volume=sheepvibes-redis:/data
 
 # Expose the Redis port to the host for debugging or external tools if needed.
 # For container-to-container communication, this is not strictly necessary.
