@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Exit immediately if a command exits with a non-zero status.
-set -euo pipefail
+set -e
 
 # --- Configuration ---
 REPO="sheepdestroyer/sheepvibes"
@@ -21,10 +21,6 @@ if ! command -v jq &> /dev/null; then
     echo "Error: jq is not installed. Please install jq and try again."
     exit 1
 fi
-if ! command -v podman &> /dev/null; then
-    echo "Error: podman is not installed. Please install podman and try again."
-    exit 1
-fi
 echo "Dependencies found."
 echo ""
 
@@ -40,6 +36,11 @@ if [ $? -ne 0 ]; then
     echo "Error creating directory ${DATA_DIR}. Please check permissions."
     exit 1
 fi
+echo "Attempting to pre-create database file on host and set permissions: ${DATA_DIR}/sheepvibes.db"
+touch "${DATA_DIR}/sheepvibes.db"
+chmod 0666 "${DATA_DIR}/sheepvibes.db" # Diagnostic: Make file writable by user/group/other
+echo "Listing host data directory after pre-creation:"
+ls -l "${DATA_DIR}/" # Diagnostic: Show the created file and its permissions
 echo "Target directories ensured."
 echo ""
 

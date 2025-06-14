@@ -16,7 +16,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 
 ## Production Deployment (Quadlets)
 
-This section describes how to deploy SheepVibes using Podman Quadlets for systemd user services. The `deploy_quadlets.sh` script will download the necessary Quadlet files from the `main` branch on GitHub.
+This section describes how to deploy SheepVibes using Podman Quadlets for systemd user services.
 
 ### Prerequisites
 
@@ -26,27 +26,36 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Setup Instructions
 
+> **Important Note for `feature/host-db-prep` Branch Users:**
+> If you are using the `deploy_quadlets.sh` script from the `feature/host-db-prep` branch, please be aware that it includes a special diagnostic step. This step pre-creates the `sheepvibes.db` file in `~/sheepvibes_data` and sets its permissions to `0666` (writable by user, group, and others) on the host. This is intended for testing purposes to help diagnose database access issues and is specific to the script on this branch. For production, use the script from the `main` branch.
+
 1.  **Obtain the Deployment Script**:
 
-    You can download the `deploy_quadlets.sh` script directly from the `main` branch of the SheepVibes GitHub repository using `curl` or `wget`:
+    If you are testing the `feature/host-db-prep` branch and have cloned the repository, the script is available at `scripts/deploy_quadlets.sh`.
 
-    Using `curl`:
+    Alternatively, you can download the version of the script specific to this branch using `curl` or `wget`:
+
+    Using `curl` (for `feature/host-db-prep` branch):
     ```bash
-    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
+    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/host-db-prep/scripts/deploy_quadlets.sh
     ```
-    Or using `wget`:
+    Or using `wget` (for `feature/host-db-prep` branch):
     ```bash
-    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
+    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/host-db-prep/scripts/deploy_quadlets.sh
     ```
-    Alternatively, if you clone the repository, the script is available at `scripts/deploy_quadlets.sh`.
+    For the stable version, always refer to the `main` branch:
+    ```bash
+    # Stable version from main:
+    # curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
+    ```
 
 2.  **Make the Script Executable and Run It**:
     Navigate to where you downloaded the script (or the repository root if cloned).
-    The script will fetch the necessary Quadlet files from the GitHub `main` branch, copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
+    The script will fetch the necessary Quadlet files from GitHub (from the `main` branch, as defined within the script itself, unless you are using a modified version from a feature branch that specifies otherwise), copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
 
     ```bash
-    chmod +x deploy_quadlets.sh
-    ./deploy_quadlets.sh
+    chmod +x deploy_quadlets.sh # Or scripts/deploy_quadlets.sh if cloned
+    ./deploy_quadlets.sh      # Or scripts/deploy_quadlets.sh if cloned
     ```
     The script will check for `curl` and `jq`, guide you through the process, and inform you of the next steps.
 
@@ -82,7 +91,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Accessing the Application
 
-Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per `sheepvibes-app.container` PublishPort setting). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the `sheepvibes-app.container` file (located in `~/.config/containers/systemd/` after running the deployment script) *before* running the deployment script, or re-run the script after modification (it will overwrite existing quadlet files), then reload/restart the systemd service.
+Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per `sheepvibes-app.container` PublishPort setting). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the downloaded `quadlets/sheepvibes-app.container` file (e.g., change to `0.0.0.0:5000:5000`) *before* running the deployment script, or re-run the script after modification (it will overwrite existing quadlet files), then reload/restart the systemd service.
 
 ## Local Development
 
@@ -100,6 +109,8 @@ This section describes how to set up SheepVibes for local development and testin
     ```bash
     git clone https://github.com/sheepdestroyer/sheepvibes.git
     cd sheepvibes
+    # If testing this specific feature, checkout the branch:
+    # git checkout feature/host-db-prep
     ```
 
 2.  **Build the Image**:
