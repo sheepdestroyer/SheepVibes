@@ -1,13 +1,15 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status.
+# Exit immediately if a command exits with a non-zero status, 
+# try to use an undefined variable, 
+# and the pipeline's exit code is the exit code of the rightmost command to fail, 
+# or zero if all succeed.
 set -euo pipefail
 
 # --- Configuration ---
 REPO="sheepdestroyer/sheepvibes"
 BRANCH="feature/standalone-quadlet-script" # Or specify a tag/commit if preferred
 QUADLET_DIR="${HOME}/.config/containers/systemd"
-# The DATA_DIR is no longer needed, as we are using a named volume.
 QUADLET_FILES_URL="https://api.github.com/repos/${REPO}/contents/quadlets?ref=${BRANCH}"
 
 # --- Dependency Checks ---
