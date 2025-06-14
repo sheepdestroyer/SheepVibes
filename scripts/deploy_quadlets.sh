@@ -5,7 +5,7 @@ set -e
 
 # --- Configuration ---
 REPO="sheepdestroyer/sheepvibes"
-BRANCH="feature/standalone-quadlet-script" # Or specify a tag/commit if preferred
+BRANCH="main" # Or specify a tag/commit if preferred
 QUADLET_DIR="${HOME}/.config/containers/systemd"
 DATA_DIR="${HOME}/sheepvibes_data"
 QUADLET_FILES_URL="https://api.github.com/repos/${REPO}/contents/quadlets?ref=${BRANCH}"
@@ -36,10 +36,6 @@ if [ $? -ne 0 ]; then
     echo "Error creating directory ${DATA_DIR}. Please check permissions."
     exit 1
 fi
-# Diagnostic: Set open permissions on data directory to help rule out host path permission issues.
-# This is for testing ONLY and might not be suitable for production.
-echo "Applying diagnostic permissions (0777) to ${DATA_DIR}..."
-chmod 0777 "${DATA_DIR}"
 echo "Target directories ensured."
 echo ""
 

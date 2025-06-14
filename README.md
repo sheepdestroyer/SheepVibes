@@ -16,45 +16,37 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 
 ## Production Deployment (Quadlets)
 
-This section describes how to deploy SheepVibes using Podman Quadlets for systemd user services. The `deploy_quadlets.sh` script, available in this repository, will download the necessary Quadlet files directly from this branch on GitHub.
+This section describes how to deploy SheepVibes using Podman Quadlets for systemd user services. The `deploy_quadlets.sh` script will download the necessary Quadlet files from the `main` branch on GitHub.
 
 ### Prerequisites
 
 - Podman installed on your server.
 - `curl` and `jq` installed (the deployment script will check for these).
-- Git (if you are cloning this branch to get the script).
+- Git (optional, if you prefer to clone the repository).
 
 ### Setup Instructions
 
 1.  **Obtain the Deployment Script**:
 
-    If you have cloned the `feature/standalone-quadlet-script` branch of this repository, the script is available at `scripts/deploy_quadlets.sh`.
-
-    Alternatively, you can download it directly from the `feature/standalone-quadlet-script` branch using `curl` or `wget`:
+    You can download the `deploy_quadlets.sh` script directly from the `main` branch of the SheepVibes GitHub repository using `curl` or `wget`:
 
     Using `curl`:
     ```bash
-    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/standalone-quadlet-script/scripts/deploy_quadlets.sh
+    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
     ```
     Or using `wget`:
     ```bash
-    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/standalone-quadlet-script/scripts/deploy_quadlets.sh
+    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
     ```
+    Alternatively, if you clone the repository, the script is available at `scripts/deploy_quadlets.sh`.
 
 2.  **Make the Script Executable and Run It**:
-    If you downloaded the script, navigate to its location. If you cloned the repository, navigate to the repository root.
-    The script will fetch the necessary Quadlet files from this GitHub branch (`feature/standalone-quadlet-script`), copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
+    Navigate to where you downloaded the script (or the repository root if cloned).
+    The script will fetch the necessary Quadlet files from the GitHub `main` branch, copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
 
     ```bash
-    # If you cloned the repo:
-    # cd path/to/sheepvibes
-    chmod +x scripts/deploy_quadlets.sh
-    scripts/deploy_quadlets.sh
-    ```
-    ```bash
-    # If you downloaded the script directly:
-    # chmod +x deploy_quadlets.sh
-    # ./deploy_quadlets.sh
+    chmod +x deploy_quadlets.sh
+    ./deploy_quadlets.sh
     ```
     The script will check for `curl` and `jq`, guide you through the process, and inform you of the next steps.
 
@@ -88,13 +80,6 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
     sudo loginctl enable-linger $(whoami)
     ```
 
-*(Optional) If you want to inspect the full codebase or contribute, you can clone the repository (if you haven't already):*
-```bash
-git clone https://github.com/sheepdestroyer/sheepvibes.git
-# Then checkout this branch if needed:
-# git checkout feature/standalone-quadlet-script
-```
-
 ### Accessing the Application
 
 Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per `sheepvibes-app.container` PublishPort setting). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the downloaded `quadlets/sheepvibes-app.container` file (e.g., change to `0.0.0.0:5000:5000`) *before* running the deployment script, or re-run the script after modification (it will overwrite existing quadlet files), then reload/restart the systemd service.
@@ -115,8 +100,6 @@ This section describes how to set up SheepVibes for local development and testin
     ```bash
     git clone https://github.com/sheepdestroyer/sheepvibes.git
     cd sheepvibes
-    # For development on this feature, checkout the branch:
-    # git checkout feature/standalone-quadlet-script
     ```
 
 2.  **Build the Image**:
@@ -219,7 +202,7 @@ This is typically caused by one of two issues:
 2.  **Systemd not reloaded:** `systemctl --user daemon-reload` was not executed after the files were copied or updated. The script should remind you of this.
 
 To resolve this, carefully follow these steps:
-1.  **Run the deployment script:** Ensure `./scripts/deploy_quadlets.sh` (if cloned) or `./deploy_quadlets.sh` (if downloaded directly) completed successfully after `chmod +x`.
+1.  **Run the deployment script:** Ensure `./deploy_quadlets.sh` (after downloading and `chmod +x`) completed successfully.
 2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes-app.container`, `redis.container`, and `sheepvibes.network`.
 3.  **Reload the systemd daemon:** Run `systemctl --user daemon-reload`.
 4.  **Check if the service is now visible:** Run `systemctl --user list-unit-files 'sheepvibes*'` to confirm.
@@ -231,37 +214,40 @@ If the services are still not found, check that the `podlet` or `podman-quadlet`
 If the application logs (viewable with `journalctl --user -u sheepvibes-app.service -f`) show errors like "unable to open database file", "database is locked", or other SQLite errors, it often points to issues with the data directory on the host (`~/sheepvibes_data`) or how the container interacts with it.
 
 *   **Host Directory Permissions**:
-    The application needs to write to the data directory (`~/sheepvibes_data` by default). The deployment script attempts to set open permissions (0777) on this directory for diagnostic purposes. You can verify its permissions on the host machine by running:
+    Ensure the data directory (`~/sheepvibes_data` by default) is writable by your user. The deployment script will create it if it doesn't exist (`mkdir -p`). You can verify its permissions on the host machine by running:
     ```bash
     ls -ld ~/sheepvibes_data
     ```
-    Ensure your user (and the user inside the container, if relevant) has write access.
+    The user running the container (which is your user when using systemd user services) needs write access.
 
 *   **SELinux Issues**:
-    If your system uses SELinux, it might be preventing the container from accessing the data directory.
-    1.  Check SELinux status:
+    If SELinux is in `enforcing` mode (check with `sestatus`), the container might be denied access to the `~/sheepvibes_data` directory. The `:Z` flag on the `Volume` line in `quadlets/sheepvibes-app.container` (e.g., `Volume=%h/sheepvibes_data:/app/data:Z`) instructs Podman to automatically relabel the host directory to a context like `container_file_t`, which is usually sufficient.
+
+    If issues persist:
+    1.  **Verify Directory Context**: Check the current SELinux context of the data directory:
         ```bash
-        sestatus
+        ls -lZ ~/sheepvibes_data
         ```
-    2.  If SELinux is in `enforcing` mode, you can temporarily set it to `permissive` mode for testing.
-        **Warning**: This reduces system security and should only be used for diagnostics. Revert to enforcing mode immediately after testing.
+        It should ideally have a context like `container_file_t` or similar that containers can access.
+    2.  **Set Permanent Context**: If the context is incorrect or missing, the recommended solution is to define a permanent SELinux context rule for the directory and its contents. Replace `YOUR_USERNAME` with your actual username:
+        ```bash
+        sudo semanage fcontext -a -t container_file_t "/home/YOUR_USERNAME/sheepvibes_data(/.*)?"
+        ```
+        Then apply this context rule:
+        ```bash
+        sudo restorecon -Rv ~/sheepvibes_data
+        ```
+    3.  **Temporary Context (for testing, does not survive relabeling/reboot)**:
+        ```bash
+        sudo chcon -Rt container_file_t ~/sheepvibes_data
+        ```
+    4.  **Permissive Mode (for diagnosis ONLY)**: As a last resort for quick diagnosis, you can temporarily set SELinux to permissive mode. **Warning**: This significantly lowers system security and should only be used for brief testing. Revert to enforcing mode immediately after.
         ```bash
         sudo setenforce 0
         # After testing, revert with:
         # sudo setenforce 1
         ```
-    3.  If permissive mode resolves the issue, SELinux policies are likely the cause. The `:Z` flag on the volume mount in `quadlets/sheepvibes-app.container` (e.g., `Volume=%h/sheepvibes_data:/app/data:Z`) attempts to instruct Podman to relabel the host directory so the container can use it. This is usually sufficient. You can check the current context of the directory with:
-        ```bash
-        ls -lZ ~/sheepvibes_data
-        ```
-        It should typically have a context like `container_file_t`.
-    4.  Consult your system's SELinux documentation for information on how to permanently allow access if the `:Z` flag is not working as expected or if you need a more specific context (e.g., using `chcon` or `semanage fcontext`). Sometimes, restoring the default context or explicitly setting `container_file_t` can help:
-        ```bash
-        # Example: To set container_file_t (use with caution)
-        # sudo chcon -R -t container_file_t ~/sheepvibes_data
-        # To restore default context (often safer if unsure)
-        # sudo restorecon -R -v ~/sheepvibes_data
-        ```
+        If permissive mode works, it confirms an SELinux policy issue, and you should apply a permanent context fix as described above.
 
 ## Contributing
 
