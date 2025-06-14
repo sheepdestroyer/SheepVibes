@@ -2,13 +2,12 @@
 
 [Unit]
 Description=Redis container for SheepVibes
-Wants=network.target
-After=network.target
-# Depends on the volume service being started first
-Wants=sheepvibes-redis-volume-volume.service
-After=sheepvibes-redis-volume-volume.service
+Requires=sheepvibes.network
+After=sheepvibes.network
+
 # Bind the lifecycle of redis to the main app service
 PartOf=sheepvibes-app.service
+
 # If nothing requires this service, it can be stopped.
 StopWhenUnneeded=true
 
@@ -17,12 +16,12 @@ ContainerName=sheepvibes-redis
 Image=docker.io/redis:alpine
 Network=sheepvibes.network
 # Mount the named volume into the container's data directory
-Volume=sheepvibes-redis:/data
+Volume=sheepvibes-redis.volume:/data
 
 # Expose the Redis port to the host for debugging or external tools if needed.
 # For container-to-container communication, this is not strictly necessary.
 PublishPort=127.0.0.1:6379:6379
 
 [Service]
-Restart=always
+Restart=on-failure
 TimeoutStartSec=90
