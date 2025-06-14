@@ -42,6 +42,25 @@ fi
 echo "Directory ensured."
 echo ""
 
+# --- Cleanup Step ---
+echo "--- Cleaning up old SheepVibes quadlet files ---"
+if [ -d "${QUADLET_DIR}" ]; then
+    echo "Found quadlet directory at ${QUADLET_DIR}."
+    # Find files matching the sheepvibes-* pattern and remove them.
+    # The 'find' command is used for safety and to handle cases where no files exist.
+    # -maxdepth 1 ensures we only search in the top-level directory.
+    find "${QUADLET_DIR}" -maxdepth 1 -name 'sheepvibes-*.container' -o -name 'sheepvibes-*.volume' -o -name 'sheepvibes-*.network' | while read -r file; do
+        if [ -f "$file" ]; then
+            echo "Removing old file: $file"
+            rm -f "$file"
+        fi
+    done
+    echo "Cleanup complete."
+else
+    echo "No existing quadlet directory found. Skipping cleanup."
+fi
+echo ""
+
 # --- Fetch and Download Quadlet Files ---
 echo "Fetching quadlet file list from GitHub (${REPO}, branch: ${BRANCH})..."
 # Modified to fetch all .container, .network, and .volume files.
