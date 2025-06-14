@@ -27,5 +27,5 @@ Environment=UPDATE_INTERVAL_MINUTES=15
 Environment=FLASK_RUN_HOST=0.0.0.0
 
 [Service]
-Restart=aon-failure
+Restart=on-failure
 TimeoutStartSec=90
