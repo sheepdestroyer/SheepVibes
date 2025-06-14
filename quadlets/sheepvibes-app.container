@@ -27,3 +27,6 @@ Environment=FLASK_RUN_HOST=0.0.0.0
 [Service]
 Restart=on-failure
 TimeoutStartSec=90
+
+[Install]
+WantedBy=default.target
