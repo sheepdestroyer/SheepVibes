@@ -29,9 +29,16 @@ def client():
     if 'cache' in app.extensions:
         del app.extensions['cache']
     
-    # Update config from environment (set by pytest-env) before re-initializing cache.
-    # This ensures the test-specific password-protected Redis URL is used.
-    app.config['CACHE_REDIS_URL'] = os.environ.get('CACHE_REDIS_URL')
+    # Get the Redis URL set by pytest-env from pytest.ini
+    redis_url = os.environ.get('CACHE_REDIS_URL')
+    
+    # IMPORTANT: In a CI environment (like GitHub Actions), service containers are
+    # reached by their label name (e.g., 'redis'), not 'localhost'. We detect the
+    # CI environment and swap the hostname accordingly.
+    if os.environ.get('CI') == 'true' and redis_url:
+        redis_url = redis_url.replace('localhost', 'redis')
+        
+    app.config['CACHE_REDIS_URL'] = redis_url
 
     # Re-initialize extensions with the updated app config
     db.init_app(app)
