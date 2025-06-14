@@ -20,32 +20,14 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Prerequisites
 
-- Podman installed on your server.
-- `curl` and `jq` installed (the deployment script will check for these).
+- `podman`, `curl` and `jq` installed (the deployment script will check for these).
 - Git (optional, if you prefer to clone the repository).
 
 ### Setup Instructions
 
-> **Important Note for `feature/host-dir-writable` Branch Users:**
-> The `deploy_quadlets.sh` script obtained from the `feature/host-dir-writable` branch includes **enhanced diagnostic steps**. It will:
-> 1. Make the `~/sheepvibes_data` directory world-writable (`chmod 0777`).
-> 2. Pre-create the `sheepvibes.db` file in `~/sheepvibes_data` with open permissions (`chmod 0666`) on the host.
-> This is for testing purposes ONLY to help diagnose database access issues, particularly "attempt to write a readonly database" errors. This behavior is specific to the script on this branch. For production, use the script from the `main` branch once issues are resolved.
-
 1.  **Obtain the Deployment Script**:
 
-    If you are testing the `feature/host-dir-writable` branch and have cloned the repository, the script is available at `scripts/deploy_quadlets.sh`.
-
-    Alternatively, you can download the version of the script specific to this branch using `curl` or `wget`:
-
-    Using `curl` (for `feature/host-dir-writable` branch):
-    ```bash
-    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/host-dir-writable/scripts/deploy_quadlets.sh
-    ```
-    Or using `wget` (for `feature/host-dir-writable` branch):
-    ```bash
-    wget https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/feature/host-dir-writable/scripts/deploy_quadlets.sh
-    ```
+   
     For the stable version, always refer to the `main` branch:
     ```bash
     # Stable version from main:
@@ -60,7 +42,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
     chmod +x deploy_quadlets.sh # Or scripts/deploy_quadlets.sh if cloned
     ./deploy_quadlets.sh      # Or scripts/deploy_quadlets.sh if cloned
     ```
-    The script will check for `curl` and `jq`, guide you through the process, and inform you of the next steps.
+    The script will check for dependencies, guide you through the process, and inform you of the next steps.
 
 3.  **Manage the Service**:
     After running the deployment script, you will be instructed to:
@@ -74,13 +56,13 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
         ```
     -   Check the status of the main application and its Redis dependency:
         ```bash
-        systemctl --user status sheepvibes-app.service redis.service
+        systemctl --user status sheepvibes-app.service sheepvibes-redis.service
         ```
     -   View logs (follow):
         ```bash
         journalctl --user -u sheepvibes-app.service -f
         ```
-    The `redis.service` (for caching) and `sheepvibes.network` (for container communication) will be started automatically as dependencies of `sheepvibes-app.service`. The application data will be stored in `~/sheepvibes_data`.
+    The `sheepvibes-redis.service` (for caching) and `sheepvibes.network` (for container communication) will be started automatically as dependencies of `sheepvibes-app.service`. The application data will be stored in managed volumes `sheepvibes-db.volume` and `sheepvibes-redis.volume`.
 
 4.  **Enable Auto-start (Optional)**:
     To start SheepVibes automatically when your user logs in, enable the service:
@@ -112,8 +94,6 @@ This section describes how to set up SheepVibes for local development and testin
     ```bash
     git clone https://github.com/sheepdestroyer/sheepvibes.git
     cd sheepvibes
-    # If testing this specific feature, checkout the branch:
-    # git checkout feature/host-dir-writable
     ```
 
 2.  **Build the Image**:
@@ -217,7 +197,7 @@ This is typically caused by one of two issues:
 
 To resolve this, carefully follow these steps:
 1.  **Run the deployment script:** Ensure `./deploy_quadlets.sh` (after downloading and `chmod +x`) completed successfully.
-2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes-app.container`, `redis.container`, and `sheepvibes.network`.
+2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes-app.container`, `sheepvibes-redis.container`, and `sheepvibes.network`.
 3.  **Reload the systemd daemon:** Run `systemctl --user daemon-reload`.
 4.  **Check if the service is now visible:** Run `systemctl --user list-unit-files 'sheepvibes*'` to confirm.
 
@@ -228,16 +208,12 @@ If the services are still not found, check that the `podlet` or `podman-quadlet`
 If the application logs (viewable with `journalctl --user -u sheepvibes-app.service -f`) show errors like "unable to open database file", "database is locked", or other SQLite errors, it often points to issues with the data directory on the host (`~/sheepvibes_data`) or how the container interacts with it.
 
 *   **Host Directory Permissions**:
-    Ensure the data directory (`~/sheepvibes_data` by default) is writable by your user. The deployment script will create it if it doesn't exist (`mkdir -p`). You can verify its permissions on the host machine by running:
-    ```bash
-    ls -ld ~/sheepvibes_data
-    ```
+    Ensure the data directory (`~/sheepvibes_data` in development mode) is writable by your user. 
     The user running the container (which is your user when using systemd user services) needs write access.
 
 *   **SELinux Issues**:
     If SELinux is in `enforcing` mode (check with `sestatus`), the container might be denied access to the `~/sheepvibes_data` directory. The `:Z` flag on the `Volume` line in `quadlets/sheepvibes-app.container` (e.g., `Volume=%h/sheepvibes_data:/app/data:Z`) instructs Podman to automatically relabel the host directory to a context like `container_file_t`, which is usually sufficient.
-
-    If issues persist:
+  If issues persist:
     1.  **Verify Directory Context**: Check the current SELinux context of the data directory:
         ```bash
         ls -lZ ~/sheepvibes_data
@@ -262,12 +238,9 @@ If the application logs (viewable with `journalctl --user -u sheepvibes-app.serv
         # sudo setenforce 1
         ```
         If permissive mode works, it confirms an SELinux policy issue, and you should apply a permanent context fix as described above.
-
+        
 ## Contributing
-
 (Contributions are welcome. Please open an issue or PR.)
 
 ## License
-
-(This project is likely under an MIT License or similar open source license. Please add a LICENSE file.)
-```
+(This project is likely under a GNU General Public License v3.0 License)
