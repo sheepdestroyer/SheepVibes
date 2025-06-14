@@ -21,15 +21,19 @@ WORKDIR /app
 # Install dependencies into the virtual environment
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
-COPY . .
+# Copy the backend application code into the container at /app/backend
+COPY --chown=appuser:appuser backend/ /app/backend/
 
-# Ensure the directory exists and has correct permissions *before* switching user
+# Copy the frontend files (adjust if serving differently)
+COPY --chown=appuser:appuser frontend/ /app/frontend/
+
+# Copy the entrypoint script & Make it script executable
+COPY --chown=appuser:appuser scripts/entrypoint.sh /app/scripts/entrypoint.sh
+RUN chmod +x /app/scripts/entrypoint.sh
+
+# Ensure the data directory exists and has correct permissions *before* switching user
 # (The VOLUME instruction itself doesn't create the directory)
 RUN mkdir -p /app/data && chown -R appuser:appuser /app
-
-# Make the entrypoint script executable
-RUN chmod +x /app/scripts/entrypoint.sh
 
 # Switch to the non-root user
 USER appuser
