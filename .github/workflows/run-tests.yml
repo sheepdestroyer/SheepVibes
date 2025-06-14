@@ -39,6 +39,10 @@ jobs:
         pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
     - name: Run Pytest
+      env:
+        # Override the CACHE_REDIS_URL for the CI environment.
+        # Use the service label 'redis' as the hostname.
+        CACHE_REDIS_URL: redis://:sheepvibes-test@redis:6379/0
       run: |
         cd backend
         python -m pytest -v
