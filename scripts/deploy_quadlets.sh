@@ -8,7 +8,7 @@ set -euo pipefail
 
 # --- Configuration ---
 REPO="sheepdestroyer/sheepvibes"
-BRANCH="feature/standalone-quadlet-script" # Or specify a tag/commit if preferred
+BRANCH="main" # Or specify a tag/commit if preferred
 QUADLET_DIR="${HOME}/.config/containers/systemd"
 QUADLET_FILES_URL="https://api.github.com/repos/${REPO}/contents/quadlets?ref=${BRANCH}"
 
