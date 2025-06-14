@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Enable version updates for pip
+  - package-ecosystem: "pip"
+    directory: "/backend" # Location of package manifests
+    schedule:
+      interval: "daily"
+    target-branch: "main"
+    # Include a list of allowed updates
+    # to avoid breaking changes from major version updates
+    # For example, allow only patch and minor updates for requests
+    # allowed_updates:
+    #  - match:
+    #      dependency-name: "requests"
+    #      update-type: "semver:patch"
+    #  - match:
+    #      dependency-name: "requests"
+    #      update-type: "semver:minor"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/" # Location of workflows
+    schedule:
+      interval: "daily"
+    target-branch: "main"
