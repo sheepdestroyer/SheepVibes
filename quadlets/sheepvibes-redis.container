@@ -12,7 +12,7 @@ StopWhenUnneeded=true
 [Container]
 ContainerName=sheepvibes-redis
 Image=docker.io/redis:alpine
-#Network=sheepvibes
+Network=sheepvibes-network.network
 # Mount the named volume into the container's data directory
 Volume=sheepvibes-redis.volume:/data
 
