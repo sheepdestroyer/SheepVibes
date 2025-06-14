@@ -5,7 +5,7 @@ set -e
 
 # --- Configuration ---
 REPO="sheepdestroyer/sheepvibes"
-BRANCH="main" # Or specify a tag/commit if preferred
+BRANCH="fix/quadlet-deployment-refinements" # Or specify a tag/commit if preferred
 QUADLET_DIR="${HOME}/.config/containers/systemd"
 DATA_DIR="${HOME}/sheepvibes_data"
 QUADLET_FILES_URL="https://api.github.com/repos/${REPO}/contents/quadlets?ref=${BRANCH}"
@@ -41,15 +41,15 @@ echo ""
 
 # --- Fetch and Download Quadlet Files ---
 echo "Fetching quadlet file list from GitHub (${REPO}, branch: ${BRANCH})..."
-# Fetch file list, filter for .container, .network, .volume, and get their download URLs
-# Handle potential null download_url (though unlikely for actual files)
-DOWNLOAD_URLS=$(curl -sSL "${QUADLET_FILES_URL}" | jq -r '.[] | select(.type == "file" and (.name | test("\\.(container|network|volume)$"))) | .download_url // empty')
+# Fetch file list, filter for .container, .network, .volume (excluding sheepvibes-db-volume.volume), and get their download URLs
+DOWNLOAD_URLS=$(curl -sSL "${QUADLET_FILES_URL}" | jq -r '.[] | select(.type == "file" and .name != "sheepvibes-db-volume.volume" and (.name | test("\\.(container|network|volume)$"))) | .download_url // empty')
 
 if [ -z "$DOWNLOAD_URLS" ]; then
-  echo "No quadlet files found or error fetching from GitHub repository ${REPO} (branch: ${BRANCH})."
-  echo "Please check the repository path, branch name, and your internet connection."
-  # Additionally, check if the quadlets directory is empty or if the files don't match the pattern.
-  curl -sSL "${QUADLET_FILES_URL}" | jq # Print full JSON for debugging if URLs are empty
+  echo "No downloadable quadlet files found (after filtering) or error fetching from GitHub repository ${REPO} (branch: ${BRANCH})."
+  echo "Please check the repository path, branch name, your internet connection, and ensure relevant files exist in the 'quadlets' directory."
+  # For debugging, show the full JSON list from GitHub if DOWNLOAD_URLS is empty
+  echo "Raw file list from GitHub:"
+  curl -sSL "${QUADLET_FILES_URL}" | jq
   exit 1
 fi
 
@@ -57,9 +57,8 @@ echo ""
 echo "Downloading quadlet files to ${QUADLET_DIR}..."
 SUCCESS_DOWNLOAD=false
 for DL_URL in $DOWNLOAD_URLS; do
-  # Extract filename from URL (safer than basename for URLs)
+  # Extract filename from URL
   FILENAME="${DL_URL##*/}"
-  # Further sanitize filename if necessary, though GitHub URLs should be safe
 
   echo "Downloading ${FILENAME}..."
   if curl -sSL "${DL_URL}" -o "${QUADLET_DIR}/${FILENAME}"; then
@@ -67,15 +66,14 @@ for DL_URL in $DOWNLOAD_URLS; do
     SUCCESS_DOWNLOAD=true
   else
     echo "Error downloading ${FILENAME} from ${DL_URL}."
-    # Decide if script should exit on first error or try to download others
-    # For now, it will continue, but SUCCESS_DOWNLOAD helps check if anything worked.
+    # Script will continue trying to download other files.
   fi
 done
 
 if ! $SUCCESS_DOWNLOAD; then
     echo ""
     echo "Critical error: No quadlet files were successfully downloaded."
-    echo "Please check your internet connection and the repository details."
+    echo "Please check your internet connection, repository details, and file availability."
     exit 1
 fi
 

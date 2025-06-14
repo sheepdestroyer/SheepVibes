@@ -5,11 +5,9 @@ Description=SheepVibes Application Container
 Wants=network.target
 After=network.target
 
-# Depend on Redis and the database volume being ready
+# Depend on Redis
 Wants=redis.service
 After=redis.service
-Wants=sheepvibes-db-volume-volume.service
-After=sheepvibes-db-volume-volume.service
 
 [Container]
 # Use the locally built image

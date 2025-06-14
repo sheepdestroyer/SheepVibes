@@ -25,8 +25,10 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Setup Instructions
 
+> **Note:** The `deploy_quadlets.sh` script is currently configured to download the necessary quadlet files from the `fix/quadlet-deployment-refinements` development branch to ensure the latest fixes and configurations are applied during this testing phase. Once this branch is merged into `main`, the script will be updated to download from `main`. The download URLs below point to the script on the `main` branch, which will then internally use the `fix/quadlet-deployment-refinements` branch for fetching the quadlets themselves.
+
 1.  **Download the Deployment Script**:
-    Download the `deploy_quadlets.sh` script from the SheepVibes GitHub repository. You can use `curl` or `wget`.
+    Download the `deploy_quadlets.sh` script from the SheepVibes GitHub repository's `main` branch. You can use `curl` or `wget`.
 
     Using `curl`:
     ```bash
@@ -38,7 +40,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
     ```
 
 2.  **Make the Script Executable and Run It**:
-    This script will fetch the necessary Quadlet files from GitHub, copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
+    This script will fetch the necessary Quadlet files from GitHub (from the `fix/quadlet-deployment-refinements` branch, as noted above), copy them to `~/.config/containers/systemd/`, and create a data directory at `~/sheepvibes_data`.
     ```bash
     chmod +x deploy_quadlets.sh
     ./deploy_quadlets.sh
@@ -55,24 +57,24 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
         ```bash
         systemctl --user start sheepvibes-app.service
         ```
-    -   Check the status:
+    -   Check the status of the main application and its Redis dependency:
         ```bash
-        systemctl --user status sheepvibes-app.service
+        systemctl --user status sheepvibes-app.service redis.service
         ```
     -   View logs (follow):
         ```bash
         journalctl --user -u sheepvibes-app.service -f
         ```
-    The `redis.service` and `sheepvibes.network` will be started automatically as dependencies of `sheepvibes-app.service`. The application data will be stored in `~/sheepvibes_data`.
+    The `redis.service` (for caching) and `sheepvibes.network` (for container communication) will be started automatically as dependencies of `sheepvibes-app.service`. The application data will be stored in `~/sheepvibes_data`.
 
 4.  **Enable Auto-start (Optional)**:
-    To start SheepVibes automatically on boot (for your user), enable the service:
+    To start SheepVibes automatically when your user logs in, enable the service:
     ```bash
     systemctl --user enable sheepvibes-app.service
     ```
-    If you want the service to start even when you are not logged in, enable lingering for your user:
+    Note: For user services to start automatically on boot *without* requiring a login, you may need to enable lingering for your user. This typically requires root privileges:
     ```bash
-    loginctl enable-linger $(whoami)
+    sudo loginctl enable-linger $(whoami)
     ```
 
 *(Optional) If you want to inspect the full codebase or contribute, you can clone the repository:*
