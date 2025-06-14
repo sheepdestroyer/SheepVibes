@@ -2,4 +2,4 @@
 # This ensures Redis data (like cache state) can persist across restarts.
 
 [Volume]
-# systemd will create a volume named 'sheepvibes-redis-volume'
+# systemd will create a volume named 'sheepvibes-redis'
