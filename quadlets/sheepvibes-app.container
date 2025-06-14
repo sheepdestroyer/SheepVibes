@@ -15,7 +15,7 @@ Image=ghcr.io/sheepdestroyer/sheepvibes:latest
 ContainerName=sheepvibes-app
 Network=sheepvibes.network
 PublishPort=127.0.0.1:5000:5000
-Volume=%h/sheepvibes_data:/app/data:Z
+Volume=sheepvibes-db.volume:/app/data
 
 # Environment variables
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
