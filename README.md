@@ -220,7 +220,7 @@ This is typically caused by one of two issues:
 
 To resolve this, carefully follow these steps:
 1.  **Run the deployment script:** Ensure `./scripts/deploy_quadlets.sh` (if cloned) or `./deploy_quadlets.sh` (if downloaded directly) completed successfully after `chmod +x`.
-2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes-app.container`, `sheepvibes-redis.container`, and `sheepvibes.network`.
+2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes-app.container`, `redis.container`, and `sheepvibes.network`.
 3.  **Reload the systemd daemon:** Run `systemctl --user daemon-reload`.
 4.  **Check if the service is now visible:** Run `systemctl --user list-unit-files 'sheepvibes*'` to confirm.
 
