@@ -80,7 +80,7 @@ echo "The application will use a Podman-managed volume named 'sheepvibes-db' for
 echo ""
 echo "Next steps:"
 echo "1. Reload systemd to recognize the new/updated unit files:"
-echo "   systemctl --user daemon-reload"
+echo "   systemctl --user daemon-reload && systemctl --user list-unit-files 'sheepvibes*'"
 echo ""
 echo "2. Start the main application service (dependencies will be handled automatically):"
 echo "   systemctl --user start sheepvibes-app.service"
