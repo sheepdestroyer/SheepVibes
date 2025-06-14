@@ -82,7 +82,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Accessing the Application
 
-Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per `sheepvibes-app.container` PublishPort setting). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the downloaded `quadlets/sheepvibes-app.container` file (e.g., change to `0.0.0.0:5000:5000`) *before* running the deployment script, or re-run the script after modification (it will overwrite existing quadlet files), then reload/restart the systemd service.
+Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per `sheepvibes-app.container` PublishPort setting). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the `sheepvibes-app.container` file (located in `~/.config/containers/systemd/` after running the deployment script) *before* running the deployment script, or re-run the script after modification (it will overwrite existing quadlet files), then reload/restart the systemd service.
 
 ## Local Development
 
