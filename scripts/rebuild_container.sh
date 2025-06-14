@@ -24,6 +24,6 @@ $CONTAINER_CMD build -t "$IMAGE_NAME" -f Containerfile .
 
 echo "--- Build complete for image $IMAGE_NAME ---"
 echo "If you are using systemd, restart the service to apply changes:"
-echo "systemctl --user restart sheepvibes-app.service"
+echo "systemctl --user restart sheepvibes.service"
 
 exit 0

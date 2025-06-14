@@ -1,5 +1,0 @@
-# Podman Quadlet to define a persistent volume for Redis.
-# This ensures Redis data (like cache state) can persist across restarts.
-
-[Volume]
-# systemd will create a volume named 'sheepvibes-redis'
