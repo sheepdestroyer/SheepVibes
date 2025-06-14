@@ -1,6 +1,7 @@
 import pytest
 import json
 from unittest.mock import patch, MagicMock
+import os
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
@@ -10,25 +11,41 @@ from .models import db, Tab, Feed, FeedItem # Import models directly
 @pytest.fixture
 def client():
     """Configures the Flask app for testing and provides a test client."""
-    # Use an in-memory SQLite database for testing
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    # Base test config
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['CACHE_TYPE'] = 'simple' # Use simple in-memory cache for tests
-    # Disable CSRF protection if it were enabled
-    # app.config['WTF_CSRF_ENABLED'] = False 
-
+    
+    # Use an in-memory SQLite database for testing
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    
     # Reset Flask app's internal state for consistent behavior across tests
     app._got_first_request = False
 
-    # Remove the existing SQLAlchemy extension instance if it exists
-    # This is to allow re-initialization with the test database URI
+    # --- Re-initialize extensions for test environment ---
+
+    # Remove existing extension instances to allow re-initialization with test-specific config
     if 'sqlalchemy' in app.extensions:
         del app.extensions['sqlalchemy']
+    if 'cache' in app.extensions:
+        del app.extensions['cache']
+    
+    # Get the Redis URL set by pytest-env from pytest.ini
+    redis_url = os.environ.get('CACHE_REDIS_URL')
+    
+    # In a CI environment, GitHub Actions maps the service port to a dynamic
+    # port on the host. We check for this port (passed as an env var by the
+    # workflow) and update the connection URL accordingly.
+    ci_redis_port = os.environ.get('CACHE_REDIS_PORT')
+    if ci_redis_port and redis_url:
+        # The URL from pytest.ini is 'redis://:password@localhost:6379/0'
+        # We replace the standard port with the dynamic one from the CI env.
+        redis_url = redis_url.replace('6379', ci_redis_port, 1)
+        
+    app.config['CACHE_REDIS_URL'] = redis_url
 
-    # Re-initialize db with the app after test config is set.
-    # This ensures that the db extension uses the test configuration.
+    # Re-initialize extensions with the updated app config
     db.init_app(app)
+    cache.init_app(app)
 
     with app.app_context(): # Ensure app context for create_all and drop_all
         db.create_all() # Ensure tables are created for each test

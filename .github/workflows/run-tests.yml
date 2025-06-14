@@ -10,6 +10,20 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      # Start a Redis service container for the job
+      redis:
+        image: redis:alpine
+        # Expose port 6379 on the service container to be mapped to the host
+        ports:
+          - 6379/tcp
+        # Health check for a passwordless Redis service.
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -26,6 +40,9 @@ jobs:
         pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
     - name: Run Pytest
+      env:
+        # Pass the dynamically assigned Redis host port to the tests.
+        CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
       run: |
         cd backend
         python -m pytest -v
