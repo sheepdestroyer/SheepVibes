@@ -21,6 +21,10 @@ if ! command -v jq &> /dev/null; then
     echo "Error: jq is not installed. Please install jq and try again."
     exit 1
 fi
+if ! command -v podman &> /dev/null; then
+    echo "Error: podman is not installed. Please install podman and try again."
+    exit 1
+fi
 echo "Dependencies found."
 echo ""
 
