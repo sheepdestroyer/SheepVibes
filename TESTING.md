@@ -22,10 +22,10 @@ The backend tests require a running Redis instance for caching checks. The test 
     Before running the tests, start a Redis container with the required password. The `--rm` flag will ensure it is automatically removed when stopped.
     ```bash
     # Using Podman
-    podman run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine --requirepass "sheepvibes-test"
+    podman run -d --rm --name sheepvibes-test-redis -p 6379:6379 -e REDIS_PASSWORD="sheepvibes-test" redis:alpine
 
     # Or using Docker
-    # docker run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine --requirepass "sheepvibes-test"
+    # docker run -d --rm --name sheepvibes-test-redis -p 6379:6379 -e REDIS_PASSWORD="sheepvibes-test" redis:alpine
     ```
 
 2.  **Run Pytest**
@@ -79,10 +79,10 @@ jobs:
       # Start a Redis service container for the job
       redis:
         image: redis:alpine
-        # Pass a password to redis-server to disable protected mode.
-        # The health check must also use the password to connect.
+        env:
+          REDIS_PASSWORD: 'sheepvibes-test'
+        # The health check must use the password to connect.
         options: >-
-          --requirepass 'sheepvibes-test'
           --health-cmd "redis-cli -a 'sheepvibes-test' ping"
           --health-interval 10s
           --health-timeout 5s
