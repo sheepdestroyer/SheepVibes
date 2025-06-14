@@ -5,19 +5,17 @@ Description=SheepVibes Application Container
 Wants=network.target
 After=network.target
 
-# Depend on Redis and the database volume being ready
+# Depend on Redis
 Wants=redis.service
 After=redis.service
-Wants=sheepvibes-db-volume-volume.service
-After=sheepvibes-db-volume-volume.service
 
 [Container]
 # Use the locally built image
-Image=localhost/sheepvibes-app:latest
+Image=ghcr.io/sheepdestroyer/sheepvibes:latest
 ContainerName=sheepvibes-app
 Network=sheepvibes.network
 PublishPort=127.0.0.1:5000:5000
-Volume=sheepvibes-db-volume:/app/data
+Volume=%h/sheepvibes_data:/app/data:Z
 
 # Environment variables
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
