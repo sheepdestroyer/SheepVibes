@@ -31,7 +31,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
     For the stable version, always refer to the `main` branch:
     ```bash
     # Stable version from main:
-    # curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
+    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
     ```
 
 2.  **Make the Script Executable and Run It**:
