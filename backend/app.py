@@ -541,7 +541,8 @@ def opml_import():
 
     if not parsed_feeds:
         logger.info(f"OPML file {file.filename} parsed, but no feeds found or it contained no valid feed entries.")
-        return jsonify({'message': 'OPML processed, but no new feeds to import.', 'new_feeds_added': 0, 'new_tabs_created': 0}), 200
+        # Changed message to be more generic as per subtask goal
+        return jsonify({'message': 'OPML import processed.', 'new_feeds_added': 0, 'new_tabs_created': 0}), 200
 
     logger.info(f"Successfully parsed OPML file {file.filename}. Found {len(parsed_feeds)} potential feeds.")
 
@@ -549,6 +550,7 @@ def opml_import():
     new_tabs_count = 0
     affected_tab_ids = set()
     default_tab_name = "Imported Feeds" # Default tab name if not specified in OPML
+    tab_cache = {} # Cache for tab objects {name: Tab} to reduce DB queries
 
     try:
         for feed_data in parsed_feeds:
@@ -561,18 +563,23 @@ def opml_import():
                 logger.warning(f"Skipping feed due to missing xmlUrl in OPML entry: {feed_data}")
                 continue
 
-            # Find or create Tab
-            tab = Tab.query.filter_by(name=outline_name).first()
-            if not tab:
-                max_order = db.session.query(db.func.max(Tab.order)).scalar()
-                new_order = (max_order or -1) + 1
-                tab = Tab(name=outline_name, order=new_order)
-                db.session.add(tab)
-                db.session.flush()
-                new_tabs_count += 1
-                logger.info(f"Creating new tab '{outline_name}' (ID: {tab.id}) for OPML import.")
+            # Find or create Tab using cache
+            target_tab = tab_cache.get(outline_name)
+            if not target_tab:
+                target_tab = Tab.query.filter_by(name=outline_name).first()
+                if not target_tab:
+                    max_order = db.session.query(db.func.max(Tab.order)).scalar()
+                    new_order = (max_order or -1) + 1
+                    target_tab = Tab(name=outline_name, order=new_order)
+                    db.session.add(target_tab)
+                    # No db.session.flush() here yet; rely on commit or relationship assignment.
+                    # If direct ID is needed before commit, flush would be required.
+                    # However, assigning target_tab to feed.tab should handle it.
+                    new_tabs_count += 1
+                    logger.info(f"Preparing to create new tab '{outline_name}' for OPML import.")
+                tab_cache[outline_name] = target_tab # Cache the tab
 
-            affected_tab_ids.add(tab.id)
+            affected_tab_ids.add(target_tab.id) # Note: target_tab.id might be None if new and not flushed
 
             # Check if Feed already exists by URL (globally)
             existing_feed = Feed.query.filter_by(url=xml_url).first()
@@ -589,20 +596,31 @@ def opml_import():
                     except Exception as fetch_exc:
                         logger.warning(f"Could not fetch title for {xml_url} during OPML import: {fetch_exc}. Using URL as name.")
 
-                feed = Feed(name=new_feed_name, url=xml_url, tab_id=tab.id)
+                # Assigning by object (tab=target_tab) instead of tab_id
+                feed = Feed(name=new_feed_name, url=xml_url, tab=target_tab)
                 db.session.add(feed)
                 new_feeds_count += 1
-                logger.info(f"Adding new feed '{new_feed_name}' ({xml_url}) to tab '{tab.name}' (ID: {tab.id}) from OPML.")
+                logger.info(f"Adding new feed '{new_feed_name}' ({xml_url}) to tab '{target_tab.name}' from OPML.")
             else:
                 logger.info(f"Feed with URL '{xml_url}' already exists (ID: {existing_feed.id} in Tab ID: {existing_feed.tab_id}), skipping.")
 
         if new_feeds_count > 0 or new_tabs_count > 0:
-            db.session.commit()
+            db.session.commit() # This will save new tabs and feeds, and resolve IDs.
             logger.info(f"OPML import successful from file {file.filename}: {new_feeds_count} new feeds added, {new_tabs_count} new tabs created.")
-            for tab_id_iter in affected_tab_ids:
-                invalidate_tab_feeds_cache(tab_id_iter)
-            if not affected_tab_ids and new_tabs_count > 0 :
+            for tab_id_iter in affected_tab_ids: # affected_tab_ids might contain None if new tabs weren't flushed
+                if tab_id_iter: # Only invalidate if ID is known
+                    invalidate_tab_feeds_cache(tab_id_iter)
+            # If new tabs were created, their IDs are now available after commit.
+            # A broader invalidation might be needed if specific IDs weren't captured before commit.
+            # However, processed_tab_names in the original diff was more about specific names.
+            # The existing affected_tab_ids logic combined with commit should be okay for now.
+            # Re-querying tabs for IDs to invalidate if Nones were present might be safer.
+            if new_tabs_count > 0 and any(tid is None for tid in affected_tab_ids): # A bit complex condition
+                 logger.info("Invalidating all tabs cache due to new tabs with initially unknown IDs.")
+                 invalidate_tabs_cache() # Fallback if some new tab IDs weren't captured pre-commit.
+            elif not affected_tab_ids and new_tabs_count > 0 : # Should not happen if logic is correct
                  invalidate_tabs_cache()
+
 
         return jsonify({
             'message': 'OPML import processed successfully.',

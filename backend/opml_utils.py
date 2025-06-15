@@ -15,57 +15,73 @@ def parse_opml(opml_content):
     try:
         parsed = listparser.parse(opml_content)
         feeds = []
+        # listparser specific parsing
         if parsed.feeds:
             for feed_obj in parsed.feeds:
-                # listparser stores outline path in feed_obj.meta.title
-                # The actual feed title is in feed_obj.title
-                # The feed URL is in feed_obj.url
                 outline_title = None
-                if hasattr(feed_obj, 'meta') and hasattr(feed_obj.meta, 'title'):
-                    outline_title = feed_obj.meta.title
+                # For listparser, feed_obj.meta.title often holds the category/outline.
+                # It can sometimes be a list if there's deep nesting, we'll take the first non-empty string.
+                if hasattr(feed_obj, 'meta') and feed_obj.meta and hasattr(feed_obj.meta, 'title') and feed_obj.meta.title:
+                    if isinstance(feed_obj.meta.title, list):
+                        for item_title in feed_obj.meta.title:
+                            if isinstance(item_title, str) and item_title.strip():
+                                outline_title = item_title.strip()
+                                break
+                    elif isinstance(feed_obj.meta.title, str) and feed_obj.meta.title.strip():
+                        outline_title = feed_obj.meta.title.strip()
 
-                # Ensure essential attributes are present
                 if not feed_obj.title or not feed_obj.url:
-                    # Potentially log a warning here if a feed is missing title or url
                     continue
 
                 feeds.append({
                     'title': feed_obj.title,
                     'xmlUrl': feed_obj.url,
-                    'outline': outline_title if outline_title else "Default" # Default to "Default" if no outline
+                    'outline': outline_title if outline_title else "Imported Feeds"
                 })
+            return feeds # Prefer listparser results if any feeds were found
 
-        # Handle OPMLs structured with <outline> tags directly
-        # listparser might handle this, but this is a fallback/alternative
-        if not feeds: # If listparser didn't find feeds in its usual way
+        # Fallback to ET parsing if listparser found no feeds.
+        # This is crucial for OPMLs where feeds are directly nested under outlines with 'text'/'title'
+        # which listparser might not always categorize as feed_obj.meta.title.
+        # Reset feeds list as listparser path was not taken or returned empty.
+        feeds = []
+        try:
             root = ET.fromstring(opml_content)
-            for outline_element in root.findall('.//outline[@xmlUrl]'):
-                outline_title = "Default" # Default tab name
-                parent = outline_element.getparent()
-                if parent is not None and parent.tag == 'outline' and parent.get('text'):
-                    outline_title = parent.get('text')
-                elif parent is not None and parent.tag == 'outline' and parent.get('title'):
-                    outline_title = parent.get('title')
-
-
-                # If the direct parent is not an outline with a title, check grandparents
-                if outline_title == "Default":
-                    grandparent = parent.getparent() if parent is not None else None
-                    if grandparent is not None and grandparent.tag == 'outline' and grandparent.get('text'):
-                         outline_title = grandparent.get('text')
-                    elif grandparent is not None and grandparent.tag == 'outline' and grandparent.get('title'):
-                         outline_title = grandparent.get('title')
-
+            # Iterate through all 'outline' elements that have an 'xmlUrl' attribute (i.e., they are feeds)
+            for feed_element in root.findall('.//outline[@xmlUrl]'):
+                current_outline_title = "Imported Feeds" # Default
+                parent = feed_element.getparent()
+                temp_parent = parent
+                # Traverse up to find the closest parent 'outline' that has a 'text' or 'title' attribute.
+                # This parent outline represents the category/folder.
+                while temp_parent is not None:
+                    # We are looking for a parent <outline> that is NOT a feed itself (i.e., does not have xmlUrl)
+                    # but DOES have a title/text to be considered a category.
+                    if temp_parent.tag == 'outline' and temp_parent.get('xmlUrl') is None:
+                        parent_title_attr = temp_parent.get('text', temp_parent.get('title'))
+                        if parent_title_attr and parent_title_attr.strip():
+                            current_outline_title = parent_title_attr.strip()
+                            break # Found the category parent
+                    # Stop if we hit the 'body' tag or go above it (e.g. opml tag).
+                    if temp_parent.tag == 'body' or temp_parent.tag == 'opml':
+                        break
+                    temp_parent = temp_parent.getparent()
 
                 feeds.append({
-                    'title': outline_element.get('title', outline_element.get('text', '')), # take title, fallback to text
-                    'xmlUrl': outline_element.get('xmlUrl'),
-                    'outline': outline_title
+                    'title': feed_element.get('title', feed_element.get('text', feed_element.get('xmlUrl'))),
+                    'xmlUrl': feed_element.get('xmlUrl'),
+                    'outline': current_outline_title
                 })
-        return feeds
-    except Exception: # Broad exception for parsing errors
-        # Consider logging the error
+            return feeds
+        except ET.ParseError:
+            # If listparser also failed (returned empty feeds before this block),
+            # and ET parsing fails, then we truly couldn't parse it.
+            # The initial feeds list would be empty from listparser path.
+            return [] # Return empty list as per original broad except clause
+    except Exception: # Catch any other unexpected errors from listparser or general issues
+        # Consider logging the error for debugging
         return []
+
 
 def generate_opml(tabs_with_feeds):
     """Generates an OPML XML string from a list of Tab objects.
@@ -88,7 +104,7 @@ def generate_opml(tabs_with_feeds):
         for feed in tab.feeds:
             ET.SubElement(tab_outline, 'outline', type='rss',
                           text=feed.name, title=feed.name,
-                          xmlUrl=feed.url, htmlUrl='') # htmlUrl is optional but common
+                          xmlUrl=feed.url, htmlUrl='')
 
     # ET.indent for pretty printing (Python 3.9+)
     if hasattr(ET, 'indent'):
