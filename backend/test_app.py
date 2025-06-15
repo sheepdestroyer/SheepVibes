@@ -847,8 +847,10 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
 
 # --- Tests for OPML Import (/api/opml/import) ---
 
-def test_import_opml_success(client):
-    """Test POST /api/opml/import with a valid OPML file."""
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_success(mock_fetch_update, client):
+    """Test POST /api/opml/import with a valid OPML file and item fetching."""
+    mock_fetch_update.return_value = (True, 1) # Simulate successful fetch with 1 new item
     # Arrange: Add a tab to import into
     with app.app_context():
         tab = Tab(name="Import Tab", order=0)
@@ -875,7 +877,8 @@ def test_import_opml_success(client):
     json_data = response.json
     assert json_data['imported_count'] == 2
     assert json_data['skipped_count'] == 0
-    assert json_data['tab_id'] == tab_id
+    # Removed: assert json_data['tab_id'] == tab_id, response format changed for generic message
+    # The tab_id for feeds is checked by querying the DB below.
 
     with app.app_context():
         feeds = Feed.query.filter_by(tab_id=tab_id).all()
@@ -887,8 +890,22 @@ def test_import_opml_success(client):
         assert "Feed1 OPM" in feed_names
         assert "Feed2 OPM" in feed_names
 
-def test_import_opml_with_duplicates(client):
+        # Assert fetch_and_update_feed was called for new feeds
+        # Get the feed objects to check their IDs
+        feed1_obj = Feed.query.filter_by(url="http://feed1.opml.com/rss").first()
+        feed2_obj = Feed.query.filter_by(url="http://feed2.opml.com/rss").first()
+        assert feed1_obj is not None
+        assert feed2_obj is not None
+
+        assert mock_fetch_update.call_count == 2
+        mock_fetch_update.assert_any_call(feed1_obj.id)
+        mock_fetch_update.assert_any_call(feed2_obj.id)
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_with_duplicates(mock_fetch_update, client):
     """Test POST /api/opml/import with some feeds already existing."""
+    mock_fetch_update.return_value = (True, 1)
     with app.app_context():
         tab = Tab(name="Import Tab Dups", order=0)
         db.session.add(tab)
@@ -948,19 +965,62 @@ def test_import_opml_malformed_xml(client):
     assert response.status_code == 400
     assert 'Malformed OPML file' in response.json['error']
 
-def test_import_opml_no_tabs_exist(client):
-    """Test POST /api/opml/import when no tabs exist in the database."""
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, client):
+    """Test import creates a default tab if none exist and imports feeds."""
+    mock_fetch_update.return_value = (True, 1)
     # Ensure no tabs exist (client fixture already drops tables)
     opml_content = """
-    <opml version="2.0"><body><outline text="Feed" xmlUrl="http://test.com"/></body></opml>
+    <opml version="2.0">
+      <body>
+        <outline text="Feed Alpha" xmlUrl="http://alpha.com/rss"/>
+        <outline text="Feed Beta" xmlUrl="http://beta.com/rss"/>
+      </body>
+    </opml>
     """
-    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test.opml')
-    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
-    assert response.status_code == 400
-    assert 'No tabs available' in response.json['error']
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_default_creation.opml')
 
-def test_import_opml_specific_tab(client):
+    # Act
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 2
+    assert json_data['skipped_count'] == 0
+    assert "Imported Feeds" in json_data['message'] # Check message content
+    # Removed: assert json_data['tab_name'] == "Imported Feeds"
+
+    # To get the new_tab_id, we have to find it by name now, or parse from message if we made message more specific
+    with app.app_context():
+        default_tab = Tab.query.filter_by(name="Imported Feeds").first()
+        assert default_tab is not None
+        new_tab_id = default_tab.id
+        # default_tab = db.session.get(Tab, new_tab_id) # This line is not needed if we fetch by name
+        assert default_tab is not None
+        assert default_tab.name == "Imported Feeds"
+        assert default_tab.order == 0
+
+        feeds_in_tab = Feed.query.filter_by(tab_id=new_tab_id).all()
+        assert len(feeds_in_tab) == 2
+        feed_urls = {f.url for f in feeds_in_tab}
+        assert "http://alpha.com/rss" in feed_urls
+        assert "http://beta.com/rss" in feed_urls
+
+        # Assert fetch_and_update_feed was called for new feeds
+        feed_alpha_obj = Feed.query.filter_by(url="http://alpha.com/rss").first()
+        feed_beta_obj = Feed.query.filter_by(url="http://beta.com/rss").first()
+        assert feed_alpha_obj is not None
+        assert feed_beta_obj is not None
+
+        assert mock_fetch_update.call_count == 2
+        mock_fetch_update.assert_any_call(feed_alpha_obj.id)
+        mock_fetch_update.assert_any_call(feed_beta_obj.id)
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_specific_tab(mock_fetch_update, client):
     """Test POST /api/opml/import into a specific tab when multiple tabs exist."""
+    mock_fetch_update.return_value = (True, 1)
     with app.app_context():
         tab1 = Tab(name="Tab One", order=0)
         tab2 = Tab(name="Tab Two", order=1)
@@ -979,8 +1039,10 @@ def test_import_opml_specific_tab(client):
     assert response.status_code == 200
     json_data = response.json
     assert json_data['imported_count'] == 1
-    assert json_data['tab_id'] == tab2_id
-    assert json_data['tab_name'] == "Tab Two"
+    # Removed: assert json_data['tab_id'] == tab2_id
+    # Removed: assert json_data['tab_name'] == "Tab Two"
+    assert f"default tab \"{tab2.name}\"" in json_data['message'] or f"tab \"{tab2.name}\"" in json_data['message']
+
 
     with app.app_context():
         assert Feed.query.filter_by(tab_id=tab1_id).count() == 0
@@ -988,8 +1050,10 @@ def test_import_opml_specific_tab(client):
         feed_in_tab2 = Feed.query.filter_by(tab_id=tab2_id).first()
         assert feed_in_tab2.url == "http://tab2feed.com"
 
-def test_import_opml_default_tab_if_tab_id_not_provided(client):
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_default_tab_if_tab_id_not_provided(mock_fetch_update, client): # Added mock_fetch_update
     """Test POST /api/opml/import defaults to the first tab if tab_id is not provided."""
+    mock_fetch_update.return_value = (True, 1) # Simulate successful fetch
     with app.app_context():
         tab1 = Tab(name="Default Tab", order=0) # Should be default
         tab2 = Tab(name="Other Tab", order=1)
@@ -1008,16 +1072,21 @@ def test_import_opml_default_tab_if_tab_id_not_provided(client):
     assert response.status_code == 200
     json_data = response.json
     assert json_data['imported_count'] == 1
-    assert json_data['tab_id'] == default_tab_id
-    assert json_data['tab_name'] == "Default Tab"
+    # Removed: assert json_data['tab_id'] == default_tab_id
+    # Removed: assert json_data['tab_name'] == "Default Tab"
+    assert f"default tab \"{tab1.name}\"" in json_data['message']
 
     with app.app_context():
         assert Feed.query.filter_by(tab_id=default_tab_id).count() == 1
         feed_in_default_tab = Feed.query.filter_by(tab_id=default_tab_id).first()
         assert feed_in_default_tab.url == "http://defaultfeed.com"
+        assert mock_fetch_update.call_count == 1
+        mock_fetch_update.assert_any_call(feed_in_default_tab.id)
 
-def test_import_opml_missing_xmlurl_is_skipped(client):
+@patch('backend.app.fetch_and_update_feed') # Even though no feeds are imported, the setup could change.
+def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client):
     """Test that an <outline> missing xmlUrl is skipped during import."""
+    mock_fetch_update_unused.return_value = (True, 0) # Should not be called if only valid feeds are fetched
     with app.app_context():
         tab = Tab(name="Test Tab", order=0)
         db.session.add(tab)
@@ -1048,7 +1117,15 @@ def test_import_opml_missing_xmlurl_is_skipped(client):
         assert "http://valid.com/rss" in urls
         assert "http://valid2.com/rss" in urls
 
-def test_import_opml_no_body_tag(client):
+        feed_valid1 = Feed.query.filter_by(url="http://valid.com/rss").first()
+        feed_valid2 = Feed.query.filter_by(url="http://valid2.com/rss").first()
+        assert mock_fetch_update_unused.call_count == 2
+        mock_fetch_update_unused.assert_any_call(feed_valid1.id)
+        mock_fetch_update_unused.assert_any_call(feed_valid2.id)
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_no_body_tag(mock_fetch_update_unused, client):
     """Test OPML import with a file that has no <body> tag."""
     with app.app_context(): # Ensure a tab exists
         tab = Tab(name="No Body Tab", order=0)
@@ -1064,8 +1141,10 @@ def test_import_opml_no_body_tag(client):
     assert json_data['imported_count'] == 0
     assert json_data['skipped_count'] == 0
     assert 'No feeds found in OPML (missing body)' in json_data['message']
+    mock_fetch_update_unused.assert_not_called()
 
-def test_import_opml_empty_body_tag(client):
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
     """Test OPML import with a file that has an empty <body> tag."""
     with app.app_context(): # Ensure a tab exists
         tab = Tab(name="Empty Body Tab", order=0)
@@ -1080,4 +1159,191 @@ def test_import_opml_empty_body_tag(client):
     json_data = response.json
     assert json_data['imported_count'] == 0
     assert json_data['skipped_count'] == 0
-    assert 'No feed entries found in the OPML file.' in json_data['message']
+    assert 'No feed entries or folders found in the OPML file.' in json_data['message'] # Updated message
+    mock_fetch_update_unused.assert_not_called()
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, client):
+    """Tests that nested OPML outlines create new tabs and feeds are correctly assigned."""
+    mock_fetch_update.return_value = (True, 1) # Simulate successful fetch
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline title="News Folder">
+          <outline text="Feed A (News)" title="Feed A (News)" xmlUrl="http://feeda.com/rss" type="rss"/>
+          <outline text="Feed B (News)" title="Feed B (News)" xmlUrl="http://feedb.com/rss" type="rss"/>
+        </outline>
+        <outline title="Tech Folder">
+          <outline text="Feed C (Tech)" title="Feed C (Tech)" xmlUrl="http://feedc.com/rss" type="rss"/>
+        </outline>
+        <outline text="Top Level Feed D" title="Top Level Feed D" xmlUrl="http://toplevel.com/rss" type="rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'nested_import.opml')
+
+    # Act: Import without specifying a tab_id, relying on default tab creation if none exist
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 4
+    assert json_data['skipped_count'] == 0
+    # The 'tab_name' in response might be the default tab name for the top-level feed
+    assert "Imported Feeds" in json_data['message']
+
+    with app.app_context():
+        # Verify tabs
+        news_folder_tab = Tab.query.filter_by(name="News Folder").first()
+        assert news_folder_tab is not None
+        tech_folder_tab = Tab.query.filter_by(name="Tech Folder").first()
+        assert tech_folder_tab is not None
+        default_tab = Tab.query.filter_by(name="Imported Feeds").first() # For the top-level feed
+        assert default_tab is not None
+
+        # Verify feeds in "News Folder"
+        feeds_in_news = Feed.query.filter_by(tab_id=news_folder_tab.id).all()
+        assert len(feeds_in_news) == 2
+        feed_urls_news = {f.url for f in feeds_in_news}
+        assert "http://feeda.com/rss" in feed_urls_news
+        assert "http://feedb.com/rss" in feed_urls_news
+
+        # Verify feeds in "Tech Folder"
+        feeds_in_tech = Feed.query.filter_by(tab_id=tech_folder_tab.id).all()
+        assert len(feeds_in_tech) == 1
+        assert feeds_in_tech[0].url == "http://feedc.com/rss"
+
+        # Verify top-level feed
+        feeds_in_default = Feed.query.filter_by(tab_id=default_tab.id).all()
+        assert len(feeds_in_default) == 1
+        assert feeds_in_default[0].url == "http://toplevel.com/rss"
+
+        # Check mock calls
+        assert mock_fetch_update.call_count == 4 # For A, B, C, D
+        # Example check for one feed (others would be similar, relying on feed IDs)
+        feed_a_obj = Feed.query.filter_by(url="http://feeda.com/rss").first()
+        mock_fetch_update.assert_any_call(feed_a_obj.id)
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, client):
+    """Tests that feeds in a folder are added to an existing tab if names match."""
+    mock_fetch_update.return_value = (True, 1)
+    with app.app_context():
+        existing_tab = Tab(name="Existing News", order=0)
+        db.session.add(existing_tab)
+        db.session.commit()
+        existing_tab_id = existing_tab.id
+
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline title="Existing News">
+          <outline text="Feed D" title="Feed D" xmlUrl="http://feedd.com/rss" type="rss"/>
+        </outline>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'existing_folder_import.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1
+
+    with app.app_context():
+        assert Tab.query.count() == 1 # No new tab should be created
+        target_tab = Tab.query.filter_by(name="Existing News").first()
+        assert target_tab.id == existing_tab_id # Should be the same tab
+
+        feeds_in_tab = Feed.query.filter_by(tab_id=existing_tab_id).all()
+        assert len(feeds_in_tab) == 1
+        assert feeds_in_tab[0].url == "http://feedd.com/rss"
+        mock_fetch_update.assert_called_once_with(feeds_in_tab[0].id)
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_empty_folder(mock_fetch_update_unused, client):
+    """Tests import of an OPML with an empty folder."""
+    mock_fetch_update_unused.return_value = (True, 0)
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline title="Empty Folder"></outline>
+        <outline text="Top Level Feed E" title="Top Level Feed E" xmlUrl="http://toplevele.com/rss" type="rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'empty_folder_import.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1 # Only Top Level Feed E
+
+    with app.app_context():
+        empty_folder_tab = Tab.query.filter_by(name="Empty Folder").first()
+        assert empty_folder_tab is None # Corrected: Empty folders are skipped, no tab created
+
+        # Check that the default tab for "Top Level Feed E" was created or used
+        # If no other tabs existed, "Imported Feeds" would be created.
+        # If other tabs existed, it would go into the first ordered one.
+        # For this test, let's ensure it goes into "Imported Feeds" by ensuring no other tabs initially.
+        # The client fixture already ensures a clean DB.
+
+        default_tab = Tab.query.filter_by(name="Imported Feeds").first()
+        assert default_tab is not None # This tab is for "Top Level Feed E"
+
+        feeds_in_default = Feed.query.filter_by(tab_id=default_tab.id).all()
+        assert len(feeds_in_default) == 1
+        assert feeds_in_default[0].url == "http://toplevele.com/rss"
+
+        mock_fetch_update_unused.assert_called_once_with(feeds_in_default[0].id)
+
+    # Also assert the skipped count due to the empty folder
+    assert json_data['skipped_count'] == 1
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(mock_fetch_update, client):
+    """Tests that a folder <outline> without a title is skipped, and its children go to the current default tab."""
+    mock_fetch_update.return_value = (True, 1)
+    with app.app_context(): # Ensure a default tab exists or will be created
+        tab1 = Tab(name="Initial Tab", order=0)
+        db.session.add(tab1)
+        db.session.commit()
+        initial_tab_id = tab1.id
+
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline> <!-- Folder without a title -->
+          <outline text="Feed E" title="Feed E" xmlUrl="http://feede.com/rss" type="rss"/>
+        </outline>
+        <outline text="Feed F" title="Feed F" xmlUrl="http://feedf.com/rss" type="rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'no_title_folder.opml')
+    # Import into the specific initial_tab_id to make assertions easier
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(initial_tab_id)}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 2 # Both Feed E and F should be imported
+
+    with app.app_context():
+        # No new tab should be created for the untitled folder
+        assert Tab.query.count() == 1
+        initial_tab = db.session.get(Tab, initial_tab_id)
+        assert initial_tab is not None
+
+        feeds_in_initial_tab = Feed.query.filter_by(tab_id=initial_tab_id).order_by(Feed.name).all()
+        assert len(feeds_in_initial_tab) == 2
+        assert feeds_in_initial_tab[0].name == "Feed E"
+        assert feeds_in_initial_tab[1].name == "Feed F"
+
+        assert mock_fetch_update.call_count == 2
+        mock_fetch_update.assert_any_call(feeds_in_initial_tab[0].id)
+        mock_fetch_update.assert_any_call(feeds_in_initial_tab[1].id)
