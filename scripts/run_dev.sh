@@ -14,6 +14,7 @@ if [ ! -d "$VENV_DIR" ]; then
   echo "  cd backend"
   echo "  python -m venv $VENV_DIR"
   echo "  source $VENV_DIR/bin/activate  # (or appropriate activation command for your shell)"
+  echo "  pip install --upgrade pip"
   echo "  pip install -r requirements.txt -r requirements-dev.txt"
   echo "  cd .."
   exit 1
@@ -22,22 +23,15 @@ fi
 echo "Activating virtual environment..."
 source "$VENV_DIR/bin/activate"
 
-# Check if required commands are available
-if ! command -v redis-cli &> /dev/null; then
-    echo "Error: 'redis-cli' is not installed or not in your PATH."
-    echo "Please install Redis to run the development server."
-    deactivate
-    exit 1
-fi
-
-# Check if Redis server is running
-if ! redis-cli ping &> /dev/null; then
+# Check if Redis server is running by using the installed 'redis' Python package
+echo "Checking Redis connection..."
+if ! python -c "import redis; redis.Redis(decode_responses=True).ping()" &> /dev/null; then
     echo "Error: Cannot connect to Redis server. Is it running?"
-    echo "Please start Redis before running the development server."
+    echo "Please start Redis (e.g., 'podman run -d -p 6379:6379 redis:alpine') before running the development server."
     deactivate
     exit 1
 fi
-
+echo "Redis connection successful."
 
 # Check if Flask is installed within the virtual environment
 if ! pip show flask &> /dev/null; then
