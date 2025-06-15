@@ -16,6 +16,9 @@ from flask_caching import Cache # Added for caching
 from .models import db, Tab, Feed, FeedItem
 import xml.etree.ElementTree as ET # Added for OPML export
 
+# --- OPML Import Configuration ---
+SKIPPED_FOLDER_TYPES = {"UWA", "Webnote", "LinkModule"} # Netvibes specific types to ignore for tab creation
+
 # Set up logging configuration
 logging.basicConfig(
     level=logging.INFO,
@@ -280,6 +283,7 @@ def _process_opml_outlines_recursive(
     New tabs (folders) are committed immediately to get their IDs.
     """
     for outline_element in outline_elements:
+        folder_type_attr = outline_element.get('type') # For Netvibes type skipping
         # Netvibes uses 'title', some others use 'text'. Prioritize 'title'.
         title_attr = outline_element.get('title')
         text_attr = outline_element.get('text')
@@ -314,6 +318,13 @@ def _process_opml_outlines_recursive(
                 # Should be rare if checks are done, but good for safety
                 logger.error(f"OPML import: Error preparing feed '{feed_name}': {e_feed}", exc_info=True)
                 skipped_count_wrapper[0] += 1
+
+        elif not xml_url and element_name and folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
+            logger.info(f"OPML import: Skipping Netvibes-specific folder '{element_name}' due to type: {folder_type_attr}.")
+            # Children of these folders are also skipped.
+            # If we needed to count skipped items within, we'd need to parse child_outlines here.
+            # For now, the folder itself is skipped from becoming a tab, and its contents aren't processed.
+            continue # Effectively skips this folder and its children for tab/feed creation
 
         elif not xml_url and element_name and child_outlines: # It's a folder (has a name, no xmlUrl, AND children)
             folder_name = element_name
