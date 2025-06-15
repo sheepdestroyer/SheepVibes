@@ -30,17 +30,37 @@ def client():
         del app.extensions['cache']
     
     # Get the Redis URL set by pytest-env from pytest.ini
-    redis_url = os.environ.get('CACHE_REDIS_URL')
-    
-    # In a CI environment, GitHub Actions maps the service port to a dynamic
-    # port on the host. We check for this port (passed as an env var by the
-    # workflow) and update the connection URL accordingly.
+    # Default to a passwordless Redis on 127.0.0.1 for local Dockerized testing
+    redis_url_from_env = os.environ.get('CACHE_REDIS_URL')
+
+    if redis_url_from_env:
+        # If CACHE_REDIS_URL is provided by the environment (e.g., pytest.ini or CI variable)
+        redis_url = redis_url_from_env
+        if 'localhost' in redis_url: # Ensure 127.0.0.1 for consistency if localhost is used
+            redis_url = redis_url.replace('localhost', '127.0.0.1')
+    else:
+        # Default for local testing when no env var is set (e.g. running pytest directly without pytest-env)
+        redis_url = 'redis://127.0.0.1:6379/0'
+
+    # Handle CI-specific port override if CACHE_REDIS_PORT is set
     ci_redis_port = os.environ.get('CACHE_REDIS_PORT')
-    if ci_redis_port and redis_url:
-        # The URL from pytest.ini is 'redis://:password@localhost:6379/0'
-        # We replace the standard port with the dynamic one from the CI env.
-        redis_url = redis_url.replace('6379', ci_redis_port, 1)
+    if ci_redis_port:
+        # Assuming redis_url is something like 'redis://<host>:<port>/<db>'
+        # We need to replace the port part carefully.
+        parts = redis_url.split(':')
+        host_part = parts[1].lstrip('/') # Get host (e.g., 127.0.0.1)
+        db_part = parts[2].split('/')[-1] # Get db number
         
+        # Reconstruct URL with CI port, ensuring no password if it wasn't there before
+        # This logic assumes the base URL structure and might need adjustment if passwords are used in CI
+        if "@" in host_part: # if there was a password in the original URL from env
+            auth_host = host_part.split('@')
+            credentials = auth_host[0]
+            host = auth_host[1]
+            redis_url = f"{parts[0]}://{credentials}@{host}:{ci_redis_port}/{db_part}"
+        else: # No password in original URL
+             redis_url = f"{parts[0]}://{host_part}:{ci_redis_port}/{db_part}"
+
     app.config['CACHE_REDIS_URL'] = redis_url
 
     # Re-initialize extensions with the updated app config
@@ -773,3 +793,82 @@ def test_to_iso_z_string_static_method():
 
     # 4. Test with None input
     assert FeedItem.to_iso_z_string(None) is None
+
+def test_feed_model_and_to_dict_with_website_url(client):
+    """Test Feed model storage and to_dict() serialization of website_url."""
+    with app.app_context():
+        # Create a Tab for the Feed
+        tab = Tab(name="Test Tab for Feed")
+        db.session.add(tab)
+        db.session.commit()
+
+        # 1. Create Feed with website_url
+        feed_with_url = Feed(
+            tab_id=tab.id,
+            name="Feed with Website",
+            url="http://example.com/feed_with_url",
+            website_url="http://example.com/website"
+        )
+        db.session.add(feed_with_url)
+        db.session.commit()
+
+        retrieved_feed = db.session.get(Feed, feed_with_url.id)
+        assert retrieved_feed is not None
+        assert retrieved_feed.website_url == "http://example.com/website"
+
+        feed_dict = retrieved_feed.to_dict()
+        assert 'website_url' in feed_dict
+        assert feed_dict['website_url'] == "http://example.com/website"
+
+        # 2. Create Feed without website_url (should be None)
+        feed_without_url = Feed(
+            tab_id=tab.id,
+            name="Feed without Website",
+            url="http://example.com/feed_without_url",
+            website_url=None # Explicitly None
+        )
+        db.session.add(feed_without_url)
+        db.session.commit()
+
+        retrieved_feed_no_url = db.session.get(Feed, feed_without_url.id)
+        assert retrieved_feed_no_url is not None
+        assert retrieved_feed_no_url.website_url is None
+
+        feed_dict_no_url = retrieved_feed_no_url.to_dict()
+        assert 'website_url' in feed_dict_no_url
+        assert feed_dict_no_url['website_url'] is None
+
+        # Clean up
+        db.session.delete(feed_with_url)
+        db.session.delete(feed_without_url)
+        db.session.delete(tab)
+        db.session.commit()
+
+def test_get_feeds_for_tab_includes_website_url(client, setup_tabs_and_feeds):
+    """Test GET /api/tabs/<tab_id>/feeds includes website_url in the response."""
+    tab1_id = setup_tabs_and_feeds["tab1_id"]
+    feed1_id = setup_tabs_and_feeds["feed1_id"]
+
+    # Update feed1 to have a website_url
+    with app.app_context():
+        feed1 = db.session.get(Feed, feed1_id)
+        feed1.website_url = "http://feed1.example.com"
+        db.session.commit()
+
+    response = client.get(f'/api/tabs/{tab1_id}/feeds')
+    assert response.status_code == 200
+    data = response.json
+
+    # Find feed1 in the response (assuming it might not be the first)
+    feed1_data = next((f for f in data if f['id'] == feed1_id), None)
+
+    assert feed1_data is not None
+    assert 'website_url' in feed1_data
+    assert feed1_data['website_url'] == "http://feed1.example.com"
+
+    # Check another feed from setup that doesn't have website_url (should be None)
+    feed2_id = setup_tabs_and_feeds["feed2_id"]
+    feed2_data = next((f for f in data if f['id'] == feed2_id), None)
+    assert feed2_data is not None
+    assert 'website_url' in feed2_data
+    assert feed2_data['website_url'] is None

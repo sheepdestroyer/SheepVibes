@@ -316,6 +316,91 @@ def test_process_feed_entries_commit_error(MockFeedItemInService, mock_db_sessio
 
 @patch('backend.feed_service.db.session')
 @patch('backend.feed_service.logger')
+def test_process_feed_entries_updates_website_url(mock_logger, mock_db_session, feed_service_db_setup):
+    """Verify that the feed's website_url is updated if a new link is found in the feed data."""
+    mock_feed_db = MagicMock(spec=Feed)
+    mock_feed_db.id = 1
+    mock_feed_db.name = "Test Feed"
+    mock_feed_db.website_url = None # Initially no website URL
+
+    parsed_feed = MagicMock()
+    parsed_feed.entries = [] # No entries needed for this test
+
+    # Mock parsed_feed.feed.get to return a website URL for 'link'
+    parsed_feed.feed = MagicMock()
+    parsed_feed.feed.get.side_effect = lambda key, default=None: "http://example.com/feedpage" if key == 'link' else None
+
+    mock_query = MagicMock()
+    mock_query.all.return_value = []
+    mock_db_session.query.return_value.filter_by.return_value = mock_query
+
+    # ACTION
+    process_feed_entries(mock_feed_db, parsed_feed)
+
+    # ASSERT
+    assert mock_feed_db.website_url == "http://example.com/feedpage"
+    mock_logger.info.assert_any_call("Updating website URL for 'Test Feed' from 'None' to 'http://example.com/feedpage'")
+    mock_db_session.commit.assert_called_once()
+
+@patch('backend.feed_service.db.session')
+@patch('backend.feed_service.logger')
+def test_process_feed_entries_website_url_unchanged_if_missing(mock_logger, mock_db_session, feed_service_db_setup):
+    """Verify website_url remains unchanged if 'link' is missing in feed data."""
+    mock_feed_db = MagicMock(spec=Feed)
+    mock_feed_db.id = 1
+    mock_feed_db.name = "Test Feed"
+    mock_feed_db.website_url = "http://existing.com" # Existing URL
+
+    parsed_feed = MagicMock()
+    parsed_feed.entries = []
+    parsed_feed.feed = MagicMock()
+    # Simulate 'link' not being present or being empty
+    parsed_feed.feed.get.side_effect = lambda key, default=None: None if key == 'link' else "Some Title"
+
+    mock_query = MagicMock()
+    mock_query.all.return_value = []
+    mock_db_session.query.return_value.filter_by.return_value = mock_query
+
+    process_feed_entries(mock_feed_db, parsed_feed)
+
+    # This test verifies that if the new website_url is missing (None from parsed_feed.feed.get('link')),
+    # and an old one exists, the old one is cleared.
+    # The feed name 'Test Feed' is updated to 'Some Title' by parsed_feed.feed.get('title')
+    # The logger uses the updated feed name.
+    assert mock_feed_db.website_url is None
+    mock_logger.info.assert_any_call("Clearing website URL for 'Some Title' (was 'http://existing.com')")
+    mock_db_session.commit.assert_called_once()
+
+
+@patch('backend.feed_service.db.session')
+@patch('backend.feed_service.logger')
+def test_process_feed_entries_website_url_cleared_if_new_is_empty(mock_logger, mock_db_session, feed_service_db_setup):
+    """Verify website_url is cleared if 'link' is empty and old one exists."""
+    mock_feed_db = MagicMock(spec=Feed)
+    mock_feed_db.id = 1
+    mock_feed_db.name = "Test Feed"
+    mock_feed_db.website_url = "http://existing.com"
+
+    parsed_feed = MagicMock()
+    parsed_feed.entries = []
+    parsed_feed.feed = MagicMock()
+    parsed_feed.feed.get.side_effect = lambda key, default=None: "" if key == 'link' else "Some Title" # Empty string for link
+
+    mock_query = MagicMock()
+    mock_query.all.return_value = []
+    mock_db_session.query.return_value.filter_by.return_value = mock_query
+
+    process_feed_entries(mock_feed_db, parsed_feed)
+
+    assert mock_feed_db.website_url is None
+    # The feed name 'Test Feed' is updated to 'Some Title' by parsed_feed.feed.get(key='title')
+    # The logger uses the updated feed name.
+    mock_logger.info.assert_any_call("Clearing website URL for 'Some Title' (was 'http://existing.com')")
+    mock_db_session.commit.assert_called_once()
+
+
+@patch('backend.feed_service.db.session')
+@patch('backend.feed_service.logger')
 def test_process_feed_entries_updates_feed_title(mock_logger, mock_db_session, feed_service_db_setup):
     """Verify that the feed's name is updated if a new title is found in the feed data."""
     # To correctly mock an object with attributes, create the mock first

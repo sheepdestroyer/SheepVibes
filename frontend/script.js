@@ -238,12 +238,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const titleElement = document.createElement('h2');
         widget.appendChild(titleElement);
-        
+
+        const feedNameSpan = document.createElement('span');
+        feedNameSpan.textContent = feed.name;
+
         const badge = createBadge(feed.unread_count);
-        if (badge) {
-            titleElement.appendChild(badge);
+
+        if (feed.website_url) {
+            const link = document.createElement('a');
+            link.href = feed.website_url;
+            link.target = '_blank'; // Open in new tab
+            link.rel = 'noopener noreferrer'; // Security best practice
+
+            // Append badge to the link first if it exists, then the name
+            if (badge) {
+                link.appendChild(badge);
+            }
+            link.appendChild(feedNameSpan); // Append the span containing the feed name
+            titleElement.appendChild(link);
+        } else {
+            // No website_url, behave as before
+            if (badge) {
+                titleElement.appendChild(badge);
+            }
+            titleElement.appendChild(feedNameSpan); // Append the span containing the feed name
         }
-        titleElement.prepend(feed.name);
 
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);

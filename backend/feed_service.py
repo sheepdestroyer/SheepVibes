@@ -137,6 +137,17 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         logger.info(f"Updating feed title for '{feed_db_obj.name}' to '{new_title}'")
         feed_db_obj.name = new_title
 
+    # ADD THIS: Update website_url if it has changed or is new
+    new_website_url = parsed_feed.feed.get('link') # 'link' is the common field for website URL in feedparser
+    if new_website_url and new_website_url.strip():
+        # Normalize or validate URL if necessary (optional, for now direct assignment)
+        if new_website_url != feed_db_obj.website_url:
+            logger.info(f"Updating website URL for '{feed_db_obj.name}' from '{feed_db_obj.website_url}' to '{new_website_url}'")
+            feed_db_obj.website_url = new_website_url
+    elif feed_db_obj.website_url: # If new URL is empty but old one exists, clear it (optional behavior)
+        logger.info(f"Clearing website URL for '{feed_db_obj.name}' (was '{feed_db_obj.website_url}')")
+        feed_db_obj.website_url = None
+
     logger.info(f"Processing {len(parsed_feed.entries)} entries for feed: {feed_db_obj.name}")
 
     for entry in parsed_feed.entries:
