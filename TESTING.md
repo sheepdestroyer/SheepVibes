@@ -134,7 +134,7 @@ jobs:
 
 After this workflow is added to the repository (in `.github/workflows/run-tests.yml`), it will automatically run based on the triggers defined. You can view the status and logs of each workflow run in the "Actions" tab of your GitHub repository. This will show whether the tests passed or failed, along with any output or errors from the test execution.
 
-### Recommendations for CI/CD and Automated Tools & Agents (like Jules)
+## Recommendations for CI/CD and Automated Tools & Agents (like Jules)
 
 Automated environments, such as those used by Google's Jules, often operate in restricted or virtualized settings where service ports may be mapped dynamically. The project's test suite is designed to handle this.
 
