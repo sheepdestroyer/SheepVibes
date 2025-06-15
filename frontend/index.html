@@ -8,25 +8,57 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header>
-        <h1>SheepVibes</h1>
-        <nav id="tabs-container">
-            <!-- Tabs will be loaded here -->
-        </nav>
-        <div id="tab-management-buttons">
-            <button id="add-tab-button" title="Add New Tab">+</button>
-            <button id="rename-tab-button" title="Rename Active Tab">Rename</button>
-            <button id="delete-tab-button" title="Delete Active Tab">-</button>
-        </div>
-        <div id="add-feed-section">
-            <input type="text" id="feed-url-input" placeholder="Enter feed URL">
-            <button id="add-feed-button">Add Feed</button>
-            <button id="refresh-all-feeds-button">Refresh All Feeds</button>
-        </div>
-    </header>
-    <main id="feed-grid">
-        <!-- Feed widgets will be loaded here -->
-    </main>
+    <div id="auth-container">
+        <h2>Login</h2>
+        <form id="login-form">
+            <div>
+                <label for="login-username">Username:</label>
+                <input type="text" id="login-username" name="username" required>
+            </div>
+            <div>
+                <label for="login-password">Password:</label>
+                <input type="password" id="login-password" name="password" required>
+            </div>
+            <button type="submit" id="login-button">Login</button>
+        </form>
+
+        <h2>Register</h2>
+        <form id="register-form">
+            <div>
+                <label for="register-username">Username:</label>
+                <input type="text" id="register-username" name="username" required>
+            </div>
+            <div>
+                <label for="register-password">Password:</label>
+                <input type="password" id="register-password" name="password" required>
+            </div>
+            <button type="submit" id="register-button">Register</button>
+        </form>
+        <div id="auth-messages"></div>
+    </div>
+
+    <div id="main-content" style="display: none;">
+        <header>
+            <h1>SheepVibes</h1>
+            <button id="logout-button" style="display: none;">Logout</button>
+            <nav id="tabs-container">
+                <!-- Tabs will be loaded here -->
+            </nav>
+            <div id="tab-management-buttons">
+                <button id="add-tab-button" title="Add New Tab">+</button>
+                <button id="rename-tab-button" title="Rename Active Tab">Rename</button>
+                <button id="delete-tab-button" title="Delete Active Tab">-</button>
+            </div>
+            <div id="add-feed-section">
+                <input type="text" id="feed-url-input" placeholder="Enter feed URL">
+                <button id="add-feed-button">Add Feed</button>
+                <button id="refresh-all-feeds-button">Refresh All Feeds</button>
+            </div>
+        </header>
+        <main id="feed-grid">
+            <!-- Feed widgets will be loaded here -->
+        </main>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>

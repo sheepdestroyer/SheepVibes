@@ -151,6 +151,16 @@ def create_mock_entry(id=None, link=None, title=None, published=None):
 # --- Fixture for tests needing DB setup for feed_service ---
 @pytest.fixture
 def feed_service_db_setup():
+    app.config['TESTING'] = True
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['WTF_CSRF_ENABLED'] = False
+    app._got_first_request = False
+
+    if 'sqlalchemy' in app.extensions:
+        del app.extensions['sqlalchemy']
+    db.init_app(app)
+
     with app.app_context():
         db.create_all()
         yield

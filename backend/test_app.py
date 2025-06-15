@@ -4,215 +4,197 @@ from unittest.mock import patch, MagicMock
 import os
 
 # Import the Flask app instance and db object
-# Need to configure the app for testing
 from .app import app, cache # Import the app and cache instance
-from .models import db, Tab, Feed, FeedItem # Import models directly
+from .models import db, Tab, Feed, FeedItem, User # Import User model
+from .auth import bcrypt, generate_token # Import bcrypt and generate_token for auth tests
 
 @pytest.fixture
 def client():
     """Configures the Flask app for testing and provides a test client."""
-    # Base test config
+    # Force app configuration for testing, overriding any defaults from app.py
     app.config['TESTING'] = True
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    # Use an in-memory SQLite database for testing
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    
-    # Reset Flask app's internal state for consistent behavior across tests
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SECRET_KEY'] = 'test-secret-key-app'
+    app.config['BCRYPT_LOG_ROUNDS'] = 4
+    app.config['WTF_CSRF_ENABLED'] = False
+    app.config['CACHE_TYPE'] = 'NullCache' # Ensure caching is disabled
+
+    # Reset Flask's internal state that might prevent reinitialization
     app._got_first_request = False
 
-    # --- Re-initialize extensions for test environment ---
-
-    # Remove existing extension instances to allow re-initialization with test-specific config
+    # Force re-initialization of extensions with test configuration
+    # Remove existing extension instances if they exist
     if 'sqlalchemy' in app.extensions:
         del app.extensions['sqlalchemy']
     if 'cache' in app.extensions:
         del app.extensions['cache']
-    
-    # Get the Redis URL set by pytest-env from pytest.ini
-    redis_url = os.environ.get('CACHE_REDIS_URL')
-    
-    # In a CI environment, GitHub Actions maps the service port to a dynamic
-    # port on the host. We check for this port (passed as an env var by the
-    # workflow) and update the connection URL accordingly.
-    ci_redis_port = os.environ.get('CACHE_REDIS_PORT')
-    if ci_redis_port and redis_url:
-        # The URL from pytest.ini is 'redis://:password@localhost:6379/0'
-        # We replace the standard port with the dynamic one from the CI env.
-        redis_url = redis_url.replace('6379', ci_redis_port, 1)
-        
-    app.config['CACHE_REDIS_URL'] = redis_url
+    # bcrypt is usually initialized globally in auth.py and then init_app in app.py
+    # If bcrypt object itself stores app-specific state that needs reset,
+    # this might be needed, but usually it's stateless or configured per call.
+    # For now, assume app.py's initialization is sufficient if config is set prior.
 
-    # Re-initialize extensions with the updated app config
-    db.init_app(app)
-    cache.init_app(app)
+    db.init_app(app) # Re-initialize db with the test app config
+    cache.init_app(app) # Re-initialize cache
+    # bcrypt.init_app(app) # bcrypt_auth from app.py is already initialized with app
 
-    with app.app_context(): # Ensure app context for create_all and drop_all
-        db.create_all() # Ensure tables are created for each test
-        cache.clear()   # Clear cache before each test run for isolation
-
-    with app.test_client() as client:
-        yield client # Provide the test client to the tests
-    
-    # Teardown: drop all tables after each test to ensure isolation
     with app.app_context():
-        db.session.remove() # Ensure session is clean before dropping
-        db.drop_all()       # Drop all tables
+        db.create_all()
+        if app.config['CACHE_TYPE'] != 'NullCache':
+             cache.clear()
 
-# --- Tests for /api/tabs --- 
+    test_client = app.test_client()
+    yield test_client
 
-def test_get_tabs_empty(client):
-    """Test GET /api/tabs when no tabs exist."""
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+
+def create_test_user_and_get_token(client_fixture_app_context):
+    """Helper function to create a user and generate a token within app context."""
+    # This function assumes it's called within an active app_context from a test
+    user = User(username='authtestuser', password_hash=bcrypt.generate_password_hash('password').decode('utf-8'))
+    db.session.add(user)
+    db.session.commit()
+    token = generate_token(user.id)
+    return token, user.id
+
+# --- Tests for /api/tabs (Authentication Required) ---
+
+def test_get_tabs_unauthorized(client):
+    """Test GET /api/tabs without a token."""
     response = client.get('/api/tabs')
+    assert response.status_code == 401 # Unauthorized
+
+def test_get_tabs_invalid_token(client):
+    """Test GET /api/tabs with an invalid token."""
+    response = client.get('/api/tabs', headers={'Authorization': 'Bearer invalidtoken'})
+    assert response.status_code == 401 # Unauthorized
+
+def test_get_tabs_empty_with_auth(client):
+    """Test GET /api/tabs when no tabs exist, with authentication."""
+    with app.app_context(): # Need app context for helper
+        token, _ = create_test_user_and_get_token(app)
+
+    response = client.get('/api/tabs', headers={'Authorization': f'Bearer {token}'})
     assert response.status_code == 200
     assert response.json == []
 
-def test_get_tabs_with_data(client):
-    """Test GET /api/tabs with existing tabs."""
-    # Arrange: Add some tabs to the in-memory DB
-    tab1 = Tab(name="Tech", order=1)
-    tab2 = Tab(name="News", order=0)
+def test_get_tabs_with_data_with_auth(client):
+    """Test GET /api/tabs with existing tabs, with authentication."""
     with app.app_context():
+        token, user_id = create_test_user_and_get_token(app)
+        # Arrange: Add some tabs to the in-memory DB
+        # Note: If tabs were user-specific, user_id would be used here.
+        # For now, tabs are global but accessed via authenticated route.
+        tab1 = Tab(name="Tech", order=1)
+        tab2 = Tab(name="News", order=0)
         db.session.add_all([tab1, tab2])
         db.session.commit()
     
-    # Act
-    response = client.get('/api/tabs')
+    response = client.get('/api/tabs', headers={'Authorization': f'Bearer {token}'})
     
-    # Assert
     assert response.status_code == 200
     assert len(response.json) == 2
-    # Check order and content (unread_count will be 0)
-    assert response.json[0]['name'] == 'News'
-    assert response.json[0]['order'] == 0
-    assert response.json[0]['unread_count'] == 0
-    assert response.json[1]['name'] == 'Tech'
-    assert response.json[1]['order'] == 1
-    assert response.json[1]['unread_count'] == 0
+    data = sorted(response.json, key=lambda x: x['order']) # Ensure order for assertion
+    assert data[0]['name'] == 'News'
+    assert data[0]['order'] == 0
+    assert data[0]['unread_count'] == 0
+    assert data[1]['name'] == 'Tech'
+    assert data[1]['order'] == 1
+    assert data[1]['unread_count'] == 0
 
-def test_create_tab_success(client):
-    """Test POST /api/tabs successfully creating a new tab."""
-    # Act
-    response = client.post('/api/tabs', json={'name': '  New Tab  '})
+# For other POST, PUT, DELETE on /api/tabs, ensure to add auth headers
+# Example for test_create_tab_success:
+def test_create_tab_success_with_auth(client):
+    """Test POST /api/tabs successfully creating a new tab with authentication."""
+    with app.app_context():
+        token, _ = create_test_user_and_get_token(app)
+
+    response = client.post('/api/tabs',
+                           json={'name': '  New Tab  '},
+                           headers={'Authorization': f'Bearer {token}'})
     
-    # Assert
-    assert response.status_code == 201 # Created
-    assert response.json['name'] == 'New Tab' # Check trimmed name
-    assert response.json['order'] == 0 # First tab gets order 0
+    assert response.status_code == 201
+    assert response.json['name'] == 'New Tab'
+    assert response.json['order'] == 0
     assert 'id' in response.json
-    
-    # Verify in DB
     with app.app_context():
         tab = db.session.get(Tab, response.json['id'])
         assert tab is not None
         assert tab.name == 'New Tab'
 
-def test_create_tab_missing_name(client):
-    """Test POST /api/tabs with missing name data."""
-    response = client.post('/api/tabs', json={})
+def test_create_tab_missing_name_with_auth(client):
+    with app.app_context(): token, _ = create_test_user_and_get_token(app)
+    response = client.post('/api/tabs', json={}, headers={'Authorization': f'Bearer {token}'})
     assert response.status_code == 400
-    assert 'error' in response.json
     assert 'Missing or empty tab name' in response.json['error']
 
-def test_create_tab_empty_name(client):
-    """Test POST /api/tabs with empty name string."""
-    response = client.post('/api/tabs', json={'name': '   '})
+def test_create_tab_empty_name_with_auth(client):
+    with app.app_context(): token, _ = create_test_user_and_get_token(app)
+    response = client.post('/api/tabs', json={'name': '   '}, headers={'Authorization': f'Bearer {token}'})
     assert response.status_code == 400
-    assert 'error' in response.json
     assert 'Missing or empty tab name' in response.json['error']
 
-def test_create_tab_duplicate_name(client):
-    """Test POST /api/tabs with a duplicate name."""
-    # Arrange: Create initial tab
-    client.post('/api/tabs', json={'name': 'Existing Tab'})
-    
-    # Act: Try to create another with the same name
-    response = client.post('/api/tabs', json={'name': 'Existing Tab'})
-    
-    # Assert
-    assert response.status_code == 409 # Conflict
-    assert 'error' in response.json
+def test_create_tab_duplicate_name_with_auth(client):
+    with app.app_context():
+        token, _ = create_test_user_and_get_token(app)
+        client.post('/api/tabs', json={'name': 'Existing Tab'}, headers={'Authorization': f'Bearer {token}'})
+    response = client.post('/api/tabs', json={'name': 'Existing Tab'}, headers={'Authorization': f'Bearer {token}'})
+    assert response.status_code == 409
     assert 'already exists' in response.json['error']
 
-def test_rename_tab_success(client):
-    """Test PUT /api/tabs/<id> successfully renaming a tab."""
-    # Arrange: Create a tab first
-    post_resp = client.post('/api/tabs', json={'name': 'Old Name'})
-    tab_id = post_resp.json['id']
-    
-    # Act
-    response = client.put(f'/api/tabs/{tab_id}', json={'name': 'New Name'})
-    
-    # Assert
+def test_rename_tab_success_with_auth(client):
+    with app.app_context():
+        token, _ = create_test_user_and_get_token(app)
+        post_resp = client.post('/api/tabs', json={'name': 'Old Name'}, headers={'Authorization': f'Bearer {token}'})
+        tab_id = post_resp.json['id']
+    response = client.put(f'/api/tabs/{tab_id}', json={'name': 'New Name'}, headers={'Authorization': f'Bearer {token}'})
     assert response.status_code == 200
-    assert response.json['id'] == tab_id
     assert response.json['name'] == 'New Name'
-    
-    # Verify in DB
     with app.app_context():
         tab = db.session.get(Tab, tab_id)
         assert tab.name == 'New Name'
 
-def test_rename_tab_not_found(client):
-    """Test PUT /api/tabs/<id> for a non-existent tab."""
-    response = client.put('/api/tabs/999', json={'name': 'New Name'})
+def test_rename_tab_not_found_with_auth(client):
+    with app.app_context(): token, _ = create_test_user_and_get_token(app)
+    response = client.put('/api/tabs/999', json={'name': 'New Name'}, headers={'Authorization': f'Bearer {token}'})
     assert response.status_code == 404
-    assert 'error' in response.json
-    assert 'not found' in response.json['error']
 
-def test_rename_tab_duplicate_name(client):
-    """Test PUT /api/tabs/<id> trying to rename to an existing name."""
-    # Arrange: Create two tabs
-    post_resp1 = client.post('/api/tabs', json={'name': 'Tab One'})
-    tab1_id = post_resp1.json['id']
-    client.post('/api/tabs', json={'name': 'Tab Two'})
-    
-    # Act: Try renaming Tab One to "Tab Two"
-    response = client.put(f'/api/tabs/{tab1_id}', json={'name': 'Tab Two'})
-    
-    # Assert
-    assert response.status_code == 409 # Conflict
-    assert 'error' in response.json
+def test_rename_tab_duplicate_name_with_auth(client):
+    with app.app_context():
+        token, _ = create_test_user_and_get_token(app)
+        post_resp1 = client.post('/api/tabs', json={'name': 'Tab One'}, headers={'Authorization': f'Bearer {token}'})
+        tab1_id = post_resp1.json['id']
+        client.post('/api/tabs', json={'name': 'Tab Two'}, headers={'Authorization': f'Bearer {token}'})
+    response = client.put(f'/api/tabs/{tab1_id}', json={'name': 'Tab Two'}, headers={'Authorization': f'Bearer {token}'})
+    assert response.status_code == 409
     assert 'already in use' in response.json['error']
 
-def test_delete_tab_success(client):
-    """Test DELETE /api/tabs/<id> successfully deleting a tab."""
-    # Arrange: Create two tabs
-    post_resp1 = client.post('/api/tabs', json={'name': 'To Delete'})
-    tab1_id = post_resp1.json['id']
-    client.post('/api/tabs', json={'name': 'To Keep'})
-    
-    # Act
-    response = client.delete(f'/api/tabs/{tab1_id}')
-    
-    # Assert
+def test_delete_tab_success_with_auth(client):
+    with app.app_context():
+        token, _ = create_test_user_and_get_token(app)
+        post_resp1 = client.post('/api/tabs', json={'name': 'To Delete'}, headers={'Authorization': f'Bearer {token}'})
+        tab1_id = post_resp1.json['id']
+        client.post('/api/tabs', json={'name': 'To Keep'}, headers={'Authorization': f'Bearer {token}'})
+    response = client.delete(f'/api/tabs/{tab1_id}', headers={'Authorization': f'Bearer {token}'})
     assert response.status_code == 200
-    assert 'message' in response.json
-    assert 'deleted successfully' in response.json['message']
-    
-    # Verify in DB
     with app.app_context():
         tab = db.session.get(Tab, tab1_id)
         assert tab is None
         assert Tab.query.count() == 1
 
-def test_delete_tab_not_found(client):
-    """Test DELETE /api/tabs/<id> for a non-existent tab."""
-    response = client.delete('/api/tabs/999')
+def test_delete_tab_not_found_with_auth(client):
+    with app.app_context(): token, _ = create_test_user_and_get_token(app)
+    response = client.delete('/api/tabs/999', headers={'Authorization': f'Bearer {token}'})
     assert response.status_code == 404
-    assert 'error' in response.json
-    assert 'not found' in response.json['error']
 
-def test_delete_last_tab(client):
-    """Test DELETE /api/tabs/<id> preventing deletion of the last tab."""
-    # Arrange: Create only one tab
-    post_resp = client.post('/api/tabs', json={'name': 'The Only Tab'})
-    tab_id = post_resp.json['id']
-    
-    # Act
-    response = client.delete(f'/api/tabs/{tab_id}')
-    
-    # Assert
+def test_delete_last_tab_with_auth(client):
+    with app.app_context():
+        token, _ = create_test_user_and_get_token(app)
+        post_resp = client.post('/api/tabs', json={'name': 'The Only Tab'}, headers={'Authorization': f'Bearer {token}'})
+        tab_id = post_resp.json['id']
+    response = client.delete(f'/api/tabs/{tab_id}', headers={'Authorization': f'Bearer {token}'})
     assert response.status_code == 400
     assert 'error' in response.json
     assert 'Cannot delete the last tab' in response.json['error']

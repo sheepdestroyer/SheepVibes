@@ -122,3 +122,19 @@ class FeedItem(db.Model):
             'is_read': self.is_read,
             'guid': self.guid
         }
+
+class User(db.Model):
+    """Represents a user of the application."""
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    username = db.Column(db.String, unique=True, nullable=False)
+    password_hash = db.Column(db.String, nullable=False)
+
+    def to_dict(self):
+        """Serializes the User object to a dictionary."""
+        return {
+            'id': self.id,
+            'username': self.username,
+            # Note: password_hash is intentionally not included
+        }

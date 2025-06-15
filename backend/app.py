@@ -13,7 +13,8 @@ from sqlalchemy import func, select # Added for optimized query
 from flask_caching import Cache # Added for caching
 
 # Import db object and models from the new models.py
-from .models import db, Tab, Feed, FeedItem
+from .models import db, Tab, Feed, FeedItem, User # Added User
+from .auth import auth_bp, bcrypt as bcrypt_auth, token_auth # Added for auth
 
 # Set up logging configuration
 logging.basicConfig(
@@ -70,38 +71,58 @@ announcer = MessageAnnouncer()
 
 # Initialize Flask application
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'your-super-secret-key-fallback') # Added for JWT and session
+
+# Initialize Bcrypt with app
+bcrypt_auth.init_app(app)
+
+# Register Auth Blueprint
+app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
 # Configure SQLite database URI
-# Use environment variable DATABASE_PATH or default to the standard path inside the container
-default_db_path_in_container = '/app/data/sheepvibes.db'
-db_path_env = os.environ.get('DATABASE_PATH')
-
-if db_path_env:
-    if db_path_env.startswith('sqlite:///'):
-        app.config['SQLALCHEMY_DATABASE_URI'] = db_path_env
-        logger.info(f"Using DATABASE_PATH environment variable directly: {db_path_env}")
-    else:
-        db_path = db_path_env
-        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-        logger.info(f"Using DATABASE_PATH environment variable for file path: {db_path}")
+if os.environ.get('PYTEST_RUNNING') == 'true':
+    logger.info("PYTEST_RUNNING detected: Using in-memory SQLite database.")
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    app.config['CACHE_TYPE'] = 'NullCache' # Use NullCache for tests
+    app.config['TESTING'] = True # General testing flag
 else:
-    # Default path logic
-    if not os.path.exists('/app'): # Assume local development
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        local_data_dir = os.path.join(project_root, 'data')
-        os.makedirs(local_data_dir, exist_ok=True)
-        db_path = os.path.join(local_data_dir, 'sheepvibes.db')
-        logger.info(f"DATABASE_PATH not set, assuming local run. Using file path: {db_path}")
-    else: # Assume container run
-        db_path = default_db_path_in_container
-        logger.info(f"DATABASE_PATH not set, assuming container run. Using default file path: {db_path}")
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    # Use environment variable DATABASE_PATH or default to the standard path inside the container
+    default_db_path_in_container = '/app/data/sheepvibes.db'
+    db_path_env = os.environ.get('DATABASE_PATH')
+
+    if db_path_env:
+        if db_path_env.startswith('sqlite:///'):
+            app.config['SQLALCHEMY_DATABASE_URI'] = db_path_env
+            logger.info(f"Using DATABASE_PATH environment variable directly: {db_path_env}")
+        else:
+            db_path = db_path_env
+            app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+            logger.info(f"Using DATABASE_PATH environment variable for file path: {db_path}")
+    else:
+        # Default path logic
+        if not os.path.exists('/app'): # Assume local development
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            local_data_dir = os.path.join(project_root, 'data')
+            os.makedirs(local_data_dir, exist_ok=True)
+            db_path = os.path.join(local_data_dir, 'sheepvibes.db')
+            logger.info(f"DATABASE_PATH not set, assuming local run. Using file path: {db_path}")
+        else: # Assume container run
+            db_path = default_db_path_in_container
+            logger.info(f"DATABASE_PATH not set, assuming container run. Using default file path: {db_path}")
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Disable modification tracking
 
 # --- Cache Configuration ---
-app.config["CACHE_TYPE"] = "RedisCache"
-app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
-app.config['CACHE_DEFAULT_TIMEOUT'] = 300 # 5 minutes default timeout
+# Overridden by PYTEST_RUNNING check above for tests
+if not app.config.get('TESTING'): # Only use RedisCache if not in testing mode (where NullCache is set)
+    app.config["CACHE_TYPE"] = "RedisCache"
+    app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
+else: # Ensure CACHE_TYPE is set if PYTEST_RUNNING was true but CACHE_TYPE wasn't explicitly set there
+    app.config.setdefault('CACHE_TYPE', 'NullCache')
+
+
+app.config.setdefault('CACHE_DEFAULT_TIMEOUT', 300) # 5 minutes default timeout
 
 cache = Cache()
 
@@ -113,6 +134,7 @@ migrate = Migrate(app, db)
 
 # Initialize the cache with the app config
 cache.init_app(app)
+
 
 # --- Cache Key Generation and Invalidation ---
 
@@ -232,8 +254,12 @@ def stream():
 
 @app.route('/api/tabs', methods=['GET'])
 @cache.cached(make_cache_key=make_tabs_cache_key)
+@token_auth.login_required
 def get_tabs():
     """Returns a list of all tabs, ordered by their 'order' field."""
+    # Example of getting current user, if needed:
+    # current_user = token_auth.current_user()
+    # logger.info(f"Tabs requested by user: {current_user.username if current_user else 'Unknown'}")
     tabs = Tab.query.order_by(Tab.order).all()
     return jsonify([tab.to_dict() for tab in tabs])
 

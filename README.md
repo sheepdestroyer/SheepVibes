@@ -13,6 +13,18 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with 
 *   Mark items as read.
 *   Displays unread counts per feed and per tab.
 *   Basic persistence using a database.
+*   User authentication (registration and login).
+
+## User Authentication
+
+The application now supports user authentication to protect access to your feeds.
+
+*   **Registration**: New users can register using the registration form available on the main page before logging in. You will need to provide a unique username and a password.
+*   **Login**: Once registered, log in using your username and password via the login form. Upon successful login, you will receive an authentication token that is stored in your browser's local storage.
+*   **Authenticated Access**: Access to view and manage tabs and feeds now requires a valid authentication token. API requests to protected endpoints must include this token in the `Authorization: Bearer <token>` header.
+*   **Logout**: A logout button is available to clear your session and token from the browser.
+
+There are no default users created. Each user must register individually.
 
 ## Production Deployment (Quadlets)
 

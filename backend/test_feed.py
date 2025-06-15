@@ -23,9 +23,16 @@ logger = logging.getLogger('sheepvibes_test')
 @pytest.fixture
 def db_setup():
     """Pytest fixture to set up the Flask app for testing with an in-memory DB."""
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['TESTING'] = True
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['WTF_CSRF_ENABLED'] = False # Common for tests
+    app._got_first_request = False
+
+    if 'sqlalchemy' in app.extensions:
+        del app.extensions['sqlalchemy']
+    db.init_app(app)
+
     with app.app_context():
         db.create_all()
         yield app # Provide the app instance, can also yield db if needed
