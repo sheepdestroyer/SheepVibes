@@ -2,16 +2,6 @@ import xml.etree.ElementTree as ET
 import listparser
 
 def parse_opml(opml_content):
-    """Parses OPML content and returns a list of feed dictionaries.
-
-    Args:
-        opml_content: A string containing the OPML XML data.
-
-    Returns:
-        A list of dictionaries, where each dictionary represents a feed
-        and has the keys 'title', 'xmlUrl', and 'outline' (for tab/folder).
-        Returns an empty list if parsing fails or no feeds are found.
-    """
     try:
         parsed = listparser.parse(opml_content)
         feeds = []
@@ -41,9 +31,6 @@ def parse_opml(opml_content):
             return feeds # Prefer listparser results if any feeds were found
 
         # Fallback to ET parsing if listparser found no feeds.
-        # This is crucial for OPMLs where feeds are directly nested under outlines with 'text'/'title'
-        # which listparser might not always categorize as feed_obj.meta.title.
-        # Reset feeds list as listparser path was not taken or returned empty.
         feeds = []
         try:
             root = ET.fromstring(opml_content)
@@ -74,26 +61,11 @@ def parse_opml(opml_content):
                 })
             return feeds
         except ET.ParseError:
-            # If listparser also failed (returned empty feeds before this block),
-            # and ET parsing fails, then we truly couldn't parse it.
-            # The initial feeds list would be empty from listparser path.
-            return [] # Return empty list as per original broad except clause
-    except Exception: # Catch any other unexpected errors from listparser or general issues
-        # Consider logging the error for debugging
+            return []
+    except Exception:
         return []
 
-
 def generate_opml(tabs_with_feeds):
-    """Generates an OPML XML string from a list of Tab objects.
-
-    Args:
-        tabs_with_feeds: A list of Tab objects, where each Tab object
-                         has a 'feeds' attribute containing a list of
-                         Feed objects.
-
-    Returns:
-        A string containing the OPML XML.
-    """
     opml = ET.Element('opml', version='2.0')
     head = ET.SubElement(opml, 'head')
     ET.SubElement(head, 'title').text = 'SheepVibes Feeds'
@@ -106,8 +78,6 @@ def generate_opml(tabs_with_feeds):
                           text=feed.name, title=feed.name,
                           xmlUrl=feed.url, htmlUrl='')
 
-    # ET.indent for pretty printing (Python 3.9+)
-    if hasattr(ET, 'indent'):
-        ET.indent(opml, space="  ")
+    if hasattr(ET, 'indent'): ET.indent(opml, space="  ")
 
     return ET.tostring(opml, encoding='unicode', method='xml')
