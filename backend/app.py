@@ -14,6 +14,7 @@ from flask_caching import Cache # Added for caching
 
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
+import xml.etree.ElementTree as ET # Added for OPML export
 
 # Set up logging configuration
 logging.basicConfig(
@@ -227,6 +228,159 @@ def serve_static_files(filename):
 def stream():
     """Endpoint for Server-Sent Events (SSE) to stream updates."""
     return Response(announcer.listen(), mimetype='text/event-stream')
+
+# --- OPML Export Endpoint ---
+
+@app.route('/api/opml/export', methods=['GET'])
+def export_opml():
+    """Exports all feeds as an OPML file."""
+    try:
+        feeds = Feed.query.all()
+
+        opml_element = ET.Element('opml', version='2.0')
+        head_element = ET.SubElement(opml_element, 'head')
+        title_element = ET.SubElement(head_element, 'title')
+        title_element.text = 'SheepVibes Feeds'
+        body_element = ET.SubElement(opml_element, 'body')
+
+        for feed in feeds:
+            outline_element = ET.SubElement(body_element, 'outline')
+            outline_element.set('text', feed.name)
+            outline_element.set('xmlUrl', feed.url)
+            outline_element.set('type', 'rss') # Common type for RSS/Atom feeds in OPML
+
+        # Convert the XML tree to a string
+        opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
+
+        response = Response(opml_string, mimetype='application/xml')
+        response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
+
+        logger.info(f"Successfully generated OPML export for {len(feeds)} feeds.")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error during OPML export: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to generate OPML export'}), 500
+
+# --- OPML Import Endpoint ---
+
+@app.route('/api/opml/import', methods=['POST'])
+def import_opml():
+    """Imports feeds from an OPML file."""
+    if 'file' not in request.files:
+        logger.warning("OPML import failed: No file part in request.")
+        return jsonify({'error': 'No file part in the request'}), 400
+
+    opml_file = request.files['file']
+
+    if opml_file.filename == '':
+        logger.warning("OPML import failed: No file selected.")
+        return jsonify({'error': 'No file selected for uploading'}), 400
+
+    if not opml_file: # Should be caught by filename check, but good practice
+        logger.warning("OPML import failed: File object is empty.")
+        return jsonify({'error': 'File object is empty'}), 400
+
+    imported_count = 0
+    skipped_count = 0
+    affected_tab_ids = set() # To store IDs of tabs that received new feeds
+
+    try:
+        tree = ET.parse(opml_file.stream)
+        root = tree.getroot()
+    except ET.ParseError as e:
+        logger.error(f"OPML import failed: Malformed XML. Error: {e}", exc_info=True)
+        return jsonify({'error': f'Malformed OPML file: {e}'}), 400
+    except Exception as e: # Catch other potential file stream errors
+        logger.error(f"OPML import failed: Could not parse file stream. Error: {e}", exc_info=True)
+        return jsonify({'error': f'Error processing OPML file: {e}'}), 500
+
+    # Determine target tab
+    target_tab_id_form = request.form.get('tab_id')
+    target_tab = None
+
+    if target_tab_id_form:
+        try:
+            target_tab_id_val = int(target_tab_id_form)
+            target_tab = db.session.get(Tab, target_tab_id_val)
+            if not target_tab:
+                logger.warning(f"OPML import: Specified tab_id {target_tab_id_val} not found. Falling back to default.")
+                # Fallback to default tab logic below if specified tab not found
+        except ValueError:
+            logger.warning(f"OPML import: Invalid tab_id format '{target_tab_id_form}'. Falling back to default.")
+            # Fallback to default tab logic
+
+    if not target_tab: # If no tab_id provided, or if provided one was invalid/not found
+        target_tab = Tab.query.order_by(Tab.order).first()
+        if not target_tab:
+            logger.error("OPML import failed: No tabs available in the system to import feeds to.")
+            return jsonify({'error': 'No tabs available to import feeds. Please create a tab first.'}), 400
+
+    final_target_tab_id = target_tab.id
+
+    body = root.find('body')
+    if body is None:
+        logger.warning("OPML import: No <body> element found in OPML file.")
+        return jsonify({'message': 'No feeds found in OPML (missing body).', 'imported_count': 0, 'skipped_count': 0}), 200
+
+    for outline in body.findall('outline'):
+        xml_url = outline.get('xmlUrl')
+        text = outline.get('text') # Could also be 'title'
+
+        if not xml_url:
+            logger.info("OPML import: Skipped an outline element due to missing 'xmlUrl'.")
+            skipped_count += 1
+            continue
+
+        # Check if feed already exists by URL
+        existing_feed = Feed.query.filter_by(url=xml_url).first()
+        if existing_feed:
+            logger.info(f"OPML import: Feed with URL '{xml_url}' already exists. Skipping.")
+            skipped_count += 1
+            continue
+
+        feed_name = text.strip() if text and text.strip() else xml_url
+
+        try:
+            new_feed = Feed(
+                tab_id=final_target_tab_id,
+                name=feed_name,
+                url=xml_url
+            )
+            db.session.add(new_feed)
+            imported_count += 1
+            affected_tab_ids.add(final_target_tab_id)
+            logger.info(f"OPML import: Prepared new feed '{feed_name}' ({xml_url}) for tab {final_target_tab_id}.")
+        except Exception as e: # Catch potential errors during Feed object creation or add
+            db.session.rollback() # Rollback for this specific feed
+            logger.error(f"OPML import: Error adding feed '{feed_name}' ({xml_url}): {e}", exc_info=True)
+            skipped_count += 1 # Count as skipped due to error
+
+    if imported_count > 0:
+        try:
+            db.session.commit()
+            logger.info(f"OPML import: Successfully committed {imported_count} new feeds to the database.")
+            # Invalidate caches
+            invalidate_tabs_cache() # Global for unread counts etc.
+            for tab_id_to_invalidate in affected_tab_ids:
+                invalidate_tab_feeds_cache(tab_id_to_invalidate)
+            logger.info(f"OPML import: Caches invalidated for tabs: {affected_tab_ids} and global tabs list.")
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"OPML import: Database commit failed after processing feeds: {e}", exc_info=True)
+            return jsonify({'error': 'Database error during final import step.'}), 500
+    elif not body.findall('outline'): # No outlines found to process
+        logger.info("OPML import: No <outline> elements found in the OPML body.")
+        return jsonify({'message': 'No feed entries found in the OPML file.', 'imported_count': 0, 'skipped_count': skipped_count}), 200
+
+
+    return jsonify({
+        'message': f'{imported_count} feeds imported successfully to tab "{target_tab.name}". {skipped_count} feeds skipped.',
+        'imported_count': imported_count,
+        'skipped_count': skipped_count,
+        'tab_id': final_target_tab_id,
+        'tab_name': target_tab.name
+    }), 200
 
 # --- Tabs API Endpoints ---
 

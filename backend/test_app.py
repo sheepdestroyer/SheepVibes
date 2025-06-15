@@ -2,6 +2,8 @@ import pytest
 import json
 from unittest.mock import patch, MagicMock
 import os
+import io
+import xml.etree.ElementTree as ET
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
@@ -30,14 +32,18 @@ def client():
         del app.extensions['cache']
     
     # Get the Redis URL set by pytest-env from pytest.ini
-    redis_url = os.environ.get('CACHE_REDIS_URL')
-    
+    redis_url = os.environ.get('CACHE_REDIS_URL', 'redis://localhost:6379/0') # Default if not set
+
+    # Force IPv4 for localhost if it's being used.
+    if 'localhost' in redis_url:
+        redis_url = redis_url.replace('localhost', '127.0.0.1')
+
     # In a CI environment, GitHub Actions maps the service port to a dynamic
     # port on the host. We check for this port (passed as an env var by the
     # workflow) and update the connection URL accordingly.
     ci_redis_port = os.environ.get('CACHE_REDIS_PORT')
-    if ci_redis_port and redis_url:
-        # The URL from pytest.ini is 'redis://:password@localhost:6379/0'
+    if ci_redis_port and '127.0.0.1' in redis_url: # Ensure it's still a local target
+        # The URL from pytest.ini is 'redis://:password@127.0.0.1:6379/0'
         # We replace the standard port with the dynamic one from the CI env.
         redis_url = redis_url.replace('6379', ci_redis_port, 1)
         
@@ -773,3 +779,305 @@ def test_to_iso_z_string_static_method():
 
     # 4. Test with None input
     assert FeedItem.to_iso_z_string(None) is None
+
+# --- Tests for OPML Export (/api/opml/export) ---
+
+def test_export_opml_empty(client):
+    """Test GET /api/opml/export when no feeds exist."""
+    response = client.get('/api/opml/export')
+    assert response.status_code == 200
+    assert 'application/xml' in response.content_type
+    assert response.headers['Content-Disposition'] == 'attachment; filename="sheepvibes_feeds.opml"'
+
+    # Parse XML
+    tree = ET.fromstring(response.data)
+    assert tree.tag == 'opml'
+    assert tree.get('version') == '2.0'
+    head = tree.find('head')
+    assert head is not None
+    title = head.find('title')
+    assert title is not None
+    assert title.text == 'SheepVibes Feeds'
+    body = tree.find('body')
+    assert body is not None
+    assert len(body.findall('outline')) == 0
+
+def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
+    """Test GET /api/opml/export with existing feeds."""
+    # setup_tabs_and_feeds already adds 3 feeds
+    # Feed 1: url1, Name: Feed 1
+    # Feed 2: url2, Name: Feed 2
+    # Feed 3: url3, Name: Feed 3
+
+    response = client.get('/api/opml/export')
+    assert response.status_code == 200
+    assert 'application/xml' in response.content_type
+    assert response.headers['Content-Disposition'] == 'attachment; filename="sheepvibes_feeds.opml"'
+
+    tree = ET.fromstring(response.data)
+    assert tree.tag == 'opml'
+    head = tree.find('head')
+    assert head is not None
+    title = head.find('title')
+    assert title is not None
+    assert title.text == 'SheepVibes Feeds'
+
+    body = tree.find('body')
+    assert body is not None
+    outlines = body.findall('outline')
+    assert len(outlines) == 3 # From setup_tabs_and_feeds
+
+    # Verify outline content (order might vary, so check presence)
+    expected_feeds_data = [
+        {'text': 'Feed 1', 'xmlUrl': 'url1', 'type': 'rss'},
+        {'text': 'Feed 2', 'xmlUrl': 'url2', 'type': 'rss'},
+        {'text': 'Feed 3', 'xmlUrl': 'url3', 'type': 'rss'},
+    ]
+
+    actual_feeds_data = []
+    for outline in outlines:
+        actual_feeds_data.append({
+            'text': outline.get('text'),
+            'xmlUrl': outline.get('xmlUrl'),
+            'type': outline.get('type')
+        })
+
+    for expected in expected_feeds_data:
+        assert expected in actual_feeds_data
+
+# --- Tests for OPML Import (/api/opml/import) ---
+
+def test_import_opml_success(client):
+    """Test POST /api/opml/import with a valid OPML file."""
+    # Arrange: Add a tab to import into
+    with app.app_context():
+        tab = Tab(name="Import Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+        tab_id = tab.id
+
+    opml_content = """
+    <opml version="2.0">
+      <head><title>Test Feeds</title></head>
+      <body>
+        <outline text="Feed1 OPM" type="rss" xmlUrl="http://feed1.opml.com/rss"/>
+        <outline text="Feed2 OPM" type="rss" xmlUrl="http://feed2.opml.com/rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_import.opml')
+
+    # Act
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(tab_id)}, content_type='multipart/form-data')
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 2
+    assert json_data['skipped_count'] == 0
+    assert json_data['tab_id'] == tab_id
+
+    with app.app_context():
+        feeds = Feed.query.filter_by(tab_id=tab_id).all()
+        assert len(feeds) == 2
+        feed_urls = {f.url for f in feeds}
+        feed_names = {f.name for f in feeds}
+        assert "http://feed1.opml.com/rss" in feed_urls
+        assert "http://feed2.opml.com/rss" in feed_urls
+        assert "Feed1 OPM" in feed_names
+        assert "Feed2 OPM" in feed_names
+
+def test_import_opml_with_duplicates(client):
+    """Test POST /api/opml/import with some feeds already existing."""
+    with app.app_context():
+        tab = Tab(name="Import Tab Dups", order=0)
+        db.session.add(tab)
+        db.session.commit() # Commit tab first to get its ID
+        tab_id = tab.id
+
+        existing_feed = Feed(tab_id=tab_id, name="Existing Feed", url="http://feed1.opml.com/rss")
+        db.session.add(existing_feed)
+        db.session.commit() # Commit the feed
+
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline text="Feed1 OPM" type="rss" xmlUrl="http://feed1.opml.com/rss"/>
+        <outline text="New Feed OPM" type="rss" xmlUrl="http://newfeed.opml.com/rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_import_dups.opml')
+
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(tab_id)}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1
+    assert json_data['skipped_count'] == 1
+
+    with app.app_context():
+        feeds = Feed.query.filter_by(tab_id=tab_id).order_by(Feed.url).all()
+        assert len(feeds) == 2 # Existing one + new one
+        assert feeds[0].url == "http://feed1.opml.com/rss" # Existing
+        assert feeds[1].url == "http://newfeed.opml.com/rss" # New one
+
+def test_import_opml_no_file(client):
+    """Test POST /api/opml/import without a file."""
+    response = client.post('/api/opml/import', content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'No file part' in response.json['error']
+
+def test_import_opml_empty_filename(client):
+    """Test POST /api/opml/import with an empty filename (simulates no file selected)."""
+    opml_file = (io.BytesIO(b"content"), '') # Empty filename
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'No file selected' in response.json['error']
+
+def test_import_opml_malformed_xml(client):
+    """Test POST /api/opml/import with malformed XML."""
+    with app.app_context(): # Ensure a tab exists
+        tab = Tab(name="Malformed Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+    opml_content = "<opml><body/><head></opml>" # Malformed, unclosed tags
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'malformed.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'Malformed OPML file' in response.json['error']
+
+def test_import_opml_no_tabs_exist(client):
+    """Test POST /api/opml/import when no tabs exist in the database."""
+    # Ensure no tabs exist (client fixture already drops tables)
+    opml_content = """
+    <opml version="2.0"><body><outline text="Feed" xmlUrl="http://test.com"/></body></opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'No tabs available' in response.json['error']
+
+def test_import_opml_specific_tab(client):
+    """Test POST /api/opml/import into a specific tab when multiple tabs exist."""
+    with app.app_context():
+        tab1 = Tab(name="Tab One", order=0)
+        tab2 = Tab(name="Tab Two", order=1)
+        db.session.add_all([tab1, tab2])
+        db.session.commit()
+        tab1_id = tab1.id
+        tab2_id = tab2.id
+
+    opml_content = """
+    <opml version="2.0"><body><outline text="Feed for Tab2" xmlUrl="http://tab2feed.com"/></body></opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_tab_specific.opml')
+
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(tab2_id)}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1
+    assert json_data['tab_id'] == tab2_id
+    assert json_data['tab_name'] == "Tab Two"
+
+    with app.app_context():
+        assert Feed.query.filter_by(tab_id=tab1_id).count() == 0
+        assert Feed.query.filter_by(tab_id=tab2_id).count() == 1
+        feed_in_tab2 = Feed.query.filter_by(tab_id=tab2_id).first()
+        assert feed_in_tab2.url == "http://tab2feed.com"
+
+def test_import_opml_default_tab_if_tab_id_not_provided(client):
+    """Test POST /api/opml/import defaults to the first tab if tab_id is not provided."""
+    with app.app_context():
+        tab1 = Tab(name="Default Tab", order=0) # Should be default
+        tab2 = Tab(name="Other Tab", order=1)
+        db.session.add_all([tab1, tab2])
+        db.session.commit()
+        default_tab_id = tab1.id
+
+    opml_content = """
+    <opml version="2.0"><body><outline text="Feed for Default" xmlUrl="http://defaultfeed.com"/></body></opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_default_tab.opml')
+
+    # Not providing 'tab_id' in the form data
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1
+    assert json_data['tab_id'] == default_tab_id
+    assert json_data['tab_name'] == "Default Tab"
+
+    with app.app_context():
+        assert Feed.query.filter_by(tab_id=default_tab_id).count() == 1
+        feed_in_default_tab = Feed.query.filter_by(tab_id=default_tab_id).first()
+        assert feed_in_default_tab.url == "http://defaultfeed.com"
+
+def test_import_opml_missing_xmlurl_is_skipped(client):
+    """Test that an <outline> missing xmlUrl is skipped during import."""
+    with app.app_context():
+        tab = Tab(name="Test Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+        tab_id = tab.id
+
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline text="Valid Feed" xmlUrl="http://valid.com/rss"/>
+        <outline text="Missing xmlUrl Feed"/>
+        <outline text="Another Valid" xmlUrl="http://valid2.com/rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_missing_xmlurl.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(tab_id)}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 2
+    assert json_data['skipped_count'] == 1
+
+    with app.app_context():
+        feeds_in_tab = Feed.query.filter_by(tab_id=tab_id).all()
+        assert len(feeds_in_tab) == 2
+        urls = {f.url for f in feeds_in_tab}
+        assert "http://valid.com/rss" in urls
+        assert "http://valid2.com/rss" in urls
+
+def test_import_opml_no_body_tag(client):
+    """Test OPML import with a file that has no <body> tag."""
+    with app.app_context(): # Ensure a tab exists
+        tab = Tab(name="No Body Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+    opml_content = """<opml version="2.0"><head><title>No Body</title></head></opml>"""
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'no_body.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200 # Should still be a valid request
+    json_data = response.json
+    assert json_data['imported_count'] == 0
+    assert json_data['skipped_count'] == 0
+    assert 'No feeds found in OPML (missing body)' in json_data['message']
+
+def test_import_opml_empty_body_tag(client):
+    """Test OPML import with a file that has an empty <body> tag."""
+    with app.app_context(): # Ensure a tab exists
+        tab = Tab(name="Empty Body Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+    opml_content = """<opml version="2.0"><head><title>Empty Body</title></head><body></body></opml>"""
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'empty_body.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 0
+    assert json_data['skipped_count'] == 0
+    assert 'No feed entries found in the OPML file.' in json_data['message']
