@@ -9,6 +9,11 @@ import xml.etree.ElementTree as ET
 # Need to configure the app for testing
 from .app import app, cache # Import the app and cache instance
 from .models import db, Tab, Feed, FeedItem # Import models directly
+from .feed_service import process_feed_entries, parse_published_time # For new tests
+import time # For new tests
+import datetime # For new tests, specifically for timezone object
+from datetime import timezone # For new tests
+
 
 @pytest.fixture
 def client():
@@ -779,6 +784,207 @@ def test_to_iso_z_string_static_method():
 
     # 4. Test with None input
     assert FeedItem.to_iso_z_string(None) is None
+
+# --- Tests for feed_service functions ---
+
+def test_parse_published_time_variations(): # No client fixture needed as it's a pure function
+    """Tests the parse_published_time helper with various entry structures."""
+
+    # Case 1: 'published_parsed' available and valid
+    entry1 = MagicMock()
+    # feedparser stores published_parsed as time.struct_time
+    entry1.published_parsed = datetime.datetime(2023, 10, 26, 14, 30, 0, tzinfo=timezone.utc).utctimetuple()
+    entry1.get = lambda key, default=None: getattr(entry1, key, default) # for link access in log
+    dt1 = parse_published_time(entry1)
+    assert dt1 is not None
+    assert dt1.year == 2023 and dt1.month == 10 and dt1.day == 26
+    assert dt1.hour == 14 and dt1.minute == 30 and dt1.second == 0
+    assert dt1.tzinfo == timezone.utc
+
+    # Case 2: 'published' field available
+    entry2 = MagicMock()
+    entry2.published_parsed = None
+    entry2.published = "Thu, 26 Oct 2023 10:00:00 -0400" # EST
+    entry2.get = lambda key, default=None: getattr(entry2, key, default)
+    dt2 = parse_published_time(entry2)
+    assert dt2 is not None
+    assert dt2.year == 2023 and dt2.month == 10 and dt2.day == 26
+    assert dt2.hour == 14 and dt2.minute == 0 # Converted to UTC
+    assert dt2.tzinfo == timezone.utc
+
+    # Case 3: 'updated' field available
+    entry3 = MagicMock()
+    entry3.published_parsed = None
+    entry3.published = None
+    entry3.updated = "2023-10-26T16:30:00Z" # ISO format UTC
+    entry3.get = lambda key, default=None: getattr(entry3, key, default)
+    dt3 = parse_published_time(entry3)
+    assert dt3 is not None
+    assert dt3.year == 2023 and dt3.month == 10 and dt3.day == 26
+    assert dt3.hour == 16 and dt3.minute == 30
+    assert dt3.tzinfo == timezone.utc
+
+    # Case 4: Naive datetime string, assumed UTC
+    entry4 = MagicMock()
+    entry4.published_parsed = None
+    entry4.published = "2023-10-26 17:00:00" # No timezone
+    entry4.get = lambda key, default=None: getattr(entry4, key, default)
+    dt4 = parse_published_time(entry4)
+    assert dt4 is not None
+    assert dt4.hour == 17 # Assumed UTC
+    assert dt4.tzinfo == timezone.utc
+
+    # Case 5: No valid date fields
+    entry5 = MagicMock()
+    entry5.published_parsed = None
+    entry5.published = None
+    entry5.updated = None
+    entry5.created = None
+    entry5.get = lambda key, default=None: getattr(entry5, key, default)
+    dt5 = parse_published_time(entry5)
+    assert dt5 is None
+
+    # Case 6: Malformed date string in 'published'
+    entry6 = MagicMock()
+    entry6.published_parsed = None
+    entry6.published = "this is not a date"
+    entry6.get = lambda key, default=None: getattr(entry6, key, default)
+    dt6 = parse_published_time(entry6)
+    assert dt6 is None
+
+    # Case 7: published_parsed is invalid type (e.g. string instead of time.struct_time)
+    entry7 = MagicMock()
+    entry7.published_parsed = "not a time_struct" # Invalid type
+    entry7.published = "2023-10-27T10:00:00Z" # Valid fallback
+    entry7.get = lambda key, default=None: getattr(entry7, key, default)
+    dt7 = parse_published_time(entry7)
+    assert dt7 is not None
+    assert dt7.hour == 10 # Should use the fallback
+    assert dt7.tzinfo == timezone.utc
+
+def test_process_feed_with_in_batch_duplicate_guids(client): # Using client fixture for app_context
+    """
+    Tests that process_feed_entries correctly handles entries with duplicate GUIDs
+    within the same fetched batch, only adding the first instance.
+    """
+    with client.application.app_context(): # Use app_context from client
+        # 1. Setup: Create a Tab and Feed object in the DB
+        tab = Tab(name="Test Tab GUIDs", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+        feed_obj = Feed(name="Test Feed In-Batch Dupes", url="http://testguids.com/rss", tab_id=tab.id)
+        db.session.add(feed_obj)
+        db.session.commit()
+
+        # 2. Create mock feedparser data
+        mock_parsed_feed = MagicMock()
+        mock_parsed_feed.feed = MagicMock()
+        mock_parsed_feed.feed.title = "Test Feed Title"
+        mock_parsed_feed.feed.get = lambda key, default='': getattr(mock_parsed_feed.feed, key, default)
+
+        dt_entry1 = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        dt_entry2 = datetime.datetime(2023, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
+        dt_entry3 = datetime.datetime(2023, 1, 1, 12, 10, 0, tzinfo=timezone.utc)
+
+        entry1_data = {'id': 'guid1', 'link': 'http://link1.com', 'title': 'Title 1',
+                       'published_parsed': dt_entry1.utctimetuple()}
+        entry2_data = {'id': 'guid1', 'link': 'http://link2.com', 'title': 'Title 2 (Same GUID)',
+                       'published_parsed': dt_entry2.utctimetuple()}
+        entry3_data = {'id': 'guid2', 'link': 'http://link3.com', 'title': 'Title 3',
+                       'published_parsed': dt_entry3.utctimetuple()}
+
+        entry1 = MagicMock()
+        entry1.configure_mock(**entry1_data)
+        entry1.get = lambda key, default=None: entry1_data.get(key, default)
+
+        entry2 = MagicMock()
+        entry2.configure_mock(**entry2_data)
+        entry2.get = lambda key, default=None: entry2_data.get(key, default)
+
+        entry3 = MagicMock()
+        entry3.configure_mock(**entry3_data)
+        entry3.get = lambda key, default=None: entry3_data.get(key, default)
+
+        mock_parsed_feed.entries = [entry1, entry2, entry3]
+        mock_parsed_feed.bozo = 0
+
+        # 3. Call process_feed_entries directly
+        new_items_count = process_feed_entries(feed_obj, mock_parsed_feed)
+
+        # 4. Assertions
+        assert new_items_count == 2
+
+        items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
+        assert len(items_in_db) == 2
+
+        guids_in_db = {item.guid for item in items_in_db}
+        assert 'guid1' in guids_in_db
+        assert 'guid2' in guids_in_db
+
+        item1_db = FeedItem.query.filter_by(guid='guid1', feed_id=feed_obj.id).first()
+        assert item1_db is not None
+        assert item1_db.title == 'Title 1'
+        assert item1_db.link == 'http://link1.com'
+
+def test_process_feed_with_missing_link(client): # Using client fixture for app_context
+    """
+    Tests that process_feed_entries skips entries that are missing a link,
+    as 'link' is a NOT NULL field in the FeedItem model.
+    """
+    with client.application.app_context():
+        # 1. Setup Feed object
+        tab = Tab(name="Test Tab Links", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+        feed_obj = Feed(name="Test Feed Missing Link", url="http://testmissinglink.com/rss", tab_id=tab.id)
+        db.session.add(feed_obj)
+        db.session.commit()
+
+        # 2. Create mock feedparser data
+        mock_parsed_feed = MagicMock()
+        mock_parsed_feed.feed = MagicMock()
+        mock_parsed_feed.feed.title = "Test Feed Title"
+        mock_parsed_feed.feed.get = lambda key, default='': getattr(mock_parsed_feed.feed, key, default)
+
+        dt_valid = datetime.datetime(2023,1,1,12,0,0, tzinfo=timezone.utc)
+        dt_no_link = datetime.datetime(2023,1,1,12,5,0, tzinfo=timezone.utc)
+        dt_empty_link = datetime.datetime(2023,1,1,12,10,0, tzinfo=timezone.utc)
+
+        entry_valid_data = {'id': 'guid_valid', 'link': 'http://valid.com', 'title': 'Valid Item',
+                            'published_parsed': dt_valid.utctimetuple()}
+        entry_no_link_data = {'id': 'guid_no_link', 'link': None, 'title': 'Item No Link',
+                              'published_parsed': dt_no_link.utctimetuple()}
+        entry_empty_link_data = {'id': 'guid_empty_link', 'link': '', 'title': 'Item Empty Link',
+                                 'published_parsed': dt_empty_link.utctimetuple()}
+
+        entry_valid = MagicMock()
+        entry_valid.configure_mock(**entry_valid_data)
+        entry_valid.get = lambda key, default=None: entry_valid_data.get(key, default)
+
+        entry_no_link = MagicMock()
+        entry_no_link.configure_mock(**entry_no_link_data)
+        entry_no_link.get = lambda key, default=None: entry_no_link_data.get(key, default)
+
+        entry_empty_link = MagicMock()
+        entry_empty_link.configure_mock(**entry_empty_link_data)
+        entry_empty_link.get = lambda key, default=None: entry_empty_link_data.get(key, default)
+
+        mock_parsed_feed.entries = [entry_valid, entry_no_link, entry_empty_link]
+        mock_parsed_feed.bozo = 0
+
+        # 3. Call process_feed_entries directly
+        new_items_count = process_feed_entries(feed_obj, mock_parsed_feed)
+
+        # 4. Assertions
+        assert new_items_count == 1
+
+        items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
+        assert len(items_in_db) == 1
+        assert items_in_db[0].guid == 'guid_valid'
+        assert items_in_db[0].link == 'http://valid.com'
+        assert items_in_db[0].title == 'Valid Item'
 
 # --- Tests for OPML Export (/api/opml/export) ---
 
