@@ -223,14 +223,20 @@ def test_delete_last_tab(client):
     # Act
     response = client.delete(f'/api/tabs/{tab_id}')
     
-    # Assert
-    assert response.status_code == 400
-    assert 'error' in response.json
-    assert 'Cannot delete the last tab' in response.json['error']
+    # Assert: Now expects successful deletion
+    assert response.status_code == 200
+    assert 'message' in response.json
+    assert 'deleted successfully' in response.json['message']
     
     # Verify in DB
     with app.app_context():
-        assert Tab.query.count() == 1
+        assert Tab.query.count() == 0 # Should be no tabs left
+
+    # Optional: Verify GET /api/tabs returns empty
+    get_response = client.get('/api/tabs')
+    assert get_response.status_code == 200
+    assert get_response.json == []
+
 
 # --- Tests for Feed/Item endpoints ---
 
