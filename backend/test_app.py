@@ -790,11 +790,15 @@ def test_to_iso_z_string_static_method():
 def test_parse_published_time_variations(): # No client fixture needed as it's a pure function
     """Tests the parse_published_time helper with various entry structures."""
 
+    mock_spec = ['published_parsed', 'published', 'updated', 'created', 'get']
+
     # Case 1: 'published_parsed' available and valid
-    entry1 = MagicMock()
-    # feedparser stores published_parsed as time.struct_time
+    entry1 = MagicMock(spec=mock_spec)
     entry1.published_parsed = datetime.datetime(2023, 10, 26, 14, 30, 0, tzinfo=timezone.utc).utctimetuple()
-    entry1.get = lambda key, default=None: getattr(entry1, key, default) # for link access in log
+    entry1.published = None
+    entry1.updated = None
+    entry1.created = None
+    entry1.get.return_value = '[mock_link_entry1]'
     dt1 = parse_published_time(entry1)
     assert dt1 is not None
     assert dt1.year == 2023 and dt1.month == 10 and dt1.day == 26
@@ -802,10 +806,12 @@ def test_parse_published_time_variations(): # No client fixture needed as it's a
     assert dt1.tzinfo == timezone.utc
 
     # Case 2: 'published' field available
-    entry2 = MagicMock()
+    entry2 = MagicMock(spec=mock_spec)
     entry2.published_parsed = None
-    entry2.published = "Thu, 26 Oct 2023 10:00:00 -0400" # EST
-    entry2.get = lambda key, default=None: getattr(entry2, key, default)
+    entry2.published = "Thu, 26 Oct 2023 10:00:00 -0400" # Field under test
+    entry2.updated = None
+    entry2.created = None
+    entry2.get.return_value = '[mock_link_entry2]'
     dt2 = parse_published_time(entry2)
     assert dt2 is not None
     assert dt2.year == 2023 and dt2.month == 10 and dt2.day == 26
@@ -813,50 +819,57 @@ def test_parse_published_time_variations(): # No client fixture needed as it's a
     assert dt2.tzinfo == timezone.utc
 
     # Case 3: 'updated' field available
-    entry3 = MagicMock()
+    entry3 = MagicMock(spec=mock_spec)
     entry3.published_parsed = None
     entry3.published = None
-    entry3.updated = "2023-10-26T16:30:00Z" # ISO format UTC
-    entry3.get = lambda key, default=None: getattr(entry3, key, default)
+    entry3.updated = "2023-10-26T16:30:00Z" # Field under test
+    entry3.created = None
+    entry3.get.return_value = '[mock_link_entry3]'
     dt3 = parse_published_time(entry3)
     assert dt3 is not None
     assert dt3.year == 2023 and dt3.month == 10 and dt3.day == 26
     assert dt3.hour == 16 and dt3.minute == 30
     assert dt3.tzinfo == timezone.utc
 
-    # Case 4: Naive datetime string, assumed UTC
-    entry4 = MagicMock()
+    # Case 4: Naive datetime string in 'published', assumed UTC
+    entry4 = MagicMock(spec=mock_spec)
     entry4.published_parsed = None
-    entry4.published = "2023-10-26 17:00:00" # No timezone
-    entry4.get = lambda key, default=None: getattr(entry4, key, default)
+    entry4.published = "2023-10-26 17:00:00" # Field under test
+    entry4.updated = None
+    entry4.created = None
+    entry4.get.return_value = '[mock_link_entry4]'
     dt4 = parse_published_time(entry4)
     assert dt4 is not None
     assert dt4.hour == 17 # Assumed UTC
     assert dt4.tzinfo == timezone.utc
 
     # Case 5: No valid date fields
-    entry5 = MagicMock()
+    entry5 = MagicMock(spec=mock_spec)
     entry5.published_parsed = None
     entry5.published = None
     entry5.updated = None
     entry5.created = None
-    entry5.get = lambda key, default=None: getattr(entry5, key, default)
+    entry5.get.return_value = '[mock_link_entry5]'
     dt5 = parse_published_time(entry5)
     assert dt5 is None
 
     # Case 6: Malformed date string in 'published'
-    entry6 = MagicMock()
+    entry6 = MagicMock(spec=mock_spec)
     entry6.published_parsed = None
-    entry6.published = "this is not a date"
-    entry6.get = lambda key, default=None: getattr(entry6, key, default)
+    entry6.published = "this is not a date" # Field under test
+    entry6.updated = None
+    entry6.created = None
+    entry6.get.return_value = '[mock_link_entry6]'
     dt6 = parse_published_time(entry6)
     assert dt6 is None
 
-    # Case 7: published_parsed is invalid type (e.g. string instead of time.struct_time)
-    entry7 = MagicMock()
-    entry7.published_parsed = "not a time_struct" # Invalid type
+    # Case 7: published_parsed is invalid type, fallback to 'published'
+    entry7 = MagicMock(spec=mock_spec)
+    entry7.published_parsed = "not a time_struct" # Invalid type for published_parsed
     entry7.published = "2023-10-27T10:00:00Z" # Valid fallback
-    entry7.get = lambda key, default=None: getattr(entry7, key, default)
+    entry7.updated = None
+    entry7.created = None
+    entry7.get.return_value = '[mock_link_entry7]'
     dt7 = parse_published_time(entry7)
     assert dt7 is not None
     assert dt7.hour == 10 # Should use the fallback
