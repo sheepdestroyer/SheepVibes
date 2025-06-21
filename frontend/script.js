@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || `HTTP error! status: ${response.status}`);
             }
 
-            alert(`Import complete: ${data.imported_count} feeds added to tab '${data.tab_name}'. ${data.skipped_count} feeds skipped.`);
+            alert(data.message);
             console.log('OPML import successful:', data);
 
             if (data.imported_count > 0) {
