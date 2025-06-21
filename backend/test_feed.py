@@ -327,34 +327,54 @@ def test_global_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     count2 = feed_service.process_feed_entries(feed2_obj, mock_feed2_data)
 
     # Expected for Feed 2:
-    # entry_f2_1 (guid="global.guid.1"): This will cause an IntegrityError because the GUID is already used by Feed1.
-    # The current process_feed_entries catches this for the whole batch and returns 0.
-    # Let's verify this behavior.
-    assert count2 == 0, "IntegrityError for duplicate global.guid.1 should cause batch to fail"
+    # entry_f2_1 (guid="global.guid.1") will fail due to global unique constraint.
+    # entry_f2_2 (link-as-ID, new link) will be added (guid=None).
+    # entry_f2_3 (link-as-ID, link already used in Feed1 with guid=None) will be added (guid=None),
+    # because link uniqueness is per-feed and NULL GUIDs don't conflict globally for uniqueness.
+    assert count2 == 2, "Should add 2 items from Feed 2 after fallback (1 conflict, 2 success)"
 
-    # Ensure no items from mock_feed2_data were actually committed due to the error
-    f2_items_after_failed_batch = FeedItem.query.filter_by(feed_id=feed2_obj.id).all()
-    assert len(f2_items_after_failed_batch) == 0, "No items from the failing batch should be committed"
+    # Check items in Feed 2
+    f2_items_after_fallback = FeedItem.query.filter_by(feed_id=feed2_obj.id).order_by(FeedItem.link).all()
+    assert len(f2_items_after_fallback) == 2
 
-    # Now let's test Feed 2 again, but with a unique GUID for the first item
-    entry_f2_1_fixed = MockFeedEntry(title="F2 Story 1 Fixed", link="http://feed2.com/item1", guid="global.guid.2", published="2024-01-02T10:00:00Z")
-    mock_feed2_data_fixed = MockParsedFeed(feed_title="Feed 2 Fixed", entries=[entry_f2_1_fixed, entry_f2_2, entry_f2_3])
-    m_parse.return_value = mock_feed2_data_fixed
-    count3 = feed_service.process_feed_entries(feed2_obj, mock_feed2_data_fixed)
+    # Check entry_f2_3 (link="http://feed1.com/item2", should have guid=None)
+    assert f2_items_after_fallback[0].link == "http://feed1.com/item2"
+    assert f2_items_after_fallback[0].guid is None
+    assert f2_items_after_fallback[0].title == "F2 Story 3"
 
-    assert count3 == 3, "All items from fixed Feed 2 should be added"
+    # Check entry_f2_2 (link="http://feed2.com/item2", should have guid=None)
+    assert f2_items_after_fallback[1].link == "http://feed2.com/item2"
+    assert f2_items_after_fallback[1].guid is None
+    assert f2_items_after_fallback[1].title == "F2 Story 2"
 
-    f2_items_final = FeedItem.query.filter_by(feed_id=feed2_obj.id).order_by(FeedItem.link).all()
-    assert len(f2_items_final) == 3
-    assert f2_items_final[0].link == "http://feed1.com/item2" # entry_f2_3
-    assert f2_items_final[0].guid is None
-    assert f2_items_final[1].link == "http://feed2.com/item1" # entry_f2_1_fixed
-    assert f2_items_final[1].guid == "global.guid.2"
-    assert f2_items_final[2].link == "http://feed2.com/item2" # entry_f2_2
-    assert f2_items_final[2].guid is None
+    # Verify total items in DB: 2 from Feed1 + 2 from Feed2's first processing attempt
+    assert FeedItem.query.count() == (count1 + count2)
 
-    # Verify total items in DB
-    assert FeedItem.query.count() == (count1 + count3) # 2 from feed1 + 3 from feed2_fixed
+    # Optional: Test Feed 2 again with all unique items to ensure it can fully populate if no conflicts
+    # This part could be a separate test for clarity if preferred.
+    entry_f2_1_fixed = MockFeedEntry(title="F2 Story 1 Fixed", link="http://feed2.com/item1_new_link", guid="global.guid.2_unique", published="2024-01-02T10:00:00Z")
+    entry_f2_2_fixed = MockFeedEntry(title="F2 Story 2 Fixed", link="http://feed2.com/item2_new_link", guid="http://feed2.com/item2_new_link", published="2024-01-02T11:00:00Z")
+    entry_f2_3_fixed = MockFeedEntry(title="F2 Story 3 Fixed", link="http://feed2.com/item3_new_link", guid="http://feed2.com/item3_new_link", published="2024-01-02T12:00:00Z")
+    mock_feed2_data_all_new = MockParsedFeed(feed_title="Feed 2 All New", entries=[entry_f2_1_fixed, entry_f2_2_fixed, entry_f2_3_fixed])
+
+    # Clear existing items from Feed 2 for a clean test of all-new items
+    FeedItem.query.filter_by(feed_id=feed2_obj.id).delete()
+    db.session.commit()
+    assert FeedItem.query.filter_by(feed_id=feed2_obj.id).count() == 0
+
+
+    m_parse.return_value = mock_feed2_data_all_new
+    count3 = feed_service.process_feed_entries(feed2_obj, mock_feed2_data_all_new)
+    assert count3 == 3, "All new items for Feed 2 should be added in a clean scenario"
+
+    f2_items_final_pass = FeedItem.query.filter_by(feed_id=feed2_obj.id).order_by(FeedItem.link).all()
+    assert len(f2_items_final_pass) == 3
+    assert f2_items_final_pass[0].guid == "global.guid.2_unique" # True GUID
+    assert f2_items_final_pass[1].guid is None # Link-as-ID
+    assert f2_items_final_pass[2].guid is None # Link-as-ID
+
+    # Total items: 2 from Feed1 + 3 from this second successful pass for Feed2
+    assert FeedItem.query.count() == (count1 + count3)
 
 
 def test_update_feed_last_updated_time(db_setup, mocker):
@@ -447,6 +467,86 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     feed2_db = Feed.query.filter_by(url="http://feedB.url").first()
     assert feed1_db.name == "Feed A" # Check title update
     assert feed2_db.name == "Feed B"
+
+
+def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
+    """
+    Test that if a batch insert fails due to IntegrityError (e.g. duplicate global GUID),
+    the system falls back to inserting items individually, and valid items are still added.
+    """
+    logger.info("Testing IntegrityError fallback to individual commits")
+    app = db_setup
+
+    # 1. Setup: Create a Tab and two Feed objects
+    tab = Tab(name="Test Tab Fallback", order=0)
+    db.session.add(tab)
+    db.session.commit()
+
+    feed_obj_target = Feed(name="Target Feed", url="http://target.com/rss", tab_id=tab.id)
+    feed_obj_other = Feed(name="Other Feed", url="http://other.com/rss", tab_id=tab.id) # To create a global GUID conflict
+    db.session.add_all([feed_obj_target, feed_obj_other])
+    db.session.commit()
+
+    # 2. Add an item to "Other Feed" that will cause a GUID conflict
+    conflicting_guid = "global-conflict-guid"
+    item_in_other_feed = FeedItem(
+        feed_id=feed_obj_other.id,
+        title="Item in Other Feed",
+        link="http://other.com/item1",
+        guid=conflicting_guid,
+        published_time=datetime.datetime.now(datetime.timezone.utc)
+    )
+    db.session.add(item_in_other_feed)
+    db.session.commit()
+    logger.info(f"Added item with conflicting GUID '{conflicting_guid}' to other feed.")
+
+
+    # 3. Mock feedparser.parse to return items for "Target Feed"
+    # One item will have the conflicting GUID, another will be valid.
+    entry_conflict = MockFeedEntry(title="Conflicting Item", link="http://target.com/conflict", guid=conflicting_guid, published="2024-02-01T10:00:00Z")
+    entry_valid = MockFeedEntry(title="Valid Item", link="http://target.com/valid", guid="unique-guid-for-target", published="2024-02-02T10:00:00Z")
+
+    mock_feed_data = MockParsedFeed(feed_title="Target Feed Data", entries=[entry_conflict, entry_valid])
+    mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data) # This mock might not be strictly needed if we pass parsed_feed directly
+
+    # Spy on logger to check for specific error messages
+    logger_spy = mocker.spy(feed_service.logger, 'error')
+    warning_spy = mocker.spy(feed_service.logger, 'warning')
+
+
+    # 4. Call process_feed_entries for "Target Feed"
+    # The batch insert of [entry_conflict, entry_valid] should fail.
+    # Then, individual insert of entry_conflict should fail.
+    # Individual insert of entry_valid should succeed.
+    new_items_count = feed_service.process_feed_entries(feed_obj_target, mock_feed_data)
+
+    # 5. Assertions
+    assert new_items_count == 1, "Only the valid item should have been added"
+
+    items_in_target_feed = FeedItem.query.filter_by(feed_id=feed_obj_target.id).all()
+    assert len(items_in_target_feed) == 1, "Target feed should contain only one item"
+    assert items_in_target_feed[0].guid == "unique-guid-for-target"
+    assert items_in_target_feed[0].title == "Valid Item"
+
+    # Check that the conflicting item was not added to the target feed
+    conflicting_item_in_target_feed = FeedItem.query.filter_by(feed_id=feed_obj_target.id, guid=conflicting_guid).first()
+    assert conflicting_item_in_target_feed is None
+
+    # Check logs for expected behavior
+    warning_found = False
+    for call in warning_spy.call_args_list:
+        if "Batch insert failed" in call.args[0] and f"feed '{feed_obj_target.name}'" in call.args[0]:
+            warning_found = True
+            break
+    assert warning_found, "Should log a warning about batch insert failure"
+
+    error_found_for_conflict_item = False
+    for call in logger_spy.call_args_list:
+        # Example: "Failed to individually add item 'Conflicting Item' ... guid: global-conflict-guid ... IntegrityError..."
+        if "Failed to individually add item" in call.args[0] and f"guid: {conflicting_guid}" in call.args[0]:
+            error_found_for_conflict_item = True
+            break
+    assert error_found_for_conflict_item, "Should log an error for the individually failed conflicting item"
 
 
 # Keep existing test_update_all_feeds, but rename it to avoid clash if it was meant to be different

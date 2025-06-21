@@ -209,28 +209,57 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         except Exception as e: # Catch potential errors during this commit
             db.session.rollback()
             logger.error(f"Error committing feed update (no new items) for {feed_db_obj.name}: {e}", exc_info=True)
-        # logger.info(f"No new items to add for feed: {feed_db_obj.name}, last_updated_time updated.")
         return 0
 
+    committed_items_count = 0
     try:
         db.session.add_all(items_to_add)
-        feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+        feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc) # Set time before trying to commit
         db.session.commit()
-        new_items_count = len(items_to_add)
-        logger.info(f"Successfully added {new_items_count} new items for feed: {feed_db_obj.name}")
+        committed_items_count = len(items_to_add)
+        logger.info(f"Successfully batch-added {committed_items_count} new items for feed: {feed_db_obj.name}")
     except IntegrityError as e:
-        db.session.rollback()
-        logger.error(f"Database integrity error committing items for feed {feed_db_obj.name}. Items involved: {len(items_to_add)}. Error: {e}", exc_info=True)
-        # Log details of items that might have caused it for debugging
-        for item_detail_idx, item_obj in enumerate(items_to_add): # Renamed item to item_obj to avoid conflict
-            logger.debug(f"  Item {item_detail_idx+1} that failed: title='{item_obj.title[:100]}', link='{item_obj.link}', guid='{item_obj.guid}'")
-        return 0 
+        db.session.rollback() # Rollback the failed batch
+        logger.warning(f"Batch insert failed for feed '{feed_db_obj.name}' due to IntegrityError: {e}. Attempting individual inserts.")
+
+        # Ensure last_updated_time is set even if all individual inserts fail,
+        # as the feed itself was successfully fetched and processed up to this point.
+        # This needs to be part of a new transaction if the previous one was rolled back.
+        try:
+            feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+            db.session.add(feed_db_obj) # Re-add if it became detached after rollback
+            db.session.commit()
+        except Exception as ts_e:
+            db.session.rollback()
+            logger.error(f"Error updating last_updated_time for feed '{feed_db_obj.name}' after batch insert failure: {ts_e}", exc_info=True)
+
+        for item_to_add in items_to_add:
+            try:
+                # Each item needs to be added to a fresh session or re-added if the session was rolled back.
+                # If items were expunged by rollback, they might need to be re-created or merged.
+                # Simplest is to re-add to current session if it's still active for individual commits.
+                db.session.add(item_to_add) # Re-add the item to the session
+                db.session.commit()
+                committed_items_count += 1
+                logger.debug(f"Individually added item: {item_to_add.title[:50]} for feed '{feed_db_obj.name}'")
+            except IntegrityError as ie_individual:
+                db.session.rollback() # Rollback this specific item's commit
+                logger.error(f"Failed to individually add item '{item_to_add.title[:100]}' (link: {item_to_add.link}, guid: {item_to_add.guid}) for feed '{feed_db_obj.name}': {ie_individual}", exc_info=False) # Log less verbosely for individual fails
+            except Exception as e_individual:
+                db.session.rollback()
+                logger.error(f"Generic error individually adding item '{item_to_add.title[:100]}' for feed '{feed_db_obj.name}': {e_individual}", exc_info=True)
+
+        if committed_items_count > 0:
+            logger.info(f"Successfully added {committed_items_count} items individually for feed: {feed_db_obj.name} after batch failure.")
+        else:
+            logger.info(f"No items could be added individually for feed: {feed_db_obj.name} after batch failure.")
+
     except Exception as e:
         db.session.rollback()
         logger.error(f"Generic error committing new items for feed {feed_db_obj.name}: {e}", exc_info=True)
-        return 0
+        return 0 # Return 0 as no items were successfully committed in this case
 
-    return new_items_count
+    return committed_items_count
 
 def fetch_and_update_feed(feed_id):
     """Fetches a single feed by ID, processes its entries, and updates the database.
