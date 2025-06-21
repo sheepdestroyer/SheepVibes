@@ -76,7 +76,11 @@ class FeedItem(db.Model):
     published_time = db.Column(db.DateTime, nullable=True, index=True) # Add index
     fetched_time = db.Column(db.DateTime, nullable=False, default=lambda: datetime.datetime.now(timezone.utc))
     is_read = db.Column(db.Boolean, nullable=False, default=False, index=True) # Add index
-    guid = db.Column(db.String, nullable=True, unique=True) # GUID should be unique
+    guid = db.Column(db.String, nullable=True) # GUID unique per feed via UniqueConstraint
+
+    __table_args__ = (
+        db.UniqueConstraint('feed_id', 'guid', name='uq_feed_item_feed_id_guid'),
+    )
 
     @validates('published_time', 'fetched_time')
     def validate_datetime_utc(self, key, dt):
