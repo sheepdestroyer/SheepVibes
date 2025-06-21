@@ -525,6 +525,8 @@ def import_opml():
         'message': f'{imported_final_count} feeds imported. {skipped_final_count} feeds skipped. Feeds were imported into relevant tabs or default tab "{top_level_target_tab_name}".',
         'imported_count': imported_final_count,
         'skipped_count': skipped_final_count,
+        'tab_id': top_level_target_tab_id,      # Added
+        'tab_name': top_level_target_tab_name  # Added
     }), 200
 
 # --- Tabs API Endpoints ---
