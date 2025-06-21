@@ -176,31 +176,46 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
         # Check for duplicates based on GUID or link against DB content and then batch content
 
-        # Check against DB content
+        # Check for duplicates against DB content
+        # Prioritize GUID for existing items. If GUID exists and is in DB, skip.
         if guid and guid in existing_guids:
-            # logger.debug(f"Skipping item with existing GUID in DB: {guid} for feed {feed_db_obj.name}")
+            # logger.debug(f"DB: Skipping item - existing GUID '{guid}' for feed '{feed_db_obj.name}'. Title: '{title[:50]}...'")
             continue
-        # If GUID is new or missing, check link against DB.
-        # An item with a new GUID should still be skipped if its link is a known duplicate in the DB.
+
+        # If GUID is not in DB (or guid is None), then check link against DB.
+        # This handles items that might not have a GUID or whose GUID changed but link remained same.
         if link and link in existing_links:
-            # logger.debug(f"Skipping item with existing Link in DB: {link} (GUID: {guid}) for feed {feed_db_obj.name}")
+            # logger.debug(f"DB: Skipping item - existing LINK '{link}' (GUID: {guid if guid else 'N/A'}) for feed '{feed_db_obj.name}'. Title: '{title[:50]}...'")
             continue
 
-        # Check against current batch content (processed_guids and processed_links)
-        # An item is a duplicate if its GUID is already processed in this batch OR its Link is already processed.
-        if guid and guid in processed_guids:
-            logger.warning(f"Skipping item (GUID: {guid}) for feed '{feed_db_obj.name}', duplicate GUID in current fetch batch.")
-            continue
-        if link and link in processed_links: # Check link even if GUID is new for this batch
-            logger.warning(f"Skipping item (Link: {link}) for feed '{feed_db_obj.name}', duplicate Link in current fetch batch (GUID was: {guid}).")
-            continue
+        # Check for duplicates against current batch content (already processed in this run)
+        # This is crucial for feeds that might have internal duplicates or items sharing identifiers.
 
-        # If the item is not a duplicate by any of the above checks, then it's new.
-        # Add its identifiers to the processed sets for this batch.
+        item_is_batch_duplicate = False
         if guid:
-            processed_guids.add(guid)
-        if link: # Add link to processed_links for all new items with links
-            processed_links.add(link)
+            if guid in processed_guids:
+                logger.warning(f"BATCH: Skipping item - duplicate GUID '{guid}' in current batch for feed '{feed_db_obj.name}'. Title: '{title[:50]}...'")
+                item_is_batch_duplicate = True
+            else:
+                # GUID is unique in this batch so far. Add it.
+                processed_guids.add(guid)
+                # If GUID is unique, we don't need to check link for batch uniqueness *for this item*,
+                # as GUID is the stronger identifier. However, we still add the link to processed_links
+                # to catch other items that might *only* match by link later.
+                if link:
+                    processed_links.add(link)
+        else: # No GUID provided for the item
+            if link and link in processed_links:
+                logger.warning(f"BATCH: Skipping item - duplicate LINK '{link}' (No GUID) in current batch for feed '{feed_db_obj.name}'. Title: '{title[:50]}...'")
+                item_is_batch_duplicate = True
+            elif link: # Link is unique for items without GUIDs in this batch so far
+                processed_links.add(link)
+            # If no GUID and no Link, it would have been skipped earlier by "if not link:"
+
+        if item_is_batch_duplicate:
+            continue
+
+        # If we've reached here, the item is considered new (not in DB, not a duplicate in this batch).
 
         # Parse published time
         published_time = parse_published_time(entry)

@@ -416,6 +416,9 @@ def import_opml():
     # --- Determine initial/top-level target tab ---
     top_level_target_tab_id = None
     top_level_target_tab_name = None
+    was_default_tab_created_for_import = False # Flag to track if "Imported Feeds" was made
+    default_tab_for_import_id = None # Store its ID if created
+
     requested_tab_id_str = request.form.get('tab_id')
 
     if requested_tab_id_str:
@@ -425,24 +428,28 @@ def import_opml():
             if tab_obj:
                 top_level_target_tab_id = tab_obj.id
                 top_level_target_tab_name = tab_obj.name
+                logger.info(f"OPML import: Using specified tab '{tab_obj.name}' (ID: {tab_obj.id}) for top-level feeds.")
             else:
-                logger.warning(f"OPML import: Requested tab_id {tab_id_val} not found. Will use default logic.")
+                logger.warning(f"OPML import: Requested tab_id {tab_id_val} not found. Will use default tab logic.")
         except ValueError:
-            logger.warning(f"OPML import: Invalid tab_id format '{requested_tab_id_str}'. Will use default logic.")
+            logger.warning(f"OPML import: Invalid tab_id format '{requested_tab_id_str}'. Will use default tab logic.")
 
-    if not top_level_target_tab_id: # If no valid tab_id from request, or no request
+    if not top_level_target_tab_id: # No specific tab requested or requested tab not found
         default_tab_obj = Tab.query.order_by(Tab.order).first()
         if default_tab_obj:
             top_level_target_tab_id = default_tab_obj.id
             top_level_target_tab_name = default_tab_obj.name
-        else: # No tabs exist at all, create a default one
-            logger.info("OPML import: No tabs exist. Creating a default tab for top-level feeds.")
+            logger.info(f"OPML import: Using first existing tab '{default_tab_obj.name}' (ID: {default_tab_obj.id}) for top-level feeds.")
+        else: # No tabs exist at all, create a default "Imported Feeds" tab
             default_tab_name_for_creation = "Imported Feeds"
-            # Check if "Imported Feeds" tab was somehow created by a concurrent request (unlikely)
+            logger.info(f"OPML import: No tabs exist. Creating a default tab named '{default_tab_name_for_creation}' for top-level feeds.")
+            # Check if "Imported Feeds" tab was somehow created by a concurrent request (unlikely but safe)
             temp_tab_check = Tab.query.filter_by(name=default_tab_name_for_creation).first()
             if temp_tab_check:
                 top_level_target_tab_id = temp_tab_check.id
                 top_level_target_tab_name = temp_tab_check.name
+                # It already existed, so we didn't just create it for this import specifically
+                was_default_tab_created_for_import = False
             else:
                 newly_created_default_tab = Tab(name=default_tab_name_for_creation, order=0)
                 db.session.add(newly_created_default_tab)
@@ -452,13 +459,15 @@ def import_opml():
                     invalidate_tabs_cache() # New tab added
                     top_level_target_tab_id = newly_created_default_tab.id
                     top_level_target_tab_name = newly_created_default_tab.name
+                    was_default_tab_created_for_import = True # Mark that we created it
+                    default_tab_for_import_id = newly_created_default_tab.id
                 except Exception as e_tab_commit:
                     db.session.rollback()
                     logger.error(f"OPML import: Failed to create default tab '{default_tab_name_for_creation}': {e_tab_commit}", exc_info=True)
                     return jsonify({'error': 'Failed to create a default tab for import.'}), 500
 
     if not top_level_target_tab_id: # Should be impossible if above logic is correct
-         logger.error("OPML import: Critical error - failed to determine a top-level target tab.")
+         logger.error("OPML import: Critical error - failed to determine a top-level target tab for import.")
          return jsonify({'error': 'Failed to determine a target tab for import.'}), 500
 
     # --- Pre-fetch all existing feed URLs for efficient duplicate checking ---
@@ -517,16 +526,54 @@ def import_opml():
             invalidate_tab_feeds_cache(tab_id_to_invalidate)
         logger.info(f"OPML import: Feed-related caches invalidated for tabs: {affected_tab_ids_set}.")
 
+    # --- Clean up empty "Imported Feeds" tab if necessary ---
+    if was_default_tab_created_for_import and default_tab_for_import_id:
+        # Check if any feeds were actually added to this specific "Imported Feeds" tab
+        feeds_in_default_tab = Feed.query.filter_by(tab_id=default_tab_for_import_id).count()
+        if feeds_in_default_tab == 0:
+            logger.info(f"OPML import: The initially created 'Imported Feeds' tab (ID: {default_tab_for_import_id}) is empty. Deleting it.")
+            tab_to_delete = db.session.get(Tab, default_tab_for_import_id)
+            if tab_to_delete:
+                db.session.delete(tab_to_delete)
+                try:
+                    db.session.commit()
+                    invalidate_tabs_cache() # Tab list changed
+                    logger.info(f"OPML import: Successfully deleted empty 'Imported Feeds' tab (ID: {default_tab_for_import_id}).")
+                    # If this was the only tab, top_level_target_tab_id might now be invalid for the response.
+                    # However, the frontend will fetch tabs again. The main goal is data consistency.
+                    # We can adjust the response message or tab_id if this deleted tab was the top_level_target_tab_id
+                    # and no other tabs exist. For now, assume other tabs (created from folders) would exist.
+                    if top_level_target_tab_id == default_tab_for_import_id:
+                        # The tab we were going to report as the "target" was just deleted.
+                        # Try to find another tab to report, or report null.
+                        first_available_tab = Tab.query.order_by(Tab.order).first()
+                        if first_available_tab:
+                            top_level_target_tab_id = first_available_tab.id
+                            top_level_target_tab_name = first_available_tab.name
+                        else: # Should be rare if other tabs were created from OPML folders
+                            top_level_target_tab_id = None
+                            top_level_target_tab_name = "N/A (default tab was empty and removed)"
+
+                except Exception as e_delete_tab:
+                    db.session.rollback()
+                    logger.error(f"OPML import: Failed to delete empty 'Imported Feeds' tab (ID: {default_tab_for_import_id}): {e_delete_tab}", exc_info=True)
+        else:
+            logger.info(f"OPML import: The initially created 'Imported Feeds' tab (ID: {default_tab_for_import_id}) contains {feeds_in_default_tab} feeds. Keeping it.")
+
+
     if not opml_body.findall('outline') and not newly_added_feeds_list:
          logger.info("OPML import: No <outline> elements found in the OPML body to process as feeds or folders.")
-         return jsonify({'message': 'No feed entries or folders found in the OPML file.', 'imported_count': 0, 'skipped_count': skipped_final_count, 'tab_id': top_level_target_tab_id, 'tab_name': top_level_target_tab_name}), 200
+         # Adjust message if default tab was created and then removed
+         final_tab_name_for_msg = top_level_target_tab_name if top_level_target_tab_id else "N/A"
+         return jsonify({'message': 'No feed entries or folders found in the OPML file.', 'imported_count': 0, 'skipped_count': skipped_final_count, 'tab_id': top_level_target_tab_id, 'tab_name': final_tab_name_for_msg}), 200
 
+    final_tab_name_for_msg = top_level_target_tab_name if top_level_target_tab_id else "N/A"
     return jsonify({
-        'message': f'{imported_final_count} feeds imported. {skipped_final_count} feeds skipped. Feeds were imported into relevant tabs or default tab "{top_level_target_tab_name}".',
+        'message': f'{imported_final_count} feeds imported. {skipped_final_count} feeds skipped. Feeds were imported into relevant tabs or default tab "{final_tab_name_for_msg}".',
         'imported_count': imported_final_count,
         'skipped_count': skipped_final_count,
-        'tab_id': top_level_target_tab_id,      # Added
-        'tab_name': top_level_target_tab_name  # Added
+        'tab_id': top_level_target_tab_id,
+        'tab_name': final_tab_name_for_msg
     }), 200
 
 # --- Tabs API Endpoints ---
@@ -606,9 +653,9 @@ def delete_tab(tab_id):
     # Find the tab or return 404
     tab = db.get_or_404(Tab, tab_id)
 
-    # Prevent deleting the last remaining tab
-    if Tab.query.count() <= 1:
-        return jsonify({'error': 'Cannot delete the last tab'}), 400
+    # Removed: Prevent deleting the last remaining tab
+    # if Tab.query.count() <= 1:
+    #     return jsonify({'error': 'Cannot delete the last tab'}), 400
 
     try:
         tab_name = tab.name
@@ -719,21 +766,49 @@ def add_feed():
     if existing_feed:
         return jsonify({'error': f'Feed with URL {feed_url} already exists'}), 409 # Conflict
 
-    # Attempt to fetch the feed to get its title
+    # Attempt to fetch the feed to get its title and site link
     parsed_feed = fetch_feed(feed_url)
-    if not parsed_feed or not parsed_feed.feed:
-        # If fetch fails initially, use the URL as the name
-        feed_name = feed_url
-        logger.warning(f"Could not fetch title for {feed_url}, using URL as name.")
-    else:
+    feed_name = feed_url # Default name to URL
+    site_link = None
+
+    if parsed_feed and parsed_feed.feed:
         feed_name = parsed_feed.feed.get('title', feed_url) # Use URL as fallback if title missing
+        site_link = parsed_feed.feed.get('link') # This is usually the website link
+        if site_link == feed_url: # If site link is same as feed_url, it's not that useful, clear it
+            # This can happen for feeds that don't have a separate website link in their metadata
+            is_probably_just_feed_self_link = True
+            for entry in parsed_feed.entries[:5]: # Check a few entries
+                if entry.get('link') and entry.get('link') != site_link:
+                    is_probably_just_feed_self_link = False
+                    break
+            if is_probably_just_feed_self_link:
+                 # Heuristic: if feed's main link is same as its own URL and item links are different,
+                 # it's likely the feed's <link> tag points to itself, not the main site.
+                 # In such cases, we prefer not to set site_url to the feed's own URL.
+                 # A more robust solution might involve checking if `site_link` is a common feed path.
+                 # For now, if it's identical to feed_url, we are cautious.
+                 # Check if it looks like a feed URL itself (e.g. ends in .xml, .rss, /feed)
+                if site_link.endswith((".xml", ".rss", ".atom")) or "/feed" in site_link or "/rss" in site_link:
+                    logger.info(f"Site link '{site_link}' for feed '{feed_url}' appears to be the feed URL itself. Clearing site_url.")
+                    site_link = None
+                elif parsed_feed.feed.get('subtitle') or parsed_feed.feed.get('description'):
+                    # If there's a subtitle/description, it's more likely a proper site link
+                    logger.info(f"Site link '{site_link}' for feed '{feed_url}' is same as feed URL, but feed has description. Keeping it.")
+                else:
+                    logger.info(f"Site link '{site_link}' for feed '{feed_url}' is same as feed URL and no other indicators. Clearing site_url.")
+                    site_link = None
+
+
+    else:
+        logger.warning(f"Could not fetch title/metadata for {feed_url}, using URL as name and no site_url.")
 
     try:
         # Create and save the new feed
         new_feed = Feed(
             tab_id=tab_id,
             name=feed_name,
-            url=feed_url
+            url=feed_url,
+            site_url=site_link
             # last_updated_time defaults to now
         )
         db.session.add(new_feed)

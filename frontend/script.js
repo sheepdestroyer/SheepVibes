@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportOpmlButton = document.getElementById('export-opml-button');
     const importOpmlButton = document.getElementById('import-opml-button');
     const opmlFileInput = document.getElementById('opml-file-input');
+    const opmlImportStatus = document.getElementById('opml-import-status'); // For loading animation
     
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -219,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
         importOpmlButton.disabled = true;
         importOpmlButton.textContent = 'Importing...';
         opmlFileInput.disabled = true;
+        if (opmlImportStatus) opmlImportStatus.textContent = 'Processing and fetching feeds, please wait...';
 
         const formData = new FormData();
         formData.append('file', file);
@@ -268,9 +270,10 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`Failed to import OPML: ${error.message}`);
         } finally {
             importOpmlButton.disabled = false;
-            importOpmlButton.textContent = 'Import OPML';
+            importOpmlButton.textContent = originalButtonText; // Restore original text
             opmlFileInput.value = ''; // Reset file input
             opmlFileInput.disabled = false;
+            if (opmlImportStatus) opmlImportStatus.textContent = ''; // Clear status message
         }
     }
 
@@ -313,8 +316,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        renameTabButton.disabled = false;
-        deleteTabButton.disabled = tabs.length <= 1;
+        renameTabButton.disabled = tabs.length === 0; // Disable if no tabs
+        deleteTabButton.disabled = tabs.length === 0; // Disable if no tabs, allow deleting last one
 
         let tabToActivate = activeTabId;
         if (!tabToActivate || !tabs.some(t => t.id === tabToActivate)) {
@@ -351,12 +354,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const titleElement = document.createElement('h2');
         widget.appendChild(titleElement);
+
+        // Create a text node for the feed name first
+        const feedNameText = document.createTextNode(feed.name);
+
+        if (feed.site_url) {
+            const siteLink = document.createElement('a');
+            siteLink.href = feed.site_url;
+            siteLink.target = '_blank';
+            siteLink.classList.add('feed-site-link');
+            siteLink.appendChild(feedNameText); // Wrap the text node
+            titleElement.appendChild(siteLink);
+        } else {
+            titleElement.appendChild(feedNameText); // Append text node directly if no site_url
+        }
         
         const badge = createBadge(feed.unread_count);
         if (badge) {
-            titleElement.appendChild(badge);
+            titleElement.appendChild(badge); // Append badge after the name/link
         }
-        titleElement.prepend(feed.name);
 
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
@@ -431,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function setActiveTab(tabId) {
         activeTabId = tabId;
+        localStorage.setItem('activeTabId', tabId); // Save active tab to localStorage
 
         // Update active class on tab buttons
         tabsContainer.querySelectorAll('button').forEach(button => {
@@ -447,7 +464,9 @@ document.addEventListener('DOMContentLoaded', () => {
             widget.style.display = widget.dataset.tabId == tabId ? 'block' : 'none';
         });
 
-        deleteTabButton.disabled = allTabs.length <= 1;
+        // Update delete button state based on whether any tabs exist
+        deleteTabButton.disabled = allTabs.length === 0;
+        renameTabButton.disabled = allTabs.length === 0; // Also disable rename if no tabs
     }
 
     /**
@@ -661,10 +680,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Please select a tab to delete.');
             return;
         }
-        if (allTabs.length <= 1) {
-            alert('Cannot delete the last tab.');
-            return;
-        }
+        // Removed: if (allTabs.length <= 1) check
 
         const currentTab = allTabs.find(t => t.id === activeTabId);
         if (!confirm(`Are you sure you want to delete the tab "${currentTab ? currentTab.name : activeTabId}" and all its feeds?`)) {
@@ -690,16 +706,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** 
      * Fetches the list of tabs from the API and renders them.
-     * @param {boolean} [isUpdate=false] - If true, keeps the current active tab.
+     * @param {boolean} [isUpdate=false] - If true, keeps the current active tab. If false (initial load), tries to load from localStorage.
      */
     async function initializeTabs(isUpdate = false) {
-        const currentActiveId = isUpdate ? activeTabId : null;
+        let potentialActiveId = null;
+        if (isUpdate) {
+            potentialActiveId = activeTabId; // Preserve current active tab during an update
+        } else {
+            const storedTabId = localStorage.getItem('activeTabId');
+            if (storedTabId) {
+                potentialActiveId = parseInt(storedTabId, 10);
+            }
+        }
+
         const tabs = await fetchData('/api/tabs');
         if (tabs) {
-            activeTabId = currentActiveId; // Restore active tab ID before rendering
-            renderTabs(tabs);
+            if (potentialActiveId && !tabs.some(t => t.id === potentialActiveId)) {
+                console.log(`Stored activeTabId ${potentialActiveId} no longer exists. Clearing.`);
+                potentialActiveId = null; // Stored tab doesn't exist anymore
+                localStorage.removeItem('activeTabId');
+            }
+            activeTabId = potentialActiveId; // Set (or clear) activeTabId before rendering
+            renderTabs(tabs); // renderTabs will pick the first tab if activeTabId is null
         } else {
-            renderTabs([]);
+            renderTabs([]); // Handle API error or no tabs
         }
     }
 

@@ -42,7 +42,8 @@ class Feed(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tab_id = db.Column(db.Integer, db.ForeignKey('tabs.id'), nullable=False) # Foreign key to Tab
     name = db.Column(db.String(200), nullable=False) # Name of the feed (often from feed title)
-    url = db.Column(db.String(500), nullable=False) # URL of the feed
+    url = db.Column(db.String(500), nullable=False) # URL of the feed (xmlUrl)
+    site_url = db.Column(db.String(500), nullable=True) # URL of the website itself (channel link)
     last_updated_time = db.Column(db.DateTime, default=lambda: datetime.datetime.now(timezone.utc)) # Last time feed was successfully fetched
     # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
     # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
@@ -62,6 +63,7 @@ class Feed(db.Model):
             'tab_id': self.tab_id,
             'name': self.name,
             'url': self.url,
+            'site_url': self.site_url,
             'last_updated_time': self.last_updated_time.isoformat() if self.last_updated_time else None,
             'unread_count': unread_count
         }
