@@ -4,6 +4,7 @@ import datetime
 from datetime import timezone # Import timezone
 import time
 import logging # Standard logging
+import ssl # Added for specific SSL error catching
 from dateutil import parser as date_parser # Use dateutil for robust date parsing
 from sqlalchemy.exc import IntegrityError
 
@@ -90,22 +91,37 @@ def fetch_feed(feed_url):
         
         # Check for basic parsing errors indicated by feedparser
         if parsed_feed.bozo:
-            bozo_exception = parsed_feed.get('bozo_exception', 'Unknown parsing error')
-            logger.warning(f"Feed is ill-formed: {feed_url} - Error: {bozo_exception}")
-            # Decide if you want to proceed despite bozo=1 (might still have usable data)
-            # For now, we'll proceed but log the warning.
+            bozo_exc = parsed_feed.get('bozo_exception', Exception('Unknown parsing error (bozo=1)'))
+            error_message = str(bozo_exc)
 
-        # Check if entries exist
-        if not parsed_feed.entries:
-             logger.warning(f"No entries found in feed: {feed_url}")
+            # More specific logging for SSL/Certificate related bozo exceptions
+            if "SSL" in error_message.upper() or \
+               "CERTIFICATE" in error_message.upper() or \
+               isinstance(bozo_exc, ssl.SSLError): # Check type as well
+                logger.error(
+                    f"Failed to fetch feed {feed_url} due to SSL/Certificate error (feedparser bozo): {error_message}",
+                    exc_info=False # bozo_exception might not give a useful full traceback here
+                )
+            else:
+                logger.warning(f"Feed is ill-formed: {feed_url} - Error: {error_message}")
+            # Continue to return the (likely empty or incomplete) parsed_feed
+            # as current logic does. If entries is empty, subsequent processing handles it.
+
+        # Check if entries exist (even if not bozo, could be empty)
+        if not parsed_feed.entries and not parsed_feed.bozo: # Avoid double logging if already warned by bozo
+             logger.warning(f"No entries found in feed (and not a bozo feed): {feed_url}")
              # Return the parsed feed anyway, might contain metadata
 
-        logger.info(f"Successfully fetched feed: {feed_url}")
+        if not parsed_feed.bozo: # Log success only if not already handled by bozo warning/error
+            logger.info(f"Successfully fetched feed: {feed_url}")
         return parsed_feed
-        
+
+    except ssl.SSLError as ssl_e: # Catch direct SSLError if it bypasses feedparser's bozo mechanism
+        logger.error(f"Direct SSL Error during fetch attempt for {feed_url}: {ssl_e}", exc_info=True)
+        return None
     except Exception as e:
         # Catch any other exceptions during fetching/parsing
-        logger.error(f"Error fetching or parsing feed {feed_url}: {e}", exc_info=True)
+        logger.error(f"Generic error fetching or parsing feed {feed_url}: {e}", exc_info=True)
         return None
 
 def process_feed_entries(feed_db_obj, parsed_feed):
@@ -145,10 +161,18 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         link = entry.get('link')
         title = entry.get('title', '[No Title]')
 
-        # Basic validation: Ensure we have at least a link or guid
-        if not link and not guid:
-            logger.warning(f"Skipping entry with no link or guid in feed {feed_db_obj.name}: '{title[:50]}...'")
+        # Validate Link (NOT NULL constraint in DB)
+        if not link: # Handles None or empty string
+            logger.warning(
+                f"Skipping entry titled '{title[:100]}' for feed '{feed_db_obj.name}' "
+                f"due to missing or empty link. (GUID for this entry was: {guid if guid else 'N/A'})"
+            )
             continue
+
+        # Basic validation: (already handled by link check if link is primary, but keep if guid can be sole identifier)
+        # if not link and not guid: # This specific check might be redundant if link is now mandatory
+        #     logger.warning(f"Skipping entry with no link or guid in feed {feed_db_obj.name}: '{title[:50]}...'")
+        #     continue
 
         # Check for duplicates based on GUID or link against DB content and then batch content
 
@@ -165,10 +189,10 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         # Check against current batch content (processed_guids and processed_links)
         # An item is a duplicate if its GUID is already processed in this batch OR its Link is already processed.
         if guid and guid in processed_guids:
-            # logger.debug(f"Skipping item with GUID already processed in this batch: {guid} for feed {feed_db_obj.name}")
+            logger.warning(f"Skipping item (GUID: {guid}) for feed '{feed_db_obj.name}', duplicate GUID in current fetch batch.")
             continue
         if link and link in processed_links: # Check link even if GUID is new for this batch
-            # logger.debug(f"Skipping item with Link already processed in this batch: {link} (GUID: {guid}) for feed {feed_db_obj.name}")
+            logger.warning(f"Skipping item (Link: {link}) for feed '{feed_db_obj.name}', duplicate Link in current fetch batch (GUID was: {guid}).")
             continue
 
         # If the item is not a duplicate by any of the above checks, then it's new.

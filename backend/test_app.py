@@ -2,11 +2,18 @@ import pytest
 import json
 from unittest.mock import patch, MagicMock
 import os
+import io
+import xml.etree.ElementTree as ET
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
 from .app import app, cache # Import the app and cache instance
 from .models import db, Tab, Feed, FeedItem # Import models directly
+from .feed_service import process_feed_entries, parse_published_time # For new tests
+import time # For new tests
+import datetime # For new tests, specifically for timezone object
+from datetime import timezone # For new tests
+
 
 @pytest.fixture
 def client():
@@ -30,14 +37,18 @@ def client():
         del app.extensions['cache']
     
     # Get the Redis URL set by pytest-env from pytest.ini
-    redis_url = os.environ.get('CACHE_REDIS_URL')
-    
+    redis_url = os.environ.get('CACHE_REDIS_URL', 'redis://localhost:6379/0') # Default if not set
+
+    # Force IPv4 for localhost if it's being used.
+    if 'localhost' in redis_url:
+        redis_url = redis_url.replace('localhost', '127.0.0.1')
+
     # In a CI environment, GitHub Actions maps the service port to a dynamic
     # port on the host. We check for this port (passed as an env var by the
     # workflow) and update the connection URL accordingly.
     ci_redis_port = os.environ.get('CACHE_REDIS_PORT')
-    if ci_redis_port and redis_url:
-        # The URL from pytest.ini is 'redis://:password@localhost:6379/0'
+    if ci_redis_port and '127.0.0.1' in redis_url: # Ensure it's still a local target
+        # The URL from pytest.ini is 'redis://:password@127.0.0.1:6379/0'
         # We replace the standard port with the dynamic one from the CI env.
         redis_url = redis_url.replace('6379', ci_redis_port, 1)
         
@@ -773,3 +784,785 @@ def test_to_iso_z_string_static_method():
 
     # 4. Test with None input
     assert FeedItem.to_iso_z_string(None) is None
+
+# --- Tests for feed_service functions ---
+
+def test_parse_published_time_variations(): # No client fixture needed as it's a pure function
+    """Tests the parse_published_time helper with various entry structures."""
+
+    mock_spec = ['published_parsed', 'published', 'updated', 'created', 'get']
+
+    # Case 1: 'published_parsed' available and valid
+    entry1 = MagicMock(spec=mock_spec)
+    entry1.published_parsed = datetime.datetime(2023, 10, 26, 14, 30, 0, tzinfo=timezone.utc).utctimetuple()
+    entry1.published = None
+    entry1.updated = None
+    entry1.created = None
+    entry1.get.return_value = '[mock_link_entry1]'
+    dt1 = parse_published_time(entry1)
+    assert dt1 is not None
+    assert dt1.year == 2023 and dt1.month == 10 and dt1.day == 26
+    assert dt1.hour == 14 and dt1.minute == 30 and dt1.second == 0
+    assert dt1.tzinfo == timezone.utc
+
+    # Case 2: 'published' field available
+    entry2 = MagicMock(spec=mock_spec)
+    entry2.published_parsed = None
+    entry2.published = "Thu, 26 Oct 2023 10:00:00 -0400" # Field under test
+    entry2.updated = None
+    entry2.created = None
+    entry2.get.return_value = '[mock_link_entry2]'
+    dt2 = parse_published_time(entry2)
+    assert dt2 is not None
+    assert dt2.year == 2023 and dt2.month == 10 and dt2.day == 26
+    assert dt2.hour == 14 and dt2.minute == 0 # Converted to UTC
+    assert dt2.tzinfo == timezone.utc
+
+    # Case 3: 'updated' field available
+    entry3 = MagicMock(spec=mock_spec)
+    entry3.published_parsed = None
+    entry3.published = None
+    entry3.updated = "2023-10-26T16:30:00Z" # Field under test
+    entry3.created = None
+    entry3.get.return_value = '[mock_link_entry3]'
+    dt3 = parse_published_time(entry3)
+    assert dt3 is not None
+    assert dt3.year == 2023 and dt3.month == 10 and dt3.day == 26
+    assert dt3.hour == 16 and dt3.minute == 30
+    assert dt3.tzinfo == timezone.utc
+
+    # Case 4: Naive datetime string in 'published', assumed UTC
+    entry4 = MagicMock(spec=mock_spec)
+    entry4.published_parsed = None
+    entry4.published = "2023-10-26 17:00:00" # Field under test
+    entry4.updated = None
+    entry4.created = None
+    entry4.get.return_value = '[mock_link_entry4]'
+    dt4 = parse_published_time(entry4)
+    assert dt4 is not None
+    assert dt4.hour == 17 # Assumed UTC
+    assert dt4.tzinfo == timezone.utc
+
+    # Case 5: No valid date fields
+    entry5 = MagicMock(spec=mock_spec)
+    entry5.published_parsed = None
+    entry5.published = None
+    entry5.updated = None
+    entry5.created = None
+    entry5.get.return_value = '[mock_link_entry5]'
+    dt5 = parse_published_time(entry5)
+    assert dt5 is None
+
+    # Case 6: Malformed date string in 'published'
+    entry6 = MagicMock(spec=mock_spec)
+    entry6.published_parsed = None
+    entry6.published = "this is not a date" # Field under test
+    entry6.updated = None
+    entry6.created = None
+    entry6.get.return_value = '[mock_link_entry6]'
+    dt6 = parse_published_time(entry6)
+    assert dt6 is None
+
+    # Case 7: published_parsed is invalid type, fallback to 'published'
+    entry7 = MagicMock(spec=mock_spec)
+    entry7.published_parsed = "not a time_struct" # Invalid type for published_parsed
+    entry7.published = "2023-10-27T10:00:00Z" # Valid fallback
+    entry7.updated = None
+    entry7.created = None
+    entry7.get.return_value = '[mock_link_entry7]'
+    dt7 = parse_published_time(entry7)
+    assert dt7 is not None
+    assert dt7.hour == 10 # Should use the fallback
+    assert dt7.tzinfo == timezone.utc
+
+def test_process_feed_with_in_batch_duplicate_guids(client): # Using client fixture for app_context
+    """
+    Tests that process_feed_entries correctly handles entries with duplicate GUIDs
+    within the same fetched batch, only adding the first instance.
+    """
+    with client.application.app_context(): # Use app_context from client
+        # 1. Setup: Create a Tab and Feed object in the DB
+        tab = Tab(name="Test Tab GUIDs", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+        feed_obj = Feed(name="Test Feed In-Batch Dupes", url="http://testguids.com/rss", tab_id=tab.id)
+        db.session.add(feed_obj)
+        db.session.commit()
+
+        # 2. Create mock feedparser data
+        mock_parsed_feed = MagicMock()
+        mock_parsed_feed.feed = MagicMock()
+        mock_parsed_feed.feed.title = "Test Feed Title"
+        mock_parsed_feed.feed.get = lambda key, default='': getattr(mock_parsed_feed.feed, key, default)
+
+        dt_entry1 = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        dt_entry2 = datetime.datetime(2023, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
+        dt_entry3 = datetime.datetime(2023, 1, 1, 12, 10, 0, tzinfo=timezone.utc)
+
+        entry1_data = {'id': 'guid1', 'link': 'http://link1.com', 'title': 'Title 1',
+                       'published_parsed': dt_entry1.utctimetuple()}
+        entry2_data = {'id': 'guid1', 'link': 'http://link2.com', 'title': 'Title 2 (Same GUID)',
+                       'published_parsed': dt_entry2.utctimetuple()}
+        entry3_data = {'id': 'guid2', 'link': 'http://link3.com', 'title': 'Title 3',
+                       'published_parsed': dt_entry3.utctimetuple()}
+
+        entry1 = MagicMock()
+        entry1.configure_mock(**entry1_data)
+        entry1.get = lambda key, default=None: entry1_data.get(key, default)
+
+        entry2 = MagicMock()
+        entry2.configure_mock(**entry2_data)
+        entry2.get = lambda key, default=None: entry2_data.get(key, default)
+
+        entry3 = MagicMock()
+        entry3.configure_mock(**entry3_data)
+        entry3.get = lambda key, default=None: entry3_data.get(key, default)
+
+        mock_parsed_feed.entries = [entry1, entry2, entry3]
+        mock_parsed_feed.bozo = 0
+
+        # 3. Call process_feed_entries directly
+        new_items_count = process_feed_entries(feed_obj, mock_parsed_feed)
+
+        # 4. Assertions
+        assert new_items_count == 2
+
+        items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
+        assert len(items_in_db) == 2
+
+        guids_in_db = {item.guid for item in items_in_db}
+        assert 'guid1' in guids_in_db
+        assert 'guid2' in guids_in_db
+
+        item1_db = FeedItem.query.filter_by(guid='guid1', feed_id=feed_obj.id).first()
+        assert item1_db is not None
+        assert item1_db.title == 'Title 1'
+        assert item1_db.link == 'http://link1.com'
+
+def test_process_feed_with_missing_link(client): # Using client fixture for app_context
+    """
+    Tests that process_feed_entries skips entries that are missing a link,
+    as 'link' is a NOT NULL field in the FeedItem model.
+    """
+    with client.application.app_context():
+        # 1. Setup Feed object
+        tab = Tab(name="Test Tab Links", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+        feed_obj = Feed(name="Test Feed Missing Link", url="http://testmissinglink.com/rss", tab_id=tab.id)
+        db.session.add(feed_obj)
+        db.session.commit()
+
+        # 2. Create mock feedparser data
+        mock_parsed_feed = MagicMock()
+        mock_parsed_feed.feed = MagicMock()
+        mock_parsed_feed.feed.title = "Test Feed Title"
+        mock_parsed_feed.feed.get = lambda key, default='': getattr(mock_parsed_feed.feed, key, default)
+
+        dt_valid = datetime.datetime(2023,1,1,12,0,0, tzinfo=timezone.utc)
+        dt_no_link = datetime.datetime(2023,1,1,12,5,0, tzinfo=timezone.utc)
+        dt_empty_link = datetime.datetime(2023,1,1,12,10,0, tzinfo=timezone.utc)
+
+        entry_valid_data = {'id': 'guid_valid', 'link': 'http://valid.com', 'title': 'Valid Item',
+                            'published_parsed': dt_valid.utctimetuple()}
+        entry_no_link_data = {'id': 'guid_no_link', 'link': None, 'title': 'Item No Link',
+                              'published_parsed': dt_no_link.utctimetuple()}
+        entry_empty_link_data = {'id': 'guid_empty_link', 'link': '', 'title': 'Item Empty Link',
+                                 'published_parsed': dt_empty_link.utctimetuple()}
+
+        entry_valid = MagicMock()
+        entry_valid.configure_mock(**entry_valid_data)
+        entry_valid.get = lambda key, default=None: entry_valid_data.get(key, default)
+
+        entry_no_link = MagicMock()
+        entry_no_link.configure_mock(**entry_no_link_data)
+        entry_no_link.get = lambda key, default=None: entry_no_link_data.get(key, default)
+
+        entry_empty_link = MagicMock()
+        entry_empty_link.configure_mock(**entry_empty_link_data)
+        entry_empty_link.get = lambda key, default=None: entry_empty_link_data.get(key, default)
+
+        mock_parsed_feed.entries = [entry_valid, entry_no_link, entry_empty_link]
+        mock_parsed_feed.bozo = 0
+
+        # 3. Call process_feed_entries directly
+        new_items_count = process_feed_entries(feed_obj, mock_parsed_feed)
+
+        # 4. Assertions
+        assert new_items_count == 1
+
+        items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
+        assert len(items_in_db) == 1
+        assert items_in_db[0].guid == 'guid_valid'
+        assert items_in_db[0].link == 'http://valid.com'
+        assert items_in_db[0].title == 'Valid Item'
+
+# --- Tests for OPML Export (/api/opml/export) ---
+
+def test_export_opml_empty(client):
+    """Test GET /api/opml/export when no feeds exist."""
+    response = client.get('/api/opml/export')
+    assert response.status_code == 200
+    assert 'application/xml' in response.content_type
+    assert response.headers['Content-Disposition'] == 'attachment; filename="sheepvibes_feeds.opml"'
+
+    # Parse XML
+    tree = ET.fromstring(response.data)
+    assert tree.tag == 'opml'
+    assert tree.get('version') == '2.0'
+    head = tree.find('head')
+    assert head is not None
+    title = head.find('title')
+    assert title is not None
+    assert title.text == 'SheepVibes Feeds'
+    body = tree.find('body')
+    assert body is not None
+    assert len(body.findall('outline')) == 0
+
+def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
+    """Test GET /api/opml/export with existing feeds."""
+    # setup_tabs_and_feeds already adds 3 feeds
+    # Feed 1: url1, Name: Feed 1
+    # Feed 2: url2, Name: Feed 2
+    # Feed 3: url3, Name: Feed 3
+
+    response = client.get('/api/opml/export')
+    assert response.status_code == 200
+    assert 'application/xml' in response.content_type
+    assert response.headers['Content-Disposition'] == 'attachment; filename="sheepvibes_feeds.opml"'
+
+    tree = ET.fromstring(response.data)
+    assert tree.tag == 'opml'
+    head = tree.find('head')
+    assert head is not None
+    title = head.find('title')
+    assert title is not None
+    assert title.text == 'SheepVibes Feeds'
+
+    body = tree.find('body')
+    assert body is not None
+    outlines = body.findall('outline')
+    assert len(outlines) == 3 # From setup_tabs_and_feeds
+
+    # Verify outline content (order might vary, so check presence)
+    expected_feeds_data = [
+        {'text': 'Feed 1', 'xmlUrl': 'url1', 'type': 'rss'},
+        {'text': 'Feed 2', 'xmlUrl': 'url2', 'type': 'rss'},
+        {'text': 'Feed 3', 'xmlUrl': 'url3', 'type': 'rss'},
+    ]
+
+    actual_feeds_data = []
+    for outline in outlines:
+        actual_feeds_data.append({
+            'text': outline.get('text'),
+            'xmlUrl': outline.get('xmlUrl'),
+            'type': outline.get('type')
+        })
+
+    for expected in expected_feeds_data:
+        assert expected in actual_feeds_data
+
+# --- Tests for OPML Import (/api/opml/import) ---
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_success(mock_fetch_update, client):
+    """Test POST /api/opml/import with a valid OPML file and item fetching."""
+    mock_fetch_update.return_value = (True, 1) # Simulate successful fetch with 1 new item
+    # Arrange: Add a tab to import into
+    with app.app_context():
+        tab = Tab(name="Import Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+        tab_id = tab.id
+
+    opml_content = """
+    <opml version="2.0">
+      <head><title>Test Feeds</title></head>
+      <body>
+        <outline text="Feed1 OPM" type="rss" xmlUrl="http://feed1.opml.com/rss"/>
+        <outline text="Feed2 OPM" type="rss" xmlUrl="http://feed2.opml.com/rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_import.opml')
+
+    # Act
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(tab_id)}, content_type='multipart/form-data')
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 2
+    assert json_data['skipped_count'] == 0
+    # Removed: assert json_data['tab_id'] == tab_id, response format changed for generic message
+    # The tab_id for feeds is checked by querying the DB below.
+
+    with app.app_context():
+        feeds = Feed.query.filter_by(tab_id=tab_id).all()
+        assert len(feeds) == 2
+        feed_urls = {f.url for f in feeds}
+        feed_names = {f.name for f in feeds}
+        assert "http://feed1.opml.com/rss" in feed_urls
+        assert "http://feed2.opml.com/rss" in feed_urls
+        assert "Feed1 OPM" in feed_names
+        assert "Feed2 OPM" in feed_names
+
+        # Assert fetch_and_update_feed was called for new feeds
+        # Get the feed objects to check their IDs
+        feed1_obj = Feed.query.filter_by(url="http://feed1.opml.com/rss").first()
+        feed2_obj = Feed.query.filter_by(url="http://feed2.opml.com/rss").first()
+        assert feed1_obj is not None
+        assert feed2_obj is not None
+
+        assert mock_fetch_update.call_count == 2
+        mock_fetch_update.assert_any_call(feed1_obj.id)
+        mock_fetch_update.assert_any_call(feed2_obj.id)
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_with_duplicates(mock_fetch_update, client):
+    """Test POST /api/opml/import with some feeds already existing."""
+    mock_fetch_update.return_value = (True, 1)
+    with app.app_context():
+        tab = Tab(name="Import Tab Dups", order=0)
+        db.session.add(tab)
+        db.session.commit() # Commit tab first to get its ID
+        tab_id = tab.id
+
+        existing_feed = Feed(tab_id=tab_id, name="Existing Feed", url="http://feed1.opml.com/rss")
+        db.session.add(existing_feed)
+        db.session.commit() # Commit the feed
+
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline text="Feed1 OPM" type="rss" xmlUrl="http://feed1.opml.com/rss"/>
+        <outline text="New Feed OPM" type="rss" xmlUrl="http://newfeed.opml.com/rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_import_dups.opml')
+
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(tab_id)}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1
+    assert json_data['skipped_count'] == 1
+
+    with app.app_context():
+        feeds = Feed.query.filter_by(tab_id=tab_id).order_by(Feed.url).all()
+        assert len(feeds) == 2 # Existing one + new one
+        assert feeds[0].url == "http://feed1.opml.com/rss" # Existing
+        assert feeds[1].url == "http://newfeed.opml.com/rss" # New one
+
+def test_import_opml_no_file(client):
+    """Test POST /api/opml/import without a file."""
+    response = client.post('/api/opml/import', content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'No file part' in response.json['error']
+
+def test_import_opml_empty_filename(client):
+    """Test POST /api/opml/import with an empty filename (simulates no file selected)."""
+    opml_file = (io.BytesIO(b"content"), '') # Empty filename
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'No file selected' in response.json['error']
+
+def test_import_opml_malformed_xml(client):
+    """Test POST /api/opml/import with malformed XML."""
+    with app.app_context(): # Ensure a tab exists
+        tab = Tab(name="Malformed Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+    opml_content = "<opml><body/><head></opml>" # Malformed, unclosed tags
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'malformed.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+    assert response.status_code == 400
+    assert 'Malformed OPML file' in response.json['error']
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, client):
+    """Test import creates a default tab if none exist and imports feeds."""
+    mock_fetch_update.return_value = (True, 1)
+    # Ensure no tabs exist (client fixture already drops tables)
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline text="Feed Alpha" xmlUrl="http://alpha.com/rss"/>
+        <outline text="Feed Beta" xmlUrl="http://beta.com/rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_default_creation.opml')
+
+    # Act
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 2
+    assert json_data['skipped_count'] == 0
+    assert "Imported Feeds" in json_data['message'] # Check message content
+    # Removed: assert json_data['tab_name'] == "Imported Feeds"
+
+    # To get the new_tab_id, we have to find it by name now, or parse from message if we made message more specific
+    with app.app_context():
+        default_tab = Tab.query.filter_by(name="Imported Feeds").first()
+        assert default_tab is not None
+        new_tab_id = default_tab.id
+        # default_tab = db.session.get(Tab, new_tab_id) # This line is not needed if we fetch by name
+        assert default_tab is not None
+        assert default_tab.name == "Imported Feeds"
+        assert default_tab.order == 0
+
+        feeds_in_tab = Feed.query.filter_by(tab_id=new_tab_id).all()
+        assert len(feeds_in_tab) == 2
+        feed_urls = {f.url for f in feeds_in_tab}
+        assert "http://alpha.com/rss" in feed_urls
+        assert "http://beta.com/rss" in feed_urls
+
+        # Assert fetch_and_update_feed was called for new feeds
+        feed_alpha_obj = Feed.query.filter_by(url="http://alpha.com/rss").first()
+        feed_beta_obj = Feed.query.filter_by(url="http://beta.com/rss").first()
+        assert feed_alpha_obj is not None
+        assert feed_beta_obj is not None
+
+        assert mock_fetch_update.call_count == 2
+        mock_fetch_update.assert_any_call(feed_alpha_obj.id)
+        mock_fetch_update.assert_any_call(feed_beta_obj.id)
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_specific_tab(mock_fetch_update, client):
+    """Test POST /api/opml/import into a specific tab when multiple tabs exist."""
+    mock_fetch_update.return_value = (True, 1)
+    with app.app_context():
+        tab1 = Tab(name="Tab One", order=0)
+        tab2 = Tab(name="Tab Two", order=1)
+        db.session.add_all([tab1, tab2])
+        db.session.commit()
+        tab1_id = tab1.id
+        tab2_id = tab2.id
+
+    opml_content = """
+    <opml version="2.0"><body><outline text="Feed for Tab2" xmlUrl="http://tab2feed.com"/></body></opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_tab_specific.opml')
+
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(tab2_id)}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1
+    # Removed: assert json_data['tab_id'] == tab2_id
+    # Removed: assert json_data['tab_name'] == "Tab Two"
+    assert f"default tab \"{tab2.name}\"" in json_data['message'] or f"tab \"{tab2.name}\"" in json_data['message']
+
+
+    with app.app_context():
+        assert Feed.query.filter_by(tab_id=tab1_id).count() == 0
+        assert Feed.query.filter_by(tab_id=tab2_id).count() == 1
+        feed_in_tab2 = Feed.query.filter_by(tab_id=tab2_id).first()
+        assert feed_in_tab2.url == "http://tab2feed.com"
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_default_tab_if_tab_id_not_provided(mock_fetch_update, client): # Added mock_fetch_update
+    """Test POST /api/opml/import defaults to the first tab if tab_id is not provided."""
+    mock_fetch_update.return_value = (True, 1) # Simulate successful fetch
+    with app.app_context():
+        tab1 = Tab(name="Default Tab", order=0) # Should be default
+        tab2 = Tab(name="Other Tab", order=1)
+        db.session.add_all([tab1, tab2])
+        db.session.commit()
+        default_tab_id = tab1.id
+
+    opml_content = """
+    <opml version="2.0"><body><outline text="Feed for Default" xmlUrl="http://defaultfeed.com"/></body></opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_default_tab.opml')
+
+    # Not providing 'tab_id' in the form data
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1
+    # Removed: assert json_data['tab_id'] == default_tab_id
+    # Removed: assert json_data['tab_name'] == "Default Tab"
+    assert f"default tab \"{tab1.name}\"" in json_data['message']
+
+    with app.app_context():
+        assert Feed.query.filter_by(tab_id=default_tab_id).count() == 1
+        feed_in_default_tab = Feed.query.filter_by(tab_id=default_tab_id).first()
+        assert feed_in_default_tab.url == "http://defaultfeed.com"
+        assert mock_fetch_update.call_count == 1
+        mock_fetch_update.assert_any_call(feed_in_default_tab.id)
+
+@patch('backend.app.fetch_and_update_feed') # Even though no feeds are imported, the setup could change.
+def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client):
+    """Test that an <outline> missing xmlUrl is skipped during import."""
+    mock_fetch_update_unused.return_value = (True, 0) # Should not be called if only valid feeds are fetched
+    with app.app_context():
+        tab = Tab(name="Test Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+        tab_id = tab.id
+
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline text="Valid Feed" xmlUrl="http://valid.com/rss"/>
+        <outline text="Missing xmlUrl Feed"/>
+        <outline text="Another Valid" xmlUrl="http://valid2.com/rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_missing_xmlurl.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(tab_id)}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 2
+    assert json_data['skipped_count'] == 1
+
+    with app.app_context():
+        feeds_in_tab = Feed.query.filter_by(tab_id=tab_id).all()
+        assert len(feeds_in_tab) == 2
+        urls = {f.url for f in feeds_in_tab}
+        assert "http://valid.com/rss" in urls
+        assert "http://valid2.com/rss" in urls
+
+        feed_valid1 = Feed.query.filter_by(url="http://valid.com/rss").first()
+        feed_valid2 = Feed.query.filter_by(url="http://valid2.com/rss").first()
+        assert mock_fetch_update_unused.call_count == 2
+        mock_fetch_update_unused.assert_any_call(feed_valid1.id)
+        mock_fetch_update_unused.assert_any_call(feed_valid2.id)
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_no_body_tag(mock_fetch_update_unused, client):
+    """Test OPML import with a file that has no <body> tag."""
+    with app.app_context(): # Ensure a tab exists
+        tab = Tab(name="No Body Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+    opml_content = """<opml version="2.0"><head><title>No Body</title></head></opml>"""
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'no_body.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200 # Should still be a valid request
+    json_data = response.json
+    assert json_data['imported_count'] == 0
+    assert json_data['skipped_count'] == 0
+    assert 'No feeds found in OPML (missing body)' in json_data['message']
+    mock_fetch_update_unused.assert_not_called()
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
+    """Test OPML import with a file that has an empty <body> tag."""
+    with app.app_context(): # Ensure a tab exists
+        tab = Tab(name="Empty Body Tab", order=0)
+        db.session.add(tab)
+        db.session.commit()
+
+    opml_content = """<opml version="2.0"><head><title>Empty Body</title></head><body></body></opml>"""
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'empty_body.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 0
+    assert json_data['skipped_count'] == 0
+    assert 'No feed entries or folders found in the OPML file.' in json_data['message'] # Updated message
+    mock_fetch_update_unused.assert_not_called()
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, client):
+    """Tests that nested OPML outlines create new tabs and feeds are correctly assigned."""
+    mock_fetch_update.return_value = (True, 1) # Simulate successful fetch
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline title="News Folder">
+          <outline text="Feed A (News)" title="Feed A (News)" xmlUrl="http://feeda.com/rss" type="rss"/>
+          <outline text="Feed B (News)" title="Feed B (News)" xmlUrl="http://feedb.com/rss" type="rss"/>
+        </outline>
+        <outline title="Tech Folder">
+          <outline text="Feed C (Tech)" title="Feed C (Tech)" xmlUrl="http://feedc.com/rss" type="rss"/>
+        </outline>
+        <outline text="Top Level Feed D" title="Top Level Feed D" xmlUrl="http://toplevel.com/rss" type="rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'nested_import.opml')
+
+    # Act: Import without specifying a tab_id, relying on default tab creation if none exist
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 4
+    assert json_data['skipped_count'] == 0
+    # The 'tab_name' in response might be the default tab name for the top-level feed
+    assert "Imported Feeds" in json_data['message']
+
+    with app.app_context():
+        # Verify tabs
+        news_folder_tab = Tab.query.filter_by(name="News Folder").first()
+        assert news_folder_tab is not None
+        tech_folder_tab = Tab.query.filter_by(name="Tech Folder").first()
+        assert tech_folder_tab is not None
+        default_tab = Tab.query.filter_by(name="Imported Feeds").first() # For the top-level feed
+        assert default_tab is not None
+
+        # Verify feeds in "News Folder"
+        feeds_in_news = Feed.query.filter_by(tab_id=news_folder_tab.id).all()
+        assert len(feeds_in_news) == 2
+        feed_urls_news = {f.url for f in feeds_in_news}
+        assert "http://feeda.com/rss" in feed_urls_news
+        assert "http://feedb.com/rss" in feed_urls_news
+
+        # Verify feeds in "Tech Folder"
+        feeds_in_tech = Feed.query.filter_by(tab_id=tech_folder_tab.id).all()
+        assert len(feeds_in_tech) == 1
+        assert feeds_in_tech[0].url == "http://feedc.com/rss"
+
+        # Verify top-level feed
+        feeds_in_default = Feed.query.filter_by(tab_id=default_tab.id).all()
+        assert len(feeds_in_default) == 1
+        assert feeds_in_default[0].url == "http://toplevel.com/rss"
+
+        # Check mock calls
+        assert mock_fetch_update.call_count == 4 # For A, B, C, D
+        # Example check for one feed (others would be similar, relying on feed IDs)
+        feed_a_obj = Feed.query.filter_by(url="http://feeda.com/rss").first()
+        mock_fetch_update.assert_any_call(feed_a_obj.id)
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, client):
+    """Tests that feeds in a folder are added to an existing tab if names match."""
+    mock_fetch_update.return_value = (True, 1)
+    with app.app_context():
+        existing_tab = Tab(name="Existing News", order=0)
+        db.session.add(existing_tab)
+        db.session.commit()
+        existing_tab_id = existing_tab.id
+
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline title="Existing News">
+          <outline text="Feed D" title="Feed D" xmlUrl="http://feedd.com/rss" type="rss"/>
+        </outline>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'existing_folder_import.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1
+
+    with app.app_context():
+        assert Tab.query.count() == 1 # No new tab should be created
+        target_tab = Tab.query.filter_by(name="Existing News").first()
+        assert target_tab.id == existing_tab_id # Should be the same tab
+
+        feeds_in_tab = Feed.query.filter_by(tab_id=existing_tab_id).all()
+        assert len(feeds_in_tab) == 1
+        assert feeds_in_tab[0].url == "http://feedd.com/rss"
+        mock_fetch_update.assert_called_once_with(feeds_in_tab[0].id)
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_empty_folder(mock_fetch_update_unused, client):
+    """Tests import of an OPML with an empty folder."""
+    mock_fetch_update_unused.return_value = (True, 0)
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline title="Empty Folder"></outline>
+        <outline text="Top Level Feed E" title="Top Level Feed E" xmlUrl="http://toplevele.com/rss" type="rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'empty_folder_import.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 1 # Only Top Level Feed E
+
+    with app.app_context():
+        empty_folder_tab = Tab.query.filter_by(name="Empty Folder").first()
+        assert empty_folder_tab is None # Corrected: Empty folders are skipped, no tab created
+
+        # Check that the default tab for "Top Level Feed E" was created or used
+        # If no other tabs existed, "Imported Feeds" would be created.
+        # If other tabs existed, it would go into the first ordered one.
+        # For this test, let's ensure it goes into "Imported Feeds" by ensuring no other tabs initially.
+        # The client fixture already ensures a clean DB.
+
+        default_tab = Tab.query.filter_by(name="Imported Feeds").first()
+        assert default_tab is not None # This tab is for "Top Level Feed E"
+
+        feeds_in_default = Feed.query.filter_by(tab_id=default_tab.id).all()
+        assert len(feeds_in_default) == 1
+        assert feeds_in_default[0].url == "http://toplevele.com/rss"
+
+        mock_fetch_update_unused.assert_called_once_with(feeds_in_default[0].id)
+
+    # Also assert the skipped count due to the empty folder
+    assert json_data['skipped_count'] == 1
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(mock_fetch_update, client):
+    """Tests that a folder <outline> without a title is skipped, and its children go to the current default tab."""
+    mock_fetch_update.return_value = (True, 1)
+    with app.app_context(): # Ensure a default tab exists or will be created
+        tab1 = Tab(name="Initial Tab", order=0)
+        db.session.add(tab1)
+        db.session.commit()
+        initial_tab_id = tab1.id
+
+    opml_content = """
+    <opml version="2.0">
+      <body>
+        <outline> <!-- Folder without a title -->
+          <outline text="Feed E" title="Feed E" xmlUrl="http://feede.com/rss" type="rss"/>
+        </outline>
+        <outline text="Feed F" title="Feed F" xmlUrl="http://feedf.com/rss" type="rss"/>
+      </body>
+    </opml>
+    """
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'no_title_folder.opml')
+    # Import into the specific initial_tab_id to make assertions easier
+    response = client.post('/api/opml/import', data={'file': opml_file, 'tab_id': str(initial_tab_id)}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    json_data = response.json
+    assert json_data['imported_count'] == 2 # Both Feed E and F should be imported
+
+    with app.app_context():
+        # No new tab should be created for the untitled folder
+        assert Tab.query.count() == 1
+        initial_tab = db.session.get(Tab, initial_tab_id)
+        assert initial_tab is not None
+
+        feeds_in_initial_tab = Feed.query.filter_by(tab_id=initial_tab_id).order_by(Feed.name).all()
+        assert len(feeds_in_initial_tab) == 2
+        assert feeds_in_initial_tab[0].name == "Feed E"
+        assert feeds_in_initial_tab[1].name == "Feed F"
+
+        assert mock_fetch_update.call_count == 2
+        mock_fetch_update.assert_any_call(feeds_in_initial_tab[0].id)
+        mock_fetch_update.assert_any_call(feeds_in_initial_tab[1].id)

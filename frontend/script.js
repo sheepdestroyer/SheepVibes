@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const renameTabButton = document.getElementById('rename-tab-button');
     const deleteTabButton = document.getElementById('delete-tab-button');
     const refreshAllFeedsButton = document.getElementById('refresh-all-feeds-button');
+    const exportOpmlButton = document.getElementById('export-opml-button');
+    const importOpmlButton = document.getElementById('import-opml-button');
+    const opmlFileInput = document.getElementById('opml-file-input');
     
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -159,6 +162,116 @@ document.addEventListener('DOMContentLoaded', () => {
             return badge;
         }
         return null;
+    }
+
+    // --- OPML Export/Import Functions ---
+
+    /** Handles the click event for the "Export OPML" button. */
+    async function handleExportOpml() {
+        console.log("Exporting OPML...");
+        const originalButtonText = exportOpmlButton.textContent;
+        exportOpmlButton.disabled = true;
+        exportOpmlButton.textContent = 'Exporting...';
+
+        try {
+            const response = await fetch('/api/opml/export');
+            if (!response.ok) {
+                let errorMsg = `HTTP error! status: ${response.status}`;
+                try {
+                    const errorData = await response.text(); // Use text() for potential non-JSON error
+                    errorMsg += `, message: ${errorData || response.statusText}`;
+                } catch (e) {
+                     errorMsg += `, message: ${response.statusText}`;
+                }
+                throw new Error(errorMsg);
+            }
+
+            const opmlText = await response.text();
+            const blob = new Blob([opmlText], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sheepvibes_feeds.opml';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log("OPML export successful.");
+
+        } catch (error) {
+            console.error('Error exporting OPML:', error);
+            alert(`Failed to export OPML: ${error.message}`);
+        } finally {
+            exportOpmlButton.disabled = false;
+            exportOpmlButton.textContent = originalButtonText;
+        }
+    }
+
+    /** Handles the file selection for OPML import. */
+    async function handleImportOpmlFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        console.log(`Importing OPML file: ${file.name}`);
+        const originalButtonText = importOpmlButton.textContent;
+        importOpmlButton.disabled = true;
+        importOpmlButton.textContent = 'Importing...';
+        opmlFileInput.disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Optionally, add the active tab ID to import into that specific tab
+        if (activeTabId) {
+            formData.append('tab_id', activeTabId);
+        }
+
+        try {
+            const response = await fetch('/api/opml/import', {
+                method: 'POST',
+                body: formData, // fetch automatically sets Content-Type for FormData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+            }
+
+            alert(data.message);
+            console.log('OPML import successful:', data);
+
+            if (data.imported_count > 0) {
+                await initializeTabs(true); // Update unread counts on all tabs
+
+                // Clear the loaded state of the target tab to force a reload
+                if (data.tab_id) {
+                    loadedTabs.delete(data.tab_id);
+                    // If the import was into the currently active tab, reload its content
+                    if (data.tab_id === activeTabId) {
+                        // Remove existing widgets for the active tab before reloading
+                        document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                        await setActiveTab(activeTabId);
+                    }
+                } else { // Fallback if tab_id wasn't in response for some reason, refresh active tab
+                    if (activeTabId) {
+                         document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                         loadedTabs.delete(activeTabId);
+                         await setActiveTab(activeTabId);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error importing OPML:', error);
+            alert(`Failed to import OPML: ${error.message}`);
+        } finally {
+            importOpmlButton.disabled = false;
+            importOpmlButton.textContent = 'Import OPML';
+            opmlFileInput.value = ''; // Reset file input
+            opmlFileInput.disabled = false;
+        }
     }
 
     // --- Rendering Functions ---
@@ -603,6 +716,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         refreshAllFeedsButton.addEventListener('click', handleRefreshAllFeeds);
+        exportOpmlButton.addEventListener('click', handleExportOpml);
+        importOpmlButton.addEventListener('click', () => opmlFileInput.click());
+        opmlFileInput.addEventListener('change', handleImportOpmlFileSelect);
 
         // Fetch initial tabs to start the application
         await initializeTabs();
