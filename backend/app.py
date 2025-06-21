@@ -113,14 +113,10 @@ else:
     app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Disable modification tracking
-app.config.setdefault('CACHE_DEFAULT_TIMEOUT', 300) # Set if not already set by testing block
+# CACHE_DEFAULT_TIMEOUT is now set within the TESTING if/else block or defaults if not.
+# Ensure CACHE_TYPE and relevant URLs are fully set before Cache() is instantiated or init_app'd.
 
-# --- Cache Object Initialization (after config is set) ---
-app.config["CACHE_TYPE"] = "RedisCache"
-app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
-app.config['CACHE_DEFAULT_TIMEOUT'] = 300 # 5 minutes default timeout
-
-cache = Cache()
+cache = Cache() # Create the cache instance
 
 # Initialize SQLAlchemy ORM extension with the app
 db.init_app(app)
