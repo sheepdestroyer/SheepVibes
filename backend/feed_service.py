@@ -156,67 +156,58 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     logger.info(f"Processing {len(parsed_feed.entries)} entries for feed: {feed_db_obj.name}")
 
     for entry in parsed_feed.entries:
-        # Determine the unique identifier (GUID preferably, fallback to link)
-        guid = entry.get('id')
-        link = entry.get('link')
         title = entry.get('title', '[No Title]')
+        original_guid = entry.get('id')
+        link = entry.get('link')
 
-        # Validate Link (NOT NULL constraint in DB)
-        if not link: # Handles None or empty string
+        # Validate Link: Must have a link, as it's NOT NULL in DB and fallback for GUID.
+        if not link:
             logger.warning(
-                f"Skipping entry titled '{title[:100]}' for feed '{feed_db_obj.name}' "
-                f"due to missing or empty link. (GUID for this entry was: {guid if guid else 'N/A'})"
+                f"Feed '{feed_db_obj.name}': Skipping entry titled '{title[:100]}' due to missing link. "
+                f"(Original GUID was: {original_guid if original_guid else 'N/A'})"
             )
             continue
 
-        # Basic validation: (already handled by link check if link is primary, but keep if guid can be sole identifier)
-        # if not link and not guid: # This specific check might be redundant if link is now mandatory
-        #     logger.warning(f"Skipping entry with no link or guid in feed {feed_db_obj.name}: '{title[:50]}...'")
-        #     continue
+        # Determine the GUID to use: prefer original_guid, fallback to link.
+        # This ensures `guid_to_use` is always non-null if `link` is present.
+        guid_to_use = original_guid if original_guid and original_guid.strip() else link
 
-        # Check for duplicates based on GUID or link against DB content and then batch content
+        # Log the identifiers being processed
+        logger.debug(f"Feed '{feed_db_obj.name}': Processing entry - Title: '{title[:50]}...', Link: '{link}', Original GUID: '{original_guid}', Effective GUID: '{guid_to_use}'")
 
-        # Check for duplicates against DB content
-        # Prioritize GUID for existing items. If GUID exists and is in DB, skip.
-        if guid and guid in existing_guids:
-            # logger.debug(f"DB: Skipping item - existing GUID '{guid}' for feed '{feed_db_obj.name}'. Title: '{title[:50]}...'")
+        # Check for duplicates against DB content using the effective GUID
+        if guid_to_use in existing_guids:
+            logger.debug(f"Feed '{feed_db_obj.name}': Skipping item - Effective GUID '{guid_to_use}' already in DB. Title: '{title[:50]}...'")
             continue
 
-        # If GUID is not in DB (or guid is None), then check link against DB.
-        # This handles items that might not have a GUID or whose GUID changed but link remained same.
-        if link and link in existing_links:
-            # logger.debug(f"DB: Skipping item - existing LINK '{link}' (GUID: {guid if guid else 'N/A'}) for feed '{feed_db_obj.name}'. Title: '{title[:50]}...'")
+        # Fallback check against existing links in DB ONLY IF original_guid was not present
+        # AND guid_to_use (which is link) is in existing_links.
+        # This is mostly redundant if guid_to_use is always primary and checked against existing_guids.
+        # However, it handles a theoretical case where an item previously had no guid (so link was its effective guid)
+        # and now it has a new guid, but the old link still matches an existing item.
+        if not original_guid and link in existing_links: # Only if no original_guid was provided
+             logger.debug(f"Feed '{feed_db_obj.name}': Skipping item - Link '{link}' (no original GUID) already in DB. Title: '{title[:50]}...'")
+             continue
+
+
+        # Check for duplicates against current batch content using effective GUID
+        if guid_to_use in processed_guids:
+            logger.warning(
+                f"Feed '{feed_db_obj.name}': Skipping item - Effective GUID '{guid_to_use}' duplicate in current batch. "
+                f"Title: '{title[:50]}...'. Original GUID: '{original_guid}', Link: '{link}'"
+            )
             continue
 
-        # Check for duplicates against current batch content (already processed in this run)
-        # This is crucial for feeds that might have internal duplicates or items sharing identifiers.
+        # Add effective GUID to processed_guids for this batch.
+        processed_guids.add(guid_to_use)
+        # Also add link to processed_links if it's different from guid_to_use,
+        # to catch items that might only match by link if their GUIDs are different.
+        # This is more for the kernel.org type issue where GUIDs are distinct but links can be shared.
+        if link != guid_to_use and link: # Ensure link is not None or empty
+             processed_links.add(link)
 
-        item_is_batch_duplicate = False
-        if guid:
-            if guid in processed_guids:
-                logger.warning(f"BATCH: Skipping item - duplicate GUID '{guid}' in current batch for feed '{feed_db_obj.name}'. Title: '{title[:50]}...'")
-                item_is_batch_duplicate = True
-            else:
-                # GUID is unique in this batch so far. Add it.
-                processed_guids.add(guid)
-                # If GUID is unique, we don't need to check link for batch uniqueness *for this item*,
-                # as GUID is the stronger identifier. However, we still add the link to processed_links
-                # to catch other items that might *only* match by link later.
-                if link:
-                    processed_links.add(link)
-        else: # No GUID provided for the item
-            if link and link in processed_links:
-                logger.warning(f"BATCH: Skipping item - duplicate LINK '{link}' (No GUID) in current batch for feed '{feed_db_obj.name}'. Title: '{title[:50]}...'")
-                item_is_batch_duplicate = True
-            elif link: # Link is unique for items without GUIDs in this batch so far
-                processed_links.add(link)
-            # If no GUID and no Link, it would have been skipped earlier by "if not link:"
 
-        if item_is_batch_duplicate:
-            continue
-
-        # If we've reached here, the item is considered new (not in DB, not a duplicate in this batch).
-
+        # If we've reached here, the item is considered new.
         # Parse published time
         published_time = parse_published_time(entry)
 
@@ -228,7 +219,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             published_time=published_time,
             # fetched_time defaults to now
             is_read=False, # New items are always unread
-            guid=guid
+            guid=guid_to_use
         )
         
         # Add to session

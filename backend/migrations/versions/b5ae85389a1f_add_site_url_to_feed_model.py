@@ -1,8 +1,8 @@
 """Add site_url to Feed model
 
-Revision ID: 7a6429ce2d26
+Revision ID: b5ae85389a1f
 Revises: 996291c6a151
-Create Date: 2025-06-21 13:28:29.685030
+Create Date: 2025-06-21 13:51:14.595398
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '7a6429ce2d26'
+revision = 'b5ae85389a1f'
 down_revision = '996291c6a151'
 branch_labels = None
 depends_on = None

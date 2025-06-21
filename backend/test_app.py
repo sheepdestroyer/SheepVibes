@@ -52,7 +52,8 @@ def client():
         # We replace the standard port with the dynamic one from the CI env.
         redis_url = redis_url.replace('6379', ci_redis_port, 1)
         
-    app.config['CACHE_REDIS_URL'] = redis_url
+    # app.config['CACHE_REDIS_URL'] = redis_url # Not needed if using SimpleCache for testing
+    app.config['CACHE_TYPE'] = 'SimpleCache' # Use in-memory cache for tests
 
     # Re-initialize extensions with the updated app config
     db.init_app(app)

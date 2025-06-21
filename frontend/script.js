@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportOpmlButton = document.getElementById('export-opml-button');
     const importOpmlButton = document.getElementById('import-opml-button');
     const opmlFileInput = document.getElementById('opml-file-input');
-    const opmlImportStatus = document.getElementById('opml-import-status'); // For loading animation
     
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -220,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
         importOpmlButton.disabled = true;
         importOpmlButton.textContent = 'Importing...';
         opmlFileInput.disabled = true;
-        if (opmlImportStatus) opmlImportStatus.textContent = 'Processing and fetching feeds, please wait...';
 
         const formData = new FormData();
         formData.append('file', file);
@@ -270,10 +268,9 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`Failed to import OPML: ${error.message}`);
         } finally {
             importOpmlButton.disabled = false;
-            importOpmlButton.textContent = originalButtonText; // Restore original text
+            importOpmlButton.textContent = 'Import OPML';
             opmlFileInput.value = ''; // Reset file input
             opmlFileInput.disabled = false;
-            if (opmlImportStatus) opmlImportStatus.textContent = ''; // Clear status message
         }
     }
 
@@ -354,25 +351,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const titleElement = document.createElement('h2');
         widget.appendChild(titleElement);
-
-        // Create a text node for the feed name first
-        const feedNameText = document.createTextNode(feed.name);
-
-        if (feed.site_url) {
-            const siteLink = document.createElement('a');
-            siteLink.href = feed.site_url;
-            siteLink.target = '_blank';
-            siteLink.classList.add('feed-site-link');
-            siteLink.appendChild(feedNameText); // Wrap the text node
-            titleElement.appendChild(siteLink);
-        } else {
-            titleElement.appendChild(feedNameText); // Append text node directly if no site_url
-        }
         
         const badge = createBadge(feed.unread_count);
         if (badge) {
-            titleElement.appendChild(badge); // Append badge after the name/link
+            titleElement.appendChild(badge);
         }
+        titleElement.prepend(feed.name);
 
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);

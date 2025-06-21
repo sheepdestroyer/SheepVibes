@@ -773,32 +773,25 @@ def add_feed():
 
     if parsed_feed and parsed_feed.feed:
         feed_name = parsed_feed.feed.get('title', feed_url) # Use URL as fallback if title missing
-        site_link = parsed_feed.feed.get('link') # This is usually the website link
-        if site_link == feed_url: # If site link is same as feed_url, it's not that useful, clear it
-            # This can happen for feeds that don't have a separate website link in their metadata
-            is_probably_just_feed_self_link = True
-            for entry in parsed_feed.entries[:5]: # Check a few entries
-                if entry.get('link') and entry.get('link') != site_link:
-                    is_probably_just_feed_self_link = False
-                    break
-            if is_probably_just_feed_self_link:
-                 # Heuristic: if feed's main link is same as its own URL and item links are different,
-                 # it's likely the feed's <link> tag points to itself, not the main site.
-                 # In such cases, we prefer not to set site_url to the feed's own URL.
-                 # A more robust solution might involve checking if `site_link` is a common feed path.
-                 # For now, if it's identical to feed_url, we are cautious.
-                 # Check if it looks like a feed URL itself (e.g. ends in .xml, .rss, /feed)
-                if site_link.endswith((".xml", ".rss", ".atom")) or "/feed" in site_link or "/rss" in site_link:
-                    logger.info(f"Site link '{site_link}' for feed '{feed_url}' appears to be the feed URL itself. Clearing site_url.")
-                    site_link = None
-                elif parsed_feed.feed.get('subtitle') or parsed_feed.feed.get('description'):
-                    # If there's a subtitle/description, it's more likely a proper site link
-                    logger.info(f"Site link '{site_link}' for feed '{feed_url}' is same as feed URL, but feed has description. Keeping it.")
-                else:
-                    logger.info(f"Site link '{site_link}' for feed '{feed_url}' is same as feed URL and no other indicators. Clearing site_url.")
-                    site_link = None
 
-
+        # Get the channel's link, which is usually the site_url
+        channel_link = parsed_feed.feed.get('link')
+        if channel_link and channel_link != feed_url:
+            # If the channel link is present and different from the feed's own URL,
+            # it's a good candidate for site_url.
+            site_link = channel_link
+            logger.info(f"Using channel link '{site_link}' as site_url for feed '{feed_url}'.")
+        elif channel_link:
+            # Channel link is same as feed_url. Less ideal.
+            # Keep it null unless it doesn't look like a typical feed file extension/path.
+            if not (feed_url.endswith((".xml", ".rss", ".atom", "/")) or \
+                    "/feed" in feed_url or "/rss" in feed_url or "/atom" in feed_url):
+                site_link = channel_link # It might be a clean URL that's also the site
+                logger.info(f"Channel link '{site_link}' is same as feed_url, but using as site_url for '{feed_url}' as it does not look like a typical feed path.")
+            else:
+                logger.info(f"Channel link '{channel_link}' for feed '{feed_url}' is same as feed URL and looks like a feed path. Setting site_url to None.")
+        else:
+            logger.info(f"No channel link found for feed '{feed_url}'. Setting site_url to None.")
     else:
         logger.warning(f"Could not fetch title/metadata for {feed_url}, using URL as name and no site_url.")
 
