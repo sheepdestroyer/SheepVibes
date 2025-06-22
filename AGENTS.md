@@ -1,29 +1,33 @@
-Agents must always start by reading all files from the repo in order to have a global understanding of the app.
+An Agent must always start by reading **all** files from the repository in order to have a global understanding of the application.
 
-After making a change, Agents always :
-- add new relevant tests to the test suite,
-- verify that pre-existing tests are still valid, and correct them if necessary,
-- then validate all tests by executing the full dedicated CI worflow as describe in this document.
+After making a change, an Agent must always:
+- Add new relevant tests to the test suite.
+- Verify that pre-existing tests are still valid and correct them if necessary.
+- Then, validate all tests by executing the full dedicated CI workflow as described in this document.
+
+### CI/CD and Automated Agent Execution Guide
 
 Automated environments, such as those used by Google's Jules, operate in restricted settings where service ports may be mapped dynamically. The project's test suite is designed to handle this.
 
-The key to running tests successfully in such an environment is to provide a Redis instance and inform the test suite how to connect to it.
+**The most reliable reference is the project's own CI workflow, located at `.github/workflows/run-tests.yml`.** This file demonstrates exactly how to set up the environment and execute the tests. Agents should replicate this setup.
 
-The most reliable reference is the project's own CI workflow, located at .github/workflows/run-tests.yml. This file demonstrates exactly how to set up the environment.
+#### Key Configuration Points for Automated Agents:
 
-Key Configuration Points for Automated Agents:
-Redis Service: The tests require a running Redis service for caching checks. In the GitHub Actions workflow, this is accomplished using the services block to start a redis:alpine container with docker. Your environment will need to do the same.
+1.  **Service Containerization**: The tests require a running Redis service for caching checks. In the GitHub Actions workflow, this is accomplished using the `services` block to start a `redis:alpine` container. Your environment must provide a Redis container accessible to the test runner.
 
-Dynamic Port Handling: In many CI systems, you cannot assume Redis will be available on localhost:6379. The service container's port 6379 will be mapped to a dynamic port on the host runner. The GitHub Actions workflow retrieves this port using `${{ job.services.redis.ports['6379'] }}`.
+2.  **Dynamic Port Handling**: In CI systems, you cannot assume Redis will be available on `localhost:6379`. The service container's port `6379` will be mapped to a *dynamic port* on the host runner. The GitHub Actions workflow retrieves this port using `${{ job.services.redis.ports['6379'] }}`.
 
-Environment Variable: The test suite (backend/test_app.py) is explicitly configured to look for the CACHE_REDIS_PORT environment variable. If this variable is set, it will override the default Redis port and allow the tests to connect to the dynamically mapped port of the Redis service container.
+3.  **Environment Variable**: The test suite (`backend/test_app.py`) is explicitly configured to look for the `CACHE_REDIS_PORT` environment variable. If this variable is set, it will override the default Redis port and allow the tests to connect to the dynamically mapped port of the Redis service container.
 
-If necessary, identify the host port that has been dynamically mapped to the container's internal port 6379, and set the CACHE_REDIS_PORT environment variable to this dynamically assigned port number.
+#### Actionable Steps for Automated Agents:
 
-Actionable Steps for CI/CD Tools:
-To successfully run the backend tests, please follow this procedure:
-- Start a Redis container with docker within your environment : `sudo docker run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine`.
-- Navigate to the backend directory & Install dependencies: `pip install -r requirements.txt -r requirements-dev.txt`.
-- Run *all* tests using the command: `python -m pytest -v`.
+To successfully run the backend tests, please follow this procedure, which mirrors our CI workflow:
 
-By following these instructions, which mirror the setup in our own CI workflow, Agents' automated tools should be able to execute the full test suite correctly ; Always make sure it suceeds before getting ready to sumbit your changes.
+1.  **Start a Redis service container** within your environment.
+2.  **Identify the host port** that has been dynamically mapped to the container's internal port `6379`.
+3.  **Set the `CACHE_REDIS_PORT` environment variable** to this dynamically assigned port number.
+4.  Navigate to the `backend` directory.
+5.  **Install dependencies**: `pip install -r requirements.txt -r requirements-dev.txt`.
+6.  **Run the tests** using the command: `python -m pytest -v`.
+
+By following these instructions, which mirror the setup in our own CI workflow, automated tools should be able to execute the full test suite correctly. Always ensure it succeeds before submitting your changes.
