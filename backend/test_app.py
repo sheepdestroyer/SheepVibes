@@ -225,14 +225,14 @@ def test_delete_last_tab(client):
     # Act
     response = client.delete(f'/api/tabs/{tab_id}')
     
-    # Assert
-    assert response.status_code == 400
-    assert 'error' in response.json
-    assert 'Cannot delete the last tab' in response.json['error']
+    # Assert: Now it should be successful (200)
+    assert response.status_code == 200
+    assert 'message' in response.json
+    assert 'deleted successfully' in response.json['message']
     
     # Verify in DB
     with app.app_context():
-        assert Tab.query.count() == 1
+        assert Tab.query.count() == 0 # Tab should be deleted
 
 # --- Tests for Feed/Item endpoints ---
 
@@ -910,7 +910,10 @@ def test_process_feed_with_in_batch_duplicate_guids(client): # Using client fixt
         mock_parsed_feed = MagicMock()
         mock_parsed_feed.feed = MagicMock()
         mock_parsed_feed.feed.title = "Test Feed Title"
-        mock_parsed_feed.feed.get = lambda key, default='': getattr(mock_parsed_feed.feed, key, default)
+        mock_parsed_feed.feed.link = "http://testguids.com/feed-website-link" # Provide a site link for the feed itself
+        # Adjust .get to correctly return explicitly set attributes or the default
+        mock_parsed_feed.feed.get = lambda key, default_val=None: getattr(mock_parsed_feed.feed, key) if hasattr(mock_parsed_feed.feed, key) else default_val
+
 
         dt_entry1 = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         dt_entry2 = datetime.datetime(2023, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
@@ -975,7 +978,9 @@ def test_process_feed_with_missing_link(client): # Using client fixture for app_
         mock_parsed_feed = MagicMock()
         mock_parsed_feed.feed = MagicMock()
         mock_parsed_feed.feed.title = "Test Feed Title"
-        mock_parsed_feed.feed.get = lambda key, default='': getattr(mock_parsed_feed.feed, key, default)
+        mock_parsed_feed.feed.link = "http://testmissinglink.com/feed-website-link" # Provide a site link for the feed itself
+        # Adjust .get to correctly return explicitly set attributes or the default
+        mock_parsed_feed.feed.get = lambda key, default_val=None: getattr(mock_parsed_feed.feed, key) if hasattr(mock_parsed_feed.feed, key) else default_val
 
         dt_valid = datetime.datetime(2023,1,1,12,0,0, tzinfo=timezone.utc)
         dt_no_link = datetime.datetime(2023,1,1,12,5,0, tzinfo=timezone.utc)
@@ -1582,3 +1587,52 @@ def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(mock
         assert mock_fetch_update.call_count == 2
         mock_fetch_update.assert_any_call(feeds_in_initial_tab[0].id)
         mock_fetch_update.assert_any_call(feeds_in_initial_tab[1].id)
+
+
+@patch('backend.app.fetch_and_update_feed')
+def test_import_opml_deletes_empty_default_imported_feeds_tab(mock_fetch_update, client): # Use client fixture for app context
+    """
+    Tests that if 'Imported Feeds' is created because no tabs exist,
+    but all OPML items go into folders (new tabs), the empty 'Imported Feeds' tab is deleted.
+    """
+    mock_fetch_update.return_value = (True, 1) # Simulate feed fetch success
+    # Ensure no tabs exist initially. The `client` fixture already handles db cleanup.
+    with client.application.app_context(): # Use client.application.app_context()
+        assert Tab.query.count() == 0
+
+    opml_content = """<?xml version="1.0" encoding="UTF-8"?>
+    <opml version="2.0">
+        <head><title>Test OPML</title></head>
+        <body>
+            <outline text="My Folder">
+                <outline text="Feed In Folder" type="rss" xmlUrl="http://example.com/folderfeed.xml"/>
+            </outline>
+        </body>
+    </opml>"""
+
+    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'test_delete_empty_default.opml')
+    response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
+
+    assert response.status_code == 200
+    data = response.json
+    assert data['imported_count'] == 1 # The feed inside "My Folder"
+    assert data['skipped_count'] == 0
+    # The 'tab_name' in response might be "Imported Feeds" (the one that got deleted)
+    # The 'tab_id' in response might be the ID of the deleted "Imported Feeds" tab.
+
+    with client.application.app_context(): # Use client.application.app_context()
+        tabs_after_import = Tab.query.all()
+        # Only "My Folder" tab should exist. "Imported Feeds" should have been created and then deleted.
+        assert len(tabs_after_import) == 1
+        assert tabs_after_import[0].name == "My Folder"
+
+        # Verify "Imported Feeds" tab specifically does not exist
+        imported_feeds_tab_check = Tab.query.filter_by(name="Imported Feeds").first()
+        assert imported_feeds_tab_check is None
+
+        feed_in_folder = Feed.query.filter_by(url="http://example.com/folderfeed.xml").first()
+        assert feed_in_folder is not None
+        assert feed_in_folder.tab.name == "My Folder" # Associated with the correct tab
+
+        # Check that fetch_and_update_feed was called for the imported feed
+        mock_fetch_update.assert_called_once_with(feed_in_folder.id)
