@@ -1,4 +1,4 @@
-Agents always start by reading all files from the repo in order to have a global understanding of the app.
+Agents must always start by reading all files from the repo in order to have a global understanding of the app.
 
 After making a change, Agents always :
 - add new relevant tests to the test suite,
