@@ -423,33 +423,38 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {number} tabId - The ID of the tab to load feeds for.
      */
     async function loadFeedsForTab(tabId) {
-        // Show a loading message only if the grid is completely empty
-        if (feedGrid.children.length === 0) {
-            feedGrid.innerHTML = '<p>Loading feeds...</p>';
-        }
+        // Clear existing widgets and messages for THIS tab before loading new ones
+        document.querySelectorAll(`.feed-widget[data-tab-id="${tabId}"]`).forEach(w => w.remove());
+        document.querySelectorAll(`.tab-message[data-tab-id="${tabId}"]`).forEach(m => m.remove());
+
+        // Optional: Add a temporary loading message for this specific tab
+        // feedGrid.insertAdjacentHTML('beforeend', `<p class="tab-message loading-message" data-tab-id="${tabId}">Loading feeds for this tab...</p>`);
 
         const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds`);
 
-        // If we were showing a global loading message, clear it.
-        if (feedGrid.querySelector('p')) {
-            feedGrid.innerHTML = '';
-        }
+        // Remove temporary loading message for this tab if it was added
+        // document.querySelectorAll(`.tab-message.loading-message[data-tab-id="${tabId}"]`).forEach(m => m.remove());
 
         if (feedsWithItems === null) {
-            feedGrid.innerHTML = '<p>Error loading feeds. Please check the console or try again.</p>';
+            // Display error message specific to this tab
+            feedGrid.insertAdjacentHTML('beforeend', `<p class="tab-message error-message" data-tab-id="${tabId}" style="display:none;">Error loading feeds. Please check the console or try again.</p>`);
+            // Visibility will be handled by setActiveTab
+            loadedTabs.add(tabId); // Mark as loaded to prevent re-fetch loops on error
             return;
         }
 
         if (feedsWithItems && feedsWithItems.length > 0) {
             feedsWithItems.forEach(feed => {
-                renderFeedWidget(feed);
+                renderFeedWidget(feed); // renderFeedWidget already sets data-tab-id
+                                        // and appends to feedGrid. setActiveTab will show/hide it.
             });
-        } else if (feedGrid.children.length === 0) {
-            // Only show 'no feeds' if the entire grid is empty after attempting to load
-            feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
+        } else {
+            // Display "no feeds" message specific to this tab
+            feedGrid.insertAdjacentHTML('beforeend', `<p class="tab-message no-feeds-message" data-tab-id="${tabId}" style="display:none;">No feeds found for this tab. Add one using the form above!</p>`);
+            // Visibility will be handled by setActiveTab
         }
 
-        loadedTabs.add(tabId); // Mark this tab's content as loaded
+        loadedTabs.add(tabId); // Mark this tab's content as loaded (or attempted to load)
     }
 
     // --- Tab Switching Logic ---
@@ -471,18 +476,37 @@ document.addEventListener('DOMContentLoaded', () => {
             button.classList.toggle('active', button.dataset.tabId == tabId);
         });
 
-        // Load content if it's not cached and tabId is valid
-        if (tabId && !loadedTabs.has(tabId)) {
-            await loadFeedsForTab(tabId);
+        // Clear any general message that might have been set if no tabs were previously active
+        if (feedGrid.innerHTML.includes("No active tab") || feedGrid.innerHTML.includes("No tabs available")) {
+            feedGrid.innerHTML = ''; // Clear general messages before loading specific tab content
         }
 
-        // Show/hide widgets based on the active tab
-        feedGrid.querySelectorAll('.feed-widget').forEach(widget => {
-            widget.style.display = widget.dataset.tabId == tabId ? 'block' : 'none';
-        });
+        // Hide all tab-specific messages and widgets initially
+        feedGrid.querySelectorAll('.tab-message').forEach(msg => msg.style.display = 'none');
+        feedGrid.querySelectorAll('.feed-widget').forEach(widget => widget.style.display = 'none');
 
-        // If no tab is active (e.g., after deleting the last one), clear the grid.
-        if (!tabId) {
+        if (tabId) {
+            // Load content if it's not cached
+            if (!loadedTabs.has(tabId)) {
+                await loadFeedsForTab(tabId); // This will render widgets or a tab-specific message
+            }
+
+            // Show widgets for the active tab
+            let activeTabHasWidgets = false;
+            feedGrid.querySelectorAll(`.feed-widget[data-tab-id="${tabId}"]`).forEach(widget => {
+                widget.style.display = 'block';
+                activeTabHasWidgets = true;
+            });
+
+            // Show tab-specific message for the active tab (e.g., "no feeds", "error")
+            // Only show message if no widgets are displayed for this tab.
+            if (!activeTabHasWidgets) {
+                feedGrid.querySelectorAll(`.tab-message[data-tab-id="${tabId}"]`).forEach(msg => {
+                    msg.style.display = 'block';
+                });
+            }
+        } else {
+            // No tab is active (e.g., after deleting the last one or initial state with no tabs)
             feedGrid.innerHTML = '<p>No active tab. Create one or select one if available.</p>';
         }
 
@@ -558,18 +582,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (result && result.success) {
             console.log(`Feed ${feedId} deleted successfully.`);
-            if (widget) widget.remove();
 
-            // Check if there are any widgets left for the active tab
-            const remainingWidgetsForActiveTab = feedGrid.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`);
-            if (remainingWidgetsForActiveTab.length === 0 && activeTabId === widget.dataset.tabId) {
-                 // Only update if the deleted feed was from the currently active tab and it's now empty
-                feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
+            const tabIdOfDeletedFeed = widget ? widget.dataset.tabId : null;
+
+            if (widget) {
+                widget.remove(); // Immediate removal from DOM for responsiveness
             }
-            await initializeTabs(true); // Update unread counts on all tabs
+
+            // If the deleted feed was in the currently active tab, we must refresh its content
+            // by marking it as not loaded. This ensures setActiveTab calls loadFeedsForTab.
+            if (tabIdOfDeletedFeed && tabIdOfDeletedFeed == activeTabId) {
+                loadedTabs.delete(activeTabId);
+            }
+
+            // initializeTabs will update counts and then call renderTabs -> setActiveTab.
+            // If activeTabId was marked as not loaded, setActiveTab will call loadFeedsForTab.
+            await initializeTabs(true);
+
         } else {
             console.error(`Failed to delete feed ${feedId}.`);
-            if (widget) widget.style.opacity = '1';
+            if (widget) widget.style.opacity = '1'; // Revert visual cue on failure
         }
     }
 
