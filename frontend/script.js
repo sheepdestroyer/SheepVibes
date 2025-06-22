@@ -476,19 +476,29 @@ document.addEventListener('DOMContentLoaded', () => {
             button.classList.toggle('active', button.dataset.tabId == tabId);
         });
 
-        // Clear any general message that might have been set if no tabs were previously active
-        if (feedGrid.innerHTML.includes("No active tab") || feedGrid.innerHTML.includes("No tabs available")) {
-            feedGrid.innerHTML = ''; // Clear general messages before loading specific tab content
-        }
-
-        // Hide all tab-specific messages and widgets initially
-        feedGrid.querySelectorAll('.tab-message').forEach(msg => msg.style.display = 'none');
+        // Hide all widgets and tab-specific messages before deciding what to show/remove/add
         feedGrid.querySelectorAll('.feed-widget').forEach(widget => widget.style.display = 'none');
+        feedGrid.querySelectorAll('.tab-message').forEach(msg => msg.style.display = 'none');
+
+        // Attempt to remove any lingering generic message (p directly under feedGrid, no data-tab-id)
+        // These are messages like "No tabs available", "Create a tab...", "No active tab..."
+        // This is crucial for clearing them when a real tab becomes active.
+        const currentChildren = Array.from(feedGrid.children);
+        currentChildren.forEach(child => {
+            if (child.tagName === 'P' && !child.hasAttribute('data-tab-id')) {
+                // Check content to be a bit safer, though ideally only specific setters create these
+                 if (child.textContent.includes("No active tab") ||
+                     child.textContent.includes("No tabs available") ||
+                     child.textContent.includes("Create a tab to get started")) {
+                    child.remove();
+                }
+            }
+        });
 
         if (tabId) {
-            // Load content if it's not cached
+            // If a specific tab is to be activated
             if (!loadedTabs.has(tabId)) {
-                await loadFeedsForTab(tabId); // This will render widgets or a tab-specific message
+                await loadFeedsForTab(tabId); // loadFeedsForTab clears its own old content and adds new.
             }
 
             // Show widgets for the active tab
@@ -499,14 +509,17 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // Show tab-specific message for the active tab (e.g., "no feeds", "error")
-            // Only show message if no widgets are displayed for this tab.
+            // ONLY if no widgets are displayed for this tab.
             if (!activeTabHasWidgets) {
                 feedGrid.querySelectorAll(`.tab-message[data-tab-id="${tabId}"]`).forEach(msg => {
                     msg.style.display = 'block';
                 });
             }
         } else {
-            // No tab is active (e.g., after deleting the last one or initial state with no tabs)
+            // No specific tab is active (tabId is null)
+            // Clear ALL widgets and tab-specific messages before setting the global "No active tab" message.
+            feedGrid.querySelectorAll('.feed-widget').forEach(widget => widget.remove());
+            feedGrid.querySelectorAll('.tab-message').forEach(msg => msg.remove());
             feedGrid.innerHTML = '<p>No active tab. Create one or select one if available.</p>';
         }
 
