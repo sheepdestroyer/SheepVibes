@@ -1,3 +1,3 @@
 pytest
-pytest-mock # For mocking dependencies
+pytest-mock
 pytest-env
