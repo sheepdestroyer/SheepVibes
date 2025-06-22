@@ -137,6 +137,16 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         logger.info(f"Updating feed title for '{feed_db_obj.name}' to '{new_title}'")
         feed_db_obj.name = new_title
 
+    # Update site_link if available and different
+    new_site_link = parsed_feed.feed.get('link') # This is typically the website link
+    if new_site_link and new_site_link.strip() and new_site_link != feed_db_obj.site_link:
+        logger.info(f"Updating feed site_link for '{feed_db_obj.name}' from '{feed_db_obj.site_link}' to '{new_site_link}'")
+        feed_db_obj.site_link = new_site_link
+    elif not feed_db_obj.site_link and new_site_link and new_site_link.strip(): # If current is null, set it
+        logger.info(f"Setting feed site_link for '{feed_db_obj.name}' to '{new_site_link}'")
+        feed_db_obj.site_link = new_site_link
+
+
     logger.info(f"Processing {len(parsed_feed.entries)} entries for feed: {feed_db_obj.name} (ID: {feed_db_obj.id})")
 
     items_to_add = []
