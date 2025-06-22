@@ -284,10 +284,10 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 1
 
 
-def test_global_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
+def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     """
-    Test that true GUIDs are globally unique, and items with NULL GUIDs (link-as-ID)
-    from different feeds don't conflict on the NULL GUID.
+    Tests that GUIDs are unique on a per-feed basis and that NULL GUIDs from
+    different feeds do not conflict.
     """
     logger.info("Testing global GUID uniqueness and NULL GUIDs from different feeds")
     app = db_setup
