@@ -5,6 +5,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, d
 ## Features
 
 *   Organize grids of feeds into customizable tabs, like Netvibes / iGoogle
+*   Import/Export tabs and feeds as OPML files (tested with exports from Netvibes).
 *   Add feeds via URL.
 *   Delete feeds.
 *   Create, rename, and delete tabs.
