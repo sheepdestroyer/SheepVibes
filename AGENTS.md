@@ -5,7 +5,7 @@ During a task, for each individual and intermediate step, and before starting a 
 - Verify that pre-existing tests are still valid, and correct them if necessary.
 - Then, validate all tests by executing the full dedicated CI workflow as described in this document.
 - Only then, start the next step.
-- A task will be done and ready to submit after a last full validation of all tests.
+- A task will be done and ready to submit after running again a last full validation of all tests.
 
 ### CI/CD and Automated Agent Execution Guide
 
