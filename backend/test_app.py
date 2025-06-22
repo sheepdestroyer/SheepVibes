@@ -24,6 +24,8 @@ def client():
     
     # Use an in-memory SQLite database for testing
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    app.config['CACHE_TYPE'] = 'SimpleCache'  # Ensure SimpleCache for all test runs
+    app.config['CACHE_DEFAULT_TIMEOUT'] = 5   # Use a short timeout for testing
     
     # Reset Flask app's internal state for consistent behavior across tests
     app._got_first_request = False
@@ -850,8 +852,14 @@ def test_parse_published_time_variations(): # No client fixture needed as it's a
     entry5.updated = None
     entry5.created = None
     entry5.get.return_value = '[mock_link_entry5]'
+
+    before_fallback_dt5 = datetime.datetime.now(timezone.utc)
     dt5 = parse_published_time(entry5)
-    assert dt5 is None
+    after_fallback_dt5 = datetime.datetime.now(timezone.utc)
+
+    assert dt5 is not None
+    assert before_fallback_dt5 <= dt5 <= after_fallback_dt5
+    assert dt5.tzinfo == timezone.utc
 
     # Case 6: Malformed date string in 'published'
     entry6 = MagicMock(spec=mock_spec)
@@ -860,8 +868,14 @@ def test_parse_published_time_variations(): # No client fixture needed as it's a
     entry6.updated = None
     entry6.created = None
     entry6.get.return_value = '[mock_link_entry6]'
+
+    before_fallback_dt6 = datetime.datetime.now(timezone.utc)
     dt6 = parse_published_time(entry6)
-    assert dt6 is None
+    after_fallback_dt6 = datetime.datetime.now(timezone.utc)
+
+    assert dt6 is not None
+    assert before_fallback_dt6 <= dt6 <= after_fallback_dt6
+    assert dt6.tzinfo == timezone.utc
 
     # Case 7: published_parsed is invalid type, fallback to 'published'
     entry7 = MagicMock(spec=mock_spec)
@@ -870,9 +884,11 @@ def test_parse_published_time_variations(): # No client fixture needed as it's a
     entry7.updated = None
     entry7.created = None
     entry7.get.return_value = '[mock_link_entry7]'
-    dt7 = parse_published_time(entry7)
+
+    dt7 = parse_published_time(entry7) # This should parse entry7.published
     assert dt7 is not None
-    assert dt7.hour == 10 # Should use the fallback
+    assert dt7.year == 2023 and dt7.month == 10 and dt7.day == 27
+    assert dt7.hour == 10
     assert dt7.tzinfo == timezone.utc
 
 def test_process_feed_with_in_batch_duplicate_guids(client): # Using client fixture for app_context
