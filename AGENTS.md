@@ -1,6 +1,6 @@
 An Agent must always start by reading **all** files from the repository in order to have a global understanding of the application.
 
-After making a change, an Agent must always:
+After each individual changes, and before starting a new one, an Agent must always:
 - Add new relevant tests to the test suite.
 - Verify that pre-existing tests are still valid and correct them if necessary.
 - Then, validate all tests by executing the full dedicated CI workflow as described in this document.
