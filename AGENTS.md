@@ -2,8 +2,8 @@ Agents must always start by reading all files from the repo in order to have a g
 
 After making a change, Agents always :
 - add new relevant tests to the test suite,
-- verify that pre-existing tests are still valid,
-- and validate them all by executing the full dedicated CI worflow as describe in this document.
+- verify that pre-existing tests are still valid, and correct them if necessary,
+- then validate all tests by executing the full dedicated CI worflow as describe in this document.
 
 Automated environments, such as those used by Google's Jules, operate in restricted settings where service ports may be mapped dynamically. The project's test suite is designed to handle this.
 
