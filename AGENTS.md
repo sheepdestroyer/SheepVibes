@@ -1,5 +1,3 @@
-AGENTS.md
-
 Agents always start by reading all files from the repo in order to have a global understanding of the app.
 
 After making a change, Agents always :
@@ -16,7 +14,7 @@ The most reliable reference is the project's own CI workflow, located at .github
 Key Configuration Points for Automated Agents:
 Redis Service: The tests require a running Redis service for caching checks. In the GitHub Actions workflow, this is accomplished using the services block to start a redis:alpine container with docker. Your environment will need to do the same.
 
-Dynamic Port Handling: In many CI systems, you cannot assume Redis will be available on localhost:6379. The service container's port 6379 will be mapped to a dynamic port on the host runner. The GitHub Actions workflow retrieves this port using ${{ job.services.redis.ports['6379'] }}.
+Dynamic Port Handling: In many CI systems, you cannot assume Redis will be available on localhost:6379. The service container's port 6379 will be mapped to a dynamic port on the host runner. The GitHub Actions workflow retrieves this port using `${{ job.services.redis.ports['6379'] }}`.
 
 Environment Variable: The test suite (backend/test_app.py) is explicitly configured to look for the CACHE_REDIS_PORT environment variable. If this variable is set, it will override the default Redis port and allow the tests to connect to the dynamically mapped port of the Redis service container.
 
