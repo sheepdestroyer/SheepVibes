@@ -127,8 +127,17 @@ document.addEventListener('DOMContentLoaded', () => {
      * @returns {Promise<object|null>} A promise resolving to the JSON data, {success: true} for successful non-JSON responses, or null on failure.
      */
     async function fetchData(url, options = {}) {
+        let fetchUrl = url;
+        const method = options.method ? options.method.toUpperCase() : 'GET';
+
+        if (method === 'GET') {
+            // Add cache-busting parameter for GET requests
+            const separator = fetchUrl.includes('?') ? '&' : '?';
+            fetchUrl += `${separator}_t=${Date.now()}`;
+        }
+
         try {
-            const response = await fetch(url, options);
+            const response = await fetch(fetchUrl, options);
             if (!response.ok) {
                 let errorMsg = `HTTP error! status: ${response.status}`;
                 try {
