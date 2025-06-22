@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportOpmlButton = document.getElementById('export-opml-button');
     const importOpmlButton = document.getElementById('import-opml-button');
     const opmlFileInput = document.getElementById('opml-file-input');
+    const loadingOverlay = document.getElementById('loading-overlay');
     
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -95,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalButtonText = refreshAllFeedsButton.textContent;
         refreshAllFeedsButton.disabled = true;
         refreshAllFeedsButton.textContent = 'Refreshing...';
+        loadingOverlay.classList.remove('hidden');
 
         try {
             const result = await fetchData('/api/feeds/update-all', { method: 'POST' });
@@ -113,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             refreshAllFeedsButton.disabled = false;
             refreshAllFeedsButton.textContent = originalButtonText;
+            loadingOverlay.classList.add('hidden');
         }
     }
 
@@ -219,6 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
         importOpmlButton.disabled = true;
         importOpmlButton.textContent = 'Importing...';
         opmlFileInput.disabled = true;
+        loadingOverlay.classList.remove('hidden');
 
         const formData = new FormData();
         formData.append('file', file);
@@ -271,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
             importOpmlButton.textContent = 'Import OPML';
             opmlFileInput.value = ''; // Reset file input
             opmlFileInput.disabled = false;
+            loadingOverlay.classList.add('hidden');
         }
     }
 
@@ -554,10 +559,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result && result.success) {
             console.log(`Feed ${feedId} deleted successfully.`);
             if (widget) widget.remove();
-            if (feedGrid.children.length === 0) {
+
+            // Check if there are any widgets left for the active tab
+            const remainingWidgetsForActiveTab = feedGrid.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`);
+            if (remainingWidgetsForActiveTab.length === 0 && activeTabId === widget.dataset.tabId) {
+                 // Only update if the deleted feed was from the currently active tab and it's now empty
                 feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
             }
-            await initializeTabs(true);
+            await initializeTabs(true); // Update unread counts on all tabs
         } else {
             console.error(`Failed to delete feed ${feedId}.`);
             if (widget) widget.style.opacity = '1';
