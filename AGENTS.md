@@ -1,9 +1,10 @@
 An Agent must always start by reading **all** files from the repository in order to have a global understanding of the application.
 
-During a task, after each individual intermediate step, and before starting a new one, an Agent must always:
+During a task, after each individual intermediate step and before starting a new one, an Agent must always:
 - Add new relevant tests to the test suite.
 - Verify that pre-existing tests are still valid and correct them if necessary.
 - Then, validate all tests by executing the full dedicated CI workflow as described in this document.
+- Only then, start the next step.
 - A task will be done and ready to submit after a last full validation of all tests.
 
 ### CI/CD and Automated Agent Execution Guide
