@@ -1,5 +1,9 @@
 AGENTS.md
 
+Agents always start by reading all files from the repo to have a global understanding of the app.
+
+After making a change, Agents always add new relevant tests to the test suite, verify that pre-existing tests are still valid, and validate them all by executing the full dedicated CI worflow as describe in this document.
+
 Automated environments, such as those used by Google's Jules, often operate in restricted or virtualized settings where service ports may be mapped dynamically. The project's test suite is designed to handle this.
 
 The key to running tests successfully in such an environment is to provide a Redis instance and inform the test suite how to connect to it.
@@ -23,4 +27,4 @@ Navigate to the backend directory.
 Install dependencies: pip install -r requirements.txt -r requirements-dev.txt.
 Run the tests using the command: python -m pytest -v.
 
-By following these instructions, which mirror the setup in our own CI workflow, your automated tool should be able to execute the test suite correctly ; Always make sure it suceeds.
+By following these instructions, which mirror the setup in our own CI workflow, Agents' automated tools should be able to execute the test suite correctly ; Always make sure it suceeds.
