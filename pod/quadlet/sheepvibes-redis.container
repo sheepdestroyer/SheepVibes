@@ -1,0 +1,17 @@
+# pod/quadlet/sheepvibes-redis.container
+
+[Unit]
+Description=SheepVibes Redis Container
+Requires=sheepvibes-redis-data.volume
+After=sheepvibes-redis-data.volume
+
+[Container]
+Pod=sheepvibespod.pod
+ContainerName=sheepvibes-redis
+Image=docker.io/redis:alpine
+Volume=sheepvibes-redis-data.volume:/data
+
+Restart=on-failure
+TimeoutStartSec=90
+# StartWithPod=true is the default when Pod= is specified.
+# No [Install] section needed if pod is the primary enabled unit.

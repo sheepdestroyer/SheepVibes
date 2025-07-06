@@ -1,0 +1,24 @@
+# pod/quadlet/sheepvibes-app.container
+
+[Unit]
+Description=SheepVibes Application Container
+Requires=sheepvibes-db.volume
+After=sheepvibes-db.volume
+
+[Container]
+Pod=sheepvibespod.pod
+ContainerName=sheepvibes-app
+Image=ghcr.io/sheepdestroyer/sheepvibes:latest
+Volume=sheepvibes-db.volume:/app/data
+
+Environment=DATABASE_PATH=/app/data/sheepvibes.db
+Environment=CACHE_REDIS_URL=redis://localhost:6379/0
+Environment=FLASK_APP=backend.app
+Environment=PYTHONPATH=/app
+Environment=UPDATE_INTERVAL_MINUTES=15
+Environment=FLASK_RUN_HOST=0.0.0.0
+
+Restart=on-failure
+TimeoutStartSec=180
+# StartWithPod=true is the default when Pod= is specified.
+# No [Install] section needed if pod is the primary enabled unit.
