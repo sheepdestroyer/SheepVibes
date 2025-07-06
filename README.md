@@ -15,9 +15,9 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, d
 *   Displays unread counts per feed and per tab.
 *   Basic persistence using a database.
 
-## Production Deployment (Quadlets)
+## Production Deployment (Podman Pod with systemd)
 
-This section describes how to deploy SheepVibes using Podman Quadlets for systemd user services.
+This section describes how to deploy SheepVibes using a Podman Pod managed by systemd user services.
 
 ### Prerequisites
 
@@ -32,16 +32,16 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
     For the stable version, always refer to the `main` branch:
     ```bash
     # Stable version from main:
-    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_quadlets.sh
+    curl -O https://raw.githubusercontent.com/sheepdestroyer/sheepvibes/main/scripts/deploy_pod.sh
     ```
 
 2.  **Make the Script Executable and Run It**:
     Navigate to where you downloaded the script (or the repository root if cloned).
-    The script will fetch the necessary `sheepvibes.pod` file from GitHub (from the `main` branch, as defined within the script itself, unless you are using a modified version from a feature branch that specifies otherwise) and copy it to `~/.config/containers/systemd/`. Volume management is now handled by the pod definition using named volumes.
+    The script will fetch the necessary `sheepvibespod.pod` file from GitHub (from the `main` branch, as defined within the script itself, unless you are using a modified version from a feature branch that specifies otherwise) and copy it to `~/.config/containers/systemd/`. Volume management is now handled by the pod definition using named volumes.
 
     ```bash
-    chmod +x deploy_quadlets.sh # Or scripts/deploy_quadlets.sh if cloned
-    ./deploy_quadlets.sh      # Or scripts/deploy_quadlets.sh if cloned
+    chmod +x deploy_pod.sh # Or scripts/deploy_pod.sh if cloned
+    ./deploy_pod.sh      # Or scripts/deploy_pod.sh if cloned
     ```
     The script will check for dependencies, guide you through the process, and inform you of the next steps.
 
@@ -77,7 +77,7 @@ This section describes how to deploy SheepVibes using Podman Quadlets for system
 
 ### Accessing the Application
 
-Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per the `PublishPort` setting in the `[Pod]` section of the `quadlets/sheepvibes.pod` file). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the downloaded `quadlets/sheepvibes.pod` file (in the `[Pod]` section) (e.g., change to `0.0.0.0:5000:5000`) *before* running the deployment script, or re-run the script after modification (it will overwrite existing quadlet files), then reload/restart the systemd service.
+Once started, the application will be accessible at `http://127.0.0.1:5000` by default (as per the `PublishPort` setting in the `[Pod]` section of the `pod/sheepvibespod.pod` file). If you need to access it from other machines, you might need to adjust firewall settings or the `PublishPort` setting in the downloaded `pod/sheepvibespod.pod` file (in the `[Pod]` section) (e.g., change to `0.0.0.0:5000:5000`) *before* running the deployment script, or re-run the script after modification (it will overwrite existing pod files), then reload/restart the systemd service.
 
 ## Local Development
 
@@ -172,14 +172,14 @@ This section is for developers who want to work on the Python backend or JavaScr
 ## Configuration (Environment Variables)
 
 You can configure the application by passing environment variables.
-- When using Quadlets (via `deploy_quadlets.sh`), the script downloads the default `sheepvibes.pod` file. To customize, you would need to download it manually, edit the `Environment=` lines for the respective container within the `quadlets/sheepvibes.pod` file, place it in `~/.config/containers/systemd/` *before* running `systemctl --user daemon-reload`, or modify it after deployment and then run `systemctl --user daemon-reload && systemctl --user restart sheepvibes.service`.
+- When deploying with the systemd pod (via `deploy_pod.sh`), the script downloads the default `sheepvibespod.pod` file. To customize, you would need to download it manually, edit the `Environment=` lines for the respective container within the `pod/sheepvibespod.pod` file, place it in `~/.config/containers/systemd/` *before* running `systemctl --user daemon-reload`, or modify it after deployment and then run `systemctl --user daemon-reload && systemctl --user restart sheepvibespod.service`.
 - When using `podman run` directly, use the `-e` flag.
 - When running the backend directly, set them in your shell environment.
 
 *   `DATABASE_PATH`: The full path *inside the container* (or on the host if running directly) where the SQLite database file should be stored. Defaults to `/app/data/sheepvibes.db` (container) or `backend/sheepvibes.db` (direct script).
 *   `UPDATE_INTERVAL_MINUTES`: The interval (in minutes) at which the application checks feeds for updates. Defaults to `15`.
 *   `CACHE_REDIS_URL`: The connection URL for the Redis server.
-    *   Quadlet default (downloaded by script): `redis://localhost:6379/0`
+    *   Pod default (downloaded by script): `redis://localhost:6379/0`
     *   `podman run` dev example: `redis://sheepvibes-redis-dev:6379/0`
     *   Direct script: `redis://localhost:6379/0` (if Redis is on host)
 *   `FLASK_APP`: Path to the Flask application. Defaults to `backend.app`.
