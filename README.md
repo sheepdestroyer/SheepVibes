@@ -77,11 +77,13 @@ This section describes how to deploy SheepVibes using a Podman Pod managed by sy
     The `sheepvibes-redis` container runs within the same pod and is managed as part of `sheepvibespod-pod.service`. Network communication between the app and Redis occurs over `localhost` within the pod. Application data and Redis data are stored in Podman-managed volumes (e.g., `systemd-sheepvibes-db` and `systemd-sheepvibes-redis-data` by default), defined via `.volume` Quadlet files.
 
 4.  **Enable Auto-start (Optional)**:
-    To start the SheepVibes pod automatically when your user logs in, enable the main pod service:
-    ```bash
-    systemctl --user enable sheepvibespod-pod.service
-    ```
-    Note: For user services to start automatically on boot *without* requiring a login, you may need to enable lingering for your user. This typically requires root privileges:
+    The `pod/quadlet/sheepvibespod.pod` file includes an `[Install]` section with `WantedBy=default.target`. This means that after you run `systemctl --user daemon-reload` (as instructed by the `deploy_pod.sh` script), the main pod service (`sheepvibespod-pod.service`) is automatically configured to start when your user session begins.
+
+    No separate `systemctl --user enable sheepvibespod-pod.service` command is needed, and attempting to run it on the generated service will result in an error.
+
+    To verify auto-start, you can log out and log back in. The service should start automatically.
+
+    *Note on system boot*: For user services to start automatically when the system boots (i.e., without requiring an interactive login for that user), you may need to enable lingering for your user. This typically requires root privileges:
     ```bash
     sudo loginctl enable-linger $(whoami)
     ```
