@@ -5,7 +5,7 @@ set -euo pipefail
 REPO="sheepdestroyer/sheepvibes"
 BRANCH="main" # Or specify a tag/commit if preferred
 QUADLET_DIR="${HOME}/.config/containers/systemd"
-POD_FILENAME="sheepvibes.pod" # New pod filename
+POD_FILENAME="sheepvibespod.pod" # New pod filename
 # Construct the direct download URL for the raw file content
 POD_FILE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/quadlets/${POD_FILENAME}"
 
@@ -62,23 +62,23 @@ echo ""
 
 # --- User Instructions ---
 echo "Pod file ${POD_FILENAME} deployed to ${QUADLET_DIR}."
-echo "The application will use Podman-managed volumes 'sheepvibes-db' and 'sheepvibes-redis' for persistence, defined within the pod."
+echo "The application will use Podman-managed volumes 'sheepvibespod-sheepvibes-db' and 'sheepvibespod-sheepvibes-redis' for persistence, defined within the pod."
 echo ""
 echo "Next steps:"
 echo "1. Reload systemd to recognize the new/updated pod file:"
-echo "   systemctl --user daemon-reload && systemctl --user list-unit-files 'sheepvibes*'"
+echo "   systemctl --user daemon-reload && systemctl --user list-unit-files 'sheepvibespod*'"
 echo ""
 echo "2. Start the pod service (this will start all containers defined in the pod):"
-echo "   systemctl --user start ${POD_FILENAME%.*}.service" # Uses the pod filename (e.g., sheepvibes.service)
+echo "   systemctl --user start ${POD_FILENAME%.*}.service" # Uses the pod filename (e.g., sheepvibespod.service)
 echo ""
 echo "3. Check the status of the pod:"
 echo "   systemctl --user status ${POD_FILENAME%.*}.service"
-echo "   You can inspect the auto-created volumes with: podman volume inspect sheepvibes-db sheepvibes-redis"
+echo "   You can inspect the auto-created volumes with: podman volume inspect sheepvibespod-sheepvibes-db sheepvibespod-sheepvibes-redis"
 echo ""
 echo "4. View logs for the entire pod (follow for real-time updates):"
 echo "   journalctl --user -u ${POD_FILENAME%.*}.service -f"
 echo "   To view logs for a specific container within the pod (e.g., sheepvibes-app):"
-echo "   journalctl --user -u sheepvibes.service -t sheepvibes-app # Assuming systemd uses container name as identifier for journald"
+echo "   journalctl --user -u sheepvibespod.service -t sheepvibes-app # Assuming systemd uses container name as identifier for journald"
 echo "   Alternatively, use 'podman logs <container_name_or_id>'"
 echo ""
 echo "To stop the pod:"
