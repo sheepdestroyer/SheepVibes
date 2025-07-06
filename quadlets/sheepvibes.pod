@@ -11,20 +11,20 @@ PublishPort=127.0.0.1:5000:5000
 # Network=sheepvibes.network # This would refer to a separate .network file if we still wanted one at the pod level
 
 [Volume/sheepvibes-db]
-# systemd will create a volume named 'sheepvibes-pod-db'
+# systemd will create a volume named 'sheepvibes-db'
 # To ensure unique volume name if old volumes are not cleaned up immediately.
 # Or reuse 'sheepvibes-db' if confident in cleanup. Let's use a new name for safety during transition.
 # Driver=local # Optional: specify driver
 
 [Volume/sheepvibes-redis]
-# systemd will create a volume named 'sheepvibes-pod-redis'
+# systemd will create a volume named 'sheepvibes-redis'
 # Driver=local # Optional: specify driver
 
 [Container/app]
 Pod=sheepvibes.pod # Explicitly state this container belongs to the pod
 ContainerName=sheepvibes-app
 Image=ghcr.io/sheepdestroyer/sheepvibes:latest
-Volume=sheepvibes-db.volume:/app/data
+Volume=sheepvibes-db.volume:/app/data:Z
 
 # Environment variables for the application
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
@@ -43,7 +43,7 @@ TimeoutStartSec=180 # Increased timeout to allow for image pulls or slow starts
 Pod=sheepvibes.pod # Explicitly state this container belongs to the pod
 ContainerName=sheepvibes-redis
 Image=docker.io/redis:alpine
-Volume=sheepvibes-redis.volume:/data
+Volume=sheepvibes-redis.volume:/data:Z
 
 # Standard service options
 Restart=on-failure

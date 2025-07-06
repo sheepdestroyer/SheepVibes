@@ -42,7 +42,7 @@ if [ -d "${QUADLET_DIR}" ]; then
            -name 'sheepvibes-*.volume' -o \
            -name 'sheepvibes-*.network' -o \
            -name "${POD_FILENAME}" \) \
-        -print -delete # More efficient: print what's being deleted and delete
+        -print -ok rm {} \; # More efficient: print what's being deleted and delete
     echo "Cleanup complete."
 else
     echo "No existing quadlet directory found. Skipping cleanup."
