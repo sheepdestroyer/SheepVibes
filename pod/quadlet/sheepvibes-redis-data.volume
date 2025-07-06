@@ -5,6 +5,3 @@ Description=Volume for SheepVibes Redis Data
 
 [Volume]
 # VolumeName=sheepvibes-redis-data # Optional: Default is systemd-sheepvibes-redis-data
-
-[Install]
-WantedBy=default.target
