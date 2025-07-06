@@ -42,7 +42,8 @@ class Feed(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tab_id = db.Column(db.Integer, db.ForeignKey('tabs.id'), nullable=False) # Foreign key to Tab
     name = db.Column(db.String(200), nullable=False) # Name of the feed (often from feed title)
-    url = db.Column(db.String(500), nullable=False) # URL of the feed
+    url = db.Column(db.String(500), nullable=False) # URL of the feed (the XML feed URL)
+    site_link = db.Column(db.String(500), nullable=True) # URL of the feed's main website (HTML link)
     last_updated_time = db.Column(db.DateTime, default=lambda: datetime.datetime.now(timezone.utc)) # Last time feed was successfully fetched
     # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
     # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
@@ -62,6 +63,7 @@ class Feed(db.Model):
             'tab_id': self.tab_id,
             'name': self.name,
             'url': self.url,
+            'site_link': self.site_link,
             'last_updated_time': self.last_updated_time.isoformat() if self.last_updated_time else None,
             'unread_count': unread_count
         }
@@ -76,7 +78,11 @@ class FeedItem(db.Model):
     published_time = db.Column(db.DateTime, nullable=True, index=True) # Add index
     fetched_time = db.Column(db.DateTime, nullable=False, default=lambda: datetime.datetime.now(timezone.utc))
     is_read = db.Column(db.Boolean, nullable=False, default=False, index=True) # Add index
-    guid = db.Column(db.String, nullable=True, unique=True) # GUID should be unique
+    guid = db.Column(db.String, nullable=True) # GUID unique per feed via UniqueConstraint
+
+    __table_args__ = (
+        db.UniqueConstraint('feed_id', 'guid', name='uq_feed_item_feed_id_guid'),
+    )
 
     @validates('published_time', 'fetched_time')
     def validate_datetime_utc(self, key, dt):

@@ -1,9 +1,9 @@
 # Import necessary libraries
 import feedparser
-import datetime
-from datetime import timezone # Import timezone
-import time
+import datetime # Import the full module
+from datetime import timezone # Specifically import timezone
 import logging # Standard logging
+import ssl # Added for specific SSL error catching
 from dateutil import parser as date_parser # Use dateutil for robust date parsing
 from sqlalchemy.exc import IntegrityError
 
@@ -22,54 +22,46 @@ def parse_published_time(entry):
         entry: A feedparser entry object.
 
     Returns:
-        A datetime object representing the published time (UTC aware),
-        or None if parsing fails.
+        A datetime object representing the published time (UTC aware).
+        Falls back to current UTC time if parsing fails.
     """
     parsed_dt = None
     if hasattr(entry, 'published_parsed') and entry.published_parsed:
-        # feedparser already parsed it
         try:
-            # Convert feedparser's time struct to datetime
-            # This is often naive but represents UTC as per feedparser docs for published_parsed
-            parsed_dt = datetime.datetime(*entry.published_parsed[:6])
+            parsed_dt = datetime.datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
         except (TypeError, ValueError) as e:
             logger.debug(f"Failed to parse 'published_parsed' for entry {entry.get('link', '[no link]')}: {e}")
-            parsed_dt = None # Ensure parsed_dt is None if parsing fails
+            parsed_dt = None
     
     if parsed_dt is None:
         # Try common date fields using dateutil.parser for more flexibility
-        date_fields = ['published', 'updated', 'created']
+        # Added 'dc:date' as observed in some feeds
+        date_fields = ['published', 'updated', 'created', 'dc:date']
         for field in date_fields:
             if hasattr(entry, field):
                 field_value = getattr(entry, field)
-                if field_value: # Ensure there's a value to parse
+                if field_value:
                     try:
-                        # Use dateutil.parser for robust parsing of various formats
                         parsed_dt = date_parser.parse(field_value)
-                        if parsed_dt: # If parsing is successful, break from loop
+                        if parsed_dt:
                             break
-                    except (ValueError, TypeError, OverflowError) as e: # Keep common exceptions for specific logging
+                    except (ValueError, TypeError, OverflowError) as e:
                         logger.debug(f"Specific parsing error for date field '{field}' for entry {entry.get('link', '[no link]')} ({type(e).__name__}): {e}")
-                        # Ignore parsing errors for this field and try the next
                         continue
-                    except Exception as e: # Catch any other exceptions during parsing
+                    except Exception as e:
                         logger.warning(f"Generic parsing error for date field '{field}' for entry {entry.get('link', '[no link]')} ({type(e).__name__}): {e}")
-                        # Ignore parsing errors for this field and try the next
                         continue
 
     if parsed_dt:
         # Ensure the datetime is UTC timezone-aware
         if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(parsed_dt) is None:
-            # Datetime is naive, assume UTC and make it aware
-            parsed_dt = parsed_dt.replace(tzinfo=datetime.timezone.utc)
+            parsed_dt = parsed_dt.replace(tzinfo=timezone.utc)
         else:
-            # Datetime is already timezone-aware, convert it to UTC
-            parsed_dt = parsed_dt.astimezone(datetime.timezone.utc)
+            parsed_dt = parsed_dt.astimezone(timezone.utc)
         return parsed_dt
                 
-    # If no date field is found or parsed successfully
-    logger.warning(f"Could not parse published time for entry: {entry.get('link', '[no link]')}")
-    return None
+    logger.warning(f"Could not parse published time for entry: {entry.get('link', '[no link]')}. Using current time as fallback.")
+    return datetime.datetime.now(timezone.utc)
 
 # --- Core Feed Processing Functions ---
 
@@ -84,28 +76,34 @@ def fetch_feed(feed_url):
     """
     logger.info(f"Fetching feed: {feed_url}")
     try:
-        # Use feedparser to fetch and parse the feed
-        # Consider adding etag and modified headers for conditional GET requests later
         parsed_feed = feedparser.parse(feed_url)
         
-        # Check for basic parsing errors indicated by feedparser
         if parsed_feed.bozo:
-            bozo_exception = parsed_feed.get('bozo_exception', 'Unknown parsing error')
-            logger.warning(f"Feed is ill-formed: {feed_url} - Error: {bozo_exception}")
-            # Decide if you want to proceed despite bozo=1 (might still have usable data)
-            # For now, we'll proceed but log the warning.
+            bozo_exc = parsed_feed.get('bozo_exception', Exception('Unknown parsing error (bozo=1)'))
+            error_message = str(bozo_exc)
 
-        # Check if entries exist
-        if not parsed_feed.entries:
-             logger.warning(f"No entries found in feed: {feed_url}")
-             # Return the parsed feed anyway, might contain metadata
+            if "SSL" in error_message.upper() or \
+               "CERTIFICATE" in error_message.upper() or \
+               isinstance(bozo_exc, ssl.SSLError):
+                logger.error(
+                    f"Failed to fetch feed {feed_url} due to SSL/Certificate error (feedparser bozo): {error_message}",
+                    exc_info=False
+                )
+            else:
+                logger.warning(f"Feed is ill-formed: {feed_url} - Error: {error_message}")
 
-        logger.info(f"Successfully fetched feed: {feed_url}")
+        if not parsed_feed.entries and not parsed_feed.bozo:
+             logger.warning(f"No entries found in feed (and not a bozo feed): {feed_url}")
+
+        if not parsed_feed.bozo:
+            logger.info(f"Successfully fetched feed: {feed_url}")
         return parsed_feed
-        
+
+    except ssl.SSLError as ssl_e:
+        logger.error(f"Direct SSL Error during fetch attempt for {feed_url}: {ssl_e}", exc_info=True)
+        return None
     except Exception as e:
-        # Catch any other exceptions during fetching/parsing
-        logger.error(f"Error fetching or parsing feed {feed_url}: {e}", exc_info=True)
+        logger.error(f"Generic error fetching or parsing feed {feed_url}: {e}", exc_info=True)
         return None
 
 def process_feed_entries(feed_db_obj, parsed_feed):
@@ -122,100 +120,156 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         logger.error(f"process_feed_entries called with a null parsed_feed for feed ID {feed_db_obj.id if feed_db_obj else 'Unknown'}")
         return 0
 
-    new_items_count = 0
-    processed_guids = set()
-    processed_links = set()
+    # These sets track items *within the current batch being processed*
+    batch_processed_guids = set()
+    batch_processed_links = set()
 
-    # Get existing GUIDs and links for this feed to avoid duplicates
-    existing_items = db.session.query(FeedItem.guid, FeedItem.link).filter_by(feed_id=feed_db_obj.id).all()
-    existing_guids = {item.guid for item in existing_items if item.guid}
-    existing_links = {item.link for item in existing_items if item.link}
+    # Get existing GUIDs and links *for this specific feed* from the DB
+    existing_feed_items_query = db.session.query(FeedItem.guid, FeedItem.link).filter_by(feed_id=feed_db_obj.id)
+    # Ensure we only add non-None GUIDs to the set
+    existing_feed_guids = {item.guid for item in existing_feed_items_query if item.guid}
+    # Ensure we only add non-None links to the set (though link is NOT NULL in DB)
+    existing_feed_links = {item.link for item in existing_feed_items_query if item.link}
 
-    # Update feed title if it has changed
+
     new_title = parsed_feed.feed.get('title')
     if new_title and new_title.strip() and new_title != feed_db_obj.name:
         logger.info(f"Updating feed title for '{feed_db_obj.name}' to '{new_title}'")
         feed_db_obj.name = new_title
 
-    logger.info(f"Processing {len(parsed_feed.entries)} entries for feed: {feed_db_obj.name}")
+    # Update site_link if available and different
+    new_site_link = parsed_feed.feed.get('link') # This is typically the website link
+    if new_site_link and new_site_link.strip() and new_site_link != feed_db_obj.site_link:
+        logger.info(f"Updating feed site_link for '{feed_db_obj.name}' from '{feed_db_obj.site_link}' to '{new_site_link}'")
+        feed_db_obj.site_link = new_site_link
+    elif not feed_db_obj.site_link and new_site_link and new_site_link.strip(): # If current is null, set it
+        logger.info(f"Setting feed site_link for '{feed_db_obj.name}' to '{new_site_link}'")
+        feed_db_obj.site_link = new_site_link
+
+
+    logger.info(f"Processing {len(parsed_feed.entries)} entries for feed: {feed_db_obj.name} (ID: {feed_db_obj.id})")
+
+    items_to_add = []
 
     for entry in parsed_feed.entries:
-        # Determine the unique identifier (GUID preferably, fallback to link)
-        guid = entry.get('id')
-        link = entry.get('link')
-        title = entry.get('title', '[No Title]')
+        entry_title = entry.get('title', '[No Title]')
+        entry_link = entry.get('link')
+        feedparser_id = entry.get('id') # This is what feedparser provides as 'id'
 
-        # Basic validation: Ensure we have at least a link or guid
-        if not link and not guid:
-            logger.warning(f"Skipping entry with no link or guid in feed {feed_db_obj.name}: '{title[:50]}...'")
+        if not entry_link: # Link is essential
+            logger.warning(f"Skipping entry titled '{entry_title[:100]}' for feed '{feed_db_obj.name}' due to missing link. (feedparser ID: {feedparser_id if feedparser_id else 'N/A'})")
             continue
 
-        # Check for duplicates based on GUID or link against DB content and then batch content
+        # Determine the GUID to be stored in the database (db_guid).
+        # If feedparser's ID (feedparser_id) is present and different from the entry_link,
+        # it's considered a "true" GUID. Otherwise, db_guid will be None.
+        # This prevents storing links in the globally unique 'guid' column if feedparser defaults id to link.
+        db_guid = None
+        if feedparser_id and feedparser_id != entry_link:
+            db_guid = feedparser_id
 
-        # Check against DB content
-        if guid and guid in existing_guids:
-            # logger.debug(f"Skipping item with existing GUID in DB: {guid} for feed {feed_db_obj.name}")
+        # --- Deduplication Logic ---
+        # 1. Check against items already in the DB *for this specific feed*
+        if db_guid and db_guid in existing_feed_guids:
+            # logger.debug(f"Item with db_guid '{db_guid}' already exists in DB for feed '{feed_db_obj.name}'. Skipping.")
             continue
-        # If GUID is new or missing, check link against DB.
-        # An item with a new GUID should still be skipped if its link is a known duplicate in the DB.
-        if link and link in existing_links:
-            # logger.debug(f"Skipping item with existing Link in DB: {link} (GUID: {guid}) for feed {feed_db_obj.name}")
-            continue
-
-        # Check against current batch content (processed_guids and processed_links)
-        # An item is a duplicate if its GUID is already processed in this batch OR its Link is already processed.
-        if guid and guid in processed_guids:
-            # logger.debug(f"Skipping item with GUID already processed in this batch: {guid} for feed {feed_db_obj.name}")
-            continue
-        if link and link in processed_links: # Check link even if GUID is new for this batch
-            # logger.debug(f"Skipping item with Link already processed in this batch: {link} (GUID: {guid}) for feed {feed_db_obj.name}")
+        # Check link for this feed, critical for items that will have db_guid=None or if link is the primary identifier
+        if entry_link in existing_feed_links:
+            # logger.debug(f"Item with link '{entry_link}' already exists in DB for feed '{feed_db_obj.name}'. Skipping. (db_guid was: {db_guid})")
             continue
 
-        # If the item is not a duplicate by any of the above checks, then it's new.
-        # Add its identifiers to the processed sets for this batch.
-        if guid:
-            processed_guids.add(guid)
-        if link: # Add link to processed_links for all new items with links
-            processed_links.add(link)
+        # 2. Check against items already processed *in this current batch*
+        is_batch_duplicate = False
+        if db_guid: # If this item has a "true" GUID
+            if db_guid in batch_processed_guids:
+                logger.warning(f"Skipping item (true GUID: {db_guid}, link: {entry_link}) for feed '{feed_db_obj.name}', duplicate true GUID in current fetch batch.")
+                is_batch_duplicate = True
+        else: # No "true" GUID (db_guid is None), so batch uniqueness relies on the link
+            if entry_link in batch_processed_links:
+                logger.warning(f"Skipping item (link: {entry_link}) for feed '{feed_db_obj.name}', it has no true GUID and its link is a duplicate in current fetch batch.")
+                is_batch_duplicate = True
 
-        # Parse published time
-        published_time = parse_published_time(entry)
+        if is_batch_duplicate:
+            continue
 
-        # Create new FeedItem object
+        # If we reach here, the item is considered new.
+        # Add its identifiers to the batch processed sets for subsequent checks within this batch.
+        if db_guid:
+            batch_processed_guids.add(db_guid)
+        # Always add the link to batch_processed_links. For items with true GUIDs, this helps
+        # catch subsequent items in the same batch that *lack* a true GUID but share the same link.
+        # For items without true GUIDs, this is their primary batch duplicate check.
+        batch_processed_links.add(entry_link)
+
+        published_time = parse_published_time(entry) # Already falls back to now()
+
         new_item = FeedItem(
             feed_id=feed_db_obj.id,
-            title=title,
-            link=link,
+            title=entry_title,
+            link=entry_link,
             published_time=published_time,
-            # fetched_time defaults to now
-            is_read=False, # New items are always unread
-            guid=guid
+            guid=db_guid # This will be None if feedparser_id was missing or same as link
         )
-        
-        # Add to session
-        db.session.add(new_item)
-        new_items_count += 1
-        # logger.debug(f"Adding new item: {title}")
+        items_to_add.append(new_item)
 
-    # Commit all new items for this feed at once
-    try:
-        # Update the feed's last updated time
+    if not items_to_add:
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+        try:
+            db.session.commit() # Commit to save updated last_updated_time
+        except Exception as e: # Catch potential errors during this commit
+            db.session.rollback()
+            logger.error(f"Error committing feed update (no new items) for {feed_db_obj.name}: {e}", exc_info=True)
+        return 0
+
+    committed_items_count = 0
+    try:
+        db.session.add_all(items_to_add)
+        feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc) # Set time before trying to commit
         db.session.commit()
-        logger.info(f"Added {new_items_count} new items for feed: {feed_db_obj.name}")
+        committed_items_count = len(items_to_add)
+        logger.info(f"Successfully batch-added {committed_items_count} new items for feed: {feed_db_obj.name}")
     except IntegrityError as e:
-        # Handle potential race conditions or unexpected unique constraint violations
-        db.session.rollback()
-        logger.error(f"Database integrity error processing feed {feed_db_obj.name}: {e}", exc_info=True)
-        # Attempt to re-process individually or log/skip
-        # For simplicity, we just log the error and return 0 for this run
-        return 0 
+        db.session.rollback() # Rollback the failed batch
+        logger.warning(f"Batch insert failed for feed '{feed_db_obj.name}' due to IntegrityError: {e}. Attempting individual inserts.")
+
+        # Ensure last_updated_time is set even if all individual inserts fail,
+        # as the feed itself was successfully fetched and processed up to this point.
+        # This needs to be part of a new transaction if the previous one was rolled back.
+        try:
+            feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+            db.session.add(feed_db_obj) # Re-add if it became detached after rollback
+            db.session.commit()
+        except Exception as ts_e:
+            db.session.rollback()
+            logger.error(f"Error updating last_updated_time for feed '{feed_db_obj.name}' after batch insert failure: {ts_e}", exc_info=True)
+
+        for item_to_add in items_to_add:
+            try:
+                # Each item needs to be added to a fresh session or re-added if the session was rolled back.
+                # If items were expunged by rollback, they might need to be re-created or merged.
+                # Simplest is to re-add to current session if it's still active for individual commits.
+                db.session.add(item_to_add) # Re-add the item to the session
+                db.session.commit()
+                committed_items_count += 1
+                logger.debug(f"Individually added item: {item_to_add.title[:50]} for feed '{feed_db_obj.name}'")
+            except IntegrityError as ie_individual:
+                db.session.rollback() # Rollback this specific item's commit
+                logger.error(f"Failed to individually add item '{item_to_add.title[:100]}' (link: {item_to_add.link}, guid: {item_to_add.guid}) for feed '{feed_db_obj.name}': {ie_individual}", exc_info=False) # Log less verbosely for individual fails
+            except Exception as e_individual:
+                db.session.rollback()
+                logger.error(f"Generic error individually adding item '{item_to_add.title[:100]}' for feed '{feed_db_obj.name}': {e_individual}", exc_info=True)
+
+        if committed_items_count > 0:
+            logger.info(f"Successfully added {committed_items_count} items individually for feed: {feed_db_obj.name} after batch failure.")
+        else:
+            logger.info(f"No items could be added individually for feed: {feed_db_obj.name} after batch failure.")
+
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error committing new items for feed {feed_db_obj.name}: {e}", exc_info=True)
-        return 0 # Indicate failure or partial success
+        logger.error(f"Generic error committing new items for feed {feed_db_obj.name}: {e}", exc_info=True)
+        return 0 # Return 0 as no items were successfully committed in this case
 
-    return new_items_count
+    return committed_items_count
 
 def fetch_and_update_feed(feed_id):
     """Fetches a single feed by ID, processes its entries, and updates the database.
@@ -225,7 +279,7 @@ def fetch_and_update_feed(feed_id):
 
     Returns:
         A tuple (success, new_items_count):
-        - success (bool): True if the feed was fetched and processed successfully, False otherwise.
+        - success (bool): True if the feed was fetched and processed successfully (even if 0 new items), False otherwise.
         - new_items_count (int): The number of new items added.
     """
     feed = db.session.get(Feed, feed_id)
@@ -235,49 +289,63 @@ def fetch_and_update_feed(feed_id):
 
     parsed_feed = fetch_feed(feed.url)
     if not parsed_feed:
-        # Fetching failed (error already logged by fetch_feed)
-        logger.error(f"Fetching content for feed {feed.name} (ID: {feed_id}) failed because fetch_feed returned None.")
+        logger.error(f"Fetching content for feed '{feed.name}' (ID: {feed_id}) failed because fetch_feed returned None.")
+        # Optionally update last_updated_time to now with a failure status
+        # feed.last_updated_time = datetime.datetime.now(timezone.utc)
+        # db.session.commit() # Be careful with commits in error paths
         return False, 0
 
-    # Process entries and update DB
+    # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
+    if not parsed_feed.entries:
+        logger.info(f"Feed '{feed.name}' (ID: {feed_id}) fetched successfully but contained no entries.")
+        feed.last_updated_time = datetime.datetime.now(timezone.utc)
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error committing feed update (no entries) for {feed.name}: {e}", exc_info=True)
+            # Still, the fetch itself might be considered a "success" in terms of reachability
+        return True, 0
+
     try:
         new_items = process_feed_entries(feed, parsed_feed)
-        # process_feed_entries handles its own logging and commits
-        
-        # Consider success even if 0 new items, as long as fetch/process didn't error out
+        # process_feed_entries handles its own logging and commits for items and last_updated_time.
+        # Success here means process_feed_entries completed without raising an exception to this level.
         return True, new_items
-    except Exception as e:
-        logger.error(f"An unexpected error occurred during entry processing for feed {feed.name} (ID: {feed_id}): {e}", exc_info=True)
+    except Exception as e: # Catch any unexpected error from process_feed_entries not caught internally
+        logger.error(f"An unexpected error occurred during entry processing for feed '{feed.name}' (ID: {feed_id}): {e}", exc_info=True)
         return False, 0
 
 def update_all_feeds():
     """Iterates through all feeds in the database, fetches updates, and processes entries.
     
     Returns:
-        A tuple (total_feeds_processed, total_new_items):
-        - total_feeds_processed (int): Number of feeds attempted.
+        A tuple (total_feeds_processed_successfully, total_new_items):
+        - total_feeds_processed_successfully (int): Number of feeds where fetch and process stages completed without critical failure.
         - total_new_items (int): Total new items added across all feeds.
     """
     all_feeds = Feed.query.all()
     total_new_items = 0
-    total_feeds_processed = 0
+    attempted_count = 0
+    processed_successfully_count = 0 # Feeds that completed fetch & process_feed_entries call
     
     logger.info(f"Starting update process for {len(all_feeds)} feeds.")
 
-    for feed in all_feeds:
-        logger.info(f"Updating feed: {feed.name} ({feed.id}) - URL: {feed.url}")
+    for feed_obj in all_feeds: # Renamed to avoid conflict
+        attempted_count += 1
+        logger.info(f"Updating feed: {feed_obj.name} ({feed_obj.id}) - URL: {feed_obj.url}")
         try:
-            # Use fetch_and_update_feed which encapsulates fetch and process logic
-            success, new_items = fetch_and_update_feed(feed.id)
-            if success:
+            success, new_items = fetch_and_update_feed(feed_obj.id)
+            if success: # True if fetch_and_update_feed completed its course
                 total_new_items += new_items
-            # Log success/failure per feed if needed (already logged within functions)
-            total_feeds_processed += 1
+                processed_successfully_count +=1
+            # Failures within fetch_and_update_feed are logged there.
         except Exception as e:
-            # Catch unexpected errors during the loop for a specific feed
-            logger.error(f"Unexpected error updating feed {feed.name} ({feed.id}): {e}", exc_info=True)
+            # This catches unexpected errors during the loop for a specific feed,
+            # e.g., if fetch_and_update_feed itself has an unhandled exception before returning.
+            logger.error(f"Unexpected critical error in update_all_feeds loop for feed {feed_obj.name} ({feed_obj.id}): {e}", exc_info=True)
             # Continue to the next feed
             continue 
             
-    logger.info(f"Finished updating all feeds. Processed: {total_feeds_processed}, New Items: {total_new_items}")
-    return total_feeds_processed, total_new_items
+    logger.info(f"Finished updating feeds. Attempted: {attempted_count}, Successfully Processed (fetch & process stages): {processed_successfully_count}, Total New Items Added: {total_new_items}")
+    return processed_successfully_count, total_new_items

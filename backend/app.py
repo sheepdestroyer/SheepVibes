@@ -14,6 +14,10 @@ from flask_caching import Cache # Added for caching
 
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
+import xml.etree.ElementTree as ET # Added for OPML export
+
+# --- OPML Import Configuration ---
+SKIPPED_FOLDER_TYPES = {"UWA", "Webnote", "LinkModule"} # Netvibes specific types to ignore for tab creation
 
 # Set up logging configuration
 logging.basicConfig(
@@ -71,39 +75,48 @@ announcer = MessageAnnouncer()
 # Initialize Flask application
 app = Flask(__name__)
 
-# Configure SQLite database URI
-# Use environment variable DATABASE_PATH or default to the standard path inside the container
-default_db_path_in_container = '/app/data/sheepvibes.db'
-db_path_env = os.environ.get('DATABASE_PATH')
-
-if db_path_env:
-    if db_path_env.startswith('sqlite:///'):
-        app.config['SQLALCHEMY_DATABASE_URI'] = db_path_env
-        logger.info(f"Using DATABASE_PATH environment variable directly: {db_path_env}")
-    else:
-        db_path = db_path_env
-        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-        logger.info(f"Using DATABASE_PATH environment variable for file path: {db_path}")
+# Test specific configuration
+# Check app.config first in case it's set by test runner, then env var
+if app.config.get('TESTING') or os.environ.get('TESTING') == 'true':
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    app.config['TESTING'] = True # Ensure it's explicitly True in app.config
+    app.config['CACHE_TYPE'] = 'SimpleCache' # Use SimpleCache for tests, no Redis needed
+    logger.info("TESTING mode: Using in-memory SQLite database and SimpleCache.")
 else:
-    # Default path logic
-    if not os.path.exists('/app'): # Assume local development
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        local_data_dir = os.path.join(project_root, 'data')
-        os.makedirs(local_data_dir, exist_ok=True)
-        db_path = os.path.join(local_data_dir, 'sheepvibes.db')
-        logger.info(f"DATABASE_PATH not set, assuming local run. Using file path: {db_path}")
-    else: # Assume container run
-        db_path = default_db_path_in_container
-        logger.info(f"DATABASE_PATH not set, assuming container run. Using default file path: {db_path}")
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    # Existing database configuration logic
+    default_db_path_in_container = '/app/data/sheepvibes.db'
+    db_path_env = os.environ.get('DATABASE_PATH')
+
+    if db_path_env:
+        if db_path_env.startswith('sqlite:///'):
+            app.config['SQLALCHEMY_DATABASE_URI'] = db_path_env
+            logger.info(f"Using DATABASE_PATH environment variable directly: {db_path_env}")
+        else:
+            db_path = db_path_env
+            app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+            logger.info(f"Using DATABASE_PATH environment variable for file path: {db_path}")
+    else:
+        # Default path logic
+        if not os.path.exists('/app'): # Assume local development
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            local_data_dir = os.path.join(project_root, 'data')
+            os.makedirs(local_data_dir, exist_ok=True)
+            db_path = os.path.join(local_data_dir, 'sheepvibes.db')
+            logger.info(f"DATABASE_PATH not set, assuming local run. Using file path: {db_path}")
+        else: # Assume container run
+            db_path = default_db_path_in_container
+            logger.info(f"DATABASE_PATH not set, assuming container run. Using default file path: {db_path}")
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
+    # --- Cache Configuration for non-testing ---
+    app.config["CACHE_TYPE"] = "RedisCache"
+    app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Disable modification tracking
+# CACHE_DEFAULT_TIMEOUT is now set within the TESTING if/else block or defaults if not.
+# Ensure CACHE_TYPE and relevant URLs are fully set before Cache() is instantiated or init_app'd.
 
-# --- Cache Configuration ---
-app.config["CACHE_TYPE"] = "RedisCache"
-app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
-app.config['CACHE_DEFAULT_TIMEOUT'] = 300 # 5 minutes default timeout
-
-cache = Cache()
+cache = Cache() # Create the cache instance
 
 # Initialize SQLAlchemy ORM extension with the app
 db.init_app(app)
@@ -228,6 +241,343 @@ def stream():
     """Endpoint for Server-Sent Events (SSE) to stream updates."""
     return Response(announcer.listen(), mimetype='text/event-stream')
 
+# --- OPML Export Endpoint ---
+
+@app.route('/api/opml/export', methods=['GET'])
+def export_opml():
+    """Exports all feeds as an OPML file."""
+    try:
+        feeds = Feed.query.all()
+
+        opml_element = ET.Element('opml', version='2.0')
+        head_element = ET.SubElement(opml_element, 'head')
+        title_element = ET.SubElement(head_element, 'title')
+        title_element.text = 'SheepVibes Feeds'
+        body_element = ET.SubElement(opml_element, 'body')
+
+        for feed in feeds:
+            outline_element = ET.SubElement(body_element, 'outline')
+            outline_element.set('text', feed.name)
+            outline_element.set('xmlUrl', feed.url)
+            outline_element.set('type', 'rss') # Common type for RSS/Atom feeds in OPML
+
+        # Convert the XML tree to a string
+        opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
+
+        response = Response(opml_string, mimetype='application/xml')
+        response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
+
+        logger.info(f"Successfully generated OPML export for {len(feeds)} feeds.")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error during OPML export: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to generate OPML export'}), 500
+
+# --- OPML Import Endpoint ---
+
+def _process_opml_outlines_recursive(
+    outline_elements,
+    current_tab_id,
+    current_tab_name, # For logging/context, not strictly for db ops here
+    all_existing_feed_urls_set,
+    newly_added_feeds_list,
+    imported_count_wrapper, # Use list/dict for mutable integer
+    skipped_count_wrapper,  # Use list/dict for mutable integer
+    affected_tab_ids_set
+):
+    """
+    Recursively processes OPML outline elements.
+    Feeds are added to `newly_added_feeds_list` but not committed here.
+    New tabs (folders) are committed immediately to get their IDs.
+    """
+    for outline_element in outline_elements:
+        folder_type_attr = outline_element.get('type') # For Netvibes type skipping
+        # Netvibes uses 'title', some others use 'text'. Prioritize 'title'.
+        title_attr = outline_element.get('title')
+        text_attr = outline_element.get('text')
+        element_name = title_attr.strip() if title_attr and title_attr.strip() else \
+                       (text_attr.strip() if text_attr and text_attr.strip() else "")
+
+        xml_url = outline_element.get('xmlUrl')
+        child_outlines = list(outline_element) # More robust than findall for direct children
+
+        if xml_url: # It's a feed
+            feed_name = element_name if element_name else xml_url # Fallback to URL if no title/text
+
+            if xml_url in all_existing_feed_urls_set:
+                logger.info(f"OPML import: Feed with URL '{xml_url}' already exists. Skipping.")
+                skipped_count_wrapper[0] += 1
+                continue
+
+            try:
+                new_feed = Feed(
+                    tab_id=current_tab_id,
+                    name=feed_name,
+                    url=xml_url
+                )
+                # Add to session, but commit will be done in batch later for feeds
+                db.session.add(new_feed)
+                newly_added_feeds_list.append(new_feed)
+                all_existing_feed_urls_set.add(xml_url) # Track for current import session
+                imported_count_wrapper[0] += 1
+                affected_tab_ids_set.add(current_tab_id)
+                logger.info(f"OPML import: Prepared new feed '{feed_name}' ({xml_url}) for tab ID {current_tab_id} ('{current_tab_name}').")
+            except Exception as e_feed:
+                # Should be rare if checks are done, but good for safety
+                logger.error(f"OPML import: Error preparing feed '{feed_name}': {e_feed}", exc_info=True)
+                skipped_count_wrapper[0] += 1
+
+        elif not xml_url and element_name and folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
+            logger.info(f"OPML import: Skipping Netvibes-specific folder '{element_name}' due to type: {folder_type_attr}.")
+            # Children of these folders are also skipped.
+            # If we needed to count skipped items within, we'd need to parse child_outlines here.
+            # For now, the folder itself is skipped from becoming a tab, and its contents aren't processed.
+            continue # Effectively skips this folder and its children for tab/feed creation
+
+        elif not xml_url and element_name and child_outlines: # It's a folder (has a name, no xmlUrl, AND children)
+            folder_name = element_name
+            existing_tab = Tab.query.filter_by(name=folder_name).first()
+
+            nested_tab_id = None
+            nested_tab_name = None
+
+            if existing_tab:
+                nested_tab_id = existing_tab.id
+                nested_tab_name = existing_tab.name
+                logger.info(f"OPML import: Folder '{folder_name}' matches existing tab '{nested_tab_name}' (ID: {nested_tab_id}). Feeds will be added to it.")
+            else:
+                max_order = db.session.query(db.func.max(Tab.order)).scalar()
+                new_order = (max_order or -1) + 1
+                new_folder_tab = Tab(name=folder_name, order=new_order)
+                db.session.add(new_folder_tab)
+                try:
+                    db.session.commit() # Commit new tab immediately to get its ID
+                    logger.info(f"OPML import: Created new tab '{new_folder_tab.name}' (ID: {new_folder_tab.id}) from OPML folder.")
+                    invalidate_tabs_cache() # Crucial: new tab added
+                    nested_tab_id = new_folder_tab.id
+                    nested_tab_name = new_folder_tab.name
+                except Exception as e_tab_commit:
+                    db.session.rollback()
+                    logger.error(f"OPML import: Failed to commit new tab '{folder_name}': {e_tab_commit}. Skipping this folder and its contents.", exc_info=True)
+                    skipped_count_wrapper[0] += len(child_outlines) # Approximate skip count
+                    continue # Skip this folder
+
+            if nested_tab_id and nested_tab_name: # child_outlines is already checked by the elif condition
+                _process_opml_outlines_recursive(
+                    child_outlines,
+                    nested_tab_id,
+                    nested_tab_name,
+                    all_existing_feed_urls_set,
+                    newly_added_feeds_list,
+                    imported_count_wrapper,
+                    skipped_count_wrapper,
+                    affected_tab_ids_set
+                )
+        elif not xml_url and not element_name and child_outlines:
+            # Folder without a title, process its children in the current tab
+            logger.info(f"OPML import: Processing children of an untitled folder under current tab '{current_tab_name}'.")
+            _process_opml_outlines_recursive(
+                child_outlines,
+                current_tab_id, # Use current tab_id
+                current_tab_name,
+                all_existing_feed_urls_set,
+                newly_added_feeds_list,
+                imported_count_wrapper,
+                skipped_count_wrapper,
+                affected_tab_ids_set
+            )
+        else:
+            # An outline element that is neither a feed, a folder with children, nor an untitled folder with children.
+            # This includes empty folders (name, no xmlUrl, no children) which will now be skipped.
+            logger.info(f"OPML import: Skipping outline element (Name: '{element_name}', xmlUrl: {xml_url}, Children: {len(child_outlines)}) as it's not a feed or a non-empty folder.")
+            if not xml_url: # If it's not a feed (it might be an empty folder or an invalid item)
+                 skipped_count_wrapper[0] +=1
+
+
+@app.route('/api/opml/import', methods=['POST'])
+def import_opml():
+    """Imports feeds from an OPML file, supporting nested structures as new tabs."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request'}), 400
+    opml_file = request.files['file']
+    if opml_file.filename == '':
+        return jsonify({'error': 'No file selected for uploading'}), 400
+    if not opml_file:
+        return jsonify({'error': 'File object is empty'}), 400
+
+    # Using lists for mutable integers to pass by reference into recursion
+    imported_count_wrapper = [0]
+    skipped_count_wrapper = [0]
+    affected_tab_ids_set = set()
+    newly_added_feeds_list = []
+
+    try:
+        tree = ET.parse(opml_file.stream)
+        root = tree.getroot()
+    except ET.ParseError as e:
+        logger.error(f"OPML import failed: Malformed XML. Error: {e}", exc_info=True)
+        return jsonify({'error': f'Malformed OPML file: {e}'}), 400
+    except Exception as e:
+        logger.error(f"OPML import failed: Could not parse file stream. Error: {e}", exc_info=True)
+        return jsonify({'error': f'Error processing OPML file: {e}'}), 500
+
+    # --- Determine initial/top-level target tab ---
+    top_level_target_tab_id = None
+    top_level_target_tab_name = None
+    requested_tab_id_str = request.form.get('tab_id')
+
+    if requested_tab_id_str:
+        try:
+            tab_id_val = int(requested_tab_id_str)
+            tab_obj = db.session.get(Tab, tab_id_val)
+            if tab_obj:
+                top_level_target_tab_id = tab_obj.id
+                top_level_target_tab_name = tab_obj.name
+            else:
+                logger.warning(f"OPML import: Requested tab_id {tab_id_val} not found. Will use default logic.")
+        except ValueError:
+            logger.warning(f"OPML import: Invalid tab_id format '{requested_tab_id_str}'. Will use default logic.")
+
+    if not top_level_target_tab_id: # If no valid tab_id from request, or no request
+        default_tab_obj = Tab.query.order_by(Tab.order).first()
+        if default_tab_obj:
+            top_level_target_tab_id = default_tab_obj.id
+            top_level_target_tab_name = default_tab_obj.name
+        else: # No tabs exist at all, create a default one
+            logger.info("OPML import: No tabs exist. Creating a default tab for top-level feeds.")
+            default_tab_name_for_creation = "Imported Feeds"
+            was_default_tab_created_for_this_import = False # Flag
+            # Check if "Imported Feeds" tab was somehow created by a concurrent request (unlikely)
+            temp_tab_check = Tab.query.filter_by(name=default_tab_name_for_creation).first()
+            if temp_tab_check:
+                top_level_target_tab_id = temp_tab_check.id
+                top_level_target_tab_name = temp_tab_check.name
+            else:
+                newly_created_default_tab = Tab(name=default_tab_name_for_creation, order=0)
+                db.session.add(newly_created_default_tab)
+                try:
+                    db.session.commit()
+                    logger.info(f"OPML import: Created new default tab '{newly_created_default_tab.name}' (ID: {newly_created_default_tab.id}).")
+                    invalidate_tabs_cache() # New tab added
+                    top_level_target_tab_id = newly_created_default_tab.id
+                    top_level_target_tab_name = newly_created_default_tab.name
+                    was_default_tab_created_for_this_import = True # Mark that we created it
+                except Exception as e_tab_commit:
+                    db.session.rollback()
+                    logger.error(f"OPML import: Failed to create default tab '{default_tab_name_for_creation}': {e_tab_commit}", exc_info=True)
+                    return jsonify({'error': 'Failed to create a default tab for import.'}), 500
+
+    if not top_level_target_tab_id: # Should be impossible if above logic is correct
+         logger.error("OPML import: Critical error - failed to determine a top-level target tab.")
+         return jsonify({'error': 'Failed to determine a target tab for import.'}), 500
+
+    # --- Pre-fetch all existing feed URLs for efficient duplicate checking ---
+    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
+
+    # --- Process OPML ---
+    opml_body = root.find('body')
+    if opml_body is None:
+        logger.warning("OPML import: No <body> element found in OPML file.")
+        # Return early if no body, but use the determined/created tab name in message
+        return jsonify({'message': 'No feeds found in OPML (missing body).', 'imported_count': 0, 'skipped_count': 0, 'tab_id': top_level_target_tab_id, 'tab_name': top_level_target_tab_name }), 200
+
+    _process_opml_outlines_recursive(
+        opml_body.findall('outline'),
+        top_level_target_tab_id,
+        top_level_target_tab_name,
+        all_existing_feed_urls_set,
+        newly_added_feeds_list,
+        imported_count_wrapper,
+        skipped_count_wrapper,
+        affected_tab_ids_set
+    )
+
+    imported_final_count = imported_count_wrapper[0]
+    skipped_final_count = skipped_count_wrapper[0]
+
+    # --- Commit all newly added feeds and fetch their items ---
+    if newly_added_feeds_list:
+        try:
+            # The main commit for all collected feeds happens here
+            db.session.commit()
+            logger.info(f"OPML import: Successfully batch-committed {len(newly_added_feeds_list)} new feeds to the database.")
+
+            # Fetch items for these newly committed feeds
+            logger.info(f"OPML import: Attempting to fetch initial items for {len(newly_added_feeds_list)} newly added feeds.")
+            for feed_obj in newly_added_feeds_list: # These objects should now have IDs
+                if feed_obj.id: # Should always be true after successful commit
+                    try:
+                        fetch_and_update_feed(feed_obj.id)
+                    except Exception as fetch_e:
+                        logger.error(f"OPML import: Error fetching items for new feed {feed_obj.name} (ID: {feed_obj.id}): {fetch_e}", exc_info=True)
+                else: # Should not happen
+                     logger.error(f"OPML import: Feed '{feed_obj.name}' missing ID after batch commit, cannot fetch items.")
+            logger.info(f"OPML import: Finished attempting to fetch initial items for new feeds.")
+        except Exception as e_commit_feeds:
+            db.session.rollback()
+            logger.error(f"OPML import: Database commit failed for new feeds: {e_commit_feeds}", exc_info=True)
+            return jsonify({'error': 'Database error during final feed import step.'}), 500
+
+    # --- Final cache invalidations for affected feed tabs ---
+    # invalidate_tabs_cache() would have been called if new tabs were created.
+    # Now, invalidate caches for all tabs that had feeds added to them.
+    if affected_tab_ids_set: # If any feeds were added to any tabs
+        invalidate_tabs_cache() # Invalidate main tabs list for unread counts anyway
+        for tab_id_to_invalidate in affected_tab_ids_set:
+            invalidate_tab_feeds_cache(tab_id_to_invalidate)
+        logger.info(f"OPML import: Feed-related caches invalidated for tabs: {affected_tab_ids_set}.")
+
+    if not opml_body.findall('outline') and not newly_added_feeds_list:
+         logger.info("OPML import: No <outline> elements found in the OPML body to process as feeds or folders.")
+         return jsonify({'message': 'No feed entries or folders found in the OPML file.', 'imported_count': 0, 'skipped_count': skipped_final_count, 'tab_id': top_level_target_tab_id, 'tab_name': top_level_target_tab_name}), 200
+
+    # --- Check if the "Imported Feeds" tab (if created by this import) is empty ---
+    # This check is relevant only if:
+    # 1. A tab named "Imported Feeds" was created *during this specific import operation*.
+    # 2. This "Imported Feeds" tab is also the `top_level_target_tab_id` (meaning it was the default for loose feeds).
+    # 3. No feeds were actually added to it (all feeds went into folders/other tabs).
+    if 'was_default_tab_created_for_this_import' in locals() and \
+       was_default_tab_created_for_this_import and \
+       top_level_target_tab_name == "Imported Feeds" and \
+       top_level_target_tab_id not in affected_tab_ids_set:
+
+        # Verify it's truly empty (no feeds associated with it from any source)
+        # This is a defensive check; `top_level_target_tab_id not in affected_tab_ids_set` should suffice
+        # if `affected_tab_ids_set` correctly tracks all tabs that received feeds.
+        feeds_in_default_tab = Feed.query.filter_by(tab_id=top_level_target_tab_id).count()
+        if feeds_in_default_tab == 0:
+            logger.info(f"OPML import: The default 'Imported Feeds' tab (ID: {top_level_target_tab_id}) created during this import is empty. Deleting it.")
+            try:
+                tab_to_delete = db.session.get(Tab, top_level_target_tab_id)
+                if tab_to_delete: # Should exist
+                    db.session.delete(tab_to_delete)
+                    db.session.commit()
+                    invalidate_tabs_cache() # Cache needs update as a tab was removed
+                    logger.info(f"OPML import: Successfully deleted empty 'Imported Feeds' tab (ID: {top_level_target_tab_id}).")
+                    # If this deleted tab was the only tab, the frontend will create a new default tab on next load if needed.
+                    # Or, if other tabs exist (e.g. from OPML folders), one of them will become active.
+                    # We don't need to explicitly return a different tab_id here; the frontend will adapt.
+                    # However, the original top_level_target_tab_id/name might now be misleading if returned.
+                    # For simplicity, we'll still return them, but they refer to a now-deleted tab.
+                    # The frontend should handle this gracefully.
+                else:
+                    logger.warning(f"OPML import: Tried to delete empty 'Imported Feeds' tab (ID: {top_level_target_tab_id}), but it was not found in session.")
+            except Exception as e_del_tab:
+                db.session.rollback()
+                logger.error(f"OPML import: Failed to delete empty 'Imported Feeds' tab (ID: {top_level_target_tab_id}): {e_del_tab}", exc_info=True)
+        else:
+            logger.info(f"OPML import: The default 'Imported Feeds' tab (ID: {top_level_target_tab_id}) was created but contains {feeds_in_default_tab} feeds. It will not be deleted.")
+
+
+    return jsonify({
+        'message': f'{imported_final_count} feeds imported. {skipped_final_count} feeds skipped. Feeds were imported into relevant tabs or default tab "{top_level_target_tab_name}".',
+        'imported_count': imported_final_count,
+        'skipped_count': skipped_final_count,
+        'tab_id': top_level_target_tab_id,      # This might be the ID of a tab that was just deleted if it was the empty "Imported Feeds"
+        'tab_name': top_level_target_tab_name  # Same as above
+    }), 200
+
 # --- Tabs API Endpoints ---
 
 @app.route('/api/tabs', methods=['GET'])
@@ -305,9 +655,9 @@ def delete_tab(tab_id):
     # Find the tab or return 404
     tab = db.get_or_404(Tab, tab_id)
 
-    # Prevent deleting the last remaining tab
-    if Tab.query.count() <= 1:
-        return jsonify({'error': 'Cannot delete the last tab'}), 400
+    # Removed: Prevent deleting the last remaining tab. Frontend now controls this.
+    # if Tab.query.count() <= 1:
+    #     return jsonify({'error': 'Cannot delete the last tab'}), 400
 
     try:
         tab_name = tab.name
@@ -423,16 +773,19 @@ def add_feed():
     if not parsed_feed or not parsed_feed.feed:
         # If fetch fails initially, use the URL as the name
         feed_name = feed_url
+        site_link = None # No website link if fetch failed
         logger.warning(f"Could not fetch title for {feed_url}, using URL as name.")
     else:
         feed_name = parsed_feed.feed.get('title', feed_url) # Use URL as fallback if title missing
+        site_link = parsed_feed.feed.get('link') # Get the website link
 
     try:
         # Create and save the new feed
         new_feed = Feed(
             tab_id=tab_id,
             name=feed_name,
-            url=feed_url
+            url=feed_url,
+            site_link=site_link
             # last_updated_time defaults to now
         )
         db.session.add(new_feed)

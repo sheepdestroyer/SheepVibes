@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const renameTabButton = document.getElementById('rename-tab-button');
     const deleteTabButton = document.getElementById('delete-tab-button');
     const refreshAllFeedsButton = document.getElementById('refresh-all-feeds-button');
+    const exportOpmlButton = document.getElementById('export-opml-button');
+    const importOpmlButton = document.getElementById('import-opml-button');
+    const opmlFileInput = document.getElementById('opml-file-input');
     
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -161,6 +164,116 @@ document.addEventListener('DOMContentLoaded', () => {
         return null;
     }
 
+    // --- OPML Export/Import Functions ---
+
+    /** Handles the click event for the "Export OPML" button. */
+    async function handleExportOpml() {
+        console.log("Exporting OPML...");
+        const originalButtonText = exportOpmlButton.textContent;
+        exportOpmlButton.disabled = true;
+        exportOpmlButton.textContent = 'Exporting...';
+
+        try {
+            const response = await fetch('/api/opml/export');
+            if (!response.ok) {
+                let errorMsg = `HTTP error! status: ${response.status}`;
+                try {
+                    const errorData = await response.text(); // Use text() for potential non-JSON error
+                    errorMsg += `, message: ${errorData || response.statusText}`;
+                } catch (e) {
+                     errorMsg += `, message: ${response.statusText}`;
+                }
+                throw new Error(errorMsg);
+            }
+
+            const opmlText = await response.text();
+            const blob = new Blob([opmlText], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sheepvibes_feeds.opml';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log("OPML export successful.");
+
+        } catch (error) {
+            console.error('Error exporting OPML:', error);
+            alert(`Failed to export OPML: ${error.message}`);
+        } finally {
+            exportOpmlButton.disabled = false;
+            exportOpmlButton.textContent = originalButtonText;
+        }
+    }
+
+    /** Handles the file selection for OPML import. */
+    async function handleImportOpmlFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        console.log(`Importing OPML file: ${file.name}`);
+        const originalButtonText = importOpmlButton.textContent;
+        importOpmlButton.disabled = true;
+        importOpmlButton.textContent = 'Importing...';
+        opmlFileInput.disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Optionally, add the active tab ID to import into that specific tab
+        if (activeTabId) {
+            formData.append('tab_id', activeTabId);
+        }
+
+        try {
+            const response = await fetch('/api/opml/import', {
+                method: 'POST',
+                body: formData, // fetch automatically sets Content-Type for FormData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+            }
+
+            alert(data.message);
+            console.log('OPML import successful:', data);
+
+            if (data.imported_count > 0) {
+                await initializeTabs(true); // Update unread counts on all tabs
+
+                // Clear the loaded state of the target tab to force a reload
+                if (data.tab_id) {
+                    loadedTabs.delete(data.tab_id);
+                    // If the import was into the currently active tab, reload its content
+                    if (data.tab_id === activeTabId) {
+                        // Remove existing widgets for the active tab before reloading
+                        document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                        await setActiveTab(activeTabId);
+                    }
+                } else { // Fallback if tab_id wasn't in response for some reason, refresh active tab
+                    if (activeTabId) {
+                         document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                         loadedTabs.delete(activeTabId);
+                         await setActiveTab(activeTabId);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error importing OPML:', error);
+            alert(`Failed to import OPML: ${error.message}`);
+        } finally {
+            importOpmlButton.disabled = false;
+            importOpmlButton.textContent = 'Import OPML';
+            opmlFileInput.value = ''; // Reset file input
+            opmlFileInput.disabled = false;
+        }
+    }
+
     // --- Rendering Functions ---
 
     /**
@@ -203,16 +316,23 @@ document.addEventListener('DOMContentLoaded', () => {
         renameTabButton.disabled = false;
         deleteTabButton.disabled = tabs.length <= 1;
 
-        let tabToActivate = activeTabId;
-        if (!tabToActivate || !tabs.some(t => t.id === tabToActivate)) {
+        let tabToActivate = null;
+        // Prioritize activeTabId (potentially from localStorage or previous state)
+        if (activeTabId && tabs.some(t => t.id === activeTabId)) {
+            tabToActivate = activeTabId;
+        } else if (firstTabId) { // Fallback to the first tab if current activeTabId is invalid or not set
             tabToActivate = firstTabId;
         }
+        // If still no tab to activate (e.g., all tabs were deleted), activeTabId remains null.
 
         if (tabToActivate) {
-            setActiveTab(tabToActivate);
+            setActiveTab(tabToActivate); // This will also update localStorage
         } else {
-            activeTabId = null;
-            feedGrid.innerHTML = '<p>Select a tab.</p>';
+            // No tabs exist or active tab became invalid and no firstTabId to fallback to (e.g. all tabs deleted)
+            setActiveTab(null); // Explicitly set to null, which clears localStorage and updates UI
+            feedGrid.innerHTML = '<p>No tabs available. Please create a new tab.</p>';
+            renameTabButton.disabled = true; // Ensure buttons are disabled if no tabs
+            deleteTabButton.disabled = true;
         }
     }
 
@@ -237,13 +357,30 @@ document.addEventListener('DOMContentLoaded', () => {
         widget.appendChild(deleteButton);
 
         const titleElement = document.createElement('h2');
+        const titleTextNode = document.createTextNode(feed.name); // Create text node for the name
+
+        // Determine the link for the feed title
+        const feedLinkUrl = feed.site_link || feed.url; // Prioritize site_link, fallback to feed's own XML URL
+
+        if (feedLinkUrl) {
+            const titleLink = document.createElement('a');
+            titleLink.href = feedLinkUrl;
+            titleLink.target = '_blank'; // Open in new tab
+            titleLink.rel = 'noopener noreferrer'; // Security measure
+            titleLink.appendChild(titleTextNode); // Add name text to link
+            titleElement.appendChild(titleLink);
+        } else {
+            titleElement.appendChild(titleTextNode); // Add name text directly if no link
+        }
+
         widget.appendChild(titleElement);
         
         const badge = createBadge(feed.unread_count);
         if (badge) {
+            // Append badge after the link/text within H2, or adjust styling as needed
             titleElement.appendChild(badge);
         }
-        titleElement.prepend(feed.name);
+        // titleElement.prepend(feed.name); // Removed, name is now part of link or direct text node
 
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
@@ -318,14 +455,19 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function setActiveTab(tabId) {
         activeTabId = tabId;
+        if (tabId) {
+            localStorage.setItem('activeTabId', tabId);
+        } else {
+            localStorage.removeItem('activeTabId'); // Clear if tabId is null
+        }
 
         // Update active class on tab buttons
         tabsContainer.querySelectorAll('button').forEach(button => {
             button.classList.toggle('active', button.dataset.tabId == tabId);
         });
 
-        // Load content if it's not cached
-        if (!loadedTabs.has(tabId)) {
+        // Load content if it's not cached and tabId is valid
+        if (tabId && !loadedTabs.has(tabId)) {
             await loadFeedsForTab(tabId);
         }
 
@@ -333,6 +475,11 @@ document.addEventListener('DOMContentLoaded', () => {
         feedGrid.querySelectorAll('.feed-widget').forEach(widget => {
             widget.style.display = widget.dataset.tabId == tabId ? 'block' : 'none';
         });
+
+        // If no tab is active (e.g., after deleting the last one), clear the grid.
+        if (!tabId) {
+            feedGrid.innerHTML = '<p>No active tab. Create one or select one if available.</p>';
+        }
 
         deleteTabButton.disabled = allTabs.length <= 1;
     }
@@ -548,10 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Please select a tab to delete.');
             return;
         }
-        if (allTabs.length <= 1) {
-            alert('Cannot delete the last tab.');
-            return;
-        }
+        // Removed: if (allTabs.length <= 1) check to allow deleting the last tab.
 
         const currentTab = allTabs.find(t => t.id === activeTabId);
         if (!confirm(`Are you sure you want to delete the tab "${currentTab ? currentTab.name : activeTabId}" and all its feeds?`)) {
@@ -563,13 +707,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (result && result.success) {
             console.log(`Tab ${activeTabId} deleted successfully.`);
+            // If the deleted tab was the active one, clear activeTabId before re-initializing
+            const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
+            if (activeTabId === deletedTabId) {
+                activeTabId = null;
+                localStorage.removeItem('activeTabId'); // Explicitly clear from storage
+            }
+
             // Remove the deleted tab's widgets from the DOM
-            document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
-            loadedTabs.delete(activeTabId);
-            activeTabId = null;
+            document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
+            loadedTabs.delete(deletedTabId);
+            // activeTabId is already set to null if it was the one deleted.
+            // initializeTabs will handle selecting a new active tab or setting to null if no tabs remain.
             await initializeTabs();
         } else {
-            console.error(`Failed to delete tab ${activeTabId}.`);
+            console.error(`Failed to delete tab ${currentTab ? currentTab.id : activeTabId}.`);
         }
     }
 
@@ -580,13 +732,23 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} [isUpdate=false] - If true, keeps the current active tab.
      */
     async function initializeTabs(isUpdate = false) {
-        const currentActiveId = isUpdate ? activeTabId : null;
+        const currentActiveId = isUpdate ? activeTabId : localStorage.getItem('activeTabId');
         const tabs = await fetchData('/api/tabs');
         if (tabs) {
-            activeTabId = currentActiveId; // Restore active tab ID before rendering
+            // Attempt to restore activeTabId from localStorage if not doing a specific update that preserves it
+            let storedActiveTabId = localStorage.getItem('activeTabId');
+            if (storedActiveTabId && tabs.some(t => t.id == storedActiveTabId)) {
+                activeTabId = parseInt(storedActiveTabId);
+            } else if (currentActiveId && tabs.some(t => t.id == currentActiveId)) {
+                activeTabId = parseInt(currentActiveId); // Use current if valid and stored is not
+            } else {
+                activeTabId = null; // Fallback if stored/current is invalid
+                localStorage.removeItem('activeTabId'); // Clean up invalid stored ID
+            }
             renderTabs(tabs);
         } else {
             renderTabs([]);
+            localStorage.removeItem('activeTabId'); // No tabs, so no active tab
         }
     }
 
@@ -603,6 +765,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         refreshAllFeedsButton.addEventListener('click', handleRefreshAllFeeds);
+        exportOpmlButton.addEventListener('click', handleExportOpml);
+        importOpmlButton.addEventListener('click', () => opmlFileInput.click());
+        opmlFileInput.addEventListener('change', handleImportOpmlFileSelect);
 
         // Fetch initial tabs to start the application
         await initializeTabs();

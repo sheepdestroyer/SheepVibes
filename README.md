@@ -1,10 +1,11 @@
 # SheepVibes
 
-A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes, built with Flask and Vanilla JavaScript, designed to run in a Podman container.
+A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, designed to run in a Podman container.
 
 ## Features
 
 *   Organize grids of feeds into customizable tabs, like Netvibes / iGoogle
+*   Import/Export tabs and feeds as OPML files (tested with exports from Netvibes).
 *   Add feeds via URL.
 *   Delete feeds.
 *   Create, rename, and delete tabs.
@@ -185,49 +186,8 @@ You can configure the application by passing environment variables.
 *   `PYTHONPATH`: Python module search path. Defaults to `/app` in container.
 *   `FLASK_RUN_HOST`: Host for Flask development server. Defaults to `0.0.0.0` to be accessible.
 
-## Troubleshooting
-
-### Error: `Unit ... not found` during Quadlet deployment
-
-If you run a `systemctl --user` command and receive an error like `Failed to start sheepvibes.service: Unit sheepvibes.service not found`, it means `systemd` was unable to generate the service file from the quadlet definitions.
-
-This is typically caused by one of two issues:
-1.  **Files not downloaded or in wrong location:** The `deploy_quadlets.sh` script should handle downloading `sheepvibes.pod` to `~/.config/containers/systemd/`. Verify the script ran successfully and that the `sheepvibes.pod` file is present there.
-2.  **Systemd not reloaded:** `systemctl --user daemon-reload` was not executed after the files were copied or updated. The script should remind you of this.
-
-To resolve this, carefully follow these steps:
-1.  **Run the deployment script:** Ensure `./deploy_quadlets.sh` (after downloading and `chmod +x`) completed successfully.
-2.  **Verify the files exist:** Run `ls -l ~/.config/containers/systemd/` and check for `sheepvibes.pod`.
-3.  **Reload the systemd daemon:** Run `systemctl --user daemon-reload`.
-4.  **Check if the service is now visible:** Run `systemctl --user list-unit-files 'sheepvibes*'` to confirm.
-
-If the services are still not found, check that the `podlet` or `podman-quadlet` package (your distribution's equivalent) is installed. Also ensure your systemd user instance is running correctly.
-
-### Error: `unable to open database file` (or similar database errors)
-
-If the application logs (viewable with `journalctl --user -u sheepvibes.service -f`) show errors like "unable to open database file", "database is locked", or other SQLite errors, it often points to issues with volume permissions or SELinux.
-
-*   **Volume Permissions & SELinux**:
-    The application uses named volumes (`sheepvibes-db`, `sheepvibes-redis`) as defined in `quadlets/sheepvibes.pod`. Podman manages these volumes.
-    If SELinux is in `enforcing` mode (check with `sestatus`), Podman typically handles the necessary labeling for named volumes automatically, especially if the `Volume` line in the `.pod` file includes `:Z` or `:z` (e.g., `Volume=sheepvibes-db.volume:/app/data:Z`). This instructs Podman to manage SELinux labels for the volume content.
-
-    If you suspect SELinux issues with volume access:
-    1.  **Check Audit Log**: Look for AVC denials in the audit log that might indicate SELinux blocking access:
-        ```bash
-        sudo ausearch -m avc -ts recent
-        ```
-    2.  **Ensure Podman Manages Labels**: Verify your `quadlets/sheepvibes.pod` file uses `:Z` or `:z` on its volume mounts if SELinux is enabled. For example: `Volume=sheepvibes-db.volume:/app/data:Z`.
-    3.  **Permissive Mode (for diagnosis ONLY)**: As a last resort for quick diagnosis, you can temporarily set SELinux to permissive mode. **Warning**: This significantly lowers system security and should only be used for brief testing. Revert to enforcing mode immediately after.
-        ```bash
-        sudo setenforce 0
-        # After testing, revert with:
-        # sudo setenforce 1
-        ```
-        If permissive mode resolves the issue, it strongly suggests an SELinux policy problem. Ensure your Podman version is up-to-date and that the volume definitions in your `.pod` file are correctly configured for SELinux. In rare cases, specific policies might need adjustment, but this is less common with named volumes than host directory mounts.
-        For development mode (using `podman run` with host mounts like `-v ./dev_data:/app/data:Z`), the `:Z` flag is also crucial for SELinux. Ensure the source directory (`./dev_data`) exists and has appropriate underlying filesystem permissions.
-
 ## Contributing
 (Contributions are welcome. Please open an issue or PR.)
 
 ## License
-(This project is likely under a GNU General Public License v3.0 License)
+(This project is under a GNU General Public License v3.0 License)
