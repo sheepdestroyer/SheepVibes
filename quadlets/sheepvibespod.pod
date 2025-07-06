@@ -1,0 +1,53 @@
+# Podman Quadlet for the SheepVibes Pod
+
+[Unit]
+Description=SheepVibes Application Pod
+Requires=network-online.target
+After=network-online.target
+
+[Pod]
+PublishPort=127.0.0.1:5000:5000
+# Pods share a network namespace. A specific network can be defined if needed for the pod itself.
+# Network=sheepvibes.network # This would refer to a separate .network file if we still wanted one at the pod level
+
+[Volume/sheepvibes-db]
+# systemd will create a volume named 'sheepvibespod-sheepvibes-db'
+# To ensure unique volume name if old volumes are not cleaned up immediately.
+# Or reuse 'sheepvibes-db' if confident in cleanup. Let's use a new name for safety during transition.
+# Driver=local # Optional: specify driver
+
+[Volume/sheepvibes-redis]
+# systemd will create a volume named 'sheepvibespod-sheepvibes-redis'
+# Driver=local # Optional: specify driver
+
+[Container/app]
+Pod=sheepvibespod.pod # Explicitly state this container belongs to the pod
+ContainerName=sheepvibes-app
+Image=ghcr.io/sheepdestroyer/sheepvibes:latest
+Volume=sheepvibes-db.volume:/app/data
+
+# Environment variables for the application
+Environment=DATABASE_PATH=/app/data/sheepvibes.db
+# Redis is now accessible via localhost as it's in the same pod
+Environment=CACHE_REDIS_URL=redis://localhost:6379/0
+Environment=FLASK_APP=backend.app
+Environment=PYTHONPATH=/app
+Environment=UPDATE_INTERVAL_MINUTES=15
+Environment=FLASK_RUN_HOST=0.0.0.0
+
+# Standard service options
+Restart=on-failure
+TimeoutStartSec=180 # Increased timeout to allow for image pulls or slow starts
+
+[Container/redis]
+Pod=sheepvibespod.pod # Explicitly state this container belongs to the pod
+ContainerName=sheepvibes-redis
+Image=docker.io/redis:alpine
+Volume=sheepvibes-redis.volume:/data
+
+# Standard service options
+Restart=on-failure
+TimeoutStartSec=90
+
+[Install]
+WantedBy=default.target
