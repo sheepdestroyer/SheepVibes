@@ -4,14 +4,14 @@ set -euo pipefail
 # --- Configuration ---
 REPO="sheepdestroyer/sheepvibes"
 BRANCH="main" # Or specify a tag/commit if preferred
-QUADLET_DIR="${HOME}/.config/containers/systemd"
-POD_FILENAME="sheepvibespod.pod" # New pod filename
+SYSTEMD_USER_DIR="${HOME}/.config/containers/systemd"
+POD_FILENAME="sheepvibespod.pod"
 # Construct the direct download URL for the raw file content
-POD_FILE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/quadlets/${POD_FILENAME}"
+POD_FILE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/${POD_FILENAME}"
 
 # --- Dependency Checks ---
 echo "Checking for dependencies..."
-if ! command -v curl &> /dev/null; then # jq is no longer needed
+if ! command -v curl &> /dev/null; then
     echo "Error: curl is not installed. Please install curl and try again."
     exit 1
 fi
@@ -23,21 +23,21 @@ echo "Dependencies found."
 echo ""
 
 # --- Create Target Directory ---
-echo "Ensuring quadlet directory exists at ${QUADLET_DIR}..."
-mkdir -p "${QUADLET_DIR}"
+echo "Ensuring systemd user directory exists at ${SYSTEMD_USER_DIR}..."
+mkdir -p "${SYSTEMD_USER_DIR}"
 if [ $? -ne 0 ]; then
-    echo "Error creating directory ${QUADLET_DIR}. Please check permissions."
+    echo "Error creating directory ${SYSTEMD_USER_DIR}. Please check permissions."
     exit 1
 fi
 echo "Directory ensured."
 echo ""
 
 # --- Cleanup Step ---
-echo "--- Cleaning up old SheepVibes quadlet and pod files ---"
-if [ -d "${QUADLET_DIR}" ]; then
-    echo "Found quadlet directory at ${QUADLET_DIR}."
+echo "--- Cleaning up old SheepVibes systemd files and pod file ---"
+if [ -d "${SYSTEMD_USER_DIR}" ]; then
+    echo "Found systemd user directory at ${SYSTEMD_USER_DIR}."
     # Updated find command to include .pod files and the specific old files
-    find "${QUADLET_DIR}" -maxdepth 1 \
+    find "${SYSTEMD_USER_DIR}" -maxdepth 1 \
         \( -name 'sheepvibes-*.container' -o \
            -name 'sheepvibes-*.volume' -o \
            -name 'sheepvibes-*.network' -o \
@@ -45,14 +45,14 @@ if [ -d "${QUADLET_DIR}" ]; then
         -print -delete # More efficient: print what's being deleted and delete
     echo "Cleanup complete."
 else
-    echo "No existing quadlet directory found. Skipping cleanup."
+    echo "No existing systemd user directory found. Skipping cleanup."
 fi
 echo ""
 
-# --- Fetch and Download Quadlet Pod File ---
+# --- Fetch and Download Pod File ---
 echo "Fetching ${POD_FILENAME} from GitHub (${REPO}, branch: ${BRANCH})..."
-if curl -sSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${POD_FILE_URL}" -o "${QUADLET_DIR}/${POD_FILENAME}"; then
-    echo "${POD_FILENAME} downloaded successfully to ${QUADLET_DIR}."
+if curl -sSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${POD_FILE_URL}" -o "${SYSTEMD_USER_DIR}/${POD_FILENAME}"; then
+    echo "${POD_FILENAME} downloaded successfully to ${SYSTEMD_USER_DIR}."
 else
     echo "Error downloading ${POD_FILENAME} from ${POD_FILE_URL}."
     echo "Please check the repository path, branch name, filename, and your internet connection."
@@ -61,7 +61,7 @@ fi
 echo ""
 
 # --- User Instructions ---
-echo "Pod file ${POD_FILENAME} deployed to ${QUADLET_DIR}."
+echo "Pod file ${POD_FILENAME} deployed to ${SYSTEMD_USER_DIR}."
 echo "The application will use Podman-managed volumes 'sheepvibespod-sheepvibes-db' and 'sheepvibespod-sheepvibes-redis' for persistence, defined within the pod."
 echo ""
 echo "Next steps:"
