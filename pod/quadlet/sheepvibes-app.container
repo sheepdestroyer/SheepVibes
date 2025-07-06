@@ -18,7 +18,8 @@ Environment=PYTHONPATH=/app
 Environment=UPDATE_INTERVAL_MINUTES=15
 Environment=FLASK_RUN_HOST=0.0.0.0
 
+# StartWithPod=true is the default when Pod= is specified.
+
+[Service]
 Restart=on-failure
 TimeoutStartSec=180
-# StartWithPod=true is the default when Pod= is specified.
-# No [Install] section needed if pod is the primary enabled unit.
