@@ -5,9 +5,16 @@ set -euo pipefail
 REPO="sheepdestroyer/sheepvibes"
 BRANCH="main" # Or specify a tag/commit if preferred
 SYSTEMD_USER_DIR="${HOME}/.config/containers/systemd"
-POD_FILENAME="sheepvibespod.pod"
-# Construct the direct download URL for the raw file content
-POD_FILE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/${POD_FILENAME}"
+# Define the Quadlet files to be downloaded
+QUADLET_FILES=(
+    "sheepvibespod.pod"
+    "sheepvibes-app.container"
+    "sheepvibes-redis.container"
+    "sheepvibes-db.volume"
+    "sheepvibes-redis-data.volume"
+)
+# Base URL for the directory containing the Quadlet files in the repository
+QUADLET_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/quadlet"
 
 # --- Dependency Checks ---
 echo "Checking for dependencies..."
@@ -33,58 +40,88 @@ echo "Directory ensured."
 echo ""
 
 # --- Cleanup Step ---
-echo "--- Cleaning up old SheepVibes systemd files and pod file ---"
+echo "--- Cleaning up old SheepVibes systemd files ---"
 if [ -d "${SYSTEMD_USER_DIR}" ]; then
     echo "Found systemd user directory at ${SYSTEMD_USER_DIR}."
-    # Updated find command to include .pod files and the specific old files
+    # Remove old monolithic pod file and any files matching the new names
     find "${SYSTEMD_USER_DIR}" -maxdepth 1 \
-        \( -name 'sheepvibes-*.container' -o \
-           -name 'sheepvibes-*.volume' -o \
-           -name 'sheepvibes-*.network' -o \
-           -name "${POD_FILENAME}" \) \
-        -print -delete # More efficient: print what's being deleted and delete
+        \( -name 'sheepvibespod.pod' \
+           -o -name 'sheepvibes-app.container' \
+           -o -name 'sheepvibes-redis.container' \
+           -o -name 'sheepvibes-db.volume' \
+           -o -name 'sheepvibes-redis-data.volume' \
+           -o -name 'sheepvibes-*.network' \) \
+        -print -delete
     echo "Cleanup complete."
 else
     echo "No existing systemd user directory found. Skipping cleanup."
 fi
 echo ""
 
-# --- Fetch and Download Pod File ---
-echo "Fetching ${POD_FILENAME} from GitHub (${REPO}, branch: ${BRANCH})..."
-if curl -sSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${POD_FILE_URL}" -o "${SYSTEMD_USER_DIR}/${POD_FILENAME}"; then
-    echo "${POD_FILENAME} downloaded successfully to ${SYSTEMD_USER_DIR}."
-else
-    echo "Error downloading ${POD_FILENAME} from ${POD_FILE_URL}."
-    echo "Please check the repository path, branch name, filename, and your internet connection."
+# --- Fetch and Download Quadlet Files ---
+echo "Fetching Quadlet files from GitHub (${REPO}, branch: ${BRANCH}, path: pod/quadlet/)..."
+DOWNLOAD_SUCCESS=true
+for filename in "${QUADLET_FILES[@]}"; do
+    file_url="${QUADLET_BASE_URL}/${filename}"
+    echo "Downloading ${filename} from ${file_url}..."
+    if curl -sSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${file_url}" -o "${SYSTEMD_USER_DIR}/${filename}"; then
+        echo "${filename} downloaded successfully to ${SYSTEMD_USER_DIR}."
+    else
+        echo "Error downloading ${filename} from ${file_url}."
+        DOWNLOAD_SUCCESS=false
+    fi
+done
+
+if [ "${DOWNLOAD_SUCCESS}" = false ]; then
+    echo "One or more files failed to download."
+    echo "Please check the repository path, branch name, filenames in pod/quadlet/, and your internet connection."
     exit 1
 fi
 echo ""
 
 # --- User Instructions ---
-echo "Pod file ${POD_FILENAME} deployed to ${SYSTEMD_USER_DIR}."
-echo "The application will use Podman-managed volumes 'sheepvibespod-sheepvibes-db' and 'sheepvibespod-sheepvibes-redis' for persistence, defined within the pod."
+POD_SERVICE_NAME="sheepvibespod-pod.service" # Generated from sheepvibespod.pod
+DB_VOLUME_NAME="systemd-sheepvibes-db" # Default generated name from sheepvibes-db.volume
+REDIS_VOLUME_NAME="systemd-sheepvibes-redis-data" # Default generated name from sheepvibes-redis-data.volume
+
+echo "Quadlet files deployed to ${SYSTEMD_USER_DIR}."
+echo "The application will use Podman-managed volumes '${DB_VOLUME_NAME}' and '${REDIS_VOLUME_NAME}' for persistence."
 echo ""
 echo "Next steps:"
-echo "1. Reload systemd to recognize the new/updated pod file:"
-echo "   systemctl --user daemon-reload && systemctl --user list-unit-files 'sheepvibespod*'"
+echo "1. Reload systemd to recognize the new/updated Quadlet files:"
+echo "   systemctl --user daemon-reload"
+echo "   Consider running 'systemd-analyze --user verify ${SYSTEMD_USER_DIR}/*' to check units."
+echo "   You can also inspect generated files in /run/user/\$(id -u)/systemd/generator/"
+echo "   E.g., ls -la /run/user/\$(id -u)/systemd/generator/${POD_SERVICE_NAME}*"
 echo ""
-echo "2. Start the pod service (this will start all containers defined in the pod):"
-echo "   systemctl --user start ${POD_FILENAME%.*}.service" # Uses the pod filename (e.g., sheepvibespod.service)
+echo "2. List the generated unit files to confirm:"
+echo "   systemctl --user list-unit-files 'sheepvibes*'"
 echo ""
-echo "3. Check the status of the pod:"
-echo "   systemctl --user status ${POD_FILENAME%.*}.service"
-echo "   You can inspect the auto-created volumes with: podman volume inspect sheepvibespod-sheepvibes-db sheepvibespod-sheepvibes-redis"
+echo "3. Start the main pod service (this will start all containers and create volumes as defined):"
+echo "   systemctl --user start ${POD_SERVICE_NAME}"
 echo ""
-echo "4. View logs for the entire pod (follow for real-time updates):"
-echo "   journalctl --user -u ${POD_FILENAME%.*}.service -f"
-echo "   To view logs for a specific container within the pod (e.g., sheepvibes-app):"
-echo "   journalctl --user -u sheepvibespod.service -t sheepvibes-app # Assuming systemd uses container name as identifier for journald"
-echo "   Alternatively, use 'podman logs <container_name_or_id>'"
+echo "4. Check the status of the pod and its components:"
+echo "   systemctl --user status ${POD_SERVICE_NAME}"
+echo "   systemctl --user status sheepvibes-app.service"
+echo "   systemctl --user status sheepvibes-redis.service"
+echo "   systemctl --user status sheepvibes-db-volume.service"
+echo "   systemctl --user status sheepvibes-redis-data-volume.service"
+echo ""
+echo "5. Inspect the auto-created volumes:"
+echo "   podman volume inspect ${DB_VOLUME_NAME} ${REDIS_VOLUME_NAME}"
+echo ""
+echo "6. View logs for the entire pod (follow for real-time updates):"
+echo "   journalctl --user -u ${POD_SERVICE_NAME} -f"
+echo "   To view logs for a specific container (e.g., sheepvibes-app):"
+# The -t option with the pod service is good, or directly query the container's service
+echo "   journalctl --user -u ${POD_SERVICE_NAME} -t sheepvibes-app"
+echo "   # OR for more detailed logs of just the app container's service:"
+echo "   journalctl --user -u sheepvibes-app.service -f"
 echo ""
 echo "To stop the pod:"
-echo "   systemctl --user stop ${POD_FILENAME%.*}.service"
+echo "   systemctl --user stop ${POD_SERVICE_NAME}"
 echo ""
 echo "To enable the pod to start automatically when you log in:"
-echo "   systemctl --user enable ${POD_FILENAME%.*}.service"
+echo "   systemctl --user enable ${POD_SERVICE_NAME}"
 echo ""
 echo "Deployment script finished."
