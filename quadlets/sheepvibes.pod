@@ -24,7 +24,7 @@ PublishPort=127.0.0.1:5000:5000
 Pod=sheepvibes.pod # Explicitly state this container belongs to the pod
 ContainerName=sheepvibes-app
 Image=ghcr.io/sheepdestroyer/sheepvibes:latest
-Volume=sheepvibes-db.volume:/app/data:Z
+Volume=sheepvibes-db.volume:/app/data
 
 # Environment variables for the application
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
@@ -43,7 +43,7 @@ TimeoutStartSec=180 # Increased timeout to allow for image pulls or slow starts
 Pod=sheepvibes.pod # Explicitly state this container belongs to the pod
 ContainerName=sheepvibes-redis
 Image=docker.io/redis:alpine
-Volume=sheepvibes-redis.volume:/data:Z
+Volume=sheepvibes-redis.volume:/data
 
 # Standard service options
 Restart=on-failure
