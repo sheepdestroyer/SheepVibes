@@ -16,15 +16,16 @@ def client():
     # Disable CSRF protection if it were enabled
     # app.config['WTF_CSRF_ENABLED'] = False 
 
+    with app.app_context(): # Ensure app context for create_all and drop_all
+        db.create_all() # Ensure tables are created for each test
+
     with app.test_client() as client:
-        with app.app_context():
-            # Create database tables for the test session
-            db.create_all()
-            # You could optionally seed data here if needed for all tests
         yield client # Provide the test client to the tests
-        # Teardown: drop tables after tests run (within app_context if needed)
-        # with app.app_context():
-        #     db.drop_all()
+
+    # Teardown: drop all tables after each test to ensure isolation
+    with app.app_context():
+        db.session.remove() # Ensure session is clean before dropping
+        db.drop_all()       # Drop all tables
 
 # --- Tests for /api/tabs --- 
 
@@ -392,25 +393,23 @@ def test_mark_item_read_not_found(client):
 
 # --- Tests for POST /api/feeds/<feed_id>/update ---
 
-@patch('app.models_to_dict')
-@patch('app.feed_service.fetch_and_update_feed')
-def test_update_feed_success(mock_fetch_and_update, mock_models_to_dict, client, setup_tabs_and_feeds):
-    """Test POST /api/feeds/<feed_id>/update successfully."""
+@patch('app.fetch_and_update_feed')
+def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
-    mock_feed_object = MagicMock(spec=Feed) # Simulate a Feed SQLAlchemy object
+    mock_feed_object = MagicMock(spec=Feed)
     mock_feed_dict = {"id": feed_id, "name": "Updated Feed", "url": "url1", "unread_count": 5}
 
     mock_fetch_and_update.return_value = mock_feed_object
-    mock_models_to_dict.return_value = mock_feed_dict
+    mock_feed_object.to_dict.return_value = mock_feed_dict
 
     response = client.post(f'/api/feeds/{feed_id}/update')
 
     assert response.status_code == 200
     assert response.json == mock_feed_dict
     mock_fetch_and_update.assert_called_once_with(feed_id)
-    mock_models_to_dict.assert_called_once_with(mock_feed_object)
+    mock_feed_object.to_dict.assert_called_once()
 
-@patch('app.feed_service.fetch_and_update_feed')
+@patch('app.fetch_and_update_feed')
 def test_update_feed_not_found(mock_fetch_and_update, client):
     """Test POST /api/feeds/<feed_id>/update when feed is not found."""
     feed_id = 999
@@ -423,9 +422,8 @@ def test_update_feed_not_found(mock_fetch_and_update, client):
     assert "Feed not found" in response.json['error']
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
-@patch('app.feed_service.fetch_and_update_feed')
+@patch('app.fetch_and_update_feed')
 def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds):
-    """Test POST /api/feeds/<feed_id>/update when the update process fails."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
     mock_fetch_and_update.side_effect = Exception("Simulated update error")
 
@@ -434,8 +432,6 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
     assert response.status_code == 500
     assert 'error' in response.json
     assert "Failed to update feed" in response.json['error']
-    # The original error message might also be in the response, depending on error handling
-    # assert "Simulated update error" in response.json['error']
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 # --- Tests for Frontend Serving Routes ---
@@ -457,7 +453,7 @@ def test_get_existing_static_file(client):
     # For the purpose of this task, we assume it's set up correctly.
     response = client.get('/script.js')
     assert response.status_code == 200
-    assert response.content_type == 'application/javascript' # Common for .js
+    assert response.content_type == 'text/javascript; charset=utf-8'
     # Check if data is not empty, actual content might change.
     assert len(response.data) > 0
 
