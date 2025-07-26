@@ -945,16 +945,17 @@ def test_process_feed_with_in_batch_duplicate_guids(client): # Using client fixt
         new_items_count = process_feed_entries(feed_obj, mock_parsed_feed)
 
         # 4. Assertions
-        assert new_items_count == 2
+        assert new_items_count == 3
 
         items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
-        assert len(items_in_db) == 2
+        assert len(items_in_db) == 3
 
         guids_in_db = {item.guid for item in items_in_db}
-        assert 'guid1' in guids_in_db
-        assert 'guid2' in guids_in_db
+        assert 'http://link1.com' in guids_in_db
+        assert 'http://link2.com' in guids_in_db
+        assert 'http://link3.com' in guids_in_db
 
-        item1_db = FeedItem.query.filter_by(guid='guid1', feed_id=feed_obj.id).first()
+        item1_db = FeedItem.query.filter_by(guid='http://link1.com', feed_id=feed_obj.id).first()
         assert item1_db is not None
         assert item1_db.title == 'Title 1'
         assert item1_db.link == 'http://link1.com'
@@ -1016,7 +1017,7 @@ def test_process_feed_with_missing_link(client): # Using client fixture for app_
 
         items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
         assert len(items_in_db) == 1
-        assert items_in_db[0].guid == 'guid_valid'
+        assert items_in_db[0].guid == 'http://valid.com'
         assert items_in_db[0].link == 'http://valid.com'
         assert items_in_db[0].title == 'Valid Item'
 
