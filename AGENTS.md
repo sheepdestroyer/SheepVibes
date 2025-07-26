@@ -1,5 +1,4 @@
-An Agent must always start by reading **all** .md files from the repository in order to have a global understanding of the application.
-It is also important to read both backend & frontend code files to understand the app's logic.
+# An Agent must always start by reading **all** .md files from the repository in order to have a global understanding of the application. It is also important to read both backend & frontend code files to understand the app's logic.
 
 ## During a single task, for each of its individual and intermediate step, an Agent must always:
 - Add new relevant tests to the test suite.
