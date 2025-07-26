@@ -1,9 +1,7 @@
 ## Backend Testing
-
 The backend of SheepVibes is written in Python and uses the `pytest` framework for testing.
 
-### Setup for Local Testing
-
+### I. Setup for Local Testing
 1.  Navigate to the backend directory. Install the necessary development dependencies within a Python virtual environment, including `pytest`:
     ```bash
     cd backend
@@ -14,8 +12,7 @@ The backend of SheepVibes is written in Python and uses the `pytest` framework f
     ```
 
 
-### Running Local Tests
-
+### II. Running Local Tests
 The backend tests require a running Redis instance for caching checks.
 
 1.  **Start Redis**
@@ -42,24 +39,17 @@ The backend tests require a running Redis instance for caching checks.
     ```
 
 ## Frontend Testing
-
 Currently, there are no automated tests specifically for the frontend JavaScript code.
 
 ### Future Considerations
-
 For a vanilla JavaScript application like this, End-to-End (E2E) testing would be a valuable addition. Suitable E2E testing tools include:
 
 * **Playwright:** [https://playwright.dev/](https://playwright.dev/)
 * **Cypress:** [https://www.cypress.io/](https://www.cypress.io/)
 
 ## Automated Testing with GitHub Actions
-
-To ensure code quality, the project uses a GitHub Actions workflow to run backend tests on every push and pull request. This workflow serves as the definitive guide for setting up an automated testing environment.
-
-### Workflow File
-
+To ensure code quality, the project uses a GitHub Actions workflow to run backend tests on every push and pull request. This workflow serves as the definitive guide for setting up an automated testing environment.  
 The workflow is defined in `.github/workflows/run-tests.yml`.
 
-### Recommendations for CI/CD and Automated Tools & Agents
-
-Please refer to `AGENTS.md` for detailed instructions on how to configure and run the test suite in automated environments. The key is to replicate the setup found in our GitHub Actions workflow, paying close attention to the use of service containers and the `CACHE_REDIS_PORT` environment variable for dynamic port mapping.
+## Recommendations for CI/CD and Automated Tools & Agents
+The key is to follow the instructions given above, and replicate the setup found in our GitHub Actions workflow, paying close attention to the use of service containers and the `CACHE_REDIS_PORT` environment variable for dynamic port mapping.
