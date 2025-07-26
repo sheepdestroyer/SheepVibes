@@ -12,7 +12,7 @@
   
 ### Finishing a task :
 5. Before preparing to end a task it is necessary to run a last full validation of all tests.
-6. Then it is necessary to update all relevant .md files (*especially* TODO.md and CHANGELOG.md) accordingly.
+6. Then it is necessary to update all relevant .md files (*especially* `TODO.md` and `CHANGELOG.md`) accordingly.
 7. Only then will the task be completed, and changes be submitted / commited.
 
 ## CI/CD and Automated Agent Execution Guide
