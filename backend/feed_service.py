@@ -161,12 +161,19 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             continue
 
         # Determine the GUID to be stored in the database (db_guid).
-        # If feedparser's ID (feedparser_id) is present and different from the entry_link,
-        # it's considered a "true" GUID. Otherwise, db_guid will be None.
-        # This prevents storing links in the globally unique 'guid' column if feedparser defaults id to link.
-        db_guid = None
-        if feedparser_id and feedparser_id != entry_link:
-            db_guid = feedparser_id
+        # The GUID is essential for uniquely identifying feed items over time.
+        # While feedparser provides an 'id' field, it can be unreliable or non-unique in some feeds.
+        # The item's link, however, is almost always unique.
+        #
+        # Previously, the logic tried to create a "true" GUID only if the feedparser 'id' was
+        # different from the link, otherwise leaving it as None. This led to issues when
+        # a feed used the same non-link 'id' for multiple, different items, causing a UNIQUE
+        # constraint violation on (feed_id, guid).
+        #
+        # The new strategy is to always use the entry's link as the primary GUID. This ensures
+        # that every item has a reliable, unique identifier, preventing database errors and
+        # ensuring that updates are processed correctly.
+        db_guid = entry_link
 
         # --- Deduplication Logic ---
         # 1. Check against items already in the DB *for this specific feed*

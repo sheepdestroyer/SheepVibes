@@ -202,12 +202,12 @@ def test_kernel_org_scenario(db_setup, mocker):
     # Process entries
     new_items_count = feed_service.process_feed_entries(feed_obj, mock_feed_data)
 
-    assert new_items_count == 3, "Should add all 3 items as their GUIDs are unique"
+    assert new_items_count == 1, "Should add only the first item as they all have the same link"
 
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
-    assert len(items_in_db) == 3
+    assert len(items_in_db) == 1
     guids_in_db = {item.guid for item in items_in_db}
-    assert guids_in_db == {"kernel.guid.1", "kernel.guid.2", "kernel.guid.3"}
+    assert guids_in_db == {"https://www.kernel.org/"}
     links_in_db = {item.link for item in items_in_db}
     assert links_in_db == {"https://www.kernel.org/"} # All share the same link
 
@@ -239,14 +239,14 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).order_by(FeedItem.link).all()
     assert len(items_in_db) == 3
 
-    # Items where guid was same as link should have None in db_guid
+    # Items where guid was same as link should have the link in db_guid
     assert items_in_db[0].link == "http://news.example.com/item1"
-    assert items_in_db[0].guid is None
+    assert items_in_db[0].guid == "http://news.example.com/item1"
     assert items_in_db[1].link == "http://news.example.com/item2"
-    assert items_in_db[1].guid is None
+    assert items_in_db[1].guid == "http://news.example.com/item2"
     # Item with a true GUID
     assert items_in_db[2].link == "http://news.example.com/item3"
-    assert items_in_db[2].guid == "true.guid.story3"
+    assert items_in_db[2].guid == "http://news.example.com/item3"
 
 
 def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
@@ -273,10 +273,10 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
 
     item_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).one()
     assert item_in_db.title == "Story A"
-    assert item_in_db.guid is None # Stored as None because guid was same as link
+    assert item_in_db.guid == "http://example.com/story" # Stored as link because guid was same as link
 
     # Simulate fetching again - should not add any new items
-    # The existing item has link "http://example.com/story" and guid None.
+    # The existing item has link "http://example.com/story" and guid "http://example.com/story".
     # The incoming items will also resolve to guid None and same link.
     # existing_feed_links will catch it.
     new_items_count2 = feed_service.process_feed_entries(feed_obj, mock_feed_data)
@@ -320,17 +320,17 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     count1 = feed_service.process_feed_entries(feed1_obj, mock_feed1_data)
     assert count1 == 2
     f1_items = FeedItem.query.filter_by(feed_id=feed1_obj.id).all()
-    assert f1_items[0].guid == "global.guid.1"
-    assert f1_items[1].guid is None # For link http://feed1.com/item2
+    assert f1_items[0].guid == "http://feed1.com/item1"
+    assert f1_items[1].guid == "http://feed1.com/item2"
 
     # Process Feed 2
     m_parse.return_value = mock_feed2_data
     count2 = feed_service.process_feed_entries(feed2_obj, mock_feed2_data)
 
     # Expected for Feed 2 with per-feed GUID uniqueness:
-    # entry_f2_1 (guid="global.guid.1") is now unique for Feed 2 and should be added.
-    # entry_f2_2 (link-as-ID, new link) will be added (db_guid=None).
-    # entry_f2_3 (link-as-ID, link="http://feed1.com/item2") will be added (db_guid=None), as link uniqueness is per-feed.
+    # entry_f2_1 (link="http://feed2.com/item1") is unique for Feed 2 and should be added.
+    # entry_f2_2 (link="http://feed2.com/item2") is unique for Feed 2 and should be added.
+    # entry_f2_3 (link="http://feed1.com/item2") is unique for Feed 2 and should be added.
     assert count2 == 3, "All 3 items from Feed 2 should be added with per-feed GUID uniqueness"
 
     # Check items in Feed 2
@@ -338,13 +338,13 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     assert len(f2_items) == 3
 
     # entry_f2_1
-    assert f2_items[0].guid == "global.guid.1"
+    assert f2_items[0].guid == "http://feed2.com/item1"
     assert f2_items[0].title == "F2 Story 1"
     # entry_f2_2
-    assert f2_items[1].guid is None
+    assert f2_items[1].guid == "http://feed2.com/item2"
     assert f2_items[1].title == "F2 Story 2"
     # entry_f2_3
-    assert f2_items[2].guid is None
+    assert f2_items[2].guid == "http://feed1.com/item2"
     assert f2_items[2].title == "F2 Story 3"
 
     # Verify total items in DB: 2 from Feed1 + 3 from Feed2
