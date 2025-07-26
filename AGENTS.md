@@ -1,11 +1,16 @@
-An Agent must always start by reading **all** files from the repository in order to have a global understanding of the application.
+An Agent must always start by reading **all** .md files from the repository in order to have a global understanding of the application.
+It is also important to read both backend & frontend code files to understand the app's logic.
 
-During a task, for each individual and intermediate step, and before starting a new step, an Agent must always:
+## During a single task, for each of its individual and intermediate step, an Agent must always:
 - Add new relevant tests to the test suite.
 - Verify that pre-existing tests are still valid, and correct them if necessary.
 - Then, validate all tests by executing the full dedicated CI workflow as described in this document.
 - Only then, start the next step.
-- A task will be done and ready to submit after running again a last full validation of all tests.
+  
+## Finishing a task :
+- Before preparing to end a task it is necessary to run a last full validation of all tests.
+- Then it is necessary to update all relevant .md files (especially TODO.md and CHANGELOG.md) accordingly.
+- Only then will the task be completed, and changes be sumbitted / commited.
 
 ### CI/CD and Automated Agent Execution Guide
 
