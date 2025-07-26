@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+ <head>
+  <title>sheepy's desk</title>
+  <type>Private</type>
+  <creationDate>2025-05-05 07:45:08</creationDate>
+ </head>
+ <body>
+  <outline title="News" cols="3" layout="3-0">
+   <outline title="Ars Technica" xmlUrl="http://feeds.arstechnica.com/arstechnica/index" htmlUrl="https://arstechnica.com/" type="rss" row="42.75" col="1"/>
+   <outline title="The Register" xmlUrl="https://www.theregister.com/headlines.atom" htmlUrl="https://www.theregister.com/" type="rss" row="80.0115" col="1"/>
+   <outline title="Tomshardware" xmlUrl="https://www.tomshardware.com/feeds/all" htmlUrl="https://www.tomshardware.com/" type="rss" row="117.273" col="1"/>
+   <outline title="Wccftech » Hardware Topic Feed" xmlUrl="https://wccftech.com/topic/hardware/feed/" htmlUrl="https://wccftech.com/topic/hardware/" type="rss" row="191.797" col="1"/>
+   <outline title="SemiAccurate" xmlUrl="https://semiaccurate.com/?feed=rss" htmlUrl="https://www.semiaccurate.com/" type="rss" row="4.09375" col="2"/>
+   <outline title="Gamers Nexus" xmlUrl="https://gamersnexus.net/rss.xml" htmlUrl="https://gamersnexus.net/" type="rss" row="8.1875" col="2"/>
+   <outline title="MIT Technology Review" xmlUrl="https://www.technologyreview.com/feed/" htmlUrl="https://www.technologyreview.com/" type="rss" row="1008.19" col="2"/>
+   <outline title="Hacker News" xmlUrl="https://news.ycombinator.com/rss" htmlUrl="https://news.ycombinator.com/" type="rss" row="302.344" col="3"/>
+   <outline title="lobste.rs" xmlUrl="https://lobste.rs/rss" htmlUrl="https://lobste.rs/" type="rss" row="453.516" col="3"/>
+   <outline title="Real World Tech" xmlUrl="http://www.realworldtech.com/feed/" htmlUrl="https://www.realworldtech.com/" type="rss" row="1662.89" col="3"/>
+  </outline>
+  <outline title="Linux" cols="3" layout="3-0">
+   <outline title="LWN.net" xmlUrl="http://lwn.net/headlines/rss" htmlUrl="https://lwn.net/" type="rss" row="750" col="1"/>
+   <outline title="Latest Linux Kernel Versions" xmlUrl="https://www.kernel.org/feeds/kdist.xml" htmlUrl="https://www.kernel.org/" type="rss" row="1125" col="1"/>
+   <outline title="Linux Kernel Podcast" xmlUrl="http://jcm.libsyn.com/rss" htmlUrl="http://www.kernelpodcast.org/" type="rss" row="1500" col="1"/>
+   <outline title="Phoronix" xmlUrl="http://feeds.feedburner.com/Phoronix" htmlUrl="https://www.phoronix.com/" type="rss" row="906.25" col="2"/>
+   <outline title="Kernel Planet" xmlUrl="http://kernelplanet.org/rss20.xml" htmlUrl="http://planet.kernel.org/" type="rss" row="1812.5" col="2"/>
+   <outline title="DistroWatch.com: News" xmlUrl="http://distrowatch.com/news/dw.xml" htmlUrl="https://distrowatch.com/" type="rss" row="750" col="3"/>
+   <outline title="SteamDB" xmlUrl="http://steamdb.info/api/BlogRSS/" htmlUrl="https://steamdb.info/blog/" type="rss" row="1500" col="3"/>
+   <outline title="Slashdot: Linux" xmlUrl="http://rss.slashdot.org/Slashdot/slashdotLinux" htmlUrl="https://linux.slashdot.org/" type="rss" row="2000" col="3"/>
+  </outline>
+  <outline title="VR" cols="3" layout="3-0">
+   <outline title="Steam Blog RSS Feed" xmlUrl="https://steamcommunity.com/games/593110/rss/" htmlUrl="https://steamcommunity.com/games/593110" type="rss" row="250" col="1"/>
+   <outline title="UploadVR » Feed" xmlUrl="http://uploadvr.com/feed/" htmlUrl="https://www.uploadvr.com/" type="rss" row="1000" col="1"/>
+   <outline title="Road to VR" xmlUrl="http://www.roadtovr.com/feed/" htmlUrl="https://www.roadtovr.com/" type="rss" row="2000" col="1"/>
+   <outline title="New On Steam" xmlUrl="https://store.steampowered.com/feeds/newreleases.xml" htmlUrl="http://www.steampowered.com/" type="rss" row="3000" col="1"/>
+   <outline title="Steam RSS News Feed" xmlUrl="https://store.steampowered.com/feeds/news.xml" htmlUrl="http://www.steampowered.com/" type="rss" row="31.25" col="2"/>
+   <outline type="Reddit" title="Reddit" row="125" col="2">
+    <outline subreddits="virtualreality,vive,oculus" color="borderless" activeSubreddit="all" limit="6"/>
+   </outline>
+   <outline title="KGOnTech » Feed" xmlUrl="https://kguttag.com/feed/" htmlUrl="https://kguttag.com/" type="rss" row="500" col="3"/>
+   <outline type="Reddit" title="Reddit" row="1000" col="3">
+    <outline subreddits="ValveIndex,SteamVR" activeSubreddit="all" color="borderless" limit="6"/>
+   </outline>
+  </outline>
+  <outline title="JV" cols="3" layout="3-0">
+   <outline title="Polygon" xmlUrl="http://www.polygon.com/rss/index.xml" htmlUrl="https://www.polygon.com/" type="rss" row="1000" col="1"/>
+   <outline title="NoFrag" xmlUrl="https://nofrag.com/feed/" htmlUrl="https://nofrag.com/" type="rss" row="1125" col="2"/>
+   <outline type="Reddit" title="Reddit" row="1000" col="3">
+    <outline subreddits="valve" limit="7" color="borderless" activeSubreddit="valve"/>
+   </outline>
+  </outline>
+  <outline title="infos" cols="3" layout="3-0">
+   <outline title="New York Times World" xmlUrl="https://rssproxy.migor.org/api/tf?url=https%3A%2F%2Frss.nytimes.com%2Fservices%2Fxml%2Frss%2Fnyt%2FWorld.xml&amp;re=none&amp;out=atom&amp;token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiYW5vbnltb3VzIiwiaWF0IjoxNjYzNzg2NDgyfQ.k3WXue9qAOizSQ2IIZjC6j9bDcY_xnYVZVtqY4c_weQ" htmlUrl="https://www.nytimes.com/section/world" type="rss" row="15.625" col="1"/>
+   <outline title="A la une sur Libération" xmlUrl="http://rss.liberation.fr/rss/latest/" htmlUrl="https://www.liberation.fr/" type="rss" row="500" col="2"/>
+   <outline title="slate" xmlUrl="http://www.slate.fr/rss.xml" htmlUrl="https://www.slate.fr/rss.xml" type="rss" row="2000" col="2"/>
+   <outline title="Le Monde.fr : A la une" xmlUrl="http://www.lemonde.fr/rss/une.xml" htmlUrl="https://www.lemonde.fr/rss/une.xml" type="rss" row="3000" col="2"/>
+   <outline title="Richard Stallman's Political Notes" xmlUrl="https://stallman.org/rss/rss.xml" htmlUrl="https://stallman.org/archives/polnotes.html" type="rss" row="1000" col="3"/>
+  </outline>
+  <outline title="Webcomic" cols="3" layout="3-0">
+   <outline title="Oglaf! -- Comics. Often dirty." xmlUrl="http://oglaf.com/feeds/rss/" htmlUrl="https://www.oglaf.com/latest/" type="rss" row="31.25" col="1"/>
+   <outline title="xkcd.com" xmlUrl="http://xkcd.com/rss.xml" htmlUrl="https://xkcd.com/" type="rss" row="312.5" col="1"/>
+   <outline title="Oatmeal" xmlUrl="http://feeds.feedburner.com/oatmealfeed" htmlUrl="http://theoatmeal.com/" type="rss" row="593.75" col="1"/>
+   <outline title="Bruno" xmlUrl="http://brunostrip.com/wp/?feed=rss2" htmlUrl="http://brunostrip.com/wp" type="rss" row="859.375" col="1"/>
+   <outline title="QC RSS" xmlUrl="http://www.questionablecontent.net/QCRSS.xml" htmlUrl="http://www.questionablecontent.net/" type="rss" row="500" col="2"/>
+   <outline title="Dumbing of Age" xmlUrl="https://www.dumbingofage.com/feed/" htmlUrl="https://www.dumbingofage.com/" type="rss" row="1125" col="2"/>
+   <outline title="Broodhollow" xmlUrl="http://broodhollow.chainsawsuit.com/feed/" htmlUrl="http://broodhollow.chainsawsuit.com/" type="rss" row="1750" col="2"/>
+   <outline title="chainsawsuit by kris straub" xmlUrl="http://chainsawsuit.com/feed/" htmlUrl="http://chainsawsuit.com/" type="rss" row="3000" col="2"/>
+   <outline title="Dragon Ball Multiverse Pages (fr)" xmlUrl="http://www.dragonball-multiverse.com/flux.rss.php?lang=fr" htmlUrl="https://www.dragonball-multiverse.com/" type="rss" row="1500" col="3"/>
+   <outline title="Penny Arcade" xmlUrl="http://feeds.penny-arcade.com/pa-mainsite" htmlUrl="https://www.penny-arcade.com/" type="rss" row="2000" col="3"/>
+   <outline title="The Perry Bible Fellowship" xmlUrl="http://www.pbfcomics.com/feed/feed.xml" htmlUrl="https://pbfcomics.com/" type="rss" row="2500" col="3"/>
+   <outline title="Alice Grove" xmlUrl="http://www.alicegrove.com/rss" htmlUrl="https://www.alicegrove.com/" type="rss" row="3500" col="3"/>
+  </outline>
+  <outline title="Bordel" cols="3" layout="3-0">
+   <outline title="Ratiatum.com - Actualités" xmlUrl="http://www.numerama.com/rss/news.rss" htmlUrl="https://www.numerama.com/" type="rss" row="31.25" col="1"/>
+   <outline title="PC INpact" xmlUrl="https://next.ink/feed/free" htmlUrl="https://next.ink/" type="rss" row="62.5" col="1"/>
+   <outline title="Futura-Sciences.com - Actualités quotidiennes sur les Sciences et les Technologies" xmlUrl="http://feeds.feedburner.com/packfs" htmlUrl="https://www.futura-sciences.com/" type="rss" row="281.25" col="1"/>
+   <outline title="Techno-Science.net" xmlUrl="http://www.techno-science.net/include/news.rss" htmlUrl="https://www.techno-science.net/" type="rss" row="2000" col="1"/>
+   <outline title="Sankaku Complex" xmlUrl="https://www.sankakucomplex.com/feed/?pg=X" htmlUrl="https://news.sankakucomplex.com/" type="rss" row="2609" col="2"/>
+   <outline title="TorrentFreak" xmlUrl="http://feed.torrentfreak.com/Torrentfreak" htmlUrl="https://torrentfreak.com/" type="rss" row="3609" col="2"/>
+   <outline title="The Daily WTF" xmlUrl="http://syndication.thedailywtf.com/TheDailyWtf" htmlUrl="http://thedailywtf.com/" type="rss" row="4609" col="2"/>
+   <outline type="LinkModule" title="Ping and mtr from multiple locations" row="1562.5" col="3">
+    <outline desc="Ping and mtr from multiple locations" title="Ping and mtr from multiple locations" url="http://ping.pe/" thumbUrl="http://netvibes.th.exalead.com/thumb?url=http%3A%2F%2Fping.pe%2F" color="borderless"/>
+   </outline>
+   <outline type="UWA" title="Netvibes Customize" row="2875" col="3">
+    <outline moduleUrl="http://netvibes.atspace.com/customize.html" inline="true" enabled="false" background_url="" header_url="" hide_top_links="true" hide_tab_bar="false" hide_feed_counts="true" remove_modules_border="false" feed_reader_show_modules="false" hide_footer="true" background_horizontal="0%" background_vertical="0%" background_repeat="no-repeat" background_attachment="fixed" header_horizontal="0%" header_vertical="0%" header_repeat="no-repeat" header_attachment="fixed" header_opacity="1" top_links_opacity="1" modules_opacity="0.7" feed_reader_opacity="0.7" footer_opacity="1" color="borderless"/>
+   </outline>
+   <outline title="Coding Horror" xmlUrl="https://blog.codinghorror.com/rss/" htmlUrl="https://blog.codinghorror.com/" type="rss" row="3875" col="3"/>
+   <outline type="LinkModule" title="Station-Drivers - News" row="4875" col="3">
+    <outline showThumbnail="1" url="http://station-drivers.com/index.html" title="Station-Drivers - News" desc="Station-Drivers: le site de drivers, bios, firmwares, ect..." showUrl="1" thumbUrl="http://netvibes.th.exalead.com/thumb?url=http%3A%2F%2Fstation-drivers.com%2Findex.html" color="borderless"/>
+   </outline>
+  </outline>
+  <outline title="Android" cols="3" layout="3-0">
+   <outline title="Android Police - Android News, Apps, Games, Phones, Tablets » Feed" xmlUrl="http://www.androidpolice.com/feed/" htmlUrl="https://www.androidpolice.com/" type="rss" row="500" col="1"/>
+   <outline title="xda-developers latest posts" xmlUrl="http://www.xda-developers.com/feed/" htmlUrl="https://www.xda-developers.com/" type="rss" row="1000" col="2"/>
+  </outline>
+  <outline title="Hack" cols="3" layout="3-0">
+   <outline title="Krebs on Security" xmlUrl="https://krebsonsecurity.com/feed/" htmlUrl="https://krebsonsecurity.com/" type="rss" row="1000" col="3"/>
+  </outline>
+  <outline title="vie Pr Pu" cols="2" layout="2-0">
+   <outline type="LinkModule" title="||==|[__ L'ANTRE DU BARBARE __]|==|| | Un site utilisant WordPress.com" row="500" col="1">
+    <outline showThumbnail="1" url="http://thorkanthebarbarian.spaces.live.com" title="||==|[__ L'ANTRE DU BARBARE __]|==|| | Un site utilisant WordPress.com" desc="&amp;#124;&amp;#124;&amp;#61;&amp;#61;&amp;#124;&amp;#91;__ L&amp;#39;ANTRE DU BARBARE __&amp;#93;&amp;#124;&amp;#61;&amp;#61;&amp;#124;&amp;#124; - Windows Live" showUrl="1" thumbUrl="http://netvibes.th.exalead.com/thumb?url=http%3A%2F%2Fthorkanthebarbarian.spaces.live.com%2F"/>
+   </outline>
+   <outline type="Webnote" title="Webnote" row="1000" col="2">
+    <outline color="yellow" text="http://biloutman24.free.fr = http://piotr.fr.st/ : scanz&#10;&#10;http://www.jenesuis.net/ : infos nes et oldies&#10;&#10;http://wiki.hak5.org/wiki//USB_Switchblade&#10;http://nostalgie-roulette.com/&#10;&#10;http://www.handdrawngames.com/DesktopTD/Game.asp&#10;&#10;http://www.nanarland.com/Chroniques/Main.php?id_film=epeeduvaillant&#10;http://www.nanarland.com/Chroniques/Main.php?id_film=epeedusaintgraal&#10;&#10;http://stores.ebay.fr/herborizer&#10;newsgroup : http://www.hitnews.eu/index_en.php?group=2&#10;louise michel&#10;&#10;http://sensmotdire.gnunux.info/ : conjugaison&#10;&#10;http://ndash.dashroms.com/&#10;www.emuparadise.org/roms/nes/&#10;http://isohunt.com/ : torrent&#10; http://usniff.com/ : torrent search&#10;http://www.thiweb.com/ : warez&#10;&#10;http://ministeredelacrise.blogs.liberation.fr/&#10;http://archet.net/index.php&#10;http://www.overheardinnewyork.com/pages/currentfavorites-1.html  : quotes&#10;&#10;http://www.myspace.com/unicorndreamattack&#10;http://www.ecrans.fr/On-connait-la-musique-de-Mario,3925.html&#10;http://www.daheardit-records.net/fr/discographie/dhr02/ &#10;http://www.zreomusic.com/listen : Zelda music&#10;http://www.cthulhulives.org/solsticecarol.html&#10;polemix et la voix off&#10;http://weblog.redisdead.net/main/2006/07/26/1827-mama-mia &#10;http://www.linux.fm/&#10;&#10;http://seriesstream.blog.mongenie.com/&#10;http://sebkamil.blog.mongenie.com/ : séries streams&#10;http://www.mangas-tv.com/ &#10;&#10;http://www.youtube.com/watch?v=l7qx1FGRt54 Bagger 288! &#10;http://vimeo.com/11986796&#10;http://www.youtube.com/watch?v=Ht96HJ01SE4&amp;feature=related bohemian rahpsody old school computer&#10;http://www.youtube.com/watch?v=a2SnYa2aJNo&amp;feature=related&#10;http://www.youtube.com/watch?v=68SVqpykpo0&amp;feature=related&#10;http://www.youtube.com/watch?v=egcXvqiho4w TRUCKERS DELIGHT &#10;http://www.youtube.com/view_play_list?p=8D6F7CC6F03A7E84&amp;annotation_id=annotation_912327&amp;feature=iv : videogames mashup&#10;http://www.youtube.com/watch?v=Nhizo7KrZrw : mcdo jp&#10;http://www.geekzone.fr/blog/?2008/01/18/1554-jouer-de-la-musique-bio &#10;http://www.youtube.com/watch?v=hXIkUgG3h6c :  disney ressemblance&#10;http://www.youtube.com/watch?v=xj8ZadKgdC0 : prometeus&#10;http://zecaf.free.fr/wintergreen-when-i-wake-up.mov&#10;http://video.google.com/videoplay?docid=4313772690011721857&amp;q=Microsoft+redesigns+ipod&amp;pl=true&#10;http://www.youtube.com/MontyPython&#10;http://www.youtube.com/watch?v=Z4Y4keqTV6w&amp;eurl= : rire un peu&#10;http://drugsinspace.ytmnd.com/&#10;http://video.google.fr/videoplay?docid=3163064718772823274 : storm troopers bad boys&#10;http://www.youtube.com/watch?v=8eHeVQDzEkQ&amp;mode=related&amp;search=  : Adam Fulara &#10;http://www.youtube.com/watch?v=aTD2mwwlPqc : Adam Fulara 2 guitar&#10;http://jerome.polidor.free.fr/JAI_VOMI.wmv &#10;http://www.youtube.com/watch?v=-3JCESdFNyw&amp;mode=related&amp;search= : cyriak&#10;http://www.d0wn.com/print.php?sid=337 : mouton fou&#10;http://www.teepik.com/video-8674-l+attaque+du+mouton+tueur.html&#10;&#10; www.phenoelit.de/dpl/dpl.html : mdp par deff&#10;http://www.nirsoft.net/utils/mspass.zip &#10;http://www.wpostal.com/item-65.html : mdp&#10;http://abcdelasecurite.free.fr/site-abc-de-la-securite/ &#10;http://www.cgsecurity.org/&#10; &#10;www.ouverture-facile.com &#10;&#10;Portail Web : &#10;http://www.freeguppy.org/&#10;http://www.guppyland.org&#10;http://www.ianxz6zefk72ulzz.onion/index.php silkroadvb5piz3r.onion&#10;kpvz7ki2v5agwt35.onion" extend="function (object) {&#10;    return Object.extend.apply(this, [this, object]);&#10;}" history="" font="Tahoma" size="11px" title=""/>
+   </outline>
+  </outline>
+  <outline title="AI" cols="3" layout="3-0">
+   <outline title="Artificial intelligence – MIT Technology Review" xmlUrl="https://www.technologyreview.com/topic/artificial-intelligence/comments/feed/" htmlUrl="https://www.technologyreview.com/" type="rss" row="1000" col="1"/>
+   <outline type="Reddit" title="Reddit" row="1000" col="2">
+    <outline subreddits="singularity,LocalLLaMA" limit="20"/>
+   </outline>
+  </outline>
+ </body>
+</opml>
