@@ -405,25 +405,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
 
+        // Render items
+        if (feed.items && feed.items.length > 0) {
+                feed.items.forEach(item => {
+                    const listItem = document.createElement('li');
+                    listItem.dataset.itemId = item.id;
+                    listItem.classList.add(item.is_read ? 'read' : 'unread');
+
+                    const link = document.createElement('a');
+                    link.href = item.link;
+                    link.textContent = item.title;
+                    link.target = '_blank';
+                    link.addEventListener('click', () => handleMarkItemRead(item.id, listItem, feed.id, feed.tab_id));
+                    listItem.appendChild(link);
+
+                    const timestamp = document.createElement('span');
+                    timestamp.textContent = formatDate(item.published_time || item.fetched_time);
+                    listItem.appendChild(timestamp);
+
+                    itemList.appendChild(listItem);
+                });
+            } else {
+                itemList.innerHTML = '<li>No items found for this feed.</li>';
+            }
+
         // Return the widget without appending it to the DOM
         return widget;
-
-                const link = document.createElement('a');
-                link.href = item.link;
-                link.textContent = item.title;
-                link.target = '_blank';
-                link.addEventListener('click', () => handleMarkItemRead(item.id, listItem, feed.id, feed.tab_id));
-                listItem.appendChild(link);
-
-                const timestamp = document.createElement('span');
-                timestamp.textContent = formatDate(item.published_time || item.fetched_time);
-                listItem.appendChild(timestamp);
-
-                itemList.appendChild(listItem);
-            });
-        } else {
-            itemList.innerHTML = '<li>No items found for this feed.</li>';
-        }
     }
 
     /**
@@ -600,7 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
         feedNameInput.value = currentName;
         
         // Show the modal
-        modal.style.display = 'flex';
+        modal.classList.add('is-active');
     }
 
     /**
@@ -640,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result) {
                 console.log('Feed updated successfully:', result);
                 // Close the modal
-                modal.style.display = 'none';
+                modal.classList.remove('is-active');
                 
                 // Update just the edited widget instead of reloading entire tab
                 const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
@@ -675,7 +682,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function handleEditFeedCancel() {
         const modal = document.getElementById('edit-feed-modal');
-        modal.style.display = 'none';
+        modal.classList.remove('is-active');
     }
 
     // --- Mark Item as Read Logic ---
