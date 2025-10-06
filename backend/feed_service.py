@@ -8,7 +8,7 @@ from dateutil import parser as date_parser # Use dateutil for robust date parsin
 from sqlalchemy.exc import IntegrityError
 
 # Import database models from the new models.py
-from models import db, Feed, FeedItem
+from .models import db, Feed, FeedItem
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
