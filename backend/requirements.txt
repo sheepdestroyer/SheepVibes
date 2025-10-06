@@ -1,4 +1,4 @@
-Flask==3.1.1
+Flask==3.1.2
 feedparser==6.0.11
 APScheduler==3.11.0
 SQLAlchemy==2.0.43
