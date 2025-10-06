@@ -342,10 +342,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Renders a single feed widget and appends it to the main grid.
+     * Creates a single feed widget.
      * @param {object} feed - The feed object from the API (including unread_count and items).
      */
-    function renderFeedWidget(feed) {
+    function createFeedWidget(feed) {
         const widget = document.createElement('div');
         widget.classList.add('feed-widget');
         widget.dataset.feedId = feed.id;
@@ -457,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (feedsWithItems && feedsWithItems.length > 0) {
             feedsWithItems.forEach(feed => {
-                renderFeedWidget(feed);
+                createFeedWidget(feed);
             });
         } else if (feedGrid.children.length === 0) {
             // Only show 'no feeds' if the entire grid is empty after attempting to load
