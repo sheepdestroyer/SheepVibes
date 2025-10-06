@@ -27,7 +27,7 @@ Ensure that all pull requests created in the SheepVibes repository are immediate
 1. Set `draft: false` when using the `create_pr` function
 2. Include clear, descriptive titles and descriptions
 3. Reference any related issues or context
-4. Ensure all required checks pass before marking as ready
+4. Ensure code passes local checks and is ready for review before creating the PR
 
 ## Implementation Guidelines
 
