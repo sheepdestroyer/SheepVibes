@@ -407,27 +407,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render items
         if (feed.items && feed.items.length > 0) {
-                feed.items.forEach(item => {
-                    const listItem = document.createElement('li');
-                    listItem.dataset.itemId = item.id;
-                    listItem.classList.add(item.is_read ? 'read' : 'unread');
+            feed.items.forEach(item => {
+                const listItem = document.createElement('li');
+                listItem.dataset.itemId = item.id;
+                listItem.classList.add(item.is_read ? 'read' : 'unread');
 
-                    const link = document.createElement('a');
-                    link.href = item.link;
-                    link.textContent = item.title;
-                    link.target = '_blank';
-                    link.addEventListener('click', () => handleMarkItemRead(item.id, listItem, feed.id, feed.tab_id));
-                    listItem.appendChild(link);
+                const link = document.createElement('a');
+                link.href = item.link;
+                link.textContent = item.title;
+                link.target = '_blank';
+                link.addEventListener('click', () => handleMarkItemRead(item.id, listItem, feed.id, feed.tab_id));
+                listItem.appendChild(link);
 
-                    const timestamp = document.createElement('span');
-                    timestamp.textContent = formatDate(item.published_time || item.fetched_time);
-                    listItem.appendChild(timestamp);
+                const timestamp = document.createElement('span');
+                timestamp.textContent = formatDate(item.published_time || item.fetched_time);
+                listItem.appendChild(timestamp);
 
-                    itemList.appendChild(listItem);
-                });
-            } else {
-                itemList.innerHTML = '<li>No items found for this feed.</li>';
-            }
+                itemList.appendChild(listItem);
+            });
+        } else {
+            itemList.innerHTML = '<li>No items found for this feed.</li>';
+        }
 
         // Return the widget without appending it to the DOM
         return widget;
