@@ -87,6 +87,5 @@ Automate the process of addressing code review comments by creating a cycle that
 ## Important Notes
 
 - This microagent complements the existing PR Ready to Review and SheepVibes Rules microagents
-- Follow all repository testing requirements and validation workflows
-- Ensure code quality by running full test suite before each PR creation
+- Follow all repository testing requirements and validation workflows, including running the full test suite before each PR creation.
 - Update relevant documentation files upon completion of each cycle
