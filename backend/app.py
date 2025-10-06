@@ -14,7 +14,7 @@ from flask_caching import Cache # Added for caching
 from flask_cors import CORS # Added for CORS support
 
 # Import db object and models from the new models.py
-from models import db, Tab, Feed, FeedItem
+from .models import db, Tab, Feed, FeedItem
 import xml.etree.ElementTree as ET # Added for OPML export
 
 # --- OPML Import Configuration ---
@@ -888,8 +888,8 @@ def update_feed_url(feed_id):
         
         # Return full feed data including items for frontend to update widget
         feed_data = feed.to_dict()
-        # Include feed items in the response
-        feed_data['items'] = [item.to_dict() for item in feed.items]
+        # Include only recent feed items in the response (limit to 10)
+        feed_data['items'] = [item.to_dict() for item in feed.items.order_by(FeedItem.published_time.desc()).limit(10)]
         return jsonify(feed_data), 200 # OK
         
     except Exception as e:
