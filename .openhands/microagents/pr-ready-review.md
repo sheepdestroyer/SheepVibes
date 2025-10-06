@@ -31,9 +31,9 @@ Ensure that all pull requests created in the SheepVibes repository are immediate
 
 ## Implementation Guidelines
 
-- Use the GitHub API directly via `create_pr` function
-- Set appropriate labels based on the changes (e.g., "enhancement", "bug", "documentation")
-5. Update relevant documentation files (CHANGELOG.md, TODO.md) as needed
+1. Use the GitHub API directly via `create_pr` function
+2. Set appropriate labels based on the changes (e.g., "enhancement", "bug", "documentation")
+3. Update relevant documentation files (CHANGELOG.md, TODO.md) as needed
 
 ## Error Handling
 
