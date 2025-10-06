@@ -33,11 +33,11 @@ PublishPort=127.0.0.1:5000:5000
 
 [Volume/sheepvibes-db]
 # Defines a volume for the application's database.
-# systemd will create a volume named 'sheepvibespod-sheepvibes-db'.
+# systemd will create a volume named 'systemd-sheepvibespod-sheepvibes-db'.
 
 [Volume/sheepvibes-redis]
 # Defines a volume for the Redis cache data.
-# systemd will create a volume named 'sheepvibespod-sheepvibes-redis'.
+# systemd will create a volume named 'systemd-sheepvibespod-sheepvibes-redis'.
 
 
 ################################################################################
@@ -48,9 +48,6 @@ PublishPort=127.0.0.1:5000:5000
 
 # --- Application Container ---
 [Container/app]
-# Specifies that this container belongs to the defined pod.
-Pod=sheepvibespod.pod
-
 # Sets a custom name for the container.
 ContainerName=sheepvibes-app
 
@@ -78,9 +75,6 @@ TimeoutStartSec=180
 
 # --- Redis Container ---
 [Container/redis]
-# Specifies that this container belongs to the defined pod.
-Pod=sheepvibespod.pod
-
 # Sets a custom name for the container.
 ContainerName=sheepvibes-redis
 
