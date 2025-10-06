@@ -405,15 +405,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
 
-        // Append the whole widget to the grid
-        feedGrid.appendChild(widget);
-
-        // Render items
-        if (feed.items && feed.items.length > 0) {
-            feed.items.forEach(item => {
-                const listItem = document.createElement('li');
-                listItem.dataset.itemId = item.id;
-                listItem.classList.add(item.is_read ? 'read' : 'unread');
+        // Return the widget without appending it to the DOM
+        return widget;
 
                 const link = document.createElement('a');
                 link.href = item.link;
@@ -457,7 +450,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (feedsWithItems && feedsWithItems.length > 0) {
             feedsWithItems.forEach(feed => {
-                createFeedWidget(feed);
+                const widget = createFeedWidget(feed);
+                feedGrid.appendChild(widget);
             });
         } else if (feedGrid.children.length === 0) {
             // Only show 'no feeds' if the entire grid is empty after attempting to load
