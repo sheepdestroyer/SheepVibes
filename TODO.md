@@ -53,12 +53,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] **Feed Management (Backend API):**
     *   [x] `POST /api/feeds`: Add a new feed (URL, optionally associate with a tab). Backend should fetch initial data upon adding.
     *   [x] `DELETE /api/feeds/<feed_id>`: Remove a feed.
-    *   [ ] `PUT /api/feeds/<feed_id>`: Update feed properties (e.g., move to different tab - maybe later).
+    *   [x] `PUT /api/feeds/<feed_id>`: Update feed URL and properties.
 *   [x] **Feed Management (Frontend UI):**
     *   [x] Add a "+" button or form to input a feed URL.
     *   [x] Implement JS to call the `POST /api/feeds` endpoint.
     *   [x] Add a "close" (X) button to each feed widget.
     *   [x] Implement JS for the close button to call `DELETE /api/feeds/<feed_id>` and remove the widget from the DOM.
+    *   [x] Add an edit (✎) button to each feed widget.
+    *   [x] Implement JS for the edit button to call `PUT /api/feeds/<feed_id>` and update the feed URL.
 *   [x] **Tab Management (Backend API):**
     *   [x] `POST /api/tabs`: Create a new tab.
     *   [x] `DELETE /api/tabs/<tab_id>`: Delete a tab (handle associated feeds - delete them or move to default?).

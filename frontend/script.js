@@ -1,5 +1,8 @@
 // Wait for the DOM to be fully loaded before executing script
 document.addEventListener('DOMContentLoaded', () => {
+    // API configuration
+    const API_BASE_URL = 'http://localhost:5000';
+    
     // Get references to key DOM elements
     const tabsContainer = document.getElementById('tabs-container');
     const feedGrid = document.getElementById('feed-grid');
@@ -125,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function fetchData(url, options = {}) {
         try {
-            const response = await fetch(url, options);
+            const response = await fetch(`${API_BASE_URL}${url}`, options);
             if (!response.ok) {
                 let errorMsg = `HTTP error! status: ${response.status}`;
                 try {
@@ -346,6 +349,19 @@ document.addEventListener('DOMContentLoaded', () => {
         widget.dataset.feedId = feed.id;
         widget.dataset.tabId = feed.tab_id; // Associate widget with a tab
 
+        const buttonContainer = document.createElement('div');
+        buttonContainer.classList.add('feed-widget-buttons');
+
+        const editButton = document.createElement('button');
+        editButton.classList.add('edit-feed-button');
+        editButton.textContent = '✎';
+        editButton.title = 'Edit Feed URL';
+        editButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleEditFeed(feed.id, feed.url, feed.name);
+        });
+        buttonContainer.appendChild(editButton);
+
         const deleteButton = document.createElement('button');
         deleteButton.classList.add('delete-feed-button');
         deleteButton.textContent = 'X';
@@ -354,7 +370,9 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation();
             handleDeleteFeed(feed.id);
         });
-        widget.appendChild(deleteButton);
+        buttonContainer.appendChild(deleteButton);
+
+        widget.appendChild(buttonContainer);
 
         const titleElement = document.createElement('h2');
         const titleTextNode = document.createTextNode(feed.name); // Create text node for the name
@@ -564,6 +582,97 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Edit Feed Logic ---
+
+    /**
+     * Handles the click event for a feed widget's edit button.
+     * @param {number} feedId - The ID of the feed to edit.
+     * @param {string} currentUrl - The current URL of the feed.
+     * @param {string} currentName - The current name of the feed.
+     */
+    function handleEditFeed(feedId, currentUrl, currentName) {
+        console.log(`Editing feed: ${feedId}`);
+        
+        const modal = document.getElementById('edit-feed-modal');
+        const feedIdInput = document.getElementById('edit-feed-id');
+        const feedUrlInput = document.getElementById('edit-feed-url');
+        const feedNameInput = document.getElementById('edit-feed-name');
+        
+        // Populate the form with current values
+        feedIdInput.value = feedId;
+        feedUrlInput.value = currentUrl;
+        feedNameInput.value = currentName;
+        
+        // Show the modal
+        modal.style.display = 'flex';
+    }
+
+    /**
+     * Handles the submission of the edit feed form.
+     * @param {Event} event - The form submission event.
+     */
+    async function handleEditFeedSubmit(event) {
+        event.preventDefault();
+        
+        const modal = document.getElementById('edit-feed-modal');
+        const feedIdInput = document.getElementById('edit-feed-id');
+        const feedUrlInput = document.getElementById('edit-feed-url');
+        const saveButton = document.getElementById('save-feed-button');
+        
+        const feedId = parseInt(feedIdInput.value);
+        const newUrl = feedUrlInput.value.trim();
+        
+        if (!newUrl) {
+            alert('Please enter a feed URL');
+            return;
+        }
+        
+        // Disable the save button and show loading state
+        const originalButtonText = saveButton.textContent;
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+        
+        try {
+            const result = await fetchData(`/api/feeds/${feedId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: newUrl })
+            });
+            
+            if (result) {
+                console.log('Feed updated successfully:', result);
+                // Close the modal
+                modal.style.display = 'none';
+                
+                // Reload the current tab to show the updated feed
+                if (loadedTabs.has(activeTabId)) {
+                    document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                    loadedTabs.delete(activeTabId);
+                }
+                await setActiveTab(activeTabId);
+                await initializeTabs(true);
+            } else {
+                console.error('Failed to update feed.');
+            }
+        } catch (error) {
+            console.error('Error updating feed:', error);
+        } finally {
+            // Re-enable the save button
+            saveButton.disabled = false;
+            saveButton.textContent = originalButtonText;
+        }
+    }
+
+    /**
+     * Handles the cancellation of the edit feed form.
+     */
+    function handleEditFeedCancel() {
+        const modal = document.getElementById('edit-feed-modal');
+        modal.style.display = 'none';
+    }
+
     // --- Mark Item as Read Logic ---
 
     /**
@@ -768,6 +877,17 @@ document.addEventListener('DOMContentLoaded', () => {
         exportOpmlButton.addEventListener('click', handleExportOpml);
         importOpmlButton.addEventListener('click', () => opmlFileInput.click());
         opmlFileInput.addEventListener('change', handleImportOpmlFileSelect);
+        
+        // Add event listeners for edit feed modal
+        document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
+        document.getElementById('cancel-edit-button').addEventListener('click', handleEditFeedCancel);
+        
+        // Close modal when clicking outside the content
+        document.getElementById('edit-feed-modal').addEventListener('click', (event) => {
+            if (event.target.id === 'edit-feed-modal') {
+                handleEditFeedCancel();
+            }
+        });
 
         // Fetch initial tabs to start the application
         await initializeTabs();

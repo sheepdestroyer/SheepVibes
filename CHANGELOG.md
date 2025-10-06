@@ -1,5 +1,14 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2025-10-06
+
+- **Feat: Make each widget's feed URL editable**
+  - Added PUT endpoint `/api/feeds/<feed_id>` for updating feed URLs and properties
+  - Added edit button (✎) to each feed widget in the frontend
+  - Implemented modal dialog for editing feed URLs with validation
+  - Added comprehensive tests for the new functionality
+  - Feed name and site link are automatically updated when URL is changed
+
 ## 2025-07-26
 
 - **Fix(feed_service): Use entry link as GUID to prevent UNIQUE constraint errors**
