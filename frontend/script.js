@@ -520,12 +520,19 @@ document.addEventListener('DOMContentLoaded', () => {
     /** Handles the click event for the "Add Feed" button. */
     async function handleAddFeed() {
         const url = feedUrlInput.value.trim();
+        const errorElement = document.getElementById('add-feed-error');
+        
+        // Clear previous errors
+        errorElement.style.display = 'none';
+        
         if (!url) {
-            alert('Please enter a feed URL.');
+            errorElement.textContent = 'Please enter a feed URL.';
+            errorElement.style.display = 'block';
             return;
         }
         if (!activeTabId) {
-            alert('Please select a tab first.');
+            errorElement.textContent = 'Please select a tab first.';
+            errorElement.style.display = 'block';
             return;
         }
 
@@ -624,9 +631,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const feedId = parseInt(feedIdInput.value);
         const newUrl = feedUrlInput.value.trim();
+        const errorElement = document.getElementById('edit-feed-error');
+        
+        // Clear previous errors
+        errorElement.style.display = 'none';
         
         if (!newUrl) {
-            alert('Please enter a feed URL');
+            errorElement.textContent = 'Please enter a feed URL.';
+            errorElement.style.display = 'block';
             return;
         }
         
