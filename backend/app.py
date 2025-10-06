@@ -75,7 +75,9 @@ announcer = MessageAnnouncer()
 
 # Initialize Flask application
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+# Configure CORS with specific allowed origins
+allowed_origins = ["http://localhost:8080", "http://127.0.0.1:8080"]
+CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 
 # Test specific configuration
 # Check app.config first in case it's set by test runner, then env var
