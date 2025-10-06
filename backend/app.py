@@ -166,7 +166,7 @@ def invalidate_tab_feeds_cache(tab_id):
 # --- Feed Update Service and Scheduler ---
 
 # Import feed service functions
-from feed_service import update_all_feeds, fetch_and_update_feed, fetch_feed, process_feed_entries
+from .feed_service import update_all_feeds, fetch_and_update_feed, fetch_feed, process_feed_entries
 
 # Configure the background scheduler
 UPDATE_INTERVAL_MINUTES_DEFAULT = 15
