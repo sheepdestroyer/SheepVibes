@@ -63,8 +63,8 @@ This microagent provides comprehensive knowledge about the SheepVibes RSS/Atom f
 
 ### Backend Testing
 1. Start Redis container: `podman run -d --rm --name sheepvibes-test-redis -p 6379:6379 redis:alpine`
-- Install dependencies: `cd backend && pip install -r requirements.txt -r requirements-dev.txt`
-- Run tests: `python -m pytest -v`
+2. Install dependencies: `cd backend && pip install -r requirements.txt -r requirements-dev.txt`
+3. Run tests: `python -m pytest -v`
 
 ### CI/CD Reference
 - **Definitive guide**: `.github/workflows/run-tests.yml`
