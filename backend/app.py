@@ -76,7 +76,8 @@ announcer = MessageAnnouncer()
 # Initialize Flask application
 app = Flask(__name__)
 # Configure CORS with specific allowed origins
-allowed_origins = ["http://localhost:8080", "http://127.0.0.1:8080"]
+allowed_origins_str = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',')]
 CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 
 # Test specific configuration
@@ -876,12 +877,13 @@ def update_feed_url(feed_id):
         
         db.session.commit()
         
-        # Trigger update to fetch new items
+        # Invalidate cache for the feed's tab, as feed properties (name, url) have changed.
+        invalidate_tab_feeds_cache(feed.tab_id)
+        logger.info(f"Cache invalidated for tab {feed.tab_id} after updating feed {feed.id}.")
+
+        # Trigger update to fetch new items.
         try:
-            success, new_items = fetch_and_update_feed(feed.id)
-            if success and new_items > 0:
-                invalidate_tab_feeds_cache(feed.tab_id)
-                logger.info(f"Cache invalidated for tab {feed.tab_id} after updating feed {feed.id}.")
+            fetch_and_update_feed(feed.id)
         except Exception as update_e:
             # Log error during update but don't fail the operation
             logger.error(f"Error updating feed {feed.id} after URL change: {update_e}", exc_info=True)
