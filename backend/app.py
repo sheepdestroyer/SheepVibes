@@ -885,12 +885,17 @@ def update_feed_url(feed_id):
             logger.error(f"Error updating feed {feed.id} after URL change: {update_e}", exc_info=True)
         
         logger.info(f"Updated feed {feed_id} from '{original_url}' to '{new_url}'.")
-        return jsonify(feed.to_dict()), 200 # OK
+        
+        # Return full feed data including items for frontend to update widget
+        feed_data = feed.to_dict()
+        # Include feed items in the response
+        feed_data['items'] = [item.to_dict() for item in feed.items]
+        return jsonify(feed_data), 200 # OK
         
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error updating feed {feed_id}: {str(e)}", exc_info=True)
-        raise e # Let 500 handler manage response
+        return jsonify({'error': 'Failed to update feed URL'}), 500
 
 # --- Feed Items API Endpoints ---
 
@@ -970,6 +975,6 @@ if __name__ == '__main__':
     # The scheduler is already started in the global scope.
     is_debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
     logger.info(f"Starting Flask app (Debug mode: {is_debug_mode})")
-    app.run(host='0.0.0.0', port=5000, debug=is_debug_mode)
+    app.run(host='0.0.0.0', port=5001, debug=is_debug_mode)
     
     logger.info("SheepVibes application finished.")

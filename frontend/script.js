@@ -1,7 +1,9 @@
 // Wait for the DOM to be fully loaded before executing script
 document.addEventListener('DOMContentLoaded', () => {
     // API configuration
-    const API_BASE_URL = 'http://localhost:5000';
+    const API_BASE_URL = window.location.origin.includes('localhost') 
+        ? 'http://localhost:5001' 
+        : window.location.origin.replace(/:\d+$/, ':5001');
     
     // Get references to key DOM elements
     const tabsContainer = document.getElementById('tabs-container');
@@ -646,13 +648,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Close the modal
                 modal.style.display = 'none';
                 
-                // Reload the current tab to show the updated feed
-                if (loadedTabs.has(activeTabId)) {
-                    document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
-                    loadedTabs.delete(activeTabId);
+                // Update just the edited widget instead of reloading entire tab
+                const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
+                if (widget) {
+                    // Replace the widget with updated content
+                    const newWidget = createFeedWidget(result);
+                    widget.replaceWith(newWidget);
+                } else {
+                    // Fallback: reload the tab if widget not found
+                    console.warn('Widget not found, falling back to tab reload');
+                    if (loadedTabs.has(activeTabId)) {
+                        document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                        loadedTabs.delete(activeTabId);
+                    }
+                    await setActiveTab(activeTabId);
                 }
-                await setActiveTab(activeTabId);
-                await initializeTabs(true);
+                await initializeTabs(true); // Update unread counts
             } else {
                 console.error('Failed to update feed.');
             }
