@@ -40,9 +40,10 @@ Automate the process of addressing code review comments by creating a cycle that
    - If no comments received, wait 5 more minutes and check one last time
 4. **Review comments**: Read and analyze all code review comments
 5. **Address feedback**: Implement all requested changes and fixes
-6. **Close PR**: Close the current pull request
-7. **Push changes**: Push the latest changes to the branch
-8. **Open new PR**: Create a new pull request to trigger fresh reviews
+6. **Commit changes**: Commit the fixes to the local branch
+7. **Close PR**: Close the current pull request
+8. **Push changes**: Push the latest changes to the branch
+9. **Open new PR**: Create a new pull request to trigger fresh reviews
 
 ## Implementation Guidelines
 
