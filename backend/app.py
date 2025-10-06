@@ -11,9 +11,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 from sqlalchemy import func, select # Added for optimized query
 from flask_caching import Cache # Added for caching
+from flask_cors import CORS # Added for CORS support
 
 # Import db object and models from the new models.py
-from .models import db, Tab, Feed, FeedItem
+from models import db, Tab, Feed, FeedItem
 import xml.etree.ElementTree as ET # Added for OPML export
 
 # --- OPML Import Configuration ---
@@ -74,6 +75,7 @@ announcer = MessageAnnouncer()
 
 # Initialize Flask application
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Test specific configuration
 # Check app.config first in case it's set by test runner, then env var
@@ -164,7 +166,7 @@ def invalidate_tab_feeds_cache(tab_id):
 # --- Feed Update Service and Scheduler ---
 
 # Import feed service functions
-from .feed_service import update_all_feeds, fetch_and_update_feed, fetch_feed, process_feed_entries
+from feed_service import update_all_feeds, fetch_and_update_feed, fetch_feed, process_feed_entries
 
 # Configure the background scheduler
 UPDATE_INTERVAL_MINUTES_DEFAULT = 15
@@ -831,6 +833,63 @@ def delete_feed(feed_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting feed {feed_id}: {str(e)}", exc_info=True)
+        raise e # Let 500 handler manage response
+
+@app.route('/api/feeds/<int:feed_id>', methods=['PUT'])
+def update_feed_url(feed_id):
+    """Updates a feed's URL and name."""
+    # Find feed or return 404
+    feed = db.get_or_404(Feed, feed_id)
+    
+    data = request.get_json()
+    # Validate input
+    if not data or 'url' not in data or not data['url'].strip():
+        return jsonify({'error': 'Missing feed URL'}), 400
+    
+    new_url = data['url'].strip()
+    
+    # Check if the new URL is already used by another feed
+    existing_feed = Feed.query.filter(Feed.id != feed_id, Feed.url == new_url).first()
+    if existing_feed:
+        return jsonify({'error': f'Feed with URL {new_url} already exists'}), 409 # Conflict
+    
+    try:
+        # Attempt to fetch the feed to get its title
+        parsed_feed = fetch_feed(new_url)
+        if not parsed_feed or not parsed_feed.feed:
+            # If fetch fails, use the URL as the name
+            new_name = new_url
+            new_site_link = None
+            logger.warning(f"Could not fetch title for {new_url}, using URL as name.")
+        else:
+            new_name = parsed_feed.feed.get('title', new_url) # Use URL as fallback if title missing
+            new_site_link = parsed_feed.feed.get('link') # Get the website link
+        
+        # Update the feed
+        original_url = feed.url
+        feed.url = new_url
+        feed.name = new_name
+        feed.site_link = new_site_link
+        feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
+        
+        db.session.commit()
+        
+        # Trigger update to fetch new items
+        try:
+            success, new_items = fetch_and_update_feed(feed.id)
+            if success and new_items > 0:
+                invalidate_tab_feeds_cache(feed.tab_id)
+                logger.info(f"Cache invalidated for tab {feed.tab_id} after updating feed {feed.id}.")
+        except Exception as update_e:
+            # Log error during update but don't fail the operation
+            logger.error(f"Error updating feed {feed.id} after URL change: {update_e}", exc_info=True)
+        
+        logger.info(f"Updated feed {feed_id} from '{original_url}' to '{new_url}'.")
+        return jsonify(feed.to_dict()), 200 # OK
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating feed {feed_id}: {str(e)}", exc_info=True)
         raise e # Let 500 handler manage response
 
 # --- Feed Items API Endpoints ---
