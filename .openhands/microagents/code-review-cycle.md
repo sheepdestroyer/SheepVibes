@@ -52,7 +52,7 @@ Automate the process of addressing code review comments by creating a cycle that
 2. Create meaningful branch names that describe the changes
 3. Follow repository templates if they exist
 4. Apply appropriate labels (e.g., "enhancement", "bug", "documentation")
-3. Include clear descriptions of changes made and purpose
+5. Include clear descriptions of changes made and purpose
 
 ### When Addressing Comments:
 1. Read all comments thoroughly
