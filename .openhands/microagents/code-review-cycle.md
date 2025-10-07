@@ -33,7 +33,7 @@ Automate the process of addressing code review comments by creating a cycle that
 2. Ensure the branch name is unique to avoid conflicts
 
 ### Code Review Cycle (Repeat up to 10 times):
-1. **Create PR**: Open a pull request with clear title and description
+1. **Create PR**: If no open PR exists for this branch: Open a pull request with clear title and description. Adress current reviews otherwise.
 2. **Mark ready**: Immediately mark the PR as ready to review (not draft)
 3. **Wait for reviews**: 
    - Wait 5 minutes for Google Code Assist and other agents to provide feedback
