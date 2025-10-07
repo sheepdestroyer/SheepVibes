@@ -11,6 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 from sqlalchemy import func, select # Added for optimized query
 from flask_caching import Cache # Added for caching
+from flask_cors import CORS # Added for CORS support
 
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
@@ -18,6 +19,9 @@ import xml.etree.ElementTree as ET # Added for OPML export
 
 # --- OPML Import Configuration ---
 SKIPPED_FOLDER_TYPES = {"UWA", "Webnote", "LinkModule"} # Netvibes specific types to ignore for tab creation
+
+# --- Application Constants ---
+DEFAULT_FEED_ITEMS_LIMIT = 10
 
 # Set up logging configuration
 logging.basicConfig(
@@ -74,6 +78,10 @@ announcer = MessageAnnouncer()
 
 # Initialize Flask application
 app = Flask(__name__)
+# Configure CORS with specific allowed origins
+allowed_origins_str = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',') if origin.strip()]
+CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 
 # Test specific configuration
 # Check app.config first in case it's set by test runner, then env var
@@ -684,8 +692,8 @@ def get_feeds_for_tab(tab_id):
     # Ensure tab exists, or return 404.
     db.get_or_404(Tab, tab_id)
 
-    # Get limit for items from query string, default to 10.
-    limit = request.args.get('limit', 10, type=int)
+    # Get limit for items from query string, default to DEFAULT_FEED_ITEMS_LIMIT.
+    limit = request.args.get('limit', DEFAULT_FEED_ITEMS_LIMIT, type=int)
 
     # Query 1: Get all feeds for the given tab.
     feeds = Feed.query.filter_by(tab_id=tab_id).all()
@@ -833,6 +841,72 @@ def delete_feed(feed_id):
         logger.error(f"Error deleting feed {feed_id}: {str(e)}", exc_info=True)
         raise e # Let 500 handler manage response
 
+@app.route('/api/feeds/<int:feed_id>', methods=['PUT'])
+def update_feed_url(feed_id):
+    """Updates a feed's URL and name."""
+    # Find feed or return 404
+    feed = db.get_or_404(Feed, feed_id)
+    
+    data = request.get_json()
+    # Validate input
+    if not data or 'url' not in data or not (isinstance(data['url'], str) and data['url'].strip()):
+        return jsonify({'error': 'Missing or invalid feed URL'}), 400
+    
+    new_url = data['url'].strip()
+    
+    # Check if the new URL is already used by another feed
+    existing_feed = Feed.query.filter(Feed.id != feed_id, Feed.url == new_url).first()
+    if existing_feed:
+        return jsonify({'error': f'Feed with URL {new_url} already exists'}), 409 # Conflict
+    
+    try:
+        # Attempt to fetch the feed to get its title
+        parsed_feed = fetch_feed(new_url)
+        if not parsed_feed or not parsed_feed.feed:
+            # If fetch fails, use the URL as the name
+            new_name = new_url
+            new_site_link = None
+            logger.warning(f"Could not fetch title for {new_url}, using URL as name.")
+        else:
+            new_name = parsed_feed.feed.get('title', new_url) # Use URL as fallback if title missing
+            new_site_link = parsed_feed.feed.get('link') # Get the website link
+        
+        # Update the feed
+        original_url = feed.url
+        feed.url = new_url
+        feed.name = new_name
+        feed.site_link = new_site_link
+        feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
+        
+        db.session.commit()
+        
+        # Invalidate cache for the feed's tab, as feed properties (name, url) have changed.
+        invalidate_tab_feeds_cache(feed.tab_id)
+        logger.info(f"Cache invalidated for tab {feed.tab_id} after updating feed {feed.id}.")
+
+        # Trigger update to fetch new items using the already fetched feed data
+        try:
+            if parsed_feed:
+                # Reuse the already fetched and parsed feed data to process entries,
+                # avoiding a redundant network call.
+                process_feed_entries(feed, parsed_feed)
+        except Exception as update_e:
+            # Log error during update but don't fail the operation
+            logger.error(f"Error updating feed {feed.id} after URL change: {update_e}", exc_info=True)
+        
+        logger.info(f"Updated feed {feed_id} from '{original_url}' to '{new_url}'.")
+        
+        # Return full feed data including items for frontend to update widget
+        feed_data = feed.to_dict()
+        # Include only recent feed items in the response (limit to DEFAULT_FEED_ITEMS_LIMIT)
+        feed_data['items'] = [item.to_dict() for item in feed.items.order_by(FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()).limit(DEFAULT_FEED_ITEMS_LIMIT)]
+        return jsonify(feed_data), 200 # OK
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating feed {feed_id}: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to update feed URL'}), 500
+
 # --- Feed Items API Endpoints ---
 
 @app.route('/api/items/<int:item_id>/read', methods=['POST'])
@@ -911,6 +985,6 @@ if __name__ == '__main__':
     # The scheduler is already started in the global scope.
     is_debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
     logger.info(f"Starting Flask app (Debug mode: {is_debug_mode})")
-    app.run(host='0.0.0.0', port=5000, debug=is_debug_mode)
+    app.run(host='0.0.0.0', port=5001, debug=is_debug_mode)
     
     logger.info("SheepVibes application finished.")
