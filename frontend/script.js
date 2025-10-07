@@ -598,13 +598,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Handles the click event for a feed widget's delete button.
-     * @param {number} feedId - The ID of the feed to delete.
+     * Handles the click event for a feed widget's edit button.
+     * @param {number} feedId - The ID of the feed to edit.
      */
-    async function handleEditFeed(feedId) {
+    function handleEditFeed(feedId) {
         console.log(`Editing feed ${feedId}...`);
         // TODO: Implement feed editing functionality
-        alert('Edit feed functionality coming soon!');
+        console.log('Edit feed functionality coming soon!');
     }
 
     async function handleDeleteFeed(feedId) {
