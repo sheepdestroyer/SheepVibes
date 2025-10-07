@@ -3,7 +3,7 @@ name: Code Review Cycle
 type: knowledge
 version: 1.0.0
 agent: CodeActAgent
-triggers: []
+triggers: [review]
 ---
 
 # Code Review Cycle Microagent
