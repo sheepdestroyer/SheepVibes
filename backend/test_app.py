@@ -524,8 +524,7 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
 # --- Tests for PUT /api/feeds/<feed_id> (Update Feed URL) ---
 
 @patch('backend.app.fetch_feed')
-@patch('backend.app.fetch_and_update_feed')
-def test_update_feed_url_success(mock_fetch_and_update, mock_fetch_feed, client, setup_tabs_and_feeds):
+def test_update_feed_url_success(mock_fetch_feed, client, setup_tabs_and_feeds):
     """Test PUT /api/feeds/<feed_id> successfully updates feed URL and name."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
     new_url = "https://example.com/new-feed.xml"
@@ -537,7 +536,6 @@ def test_update_feed_url_success(mock_fetch_and_update, mock_fetch_feed, client,
         'link': 'https://example.com'
     }
     mock_fetch_feed.return_value = mock_feed
-    mock_fetch_and_update.return_value = (True, 2)  # success, num_new_items
     
     response = client.put(f'/api/feeds/{feed_id}', json={'url': new_url})
     
