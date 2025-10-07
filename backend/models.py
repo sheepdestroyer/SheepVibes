@@ -82,6 +82,7 @@ class FeedItem(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('feed_id', 'guid', name='uq_feed_item_feed_id_guid'),
+        db.Index('ix_feed_items_feed_id_published_fetched_time', 'feed_id', 'published_time', 'fetched_time'),
     )
 
     @validates('published_time', 'fetched_time')

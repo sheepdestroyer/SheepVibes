@@ -53,7 +53,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] **Feed Management (Backend API):**
     *   [x] `POST /api/feeds`: Add a new feed (URL, optionally associate with a tab). Backend should fetch initial data upon adding.
     *   [x] `DELETE /api/feeds/<feed_id>`: Remove a feed.
-    *   [ ] `PUT /api/feeds/<feed_id>`: Update feed properties (e.g., move to different tab - maybe later).
+    *   [x] `PUT /api/feeds/<feed_id>`: Update feed URL and properties.
 *   [x] **Feed Management (Frontend UI):**
     *   [x] Add a "+" button or form to input a feed URL.
     *   [x] Implement JS to call the `POST /api/feeds` endpoint.
@@ -61,6 +61,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Implement JS for the close button to call `DELETE /api/feeds/<feed_id>` and remove the widget from the DOM.
     *   [x] Add an edit (✎) button to each feed widget.
     *   [x] Position unread counter to the left of edit and close buttons.
+    *   [x] Implement JS for the edit button to call `PUT /api/feeds/<feed_id>` and update the feed URL.
 *   [x] **Tab Management (Backend API):**
     *   [x] `POST /api/tabs`: Create a new tab.
     *   [x] `DELETE /api/tabs/<tab_id>`: Delete a tab (handle associated feeds - delete them or move to default?).
@@ -98,6 +99,13 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Add basic unit tests for backend logic (API endpoints).
     *   [ ] Consider basic end-to-end tests. (Deferred)
 *   [x] Finalize `Containerfile` for production readiness (non-root user, proper volume mounts, etc.).
+
+## Code Review Completion
+
+*   [x] **PR #100 Review Comments Addressed:**
+  * [x] Fixed backend performance issue in `update_feed_url` function
+  * [x] Updated frontend API configuration for production
+  * [x] Fixed frontend error handling syntax and UX
 
 ## Future Considerations
 

@@ -1,5 +1,10 @@
 // Wait for the DOM to be fully loaded before executing script
 document.addEventListener('DOMContentLoaded', () => {
+    // API configuration
+    const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? 'http://localhost:5001' 
+        : ''; // Use relative paths for production
+    
     // Get references to key DOM elements
     const tabsContainer = document.getElementById('tabs-container');
     const feedGrid = document.getElementById('feed-grid');
@@ -17,6 +22,39 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeTabId = null; // ID of the currently selected tab
     let allTabs = []; // Cache of tab data fetched from the API
     const loadedTabs = new Set(); // Cache to track which tabs have been loaded
+
+
+    // --- Toast Notification Functions ---
+
+    /**
+     * Displays a toast notification.
+     * @param {string} message - The message to display.
+     * @param {string} type - The type of toast ('success', 'error', 'info').
+     * @param {number} duration - The duration in milliseconds.
+     */
+    function showToast(message, type = 'info', duration = 3000) {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+
+        toastContainer.appendChild(toast);
+
+        // Animate in
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 100);
+
+        // Animate out and remove
+        setTimeout(() => {
+            toast.classList.remove('show');
+            const removalTimeout = setTimeout(() => toast.remove(), 500); // 500ms > 0.3s transition in CSS
+            toast.addEventListener('transitionend', () => {
+                clearTimeout(removalTimeout);
+                toast.remove();
+            }, { once: true });
+        }, duration);
+    }
 
     // --- Helper Functions ---
 
@@ -101,15 +139,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (result && result.message) {
                 console.log('All feeds refresh triggered successfully:', result);
-            } else if (result && result.error) {
-                alert(`Failed to refresh all feeds: ${result.error}`);
-                console.error('Error refreshing all feeds:', result.error);
-            } else if (!result) {
-                console.error('Failed to refresh all feeds. fetchData returned null.');
             }
         } catch (error) {
-            console.error('Unexpected error in handleRefreshAllFeeds:', error);
-            alert('An unexpected error occurred while refreshing feeds.');
+            console.error('Error in handleRefreshAllFeeds:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while refreshing feeds.';
+            showToast(`Failed to refresh all feeds: ${displayMessage}`, 'error');
         } finally {
             refreshAllFeedsButton.disabled = false;
             refreshAllFeedsButton.textContent = originalButtonText;
@@ -125,18 +159,19 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function fetchData(url, options = {}) {
         try {
-            const response = await fetch(url, options);
+            const response = await fetch(`${API_BASE_URL}${url}`, options);
             if (!response.ok) {
-                let errorMsg = `HTTP error! status: ${response.status}`;
+                const error = new Error(`HTTP error! status: ${response.status}`);
                 try {
                     const errorData = await response.json();
                     if (errorData && errorData.error) {
-                        errorMsg += `, message: ${errorData.error}`;
+                        error.backendMessage = errorData.error; // Attach structured data
+                        error.message += `, message: ${errorData.error}`; // Keep original message for logging
                     }
                 } catch (e) {
-                    errorMsg += `, message: ${response.statusText}`;
+                    error.message += `, message: ${response.statusText}`;
                 }
-                throw new Error(errorMsg);
+                throw error;
             }
             if (response.status === 204 || response.headers.get('content-length') === '0') {
                 return { success: true };
@@ -144,8 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return await response.json();
         } catch (error) {
             console.error('Error fetching data:', error);
-            alert(`Operation failed: ${error.message}`);
-            return null;
+            throw error; // Re-throw the error instead of returning null
         }
     }
 
@@ -200,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Error exporting OPML:', error);
-            alert(`Failed to export OPML: ${error.message}`);
+            showToast(`Failed to export OPML: ${error.message}`, 'error');
         } finally {
             exportOpmlButton.disabled = false;
             exportOpmlButton.textContent = originalButtonText;
@@ -240,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || `HTTP error! status: ${response.status}`);
             }
 
-            alert(data.message);
+            showToast(data.message, 'success');
             console.log('OPML import successful:', data);
 
             if (data.imported_count > 0) {
@@ -265,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Error importing OPML:', error);
-            alert(`Failed to import OPML: ${error.message}`);
+            showToast(`Failed to import OPML: ${error.message}`, 'error');
         } finally {
             importOpmlButton.disabled = false;
             importOpmlButton.textContent = 'Import OPML';
@@ -337,10 +371,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Renders a single feed widget and appends it to the main grid.
+     * Creates a single feed widget.
      * @param {object} feed - The feed object from the API (including unread_count and items).
      */
-    function renderFeedWidget(feed) {
+    function createFeedWidget(feed) {
         const widget = document.createElement('div');
         widget.classList.add('feed-widget');
         widget.dataset.feedId = feed.id;
@@ -369,6 +403,8 @@ document.addEventListener('DOMContentLoaded', () => {
             handleDeleteFeed(feed.id);
         });
         buttonContainer.appendChild(deleteButton);
+
+        widget.appendChild(buttonContainer);
 
         const titleElement = document.createElement('h2');
         const titleTextNode = document.createTextNode(feed.name); // Create text node for the name
@@ -399,9 +435,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
 
-        // Append the whole widget to the grid
-        feedGrid.appendChild(widget);
-
         // Render items
         if (feed.items && feed.items.length > 0) {
             feed.items.forEach(item => {
@@ -425,6 +458,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             itemList.innerHTML = '<li>No items found for this feed.</li>';
         }
+
+        // Return the widget without appending it to the DOM
+        return widget;
     }
 
     /**
@@ -437,28 +473,29 @@ document.addEventListener('DOMContentLoaded', () => {
             feedGrid.innerHTML = '<p>Loading feeds...</p>';
         }
 
-        const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds`);
+        try {
+            const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds`);
 
-        // If we were showing a global loading message, clear it.
-        if (feedGrid.querySelector('p')) {
-            feedGrid.innerHTML = '';
-        }
+            // If we were showing a global loading message, clear it.
+            if (feedGrid.querySelector('p')) {
+                feedGrid.innerHTML = '';
+            }
 
-        if (feedsWithItems === null) {
+            if (feedsWithItems && feedsWithItems.length > 0) {
+                feedsWithItems.forEach(feed => {
+                    const widget = createFeedWidget(feed);
+                    feedGrid.appendChild(widget);
+                });
+            } else if (feedGrid.children.length === 0) {
+                // Only show 'no feeds' if the entire grid is empty after attempting to load
+                feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
+            }
+
+            loadedTabs.add(tabId); // Mark this tab's content as loaded
+        } catch (error) {
+            console.error('Error loading feeds for tab:', error);
             feedGrid.innerHTML = '<p>Error loading feeds. Please check the console or try again.</p>';
-            return;
         }
-
-        if (feedsWithItems && feedsWithItems.length > 0) {
-            feedsWithItems.forEach(feed => {
-                renderFeedWidget(feed);
-            });
-        } else if (feedGrid.children.length === 0) {
-            // Only show 'no feeds' if the entire grid is empty after attempting to load
-            feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
-        }
-
-        loadedTabs.add(tabId); // Mark this tab's content as loaded
     }
 
     // --- Tab Switching Logic ---
@@ -513,12 +550,19 @@ document.addEventListener('DOMContentLoaded', () => {
     /** Handles the click event for the "Add Feed" button. */
     async function handleAddFeed() {
         const url = feedUrlInput.value.trim();
+        const errorElement = document.getElementById('add-feed-error');
+        
+        // Clear previous errors
+        errorElement.style.display = 'none';
+        
         if (!url) {
-            alert('Please enter a feed URL.');
+            errorElement.textContent = 'Please enter a feed URL.';
+            errorElement.style.display = 'block';
             return;
         }
         if (!activeTabId) {
-            alert('Please select a tab first.');
+            errorElement.textContent = 'Please select a tab first.';
+            errorElement.style.display = 'block';
             return;
         }
 
@@ -526,16 +570,13 @@ document.addEventListener('DOMContentLoaded', () => {
         addFeedButton.disabled = true;
         addFeedButton.textContent = 'Adding...';
 
-        const newFeedData = await fetchData('/api/feeds', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: url, tab_id: activeTabId }),
-        });
+        try {
+            const newFeedData = await fetchData('/api/feeds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url, tab_id: activeTabId }),
+            });
 
-        addFeedButton.disabled = false;
-        addFeedButton.textContent = 'Add Feed';
-
-        if (newFeedData) {
             console.log('Feed added:', newFeedData);
             feedUrlInput.value = '';
             // Invalidate and reload the current tab to show the new feed
@@ -545,8 +586,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             await setActiveTab(activeTabId); // Reload and display the current tab
             await initializeTabs(true); // Update unread counts
-        } else {
-            console.error('Failed to add feed.');
+        } catch (error) {
+            console.error('Error adding feed:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred.';
+            errorElement.textContent = displayMessage;
+            errorElement.style.display = 'block';
+        } finally {
+            addFeedButton.disabled = false;
+            addFeedButton.textContent = 'Add Feed';
         }
     }
 
@@ -569,19 +616,139 @@ document.addEventListener('DOMContentLoaded', () => {
         const widget = feedGrid.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
         if (widget) widget.style.opacity = '0.5';
 
-        const result = await fetchData(`/api/feeds/${feedId}`, { method: 'DELETE' });
+        try {
+            const result = await fetchData(`/api/feeds/${feedId}`, { method: 'DELETE' });
 
-        if (result && result.success) {
             console.log(`Feed ${feedId} deleted successfully.`);
             if (widget) widget.remove();
             if (feedGrid.children.length === 0) {
                 feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
             }
             await initializeTabs(true);
-        } else {
-            console.error(`Failed to delete feed ${feedId}.`);
+        } catch (error) {
+            console.error(`Failed to delete feed ${feedId}:`, error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred.';
+            showToast(`Failed to delete feed: ${displayMessage}`, 'error');
             if (widget) widget.style.opacity = '1';
         }
+    }
+
+    // --- Edit Feed Logic ---
+
+    /**
+     * Handles the click event for a feed widget's edit button.
+     * @param {number} feedId - The ID of the feed to edit.
+     * @param {string} currentUrl - The current URL of the feed.
+     * @param {string} currentName - The current name of the feed.
+     */
+    function handleEditFeed(feedId, currentUrl, currentName) {
+        console.log(`Editing feed: ${feedId}`);
+        
+        const modal = document.getElementById('edit-feed-modal');
+        const feedIdInput = document.getElementById('edit-feed-id');
+        const feedUrlInput = document.getElementById('edit-feed-url');
+        const feedNameInput = document.getElementById('edit-feed-name');
+        
+        // Populate the form with current values
+        feedIdInput.value = feedId;
+        feedUrlInput.value = currentUrl;
+        feedNameInput.value = currentName;
+        
+        // Show the modal
+        modal.classList.add('is-active');
+    }
+
+    /**
+     * Handles the submission of the edit feed form.
+     * @param {Event} event - The form submission event.
+     */
+    async function handleEditFeedSubmit(event) {
+        event.preventDefault();
+        
+        const modal = document.getElementById('edit-feed-modal');
+        const feedIdInput = document.getElementById('edit-feed-id');
+        const feedUrlInput = document.getElementById('edit-feed-url');
+        const saveButton = document.getElementById('save-feed-button');
+        
+        const feedId = parseInt(feedIdInput.value, 10);
+        const newUrl = feedUrlInput.value.trim();
+        const errorElement = document.getElementById('edit-feed-error');
+        
+        // Clear previous errors
+        errorElement.style.display = 'none';
+
+        if (isNaN(feedId)) {
+            errorElement.textContent = 'Invalid Feed ID. Please try again.';
+            errorElement.style.display = 'block';
+            return;
+        }
+        
+        if (!newUrl) {
+            errorElement.textContent = 'Please enter a feed URL.';
+            errorElement.style.display = 'block';
+            return;
+        }
+        
+        // Disable the save button and show loading state
+        const originalButtonText = saveButton.textContent;
+        const cancelButton = document.getElementById('cancel-edit-button');
+        saveButton.disabled = true;
+        cancelButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+        
+        try {
+            const result = await fetchData(`/api/feeds/${feedId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: newUrl })
+            });
+            
+            console.log('Feed updated successfully:', result);
+            // Close the modal
+            modal.classList.remove('is-active');
+            
+            // Update just the edited widget instead of reloading entire tab
+            const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
+            if (widget) {
+                // Replace the widget with updated content
+                const newWidget = createFeedWidget(result);
+                widget.replaceWith(newWidget);
+            } else {
+                // Fallback: reload the tab if widget not found
+                console.warn('Widget not found, falling back to tab reload');
+                if (loadedTabs.has(activeTabId)) {
+                    document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                    loadedTabs.delete(activeTabId);
+                }
+                await setActiveTab(activeTabId);
+            }
+            await initializeTabs(true); // Update unread counts
+        } catch (error) {
+            console.error('Error updating feed:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred.';
+            errorElement.textContent = displayMessage;
+            errorElement.style.display = 'block';
+        } finally {
+            // Re-enable the save and cancel buttons
+            saveButton.disabled = false;
+            cancelButton.disabled = false;
+            saveButton.textContent = originalButtonText;
+        }
+    }
+
+    /**
+     * Handles the cancellation of the edit feed form.
+     */
+    function handleEditFeedCancel() {
+        const saveButton = document.getElementById('save-feed-button');
+        // Prevent closing the modal if a save operation is in progress.
+        if (saveButton.disabled) {
+            return;
+        }
+        const modal = document.getElementById('edit-feed-modal');
+        modal.classList.remove('is-active');
     }
 
     // --- Mark Item as Read Logic ---
@@ -596,16 +763,18 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleMarkItemRead(itemId, listItemElement, feedId, tabId) {
         if (listItemElement.classList.contains('unread')) {
             console.log(`Marking item ${itemId} as read`);
-            const result = await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
+            try {
+                await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
 
-            if (result && result.success) {
+                // If fetchData completes without throwing, the operation was successful.
                 console.log(`Successfully marked item ${itemId} as read.`);
                 listItemElement.classList.remove('unread');
                 listItemElement.classList.add('read');
                 updateUnreadCount(feedId, -1);
                 updateUnreadCount(tabId, -1, true);
-            } else {
-                console.error(`Failed to mark item ${itemId} as read.`);
+            } catch (error) {
+                console.error('Error marking item as read:', error);
+                // Don't show alert for this as it's a frequent operation
             }
         }
     }
@@ -660,28 +829,30 @@ document.addEventListener('DOMContentLoaded', () => {
         addTabButton.disabled = true;
         addTabButton.textContent = 'Adding...';
 
-        const newTabData = await fetchData('/api/tabs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newTabName.trim() }),
-        });
+        try {
+            const newTabData = await fetchData('/api/tabs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newTabName.trim() }),
+            });
 
-        addTabButton.disabled = false;
-        addTabButton.textContent = 'Add Tab';
-
-        if (newTabData) {
             console.log('Tab added:', newTabData);
             await initializeTabs();
             await setActiveTab(newTabData.id);
-        } else {
-            console.error('Failed to add tab.');
+        } catch (error) {
+            console.error('Error adding tab:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while adding the tab.';
+            showToast(`Failed to add tab: ${displayMessage}`, 'error');
+        } finally {
+            addTabButton.disabled = false;
+            addTabButton.textContent = 'Add Tab';
         }
     }
 
     /** Handles the click event for the "Rename Tab" button. */
     async function handleRenameTab() {
         if (!activeTabId) {
-            alert('Please select a tab to rename.');
+            showToast('Please select a tab to rename.', 'info');
             return;
         }
 
@@ -695,24 +866,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log(`Renaming tab ${activeTabId} to: ${newTabName}`);
-        const updatedTabData = await fetchData(`/api/tabs/${activeTabId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newTabName.trim() }),
-        });
+        try {
+            const updatedTabData = await fetchData(`/api/tabs/${activeTabId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newTabName.trim() }),
+            });
 
-        if (updatedTabData) {
             console.log('Tab renamed:', updatedTabData);
             await initializeTabs(true);
-        } else {
-            console.error('Failed to rename tab.');
+        } catch (error) {
+            console.error('Error renaming tab:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while renaming the tab.';
+            showToast(`Failed to rename tab: ${displayMessage}`, 'error');
         }
     }
 
     /** Handles the click event for the "Delete Tab" button. */
     async function handleDeleteTab() {
         if (!activeTabId) {
-            alert('Please select a tab to delete.');
+            showToast('Please select a tab to delete.', 'info');
             return;
         }
         // Removed: if (allTabs.length <= 1) check to allow deleting the last tab.
@@ -723,9 +896,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log(`Deleting tab: ${activeTabId}`);
-        const result = await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
+        try {
+            await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
 
-        if (result && result.success) {
             console.log(`Tab ${activeTabId} deleted successfully.`);
             // If the deleted tab was the active one, clear activeTabId before re-initializing
             const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
@@ -740,8 +913,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // activeTabId is already set to null if it was the one deleted.
             // initializeTabs will handle selecting a new active tab or setting to null if no tabs remain.
             await initializeTabs();
-        } else {
-            console.error(`Failed to delete tab ${currentTab ? currentTab.id : activeTabId}.`);
+        } catch (error) {
+            console.error('Error deleting tab:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while deleting the tab.';
+            showToast(`Failed to delete tab: ${displayMessage}`, 'error');
         }
     }
 
@@ -753,22 +928,28 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function initializeTabs(isUpdate = false) {
         const currentActiveId = isUpdate ? activeTabId : localStorage.getItem('activeTabId');
-        const tabs = await fetchData('/api/tabs');
-        if (tabs) {
-            // Attempt to restore activeTabId from localStorage if not doing a specific update that preserves it
-            let storedActiveTabId = localStorage.getItem('activeTabId');
-            if (storedActiveTabId && tabs.some(t => t.id == storedActiveTabId)) {
-                activeTabId = parseInt(storedActiveTabId);
-            } else if (currentActiveId && tabs.some(t => t.id == currentActiveId)) {
-                activeTabId = parseInt(currentActiveId); // Use current if valid and stored is not
+        try {
+            const tabs = await fetchData('/api/tabs');
+            if (tabs) {
+                // Attempt to restore activeTabId from localStorage if not doing a specific update that preserves it
+                let storedActiveTabId = localStorage.getItem('activeTabId');
+                if (storedActiveTabId && tabs.some(t => t.id == storedActiveTabId)) {
+                    activeTabId = parseInt(storedActiveTabId);
+                } else if (currentActiveId && tabs.some(t => t.id == currentActiveId)) {
+                    activeTabId = parseInt(currentActiveId); // Use current if valid and stored is not
+                } else {
+                    activeTabId = null; // Fallback if stored/current is invalid
+                    localStorage.removeItem('activeTabId'); // Clean up invalid stored ID
+                }
+                renderTabs(tabs);
             } else {
-                activeTabId = null; // Fallback if stored/current is invalid
-                localStorage.removeItem('activeTabId'); // Clean up invalid stored ID
+                renderTabs([]);
+                localStorage.removeItem('activeTabId'); // No tabs, so no active tab
             }
-            renderTabs(tabs);
-        } else {
+        } catch (error) {
+            console.error('Error initializing tabs:', error);
             renderTabs([]);
-            localStorage.removeItem('activeTabId'); // No tabs, so no active tab
+            localStorage.removeItem('activeTabId'); // Clear invalid stored ID on error
         }
     }
 
@@ -788,6 +969,17 @@ document.addEventListener('DOMContentLoaded', () => {
         exportOpmlButton.addEventListener('click', handleExportOpml);
         importOpmlButton.addEventListener('click', () => opmlFileInput.click());
         opmlFileInput.addEventListener('change', handleImportOpmlFileSelect);
+        
+        // Add event listeners for edit feed modal
+        document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
+        document.getElementById('cancel-edit-button').addEventListener('click', handleEditFeedCancel);
+        
+        // Close modal when clicking outside the content
+        document.getElementById('edit-feed-modal').addEventListener('click', (event) => {
+            if (event.target.id === 'edit-feed-modal') {
+                handleEditFeedCancel();
+            }
+        });
 
         // Fetch initial tabs to start the application
         await initializeTabs();
