@@ -881,9 +881,12 @@ def update_feed_url(feed_id):
         invalidate_tab_feeds_cache(feed.tab_id)
         logger.info(f"Cache invalidated for tab {feed.tab_id} after updating feed {feed.id}.")
 
-        # Trigger update to fetch new items.
+        # Trigger update to fetch new items using the already fetched feed data
         try:
-            fetch_and_update_feed(feed.id)
+            if parsed_feed:
+                # Reuse the already fetched and parsed feed data to process entries,
+                # avoiding a redundant network call.
+                process_feed_entries(feed, parsed_feed)
         except Exception as update_e:
             # Log error during update but don't fail the operation
             logger.error(f"Error updating feed {feed.id} after URL change: {update_e}", exc_info=True)
