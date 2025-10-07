@@ -48,9 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Animate out and remove
         setTimeout(() => {
             toast.classList.remove('show');
+            const removalTimeout = setTimeout(() => toast.remove(), 500); // 500ms > 0.3s transition in CSS
             toast.addEventListener('transitionend', () => {
+                clearTimeout(removalTimeout);
                 toast.remove();
-            });
+            }, { once: true });
         }, duration);
     }
 
