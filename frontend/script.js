@@ -109,12 +109,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (result && result.error) {
                 alert(`Failed to refresh all feeds: ${result.error}`);
                 console.error('Error refreshing all feeds:', result.error);
-            } else if (!result) {
-                console.error('Failed to refresh all feeds. fetchData returned null.');
             }
         } catch (error) {
-            console.error('Unexpected error in handleRefreshAllFeeds:', error);
-            alert('An unexpected error occurred while refreshing feeds.');
+            console.error('Error in handleRefreshAllFeeds:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while refreshing feeds.';
+            alert(`Failed to refresh all feeds: ${displayMessage}`);
         } finally {
             refreshAllFeedsButton.disabled = false;
             refreshAllFeedsButton.textContent = originalButtonText;
@@ -443,29 +442,29 @@ document.addEventListener('DOMContentLoaded', () => {
             feedGrid.innerHTML = '<p>Loading feeds...</p>';
         }
 
-        const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds`);
+        try {
+            const feedsWithItems = await fetchData(`/api/tabs/${tabId}/feeds`);
 
-        // If we were showing a global loading message, clear it.
-        if (feedGrid.querySelector('p')) {
-            feedGrid.innerHTML = '';
-        }
+            // If we were showing a global loading message, clear it.
+            if (feedGrid.querySelector('p')) {
+                feedGrid.innerHTML = '';
+            }
 
-        if (feedsWithItems === null) {
+            if (feedsWithItems && feedsWithItems.length > 0) {
+                feedsWithItems.forEach(feed => {
+                    const widget = createFeedWidget(feed);
+                    feedGrid.appendChild(widget);
+                });
+            } else if (feedGrid.children.length === 0) {
+                // Only show 'no feeds' if the entire grid is empty after attempting to load
+                feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
+            }
+
+            loadedTabs.add(tabId); // Mark this tab's content as loaded
+        } catch (error) {
+            console.error('Error loading feeds for tab:', error);
             feedGrid.innerHTML = '<p>Error loading feeds. Please check the console or try again.</p>';
-            return;
         }
-
-        if (feedsWithItems && feedsWithItems.length > 0) {
-            feedsWithItems.forEach(feed => {
-                const widget = createFeedWidget(feed);
-                feedGrid.appendChild(widget);
-            });
-        } else if (feedGrid.children.length === 0) {
-            // Only show 'no feeds' if the entire grid is empty after attempting to load
-            feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
-        }
-
-        loadedTabs.add(tabId); // Mark this tab's content as loaded
     }
 
     // --- Tab Switching Logic ---
@@ -713,16 +712,21 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleMarkItemRead(itemId, listItemElement, feedId, tabId) {
         if (listItemElement.classList.contains('unread')) {
             console.log(`Marking item ${itemId} as read`);
-            const result = await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
+            try {
+                const result = await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
 
-            if (result && result.success) {
-                console.log(`Successfully marked item ${itemId} as read.`);
-                listItemElement.classList.remove('unread');
-                listItemElement.classList.add('read');
-                updateUnreadCount(feedId, -1);
-                updateUnreadCount(tabId, -1, true);
-            } else {
-                console.error(`Failed to mark item ${itemId} as read.`);
+                if (result && result.success) {
+                    console.log(`Successfully marked item ${itemId} as read.`);
+                    listItemElement.classList.remove('unread');
+                    listItemElement.classList.add('read');
+                    updateUnreadCount(feedId, -1);
+                    updateUnreadCount(tabId, -1, true);
+                } else {
+                    console.error(`Failed to mark item ${itemId} as read.`);
+                }
+            } catch (error) {
+                console.error('Error marking item as read:', error);
+                // Don't show alert for this as it's a frequent operation
             }
         }
     }
@@ -777,21 +781,23 @@ document.addEventListener('DOMContentLoaded', () => {
         addTabButton.disabled = true;
         addTabButton.textContent = 'Adding...';
 
-        const newTabData = await fetchData('/api/tabs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newTabName.trim() }),
-        });
+        try {
+            const newTabData = await fetchData('/api/tabs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newTabName.trim() }),
+            });
 
-        addTabButton.disabled = false;
-        addTabButton.textContent = 'Add Tab';
-
-        if (newTabData) {
             console.log('Tab added:', newTabData);
             await initializeTabs();
             await setActiveTab(newTabData.id);
-        } else {
-            console.error('Failed to add tab.');
+        } catch (error) {
+            console.error('Error adding tab:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while adding the tab.';
+            alert(`Failed to add tab: ${displayMessage}`);
+        } finally {
+            addTabButton.disabled = false;
+            addTabButton.textContent = 'Add Tab';
         }
     }
 
@@ -812,17 +818,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log(`Renaming tab ${activeTabId} to: ${newTabName}`);
-        const updatedTabData = await fetchData(`/api/tabs/${activeTabId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newTabName.trim() }),
-        });
+        try {
+            const updatedTabData = await fetchData(`/api/tabs/${activeTabId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newTabName.trim() }),
+            });
 
-        if (updatedTabData) {
             console.log('Tab renamed:', updatedTabData);
             await initializeTabs(true);
-        } else {
-            console.error('Failed to rename tab.');
+        } catch (error) {
+            console.error('Error renaming tab:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while renaming the tab.';
+            alert(`Failed to rename tab: ${displayMessage}`);
         }
     }
 
@@ -840,25 +848,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         console.log(`Deleting tab: ${activeTabId}`);
-        const result = await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
+        try {
+            const result = await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
 
-        if (result && result.success) {
-            console.log(`Tab ${activeTabId} deleted successfully.`);
-            // If the deleted tab was the active one, clear activeTabId before re-initializing
-            const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
-            if (activeTabId === deletedTabId) {
-                activeTabId = null;
-                localStorage.removeItem('activeTabId'); // Explicitly clear from storage
+            if (result && result.success) {
+                console.log(`Tab ${activeTabId} deleted successfully.`);
+                // If the deleted tab was the active one, clear activeTabId before re-initializing
+                const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
+                if (activeTabId === deletedTabId) {
+                    activeTabId = null;
+                    localStorage.removeItem('activeTabId'); // Explicitly clear from storage
+                }
+
+                // Remove the deleted tab's widgets from the DOM
+                document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
+                loadedTabs.delete(deletedTabId);
+                // activeTabId is already set to null if it was the one deleted.
+                // initializeTabs will handle selecting a new active tab or setting to null if no tabs remain.
+                await initializeTabs();
+            } else {
+                console.error(`Failed to delete tab ${currentTab ? currentTab.id : activeTabId}.`);
             }
-
-            // Remove the deleted tab's widgets from the DOM
-            document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
-            loadedTabs.delete(deletedTabId);
-            // activeTabId is already set to null if it was the one deleted.
-            // initializeTabs will handle selecting a new active tab or setting to null if no tabs remain.
-            await initializeTabs();
-        } else {
-            console.error(`Failed to delete tab ${currentTab ? currentTab.id : activeTabId}.`);
+        } catch (error) {
+            console.error('Error deleting tab:', error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while deleting the tab.';
+            alert(`Failed to delete tab: ${displayMessage}`);
         }
     }
 
@@ -870,22 +884,28 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function initializeTabs(isUpdate = false) {
         const currentActiveId = isUpdate ? activeTabId : localStorage.getItem('activeTabId');
-        const tabs = await fetchData('/api/tabs');
-        if (tabs) {
-            // Attempt to restore activeTabId from localStorage if not doing a specific update that preserves it
-            let storedActiveTabId = localStorage.getItem('activeTabId');
-            if (storedActiveTabId && tabs.some(t => t.id == storedActiveTabId)) {
-                activeTabId = parseInt(storedActiveTabId);
-            } else if (currentActiveId && tabs.some(t => t.id == currentActiveId)) {
-                activeTabId = parseInt(currentActiveId); // Use current if valid and stored is not
+        try {
+            const tabs = await fetchData('/api/tabs');
+            if (tabs) {
+                // Attempt to restore activeTabId from localStorage if not doing a specific update that preserves it
+                let storedActiveTabId = localStorage.getItem('activeTabId');
+                if (storedActiveTabId && tabs.some(t => t.id == storedActiveTabId)) {
+                    activeTabId = parseInt(storedActiveTabId);
+                } else if (currentActiveId && tabs.some(t => t.id == currentActiveId)) {
+                    activeTabId = parseInt(currentActiveId); // Use current if valid and stored is not
+                } else {
+                    activeTabId = null; // Fallback if stored/current is invalid
+                    localStorage.removeItem('activeTabId'); // Clean up invalid stored ID
+                }
+                renderTabs(tabs);
             } else {
-                activeTabId = null; // Fallback if stored/current is invalid
-                localStorage.removeItem('activeTabId'); // Clean up invalid stored ID
+                renderTabs([]);
+                localStorage.removeItem('activeTabId'); // No tabs, so no active tab
             }
-            renderTabs(tabs);
-        } else {
+        } catch (error) {
+            console.error('Error initializing tabs:', error);
             renderTabs([]);
-            localStorage.removeItem('activeTabId'); // No tabs, so no active tab
+            localStorage.removeItem('activeTabId'); // Clear invalid stored ID on error
         }
     }
 
