@@ -12,33 +12,33 @@ SheepVibes is a self-hosted RSS/Atom feed aggregator inspired by Netvibes and iG
 ## 3. Repository Structure
 ```
 SheepVibes/
-├── backend/                 # Python Flask application
-│   ├── app.py               # Main Flask application with API endpoints
-│   ├── feed_service.py      # Feed parsing and update logic
-│   ├── models.py            # SQLAlchemy database models
-│   ├── migrations/          # Database migration files
-│   ├── test_app.py          # API endpoint tests
-│   ├── test_feed.py         # Feed service tests
-│   ├── requirements.txt     # Production dependencies
+├── .github/workflows/   # CI/CD pipelines
+│   ├── run-tests.yml   # Main test workflow
+│   └── release.yml     # Container image publishing
+├── backend/             # Python Flask application
+│   ├── app.py           # Main Flask application with API endpoints
+│   ├── feed_service.py  # Feed parsing and update logic
+│   ├── models.py        # SQLAlchemy database models
+│   ├── migrations/      # Database migration files
+│   ├── test_app.py      # API endpoint tests
+│   ├── test_feed.py     # Feed service tests
+│   ├── requirements.txt # Production dependencies
 │   └── requirements-dev.txt # Development dependencies
-├── frontend/                 # Vanilla JavaScript UI
-│   ├── index.html           # Main HTML file
-│   ├── script.js            # Frontend JavaScript logic
-│   └── style.css            # CSS styling
-├── pod/                     # Podman deployment configuration
-│   └── quadlet/             # Systemd Quadlet unit files
-├── scripts/                  # Deployment and management scripts
-│   ├── deploy_pod.sh         # Production deployment script
-│   ├── run_dev.sh            # Local development script
-├── .github/workflows/        # CI/CD pipelines
-│   ├── run-tests.yml        # Main test workflow
-│   └── release.yml          # Container image publishing
-└── docs/                     # Documentation files
-    ├── README.md              # Main documentation
-    ├── AGENTS.md              # AI agent guidelines
-    ├── TESTING.md             # Testing procedures
-    ├── TODO.md                # Development roadmap
-    └── CHANGELOG.md           # Project history
+├── frontend/            # Vanilla JavaScript UI
+│   ├── index.html       # Main HTML file
+│   ├── script.js        # Frontend JavaScript logic
+│   └── style.css        # CSS styling
+├── pod/                 # Podman deployment configuration
+│   └── quadlet/         # Systemd Quadlet unit files
+├── scripts/             # Deployment and management scripts
+│   ├── deploy_pod.sh    # Production deployment script
+│   ├── rebuild_container.sh # Script to rebuild container image
+│   └── run_dev.sh       # Local development script
+├── AGENTS.md            # AI agent guidelines
+├── CHANGELOG.md         # Project history
+├── README.md            # Main documentation
+├── TESTING.md           # Testing procedures
+└── TODO.md              # Development roadmap
 ```
 
 ## 4. CI/CD Workflows
