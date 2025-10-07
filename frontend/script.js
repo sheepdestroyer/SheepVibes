@@ -684,7 +684,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Disable the save button and show loading state
         const originalButtonText = saveButton.textContent;
+        const cancelButton = document.getElementById('cancel-edit-button');
         saveButton.disabled = true;
+        cancelButton.disabled = true;
         saveButton.textContent = 'Saving...';
         
         try {
@@ -722,8 +724,9 @@ document.addEventListener('DOMContentLoaded', () => {
             errorElement.textContent = displayMessage;
             errorElement.style.display = 'block';
         } finally {
-            // Re-enable the save button
+            // Re-enable the save and cancel buttons
             saveButton.disabled = false;
+            cancelButton.disabled = false;
             saveButton.textContent = originalButtonText;
         }
     }
