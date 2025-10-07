@@ -683,9 +683,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error updating feed:', error);
             const errorMsg = error.message || 'An unexpected error occurred.';
             // Extract the backend message if available for a cleaner display.
-            const backendMsgIndex = errorMsg.indexOf('message: ');
-            errorElement.textContent = backendMsgIndex !== -1 
-                ? errorMsg.substring(backendMsgIndex + 9)
+            const backendMsgIndex = /message: (.*)/.exec(errorMsg);
+            errorElement.textContent = backendMsgIndex 
+                ? backendMsgIndex[1]
                 : errorMsg;
             errorElement.style.display = 'block';
         } finally {
