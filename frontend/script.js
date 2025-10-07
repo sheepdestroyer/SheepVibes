@@ -539,16 +539,13 @@ document.addEventListener('DOMContentLoaded', () => {
         addFeedButton.disabled = true;
         addFeedButton.textContent = 'Adding...';
 
-        const newFeedData = await fetchData('/api/feeds', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: url, tab_id: activeTabId }),
-        });
+        try {
+            const newFeedData = await fetchData('/api/feeds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url, tab_id: activeTabId }),
+            });
 
-        addFeedButton.disabled = false;
-        addFeedButton.textContent = 'Add Feed';
-
-        if (newFeedData) {
             console.log('Feed added:', newFeedData);
             feedUrlInput.value = '';
             // Invalidate and reload the current tab to show the new feed
@@ -558,8 +555,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             await setActiveTab(activeTabId); // Reload and display the current tab
             await initializeTabs(true); // Update unread counts
-        } else {
-            console.error('Failed to add feed.');
+        } catch (error) {
+            console.error('Error adding feed:', error);
+            const errorMsg = error.message || 'An unexpected error occurred.';
+            // Extract the backend message if available for a cleaner display.
+            const backendMsgIndex = /message: (.*)/.exec(errorMsg);
+            errorElement.textContent = backendMsgIndex 
+                ? backendMsgIndex[1]
+                : errorMsg;
+            errorElement.style.display = 'block';
+        } finally {
+            addFeedButton.disabled = false;
+            addFeedButton.textContent = 'Add Feed';
         }
     }
 
@@ -576,17 +583,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const widget = feedGrid.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
         if (widget) widget.style.opacity = '0.5';
 
-        const result = await fetchData(`/api/feeds/${feedId}`, { method: 'DELETE' });
+        try {
+            const result = await fetchData(`/api/feeds/${feedId}`, { method: 'DELETE' });
 
-        if (result && result.success) {
             console.log(`Feed ${feedId} deleted successfully.`);
             if (widget) widget.remove();
             if (feedGrid.children.length === 0) {
                 feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
             }
             await initializeTabs(true);
-        } else {
-            console.error(`Failed to delete feed ${feedId}.`);
+        } catch (error) {
+            console.error(`Failed to delete feed ${feedId}:`, error);
             if (widget) widget.style.opacity = '1';
         }
     }
@@ -655,30 +662,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ url: newUrl })
             });
             
-            if (result) {
-                console.log('Feed updated successfully:', result);
-                // Close the modal
-                modal.classList.remove('is-active');
-                
-                // Update just the edited widget instead of reloading entire tab
-                const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
-                if (widget) {
-                    // Replace the widget with updated content
-                    const newWidget = createFeedWidget(result);
-                    widget.replaceWith(newWidget);
-                } else {
-                    // Fallback: reload the tab if widget not found
-                    console.warn('Widget not found, falling back to tab reload');
-                    if (loadedTabs.has(activeTabId)) {
-                        document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
-                        loadedTabs.delete(activeTabId);
-                    }
-                    await setActiveTab(activeTabId);
-                }
-                await initializeTabs(true); // Update unread counts
+            console.log('Feed updated successfully:', result);
+            // Close the modal
+            modal.classList.remove('is-active');
+            
+            // Update just the edited widget instead of reloading entire tab
+            const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
+            if (widget) {
+                // Replace the widget with updated content
+                const newWidget = createFeedWidget(result);
+                widget.replaceWith(newWidget);
             } else {
-                console.error('Failed to update feed.');
+                // Fallback: reload the tab if widget not found
+                console.warn('Widget not found, falling back to tab reload');
+                if (loadedTabs.has(activeTabId)) {
+                    document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                    loadedTabs.delete(activeTabId);
+                }
+                await setActiveTab(activeTabId);
             }
+            await initializeTabs(true); // Update unread counts
         } catch (error) {
             console.error('Error updating feed:', error);
             const errorMsg = error.message || 'An unexpected error occurred.';
