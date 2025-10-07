@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // API configuration
     const API_BASE_URL = window.location.origin.includes('localhost') 
         ? 'http://localhost:5001' 
-        : window.location.origin.replace(/:\d+$/, ':5001');
+        : ''; // Use relative paths for production
     
     // Get references to key DOM elements
     const tabsContainer = document.getElementById('tabs-container');
@@ -682,6 +682,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Error updating feed:', error);
+            const errorMsg = error.message || 'An unexpected error occurred.';
+            // Extract the backend message if available for a cleaner display.
+            const backendMsgIndex = errorMsg.indexOf('message: ');
+            errorElement.textContent = backendMsgIndex !== -1 
+                ? errorMsg.substring(backendMsgIndex + 9)
+                : errorMsg;
+            errorElement.style.display = 'block';
         } finally {
             // Re-enable the save button
             saveButton.disabled = false;
