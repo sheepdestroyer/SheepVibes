@@ -899,7 +899,7 @@ def update_feed_url(feed_id):
         # Return full feed data including items for frontend to update widget
         feed_data = feed.to_dict()
         # Include only recent feed items in the response (limit to DEFAULT_FEED_ITEMS_LIMIT)
-        feed_data['items'] = [item.to_dict() for item in feed.items.order_by(FeedItem.published_time.desc()).limit(DEFAULT_FEED_ITEMS_LIMIT)]
+        feed_data['items'] = [item.to_dict() for item in feed.items.order_by(FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()).limit(DEFAULT_FEED_ITEMS_LIMIT)]
         return jsonify(feed_data), 200 # OK
         
     except Exception as e:
