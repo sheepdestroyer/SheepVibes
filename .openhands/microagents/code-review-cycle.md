@@ -13,10 +13,10 @@ This microagent provides guidance for iteratively addressing code reviews throug
 ## Purpose
 
 Automate the process of addressing code review comments by creating a cycle that:
-1. Checks latest PR and Looks for code reviews from Google Code Assist and other agents
+1. Checks latest PR and looks for code reviews from Google Code Assist and other agents
 2. Addresses all review comments
 3. Closes the current PR
-4. Opens a new PR to trigger fresh reviews and Waits 5 minutes for new code reviews.
+4. Opens a new PR to trigger fresh reviews and waits 5 minutes for new code reviews.
 
 ## Core Rules
 
