@@ -20,6 +20,9 @@ import xml.etree.ElementTree as ET # Added for OPML export
 # --- OPML Import Configuration ---
 SKIPPED_FOLDER_TYPES = {"UWA", "Webnote", "LinkModule"} # Netvibes specific types to ignore for tab creation
 
+# --- Application Constants ---
+DEFAULT_FEED_ITEMS_LIMIT = 10
+
 # Set up logging configuration
 logging.basicConfig(
     level=logging.INFO,
@@ -689,8 +692,8 @@ def get_feeds_for_tab(tab_id):
     # Ensure tab exists, or return 404.
     db.get_or_404(Tab, tab_id)
 
-    # Get limit for items from query string, default to 10.
-    limit = request.args.get('limit', 10, type=int)
+    # Get limit for items from query string, default to DEFAULT_FEED_ITEMS_LIMIT.
+    limit = request.args.get('limit', DEFAULT_FEED_ITEMS_LIMIT, type=int)
 
     # Query 1: Get all feeds for the given tab.
     feeds = Feed.query.filter_by(tab_id=tab_id).all()
@@ -895,8 +898,8 @@ def update_feed_url(feed_id):
         
         # Return full feed data including items for frontend to update widget
         feed_data = feed.to_dict()
-        # Include only recent feed items in the response (limit to 10)
-        feed_data['items'] = [item.to_dict() for item in feed.items.order_by(FeedItem.published_time.desc()).limit(10)]
+        # Include only recent feed items in the response (limit to DEFAULT_FEED_ITEMS_LIMIT)
+        feed_data['items'] = [item.to_dict() for item in feed.items.order_by(FeedItem.published_time.desc()).limit(DEFAULT_FEED_ITEMS_LIMIT)]
         return jsonify(feed_data), 200 # OK
         
     except Exception as e:

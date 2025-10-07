@@ -132,16 +132,17 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`${API_BASE_URL}${url}`, options);
             if (!response.ok) {
-                let errorMsg = `HTTP error! status: ${response.status}`;
+                const error = new Error(`HTTP error! status: ${response.status}`);
                 try {
                     const errorData = await response.json();
                     if (errorData && errorData.error) {
-                        errorMsg += `, message: ${errorData.error}`;
+                        error.backendMessage = errorData.error; // Attach structured data
+                        error.message += `, message: ${errorData.error}`; // Keep original message for logging
                     }
                 } catch (e) {
-                    errorMsg += `, message: ${response.statusText}`;
+                    error.message += `, message: ${response.statusText}`;
                 }
-                throw new Error(errorMsg);
+                throw error;
             }
             if (response.status === 204 || response.headers.get('content-length') === '0') {
                 return { success: true };
@@ -557,12 +558,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await initializeTabs(true); // Update unread counts
         } catch (error) {
             console.error('Error adding feed:', error);
-            const errorMsg = error.message || 'An unexpected error occurred.';
-            // Extract the backend message if available for a cleaner display.
-            const backendMsgIndex = /message: (.*)/.exec(errorMsg);
-            errorElement.textContent = backendMsgIndex 
-                ? backendMsgIndex[1]
-                : errorMsg;
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred.';
+            errorElement.textContent = displayMessage;
             errorElement.style.display = 'block';
         } finally {
             addFeedButton.disabled = false;
@@ -594,6 +591,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await initializeTabs(true);
         } catch (error) {
             console.error(`Failed to delete feed ${feedId}:`, error);
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred.';
+            alert(`Failed to delete feed: ${displayMessage}`);
             if (widget) widget.style.opacity = '1';
         }
     }
@@ -684,12 +683,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await initializeTabs(true); // Update unread counts
         } catch (error) {
             console.error('Error updating feed:', error);
-            const errorMsg = error.message || 'An unexpected error occurred.';
-            // Extract the backend message if available for a cleaner display.
-            const backendMsgIndex = /message: (.*)/.exec(errorMsg);
-            errorElement.textContent = backendMsgIndex 
-                ? backendMsgIndex[1]
-                : errorMsg;
+            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred.';
+            errorElement.textContent = displayMessage;
             errorElement.style.display = 'block';
         } finally {
             // Re-enable the save button
