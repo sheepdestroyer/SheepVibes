@@ -149,8 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return await response.json();
         } catch (error) {
             console.error('Error fetching data:', error);
-            alert(`Operation failed: ${error.message}`);
-            return null;
+            throw error; // Re-throw the error instead of returning null
         }
     }
 
