@@ -80,7 +80,7 @@ announcer = MessageAnnouncer()
 app = Flask(__name__)
 # Configure CORS with specific allowed origins
 allowed_origins_str = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080")
-allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',')]
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',') if origin.strip()]
 CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 
 # Test specific configuration
