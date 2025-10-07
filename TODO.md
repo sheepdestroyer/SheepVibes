@@ -59,6 +59,8 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Implement JS to call the `POST /api/feeds` endpoint.
     *   [x] Add a "close" (X) button to each feed widget.
     *   [x] Implement JS for the close button to call `DELETE /api/feeds/<feed_id>` and remove the widget from the DOM.
+    *   [x] Add an edit (✎) button to each feed widget.
+    *   [x] Position unread counter to the left of edit and close buttons.
 *   [x] **Tab Management (Backend API):**
     *   [x] `POST /api/tabs`: Create a new tab.
     *   [x] `DELETE /api/tabs/<tab_id>`: Delete a tab (handle associated feeds - delete them or move to default?).

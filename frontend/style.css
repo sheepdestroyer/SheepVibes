@@ -239,11 +239,27 @@ header h1 {
     padding: 2px 6px;
 }
 
-/* Delete Buttons */
-.feed-widget .delete-feed-button {
+.feed-widget-buttons .unread-count-badge {
+    position: static;
+    background-color: #6c757d;
+    padding: 2px 6px;
+    margin-right: 4px;
+}
+
+/* Feed Widget Buttons Container */
+.feed-widget-buttons {
     position: absolute;
-    top: 8px; /* Adjust position */
+    top: 8px;
     right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 10; /* Ensure it's above title */
+}
+
+/* Edit and Delete Buttons */
+.feed-widget .edit-feed-button,
+.feed-widget .delete-feed-button {
     background: #6c757d;
     color: white;
     border: none;
@@ -256,11 +272,18 @@ header h1 {
     cursor: pointer;
     opacity: 0.6;
     transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
-    z-index: 10; /* Ensure it's above title */
 }
 
+.feed-widget:hover .edit-feed-button,
 .feed-widget:hover .delete-feed-button {
     opacity: 1;
+}
+
+.feed-widget .edit-feed-button:hover {
+    background-color: #007bff; /* Blue on hover */
+}
+
+.feed-widget .delete-feed-button:hover {
     background-color: #dc3545; /* Red on hover */
 }
 

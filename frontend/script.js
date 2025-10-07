@@ -346,6 +346,20 @@ document.addEventListener('DOMContentLoaded', () => {
         widget.dataset.feedId = feed.id;
         widget.dataset.tabId = feed.tab_id; // Associate widget with a tab
 
+        // Create button container for edit and delete buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.classList.add('feed-widget-buttons');
+        
+        const editButton = document.createElement('button');
+        editButton.classList.add('edit-feed-button');
+        editButton.textContent = '✎';
+        editButton.title = 'Edit Feed';
+        editButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleEditFeed(feed.id);
+        });
+        buttonContainer.appendChild(editButton);
+
         const deleteButton = document.createElement('button');
         deleteButton.classList.add('delete-feed-button');
         deleteButton.textContent = 'X';
@@ -354,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation();
             handleDeleteFeed(feed.id);
         });
-        widget.appendChild(deleteButton);
+        buttonContainer.appendChild(deleteButton);
 
         const titleElement = document.createElement('h2');
         const titleTextNode = document.createTextNode(feed.name); // Create text node for the name
@@ -373,14 +387,14 @@ document.addEventListener('DOMContentLoaded', () => {
             titleElement.appendChild(titleTextNode); // Add name text directly if no link
         }
 
-        widget.appendChild(titleElement);
-        
+        // Add unread counter to the left of buttons
         const badge = createBadge(feed.unread_count);
         if (badge) {
-            // Append badge after the link/text within H2, or adjust styling as needed
-            titleElement.appendChild(badge);
+            buttonContainer.prepend(badge);
         }
-        // titleElement.prepend(feed.name); // Removed, name is now part of link or direct text node
+
+        widget.appendChild(titleElement);
+        widget.appendChild(buttonContainer);
 
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
@@ -540,6 +554,12 @@ document.addEventListener('DOMContentLoaded', () => {
      * Handles the click event for a feed widget's delete button.
      * @param {number} feedId - The ID of the feed to delete.
      */
+    async function handleEditFeed(feedId) {
+        console.log(`Editing feed ${feedId}...`);
+        // TODO: Implement feed editing functionality
+        alert('Edit feed functionality coming soon!');
+    }
+
     async function handleDeleteFeed(feedId) {
         if (!confirm('Are you sure you want to delete this feed?')) {
             return;
