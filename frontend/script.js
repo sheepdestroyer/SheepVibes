@@ -1,7 +1,7 @@
 // Wait for the DOM to be fully loaded before executing script
 document.addEventListener('DOMContentLoaded', () => {
     // API configuration
-    const API_BASE_URL = window.location.origin.includes('localhost') 
+    const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         ? 'http://localhost:5001' 
         : ''; // Use relative paths for production
     
@@ -106,9 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (result && result.message) {
                 console.log('All feeds refresh triggered successfully:', result);
-            } else if (result && result.error) {
-                alert(`Failed to refresh all feeds: ${result.error}`);
-                console.error('Error refreshing all feeds:', result.error);
             }
         } catch (error) {
             console.error('Error in handleRefreshAllFeeds:', error);
@@ -633,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const feedUrlInput = document.getElementById('edit-feed-url');
         const saveButton = document.getElementById('save-feed-button');
         
-        const feedId = parseInt(feedIdInput.value);
+        const feedId = parseInt(feedIdInput.value, 10);
         const newUrl = feedUrlInput.value.trim();
         const errorElement = document.getElementById('edit-feed-error');
         
@@ -713,17 +710,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (listItemElement.classList.contains('unread')) {
             console.log(`Marking item ${itemId} as read`);
             try {
-                const result = await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
+                await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
 
-                if (result && result.success) {
-                    console.log(`Successfully marked item ${itemId} as read.`);
-                    listItemElement.classList.remove('unread');
-                    listItemElement.classList.add('read');
-                    updateUnreadCount(feedId, -1);
-                    updateUnreadCount(tabId, -1, true);
-                } else {
-                    console.error(`Failed to mark item ${itemId} as read.`);
-                }
+                // If fetchData completes without throwing, the operation was successful.
+                console.log(`Successfully marked item ${itemId} as read.`);
+                listItemElement.classList.remove('unread');
+                listItemElement.classList.add('read');
+                updateUnreadCount(feedId, -1);
+                updateUnreadCount(tabId, -1, true);
             } catch (error) {
                 console.error('Error marking item as read:', error);
                 // Don't show alert for this as it's a frequent operation
@@ -849,26 +843,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         console.log(`Deleting tab: ${activeTabId}`);
         try {
-            const result = await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
+            await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
 
-            if (result && result.success) {
-                console.log(`Tab ${activeTabId} deleted successfully.`);
-                // If the deleted tab was the active one, clear activeTabId before re-initializing
-                const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
-                if (activeTabId === deletedTabId) {
-                    activeTabId = null;
-                    localStorage.removeItem('activeTabId'); // Explicitly clear from storage
-                }
-
-                // Remove the deleted tab's widgets from the DOM
-                document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
-                loadedTabs.delete(deletedTabId);
-                // activeTabId is already set to null if it was the one deleted.
-                // initializeTabs will handle selecting a new active tab or setting to null if no tabs remain.
-                await initializeTabs();
-            } else {
-                console.error(`Failed to delete tab ${currentTab ? currentTab.id : activeTabId}.`);
+            console.log(`Tab ${activeTabId} deleted successfully.`);
+            // If the deleted tab was the active one, clear activeTabId before re-initializing
+            const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
+            if (activeTabId === deletedTabId) {
+                activeTabId = null;
+                localStorage.removeItem('activeTabId'); // Explicitly clear from storage
             }
+
+            // Remove the deleted tab's widgets from the DOM
+            document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
+            loadedTabs.delete(deletedTabId);
+            // activeTabId is already set to null if it was the one deleted.
+            // initializeTabs will handle selecting a new active tab or setting to null if no tabs remain.
+            await initializeTabs();
         } catch (error) {
             console.error('Error deleting tab:', error);
             const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while deleting the tab.';
