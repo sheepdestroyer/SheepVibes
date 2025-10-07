@@ -669,6 +669,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Clear previous errors
         errorElement.style.display = 'none';
+
+        if (isNaN(feedId)) {
+            errorElement.textContent = 'Invalid Feed ID. Please try again.';
+            errorElement.style.display = 'block';
+            return;
+        }
         
         if (!newUrl) {
             errorElement.textContent = 'Please enter a feed URL.';
