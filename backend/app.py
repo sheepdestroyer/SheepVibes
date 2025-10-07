@@ -849,8 +849,8 @@ def update_feed_url(feed_id):
     
     data = request.get_json()
     # Validate input
-    if not data or 'url' not in data or not data['url'].strip():
-        return jsonify({'error': 'Missing feed URL'}), 400
+    if not data or 'url' not in data or not (isinstance(data['url'], str) and data['url'].strip()):
+        return jsonify({'error': 'Missing or invalid feed URL'}), 400
     
     new_url = data['url'].strip()
     
