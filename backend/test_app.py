@@ -575,7 +575,7 @@ def test_update_feed_url_missing_url(client, setup_tabs_and_feeds):
     
     assert response.status_code == 400
     assert 'error' in response.json
-    assert 'Missing feed URL' in response.json['error']
+    assert 'Missing or invalid feed URL' in response.json['error']
 
 def test_update_feed_url_duplicate_url(client, setup_tabs_and_feeds):
     """Test PUT /api/feeds/<feed_id> with URL that already exists."""
