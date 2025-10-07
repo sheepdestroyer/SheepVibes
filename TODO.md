@@ -99,6 +99,13 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [ ] Consider basic end-to-end tests. (Deferred)
 *   [x] Finalize `Containerfile` for production readiness (non-root user, proper volume mounts, etc.).
 
+## Code Review Completion
+
+*   [x] **PR #100 Review Comments Addressed:**
+  * [x] Fixed backend performance issue in `update_feed_url` function
+  * [x] Updated frontend API configuration for production
+  * [x] Fixed frontend error handling syntax and UX
+
 ## Future Considerations
 
 *   [ ] Widget resizing/reordering (drag and drop).
