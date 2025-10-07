@@ -3,7 +3,7 @@ name: Code Review Cycle
 type: knowledge
 version: 1.0.0
 agent: CodeActAgent
-triggers: [review]
+triggers: [review-cycle]
 ---
 
 # Code Review Cycle Microagent
@@ -13,10 +13,10 @@ This microagent provides guidance for iteratively addressing code reviews throug
 ## Purpose
 
 Automate the process of addressing code review comments by creating a cycle that:
-1. Waits for code reviews from Google Code Assist and other agents
+1. Checks latest PR and Looks for code reviews from Google Code Assist and other agents
 2. Addresses all review comments
 3. Closes the current PR
-4. Opens a new PR to trigger fresh reviews
+4. Opens a new PR to trigger fresh reviews and Waits 5 minutes for new code reviews.
 
 ## Core Rules
 
@@ -44,6 +44,8 @@ Automate the process of addressing code review comments by creating a cycle that
 7. **Close PR**: Close the current pull request
 8. **Push changes**: Push the latest changes to the branch
 9. **Open new PR**: Create a new pull request to trigger fresh reviews
+10. **Back to step 2**: Iterate
+
 
 ## Implementation Guidelines
 
