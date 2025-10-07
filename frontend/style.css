@@ -425,3 +425,35 @@ header h1 {
 #cancel-edit-button:hover {
     background-color: #5a6268;
 }
+/* Toast (Notification) Styles */
+#toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+.toast {
+    background-color: #333;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    margin-top: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    transform: translateY(20px);
+}
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+.toast.error {
+    background-color: #dc3545;
+}
+.toast.success {
+    background-color: #28a745;
+}
+

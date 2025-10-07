@@ -23,6 +23,37 @@ document.addEventListener('DOMContentLoaded', () => {
     let allTabs = []; // Cache of tab data fetched from the API
     const loadedTabs = new Set(); // Cache to track which tabs have been loaded
 
+
+    // --- Toast Notification Functions ---
+
+    /**
+     * Displays a toast notification.
+     * @param {string} message - The message to display.
+     * @param {string} type - The type of toast ('success', 'error', 'info').
+     * @param {number} duration - The duration in milliseconds.
+     */
+    function showToast(message, type = 'info', duration = 3000) {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+
+        toastContainer.appendChild(toast);
+
+        // Animate in
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 100);
+
+        // Animate out and remove
+        setTimeout(() => {
+            toast.classList.remove('show');
+            toast.addEventListener('transitionend', () => {
+                toast.remove();
+            });
+        }, duration);
+    }
+
     // --- Helper Functions ---
 
     /**
@@ -110,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error in handleRefreshAllFeeds:', error);
             const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while refreshing feeds.';
-            alert(`Failed to refresh all feeds: ${displayMessage}`);
+            showToast(`Failed to refresh all feeds: ${displayMessage}`, 'error');
         } finally {
             refreshAllFeedsButton.disabled = false;
             refreshAllFeedsButton.textContent = originalButtonText;
@@ -201,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Error exporting OPML:', error);
-            alert(`Failed to export OPML: ${error.message}`);
+            showToast(`Failed to export OPML: ${error.message}`, 'error');
         } finally {
             exportOpmlButton.disabled = false;
             exportOpmlButton.textContent = originalButtonText;
@@ -241,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || `HTTP error! status: ${response.status}`);
             }
 
-            alert(data.message);
+            showToast(data.message, 'success');
             console.log('OPML import successful:', data);
 
             if (data.imported_count > 0) {
@@ -266,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Error importing OPML:', error);
-            alert(`Failed to import OPML: ${error.message}`);
+            showToast(`Failed to import OPML: ${error.message}`, 'error');
         } finally {
             importOpmlButton.disabled = false;
             importOpmlButton.textContent = 'Import OPML';
@@ -588,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error(`Failed to delete feed ${feedId}:`, error);
             const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred.';
-            alert(`Failed to delete feed: ${displayMessage}`);
+            showToast(`Failed to delete feed: ${displayMessage}`, 'error');
             if (widget) widget.style.opacity = '1';
         }
     }
@@ -788,7 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error adding tab:', error);
             const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while adding the tab.';
-            alert(`Failed to add tab: ${displayMessage}`);
+            showToast(`Failed to add tab: ${displayMessage}`, 'error');
         } finally {
             addTabButton.disabled = false;
             addTabButton.textContent = 'Add Tab';
@@ -798,7 +829,7 @@ document.addEventListener('DOMContentLoaded', () => {
     /** Handles the click event for the "Rename Tab" button. */
     async function handleRenameTab() {
         if (!activeTabId) {
-            alert('Please select a tab to rename.');
+            showToast('Please select a tab to rename.', 'info');
             return;
         }
 
@@ -824,14 +855,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error renaming tab:', error);
             const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while renaming the tab.';
-            alert(`Failed to rename tab: ${displayMessage}`);
+            showToast(`Failed to rename tab: ${displayMessage}`, 'error');
         }
     }
 
     /** Handles the click event for the "Delete Tab" button. */
     async function handleDeleteTab() {
         if (!activeTabId) {
-            alert('Please select a tab to delete.');
+            showToast('Please select a tab to delete.', 'info');
             return;
         }
         // Removed: if (allTabs.length <= 1) check to allow deleting the last tab.
@@ -862,7 +893,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error deleting tab:', error);
             const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while deleting the tab.';
-            alert(`Failed to delete tab: ${displayMessage}`);
+            showToast(`Failed to delete tab: ${displayMessage}`, 'error');
         }
     }
 
