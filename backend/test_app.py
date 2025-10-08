@@ -1637,3 +1637,29 @@ def test_import_opml_deletes_empty_default_imported_feeds_tab(mock_fetch_update,
 
         # Check that fetch_and_update_feed was called for the imported feed
         mock_fetch_update.assert_called_once_with(feed_in_folder.id)
+
+def test_get_feed_items_pagination(client, setup_tabs_and_feeds):
+    """Test GET /api/feeds/<feed_id>/items with offset and limit for pagination."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    # Add 10 more items to the feed for a total of 12
+    with app.app_context():
+        for i in range(10):
+            item = FeedItem(feed_id=feed_id, title=f"Paginate Item {i}", link=f"link_paginate_{i}", guid=f"guid_paginate_{i}")
+            db.session.add(item)
+        db.session.commit()
+
+    # Get the first 5 items
+    response1 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=5')
+    assert response1.status_code == 200
+    assert len(response1.json) == 5
+
+    # Get the next 5 items
+    response2 = client.get(f'/api/feeds/{feed_id}/items?offset=5&limit=5')
+    assert response2.status_code == 200
+    assert len(response2.json) == 5
+
+    # Get the last 2 items
+    response3 = client.get(f'/api/feeds/{feed_id}/items?offset=10&limit=5')
+    assert response3.status_code == 200
+    assert len(response3.json) == 2
