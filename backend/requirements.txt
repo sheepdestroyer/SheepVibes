@@ -8,3 +8,4 @@ python-dateutil
 gunicorn
 Flask-Caching>=2.1.0
 redis
+Flask-CORS

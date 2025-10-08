@@ -521,6 +521,82 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
     assert "Failed to update feed" in response.json['error'] 
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
+# --- Tests for PUT /api/feeds/<feed_id> (Update Feed URL) ---
+
+@patch('backend.app.fetch_feed')
+def test_update_feed_url_success(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test PUT /api/feeds/<feed_id> successfully updates feed URL and name."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    new_url = "https://example.com/new-feed.xml"
+    
+    # Mock the feed fetch to return a valid feed
+    mock_feed = MagicMock()
+    mock_feed.feed = {
+        'title': 'New Feed Title',
+        'link': 'https://example.com'
+    }
+    mock_fetch_feed.return_value = mock_feed
+    
+    response = client.put(f'/api/feeds/{feed_id}', json={'url': new_url})
+    
+    assert response.status_code == 200
+    data = response.json
+    assert data['url'] == new_url
+    assert data['name'] == 'New Feed Title'
+    assert data['site_link'] == 'https://example.com'
+    
+    mock_fetch_feed.assert_called_once_with(new_url)
+    # The optimized implementation uses process_feed_entries directly instead of fetch_and_update_feed
+
+@patch('backend.app.fetch_feed')
+def test_update_feed_url_fetch_fails(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test PUT /api/feeds/<feed_id> when feed fetch fails."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    new_url = "https://example.com/invalid-feed.xml"
+    
+    # Mock the feed fetch to fail
+    mock_fetch_feed.return_value = None
+    
+    response = client.put(f'/api/feeds/{feed_id}', json={'url': new_url})
+    
+    assert response.status_code == 200
+    data = response.json
+    assert data['url'] == new_url
+    assert data['name'] == new_url  # Should use URL as name when fetch fails
+    assert data['site_link'] is None
+    
+    mock_fetch_feed.assert_called_once_with(new_url)
+
+def test_update_feed_url_missing_url(client, setup_tabs_and_feeds):
+    """Test PUT /api/feeds/<feed_id> with missing URL."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    
+    response = client.put(f'/api/feeds/{feed_id}', json={})
+    
+    assert response.status_code == 400
+    assert 'error' in response.json
+    assert 'Missing or invalid feed URL' in response.json['error']
+
+def test_update_feed_url_duplicate_url(client, setup_tabs_and_feeds):
+    """Test PUT /api/feeds/<feed_id> with URL that already exists."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    # Get the URL from feed2 by querying the database
+    with app.app_context():
+        feed2 = db.session.get(Feed, setup_tabs_and_feeds["feed2_id"])
+        existing_url = feed2.url
+    
+    response = client.put(f'/api/feeds/{feed_id}', json={'url': existing_url})
+    
+    assert response.status_code == 409
+    assert 'error' in response.json
+    assert 'already exists' in response.json['error']
+
+def test_update_feed_url_not_found(client):
+    """Test PUT /api/feeds/<feed_id> when feed is not found."""
+    response = client.put('/api/feeds/999', json={'url': 'https://example.com/new-feed.xml'})
+    
+    assert response.status_code == 404
+
 # --- Tests for Frontend Serving Routes ---
 
 def test_get_root_path(client):
