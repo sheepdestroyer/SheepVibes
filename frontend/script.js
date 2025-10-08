@@ -380,13 +380,14 @@ document.addEventListener('DOMContentLoaded', () => {
         widget.dataset.feedId = feed.id;
         widget.dataset.tabId = feed.tab_id; // Associate widget with a tab
 
+        // Create button container for edit and delete buttons
         const buttonContainer = document.createElement('div');
         buttonContainer.classList.add('feed-widget-buttons');
-
+        
         const editButton = document.createElement('button');
         editButton.classList.add('edit-feed-button');
         editButton.textContent = '✎';
-        editButton.title = 'Edit Feed URL';
+        editButton.title = 'Edit Feed';
         editButton.addEventListener('click', (e) => {
             e.stopPropagation();
             handleEditFeed(feed.id, feed.url, feed.name);
@@ -402,8 +403,6 @@ document.addEventListener('DOMContentLoaded', () => {
             handleDeleteFeed(feed.id);
         });
         buttonContainer.appendChild(deleteButton);
-
-        widget.appendChild(buttonContainer);
 
         const titleElement = document.createElement('h2');
         const titleTextNode = document.createTextNode(feed.name); // Create text node for the name
@@ -422,14 +421,14 @@ document.addEventListener('DOMContentLoaded', () => {
             titleElement.appendChild(titleTextNode); // Add name text directly if no link
         }
 
-        widget.appendChild(titleElement);
-        
+        // Add unread counter to the left of buttons
         const badge = createBadge(feed.unread_count);
         if (badge) {
-            // Append badge after the link/text within H2, or adjust styling as needed
-            titleElement.appendChild(badge);
+            buttonContainer.prepend(badge);
         }
-        // titleElement.prepend(feed.name); // Removed, name is now part of link or direct text node
+
+        titleElement.appendChild(buttonContainer);
+        widget.appendChild(titleElement);
 
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
@@ -779,11 +778,21 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} [isTab=false] - Whether the ID refers to a tab.
      */
     function updateUnreadCount(id, change, isTab = false) {
-        const selector = isTab ? `#tabs-container button[data-tab-id="${id}"]` : `.feed-widget[data-feed-id="${id}"] h2`;
-        const element = document.querySelector(selector);
+        const badgeSelector = '.unread-count-badge';
+        let element;
+        let prepend = false;
+
+        if (isTab) {
+            // For tabs, the badge is appended to the button
+            element = document.querySelector(`#tabs-container button[data-tab-id="${id}"]`);
+        } else {
+            // For feed widgets, the badge is prepended to the button container
+            element = document.querySelector(`.feed-widget[data-feed-id="${id}"] .feed-widget-buttons`);
+            prepend = true;
+        }
+
         if (!element) return;
 
-        const badgeSelector = '.unread-count-badge';
         let badge = element.querySelector(badgeSelector);
 
         let currentCount = 0;
@@ -798,7 +807,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 badge.textContent = newCount;
             } else {
                 badge = createBadge(newCount);
-                if (badge) {
+                if (prepend) {
+                    element.prepend(badge);
+                } else {
                     element.appendChild(badge);
                 }
             }

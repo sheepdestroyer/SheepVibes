@@ -1,7 +1,13 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
-
 ## 2025-10-07
+
+- **Feat(frontend): Move unread counter to left of edit and close buttons**
+  - Added edit button (✎) to feed widgets alongside existing delete button
+  - Created button container to group edit, delete buttons and unread counter
+  - Repositioned unread counter from title area to left of buttons in button container
+  - Updated CSS styling for new button container layout with flexbox
+  - Added placeholder handleEditFeed function for future implementation
 
 - **Fix: Fix critical error handling bugs and complete code review feedback**
   - **Fixed `handleMarkItemRead`**: Removed unnecessary success check since `fetchData` throws on error - the UI was not updating items as read
@@ -9,7 +15,6 @@
 - **Improved `API_BASE_URL` detection**: Now uses `window.location.hostname` instead of `window.location.origin.includes('localhost')` for more robust localhost detection
 - **Removed dead code**: Eliminated unreachable error handling in `handleRefreshAllFeeds`
 - **Added radix parameter**: Used `parseInt(feedIdInput.value, 10)` to prevent unexpected octal parsing behavior
-
 
 ## 2025-10-06
 
