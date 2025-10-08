@@ -1688,3 +1688,38 @@ def test_get_feed_items_pagination_validation(client, setup_tabs_and_feeds):
     response4 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=200')
     assert response4.status_code == 200
     assert len(response4.json) == 2  # Should return available items, capped to MAX_PAGINATION_LIMIT
+
+
+def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
+    """Test that pagination limit is properly capped when more items exist than MAX_PAGINATION_LIMIT."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    
+    # Add more items than MAX_PAGINATION_LIMIT (110 items total)
+    with app.app_context():
+        # Clear existing items first
+        FeedItem.query.filter_by(feed_id=feed_id).delete()
+        
+        # Add 110 items with sequential published times to ensure proper ordering
+        from datetime import datetime, timedelta, timezone
+        base_time = datetime.now(timezone.utc)
+        
+        for i in range(110):
+            item = FeedItem(
+                feed_id=feed_id, 
+                title=f"Limit Cap Item {i}", 
+                link=f"link_limit_cap_{i}", 
+                guid=f"guid_limit_cap_{i}",
+                published_time=base_time - timedelta(minutes=i)  # Newer items have later times
+            )
+            db.session.add(item)
+        db.session.commit()
+
+    # Test that limit exceeding MAX_PAGINATION_LIMIT (100) is properly capped
+    response = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=200')
+    assert response.status_code == 200
+    assert len(response.json) == 100  # Should be capped to MAX_PAGINATION_LIMIT
+    
+    # Verify the items are properly ordered (newest first)
+    # Since we added items with decreasing timestamps, the first item should be the most recent (i=0)
+    assert response.json[0]['title'] == "Limit Cap Item 0"  # Most recent item
+    assert response.json[-1]['title'] == "Limit Cap Item 99"  # 100th item from the end
