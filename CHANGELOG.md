@@ -1,5 +1,11 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2025-10-08
+
+- **Migration: Upgrade project to Python 3.14**
+  - Updated GitHub workflow run-tests.yml to use Python 3.14
+  - Updated Containerfile to use Python 3.14-slim base image
+  - Updated documentation to reflect Python 3.14 migration
 ## 2025-10-07
 
 - **Feat(frontend): Move unread counter to left of edit and close buttons**
