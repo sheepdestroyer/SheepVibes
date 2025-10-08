@@ -1687,4 +1687,4 @@ def test_get_feed_items_pagination_validation(client, setup_tabs_and_feeds):
     # Test limit exceeding maximum (should be capped, not error)
     response4 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=200')
     assert response4.status_code == 200
-    # Should return items but capped to MAX_PAGINATION_LIMIT
+    assert len(response4.json) == 2  # Should return available items, capped to MAX_PAGINATION_LIMIT
