@@ -390,7 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editButton.title = 'Edit Feed';
         editButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            handleEditFeed(feed.id);
+            handleEditFeed(feed.id, feed.url, feed.name);
         });
         buttonContainer.appendChild(editButton);
 
@@ -595,16 +595,6 @@ document.addEventListener('DOMContentLoaded', () => {
             addFeedButton.disabled = false;
             addFeedButton.textContent = 'Add Feed';
         }
-    }
-
-    /**
-     * Handles the click event for a feed widget's edit button.
-     * @param {number} feedId - The ID of the feed to edit.
-     */
-    function handleEditFeed(feedId) {
-        console.log(`Editing feed ${feedId}...`);
-        // TODO: Implement feed editing functionality
-        console.log('Edit feed functionality coming soon!');
     }
 
     async function handleDeleteFeed(feedId) {

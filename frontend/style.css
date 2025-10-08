@@ -335,46 +335,7 @@ header h1 {
         /* Single column on very small screens */
         grid-template-columns: 1fr;
     }
-}
 
-/* Feed Widget Buttons */
-.feed-widget-buttons {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    display: flex;
-    gap: 4px;
-    z-index: 10;
-}
-
-.feed-widget .edit-feed-button,
-.feed-widget .delete-feed-button {
-    background: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 18px;
-    height: 18px;
-    font-size: 11px;
-    line-height: 17px;
-    text-align: center;
-    cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
-}
-
-.feed-widget:hover .edit-feed-button,
-.feed-widget:hover .delete-feed-button {
-    opacity: 1;
-}
-
-.feed-widget .edit-feed-button:hover {
-    background-color: #007bff; /* Blue on hover */
-}
-
-.feed-widget .delete-feed-button:hover {
-    background-color: #dc3545; /* Red on hover */
-}
 
 /* Modal Styles */
 .modal {
