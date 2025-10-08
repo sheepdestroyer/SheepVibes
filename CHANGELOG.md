@@ -1,5 +1,12 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2025-10-08
+
+- **Migration: Upgrade project to Python 3.14**
+  - Updated GitHub workflow run-tests.yml to use Python 3.14
+  - Updated Containerfile to use Python 3.14-slim base image
+  - Updated documentation to reflect Python 3.14 migration
+
 ## 2025-07-26
 
 - **Fix(feed_service): Use entry link as GUID to prevent UNIQUE constraint errors**

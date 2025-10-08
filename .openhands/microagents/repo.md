@@ -47,7 +47,7 @@ SheepVibes/
 - **Trigger**: On every push and pull request
 - **Services**: Redis container for caching (dynamic port mapping)
 - **Key Environment Variable**: `CACHE_REDIS_PORT` - dynamically assigned Redis port
-- **Setup**: Python 3.13 with pip caching
+- **Setup**: Python 3.14 with pip caching
 - **Test Execution**: 
   - Install dependencies from backend/requirements*.txt
   - Run pytest with `python -m pytest -v` from backend directory
