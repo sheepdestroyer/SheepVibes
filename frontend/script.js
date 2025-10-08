@@ -404,8 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         buttonContainer.appendChild(deleteButton);
 
-        widget.appendChild(buttonContainer);
-
         const titleElement = document.createElement('h2');
         const titleTextNode = document.createTextNode(feed.name); // Create text node for the name
 
