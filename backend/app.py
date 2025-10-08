@@ -914,6 +914,14 @@ def get_feed_items(feed_id):
     offset = request.args.get('offset', 0, type=int)
     limit = request.args.get('limit', 10, type=int)  # Default to loading 10 more items
 
+    # Validate and cap pagination parameters
+    MAX_LIMIT = 100
+    if offset < 0:
+        return jsonify({'error': 'Offset cannot be negative.'}), 400
+    if limit <= 0:
+        return jsonify({'error': 'Limit must be positive.'}), 400
+    limit = min(limit, MAX_LIMIT)
+
     # Query the database for the items, ordered by date
     items = FeedItem.query.filter_by(feed_id=feed_id)\
         .order_by(FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc())\
