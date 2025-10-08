@@ -427,8 +427,8 @@ document.addEventListener('DOMContentLoaded', () => {
             buttonContainer.prepend(badge);
         }
 
+        titleElement.appendChild(buttonContainer);
         widget.appendChild(titleElement);
-        widget.appendChild(buttonContainer);
 
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);

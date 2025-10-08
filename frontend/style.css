@@ -240,13 +240,9 @@ header h1 {
 
 /* Feed Widget Buttons Container */
 .feed-widget-buttons {
-    position: absolute;
-    top: 8px;
-    right: 8px;
     display: flex;
     align-items: center;
     gap: 4px;
-    z-index: 10; /* Ensure it's above title */
 }
 
 /* Edit and Delete Buttons */
