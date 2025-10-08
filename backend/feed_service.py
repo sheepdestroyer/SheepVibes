@@ -13,6 +13,9 @@ from .models import db, Feed, FeedItem
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
+# Maximum number of items to keep per feed for cache eviction
+MAX_ITEMS_PER_FEED = 100
+
 # --- Helper Functions ---
 
 def parse_published_time(entry):
@@ -279,24 +282,25 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     # --- Cache Eviction Logic ---
     # After adding new items, check if the total number of items exceeds the limit.
     # If so, delete the oldest items to keep the total at the limit.
-    MAX_ITEMS_PER_FEED = 100
     current_item_count = db.session.query(FeedItem).filter_by(feed_id=feed_db_obj.id).count()
 
     if current_item_count > MAX_ITEMS_PER_FEED:
         num_to_delete = current_item_count - MAX_ITEMS_PER_FEED
-        # Get the IDs of the oldest items to delete
-        oldest_item_ids_to_delete = [
-            item_id for item_id, in
+        
+        # Use a subquery to find and delete the oldest items in a single operation.
+        # This is more efficient than fetching IDs into application memory.
+        oldest_item_ids_q = (
             db.session.query(FeedItem.id)
             .filter_by(feed_id=feed_db_obj.id)
             .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
             .limit(num_to_delete)
-        ]
+        )
 
-        if oldest_item_ids_to_delete:
-            # Perform a bulk delete for efficiency
-            db.session.query(FeedItem).filter(FeedItem.id.in_(oldest_item_ids_to_delete)).delete(synchronize_session=False)
-            logger.info(f"Evicted {len(oldest_item_ids_to_delete)} oldest items from feed '{feed_db_obj.name}' to enforce item limit.")
+        # The `delete()` method returns the number of rows deleted.
+        deleted_count = db.session.query(FeedItem).filter(FeedItem.id.in_(oldest_item_ids_q)).delete(synchronize_session=False)
+
+        if deleted_count > 0:
+            logger.info(f"Evicted {deleted_count} oldest items from feed '{feed_db_obj.name}' to enforce item limit.")
             try:
                 db.session.commit()
             except Exception as e:
