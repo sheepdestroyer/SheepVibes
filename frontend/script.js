@@ -484,8 +484,8 @@ document.addEventListener('DOMContentLoaded', () => {
             itemList.innerHTML = '<li>No items found for this feed.</li>';
         }
 
-        // Append the whole widget to the grid
-        feedGrid.appendChild(widget);
+        // Return the widget without appending it to the DOM
+        return widget;
     }
 
     /**
@@ -798,10 +798,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const newItems = await fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`);
 
             if (newItems && newItems.length > 0) {
+                const feedWidget = itemList.closest('.feed-widget');
+                const tabId = feedWidget.dataset.tabId;
                 newItems.forEach(item => {
                     const listItem = createFeedItemElement(item, (li) => {
-                        const feedWidget = itemList.closest('.feed-widget');
-                        const tabId = feedWidget.dataset.tabId;
                         handleMarkItemRead(item.id, li, feedId, tabId);
                     });
                     itemList.appendChild(listItem);

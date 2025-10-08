@@ -989,8 +989,11 @@ def get_feed_items(feed_id):
     db.get_or_404(Feed, feed_id)
 
     # Get offset and limit from the request's query string, with default values
-    offset = request.args.get('offset', 0, type=int)
-    limit = request.args.get('limit', DEFAULT_PAGINATION_LIMIT, type=int)  # Default to loading 10 more items
+    try:
+        offset = int(request.args.get('offset', 0))
+        limit = int(request.args.get('limit', DEFAULT_PAGINATION_LIMIT))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Offset and limit parameters must be valid integers.'}), 400
 
     # Validate and cap pagination parameters
     if offset < 0:
