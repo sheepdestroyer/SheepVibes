@@ -20,6 +20,7 @@
         </div>
         <div id="add-feed-section">
             <input type="text" id="feed-url-input" placeholder="Enter feed URL">
+            <small id="add-feed-error" style="color: red; display: none;"></small>
             <button id="add-feed-button">Add Feed</button>
             <button id="refresh-all-feeds-button">Refresh All Feeds</button>
             <button id="export-opml-button">Export OPML</button>
@@ -30,6 +31,34 @@
     <main id="feed-grid">
         <!-- Feed widgets will be loaded here -->
     </main>
+    
+    <!-- Edit Feed Modal -->
+    <div id="edit-feed-modal" class="modal">
+        <div class="modal-content">
+            <h2>Edit Feed</h2>
+            <form id="edit-feed-form">
+                <input type="hidden" id="edit-feed-id">
+                <div class="form-group">
+                    <label for="edit-feed-url">Feed URL:</label>
+                    <input type="url" id="edit-feed-url" required>
+                    <small id="edit-feed-error" style="color: red; display: none;"></small>
+                </div>
+                <div class="form-group">
+                    <label for="edit-feed-name">Feed Name:</label>
+                    <input type="text" id="edit-feed-name" readonly>
+                    <small>Name will be automatically updated from the feed</small>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" id="save-feed-button">Save Changes</button>
+                    <button type="button" id="cancel-edit-button">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+
+    <div id="toast-container"></div>
+
     <script src="script.js"></script>
 </body>
 </html>
