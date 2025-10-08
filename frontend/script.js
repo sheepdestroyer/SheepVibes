@@ -807,12 +807,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 badge.textContent = newCount;
             } else {
                 badge = createBadge(newCount);
-                if (badge) {
-                    if (prepend) {
-                        element.prepend(badge);
-                    } else {
-                        element.appendChild(badge);
-                    }
+                if (prepend) {
+                    element.prepend(badge);
+                } else {
+                    element.appendChild(badge);
                 }
             }
         } else {

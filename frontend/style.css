@@ -255,11 +255,12 @@ header h1 {
     width: 18px;
     height: 18px;
     font-size: 11px;
-    line-height: 17px;
-    text-align: center;
     cursor: pointer;
     opacity: 0.6;
     transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .feed-widget:hover .edit-feed-button,
