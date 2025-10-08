@@ -75,6 +75,9 @@ announcer = MessageAnnouncer()
 # Initialize Flask application
 app = Flask(__name__)
 
+# Constants
+MAX_PAGINATION_LIMIT = 100
+
 # Test specific configuration
 # Check app.config first in case it's set by test runner, then env var
 if app.config.get('TESTING') or os.environ.get('TESTING') == 'true':
@@ -915,12 +918,11 @@ def get_feed_items(feed_id):
     limit = request.args.get('limit', 10, type=int)  # Default to loading 10 more items
 
     # Validate and cap pagination parameters
-    MAX_LIMIT = 100
     if offset < 0:
         return jsonify({'error': 'Offset cannot be negative.'}), 400
     if limit <= 0:
         return jsonify({'error': 'Limit must be positive.'}), 400
-    limit = min(limit, MAX_LIMIT)
+    limit = min(limit, MAX_PAGINATION_LIMIT)
 
     # Query the database for the items, ordered by date
     items = FeedItem.query.filter_by(feed_id=feed_id)\

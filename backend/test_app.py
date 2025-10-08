@@ -1663,3 +1663,28 @@ def test_get_feed_items_pagination(client, setup_tabs_and_feeds):
     response3 = client.get(f'/api/feeds/{feed_id}/items?offset=10&limit=5')
     assert response3.status_code == 200
     assert len(response3.json) == 2
+
+
+def test_get_feed_items_pagination_validation(client, setup_tabs_and_feeds):
+    """Test GET /api/feeds/<feed_id>/items validation for invalid parameters."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    # Test negative offset
+    response1 = client.get(f'/api/feeds/{feed_id}/items?offset=-1&limit=10')
+    assert response1.status_code == 400
+    assert 'Offset cannot be negative' in response1.json['error']
+
+    # Test zero limit
+    response2 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=0')
+    assert response2.status_code == 400
+    assert 'Limit must be positive' in response2.json['error']
+
+    # Test negative limit
+    response3 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=-5')
+    assert response3.status_code == 400
+    assert 'Limit must be positive' in response3.json['error']
+
+    # Test limit exceeding maximum (should be capped, not error)
+    response4 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=200')
+    assert response4.status_code == 200
+    # Should return items but capped to MAX_PAGINATION_LIMIT
