@@ -77,6 +77,7 @@ app = Flask(__name__)
 
 # Constants
 MAX_PAGINATION_LIMIT = 100
+DEFAULT_PAGINATION_LIMIT = 10
 
 # Test specific configuration
 # Check app.config first in case it's set by test runner, then env var
@@ -915,7 +916,7 @@ def get_feed_items(feed_id):
 
     # Get offset and limit from the request's query string, with default values
     offset = request.args.get('offset', 0, type=int)
-    limit = request.args.get('limit', 10, type=int)  # Default to loading 10 more items
+    limit = request.args.get('limit', DEFAULT_PAGINATION_LIMIT, type=int)  # Default to loading 10 more items
 
     # Validate and cap pagination parameters
     if offset < 0:
