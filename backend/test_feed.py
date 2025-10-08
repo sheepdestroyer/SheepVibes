@@ -527,3 +527,65 @@ def test_original_update_all_feeds_empty_db(db_setup):
 # Note: The original test_fetch_feed is skipped as it's for manual URL testing.
 # The original add_test_feed is a helper, not a test. It's used implicitly by some manual test setups.
 # For automated tests, it's better to set up DB state directly or use mocks as above.
+
+
+def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
+    """
+    Test that when a feed exceeds the MAX_ITEMS_PER_FEED limit, the oldest items are evicted.
+    """
+    logger.info("Testing feed item eviction logic")
+    app = db_setup
+
+    tab = Tab(name="Eviction Test Tab", order=0)
+    db.session.add(tab)
+    db.session.commit()
+
+    feed_obj = Feed(name="Eviction Test Feed", url="http://eviction.com/rss", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    # 1. Add 110 mock items to the database directly to simulate an existing large feed
+    for i in range(110):
+        # Stagger published times to have a clear order
+        pub_time = datetime.datetime(2024, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc) + datetime.timedelta(minutes=i)
+        item = FeedItem(
+            feed_id=feed_obj.id,
+            title=f"Old Item {i}",
+            link=f"http://eviction.com/item{i}",
+            guid=f"guid{i}",
+            published_time=pub_time
+        )
+        db.session.add(item)
+    db.session.commit()
+
+    assert db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).count() == 110, "Pre-condition: Feed should have 110 items"
+
+    # 2. Prepare a new feed fetch that adds 5 more items
+    new_entries = []
+    for i in range(5):
+        pub_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=i)
+        new_entries.append(
+            MockFeedEntry(title=f"New Item {i}", link=f"http://eviction.com/new{i}", guid=f"new-guid{i}", published=pub_time.isoformat())
+        )
+    mock_feed_data = MockParsedFeed(feed_title="Eviction Data", entries=new_entries)
+
+    # 3. Call process_feed_entries, which should add new items AND trigger eviction
+    new_items_count = feed_service.process_feed_entries(feed_obj, mock_feed_data)
+
+    assert new_items_count == 5, "Should add the 5 new items"
+
+    # 4. Verify the total number of items is now back down to the limit (100)
+    final_item_count = db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).count()
+    assert final_item_count == 100, "Feed should have exactly 100 items after eviction"
+
+    # 5. Verify that the items that remain are the newest ones
+    oldest_remaining_item = db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).order_by(FeedItem.published_time.asc()).first()
+    newest_remaining_item = db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).order_by(FeedItem.published_time.desc()).first()
+
+    assert "Old Item" in oldest_remaining_item.title # Check that some old items remain
+    assert "New Item" in newest_remaining_item.title # Check that the new items are present
+
+    # The titles of the first 15 old items (0-14) should have been deleted (110 + 5 - 100 = 15)
+    deleted_item_titles = {f"Old Item {i}" for i in range(15)}
+    remaining_titles = {item.title for item in db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).all()}
+    assert not deleted_item_titles.intersection(remaining_titles), "The oldest 15 items should have been deleted"
