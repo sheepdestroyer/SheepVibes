@@ -58,6 +58,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper Functions ---
 
+    // Constants for infinite scrolling
+    const SCROLL_BUFFER = 20; // pixels from bottom to trigger loading
+    const ITEMS_PER_PAGE = 10; // number of items to load per scroll
+
+    /**
+     * Creates a list item element for a feed item.
+     * @param {object} item - The feed item object.
+     * @param {function} clickHandler - The function to execute on link click.
+     * @returns {HTMLLIElement} The created list item element.
+     */
+    function createFeedItemElement(item, clickHandler) {
+        const listItem = document.createElement('li');
+        listItem.dataset.itemId = item.id;
+        listItem.classList.add(item.is_read ? 'read' : 'unread');
+
+        const link = document.createElement('a');
+        link.href = item.link;
+        link.textContent = item.title;
+        link.target = '_blank';
+        link.addEventListener('click', () => clickHandler(listItem));
+        listItem.appendChild(link);
+
+        const timestamp = document.createElement('span');
+        timestamp.textContent = formatDate(item.published_time || item.fetched_time);
+        listItem.appendChild(timestamp);
+
+        return listItem;
+    }
+
     /**
      * Formats an ISO date string into a user-friendly relative or absolute time.
      * @param {string | null} isoString - The ISO date string to format.
@@ -446,21 +475,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render items
         if (feed.items && feed.items.length > 0) {
             feed.items.forEach(item => {
-                const listItem = document.createElement('li');
-                listItem.dataset.itemId = item.id;
-                listItem.classList.add(item.is_read ? 'read' : 'unread');
-
-                const link = document.createElement('a');
-                link.href = item.link;
-                link.textContent = item.title;
-                link.target = '_blank';
-                link.addEventListener('click', () => handleMarkItemRead(item.id, listItem, feed.id, feed.tab_id));
-                listItem.appendChild(link);
-
-                const timestamp = document.createElement('span');
-                timestamp.textContent = formatDate(item.published_time || item.fetched_time);
-                listItem.appendChild(timestamp);
-
+                const listItem = createFeedItemElement(item, (li) => {
+                    handleMarkItemRead(item.id, li, feed.id, feed.tab_id);
+                });
                 itemList.appendChild(listItem);
             });
         } else {
@@ -763,7 +780,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemList = event.target;
 
         // Check if we are near the bottom of the list
-        const isAtBottom = (itemList.scrollTop + itemList.clientHeight) >= itemList.scrollHeight - 20; // 20px buffer
+        const isAtBottom = (itemList.scrollTop + itemList.clientHeight) >= itemList.scrollHeight - SCROLL_BUFFER;
         const isLoading = itemList.dataset.loading === 'true';
         const allItemsLoaded = itemList.dataset.allItemsLoaded === 'true';
 
@@ -775,32 +792,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const feedId = itemList.dataset.feedId;
         let offset = parseInt(itemList.dataset.offset, 10);
-        const limit = 10; // Number of items to fetch per scroll
+        const limit = ITEMS_PER_PAGE; // Number of items to fetch per scroll
 
         try {
             const newItems = await fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`);
 
             if (newItems && newItems.length > 0) {
                 newItems.forEach(item => {
-                    const listItem = document.createElement('li');
-                    listItem.dataset.itemId = item.id;
-                    listItem.classList.add(item.is_read ? 'read' : 'unread');
-
-                    const link = document.createElement('a');
-                    link.href = item.link;
-                    link.textContent = item.title;
-                    link.target = '_blank';
-                    link.addEventListener('click', () => {
+                    const listItem = createFeedItemElement(item, (li) => {
                         const feedWidget = itemList.closest('.feed-widget');
                         const tabId = feedWidget.dataset.tabId;
-                        handleMarkItemRead(item.id, listItem, feedId, tabId);
+                        handleMarkItemRead(item.id, li, feedId, tabId);
                     });
-                    listItem.appendChild(link);
-
-                    const timestamp = document.createElement('span');
-                    timestamp.textContent = formatDate(item.published_time || item.fetched_time);
-                    listItem.appendChild(timestamp);
-
                     itemList.appendChild(listItem);
                 });
 
@@ -811,8 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 itemList.dataset.allItemsLoaded = 'true';
                 const noMoreItemsMsg = document.createElement('li');
                 noMoreItemsMsg.textContent = 'No more items';
-                noMoreItemsMsg.style.textAlign = 'center';
-                noMoreItemsMsg.style.color = '#888';
+                noMoreItemsMsg.classList.add('no-more-items-message');
                 itemList.appendChild(noMoreItemsMsg);
             }
         } catch (error) {
