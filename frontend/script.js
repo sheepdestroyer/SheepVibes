@@ -595,6 +595,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Handles the click event for a feed widget's delete button.
+     * @param {number} feedId - The ID of the feed to delete.
+     */
     async function handleDeleteFeed(feedId) {
         if (!confirm('Are you sure you want to delete this feed?')) {
             return;
@@ -774,11 +778,21 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} [isTab=false] - Whether the ID refers to a tab.
      */
     function updateUnreadCount(id, change, isTab = false) {
-        const selector = isTab ? `#tabs-container button[data-tab-id="${id}"]` : `.feed-widget[data-feed-id="${id}"] h2`;
-        const element = document.querySelector(selector);
+        const badgeSelector = '.unread-count-badge';
+        let element;
+        let prepend = false;
+
+        if (isTab) {
+            // For tabs, the badge is appended to the button
+            element = document.querySelector(`#tabs-container button[data-tab-id="${id}"]`);
+        } else {
+            // For feed widgets, the badge is prepended to the button container
+            element = document.querySelector(`.feed-widget[data-feed-id="${id}"] .feed-widget-buttons`);
+            prepend = true;
+        }
+
         if (!element) return;
 
-        const badgeSelector = '.unread-count-badge';
         let badge = element.querySelector(badgeSelector);
 
         let currentCount = 0;
@@ -794,7 +808,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 badge = createBadge(newCount);
                 if (badge) {
-                    element.appendChild(badge);
+                    if (prepend) {
+                        element.prepend(badge);
+                    } else {
+                        element.appendChild(badge);
+                    }
                 }
             }
         } else {
