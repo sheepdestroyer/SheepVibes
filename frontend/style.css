@@ -453,3 +453,11 @@ header h1 {
     background-color: #28a745;
 }
 
+/* No more items message for infinite scrolling */
+.no-more-items-message {
+    text-align: center;
+    color: #888;
+    padding: 10px 0;
+    font-style: italic;
+}
+

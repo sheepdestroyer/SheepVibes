@@ -2,6 +2,12 @@
 
 ## 2025-10-08
 
+- **Documentation: Added code review cycle guidelines**
+  - Created comprehensive guide for maintaining PR descriptions across review cycles
+  - Added template structure for multi-cycle PR descriptions
+  - Documented best practices for preserving context and incremental updates
+  - Updated TODO.md to track completion
+
 - **Migration: Upgrade project to Python 3.14**
   - Updated GitHub workflow run-tests.yml to use Python 3.14
   - Updated Containerfile to use Python 3.14-slim base image

@@ -1713,3 +1713,89 @@ def test_import_opml_deletes_empty_default_imported_feeds_tab(mock_fetch_update,
 
         # Check that fetch_and_update_feed was called for the imported feed
         mock_fetch_update.assert_called_once_with(feed_in_folder.id)
+
+def test_get_feed_items_pagination(client, setup_tabs_and_feeds):
+    """Test GET /api/feeds/<feed_id>/items with offset and limit for pagination."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    # Add 10 more items to the feed for a total of 12
+    with app.app_context():
+        for i in range(10):
+            item = FeedItem(feed_id=feed_id, title=f"Paginate Item {i}", link=f"link_paginate_{i}", guid=f"guid_paginate_{i}")
+            db.session.add(item)
+        db.session.commit()
+
+    # Get the first 5 items
+    response1 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=5')
+    assert response1.status_code == 200
+    assert len(response1.json) == 5
+
+    # Get the next 5 items
+    response2 = client.get(f'/api/feeds/{feed_id}/items?offset=5&limit=5')
+    assert response2.status_code == 200
+    assert len(response2.json) == 5
+
+    # Get the last 2 items
+    response3 = client.get(f'/api/feeds/{feed_id}/items?offset=10&limit=5')
+    assert response3.status_code == 200
+    assert len(response3.json) == 2
+
+
+def test_get_feed_items_pagination_validation(client, setup_tabs_and_feeds):
+    """Test GET /api/feeds/<feed_id>/items validation for invalid parameters."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    # Test negative offset
+    response1 = client.get(f'/api/feeds/{feed_id}/items?offset=-1&limit=10')
+    assert response1.status_code == 400
+    assert 'Offset cannot be negative' in response1.json['error']
+
+    # Test zero limit
+    response2 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=0')
+    assert response2.status_code == 400
+    assert 'Limit must be positive' in response2.json['error']
+
+    # Test negative limit
+    response3 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=-5')
+    assert response3.status_code == 400
+    assert 'Limit must be positive' in response3.json['error']
+
+    # Test limit exceeding maximum (should be capped, not error)
+    response4 = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=200')
+    assert response4.status_code == 200
+    assert len(response4.json) == 2  # Should return available items, capped to MAX_PAGINATION_LIMIT
+
+
+def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
+    """Test that pagination limit is properly capped when more items exist than MAX_PAGINATION_LIMIT."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    
+    # Add more items than MAX_PAGINATION_LIMIT (110 items total)
+    with app.app_context():
+        # Clear existing items first
+        FeedItem.query.filter_by(feed_id=feed_id).delete()
+        
+        # Add 110 items with sequential published times to ensure proper ordering
+        from datetime import datetime, timedelta, timezone
+        base_time = datetime.now(timezone.utc)
+        
+        for i in range(110):
+            item = FeedItem(
+                feed_id=feed_id, 
+                title=f"Limit Cap Item {i}", 
+                link=f"link_limit_cap_{i}", 
+                guid=f"guid_limit_cap_{i}",
+                published_time=base_time - timedelta(minutes=i)  # Newer items have later times
+            )
+            db.session.add(item)
+        db.session.commit()
+
+    # Test that limit exceeding MAX_PAGINATION_LIMIT (100) is properly capped
+    response = client.get(f'/api/feeds/{feed_id}/items?offset=0&limit=200')
+    assert response.status_code == 200
+    assert len(response.json) == 100  # Should be capped to MAX_PAGINATION_LIMIT
+    
+    # Verify the items are properly ordered (newest first)
+    # Since we added items with decreasing timestamps, the first item should be the most recent (i=0)
+    assert response.json[0]['title'] == "Limit Cap Item 0"  # Most recent item
+    assert response.json[-1]['title'] == "Limit Cap Item 99"  # 100th item from the end
