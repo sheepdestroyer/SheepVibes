@@ -34,14 +34,26 @@ logging.basicConfig(
 logger = logging.getLogger('sheepvibes')
 
 class MessageAnnouncer:
-    """A simple message announcer that uses server-sent events."""
+    """A simple message announcer that uses server-sent events.
+
+    This class manages a list of listener queues. When a message is announced,
+    it is put into each queue. The listen method yields messages from a queue,
+    allowing for real-time communication with clients.
+    """
+
     def __init__(self):
+        """Initializes the MessageAnnouncer."""
         self.listeners = []
 
     def listen(self):
-        """
-        Listens for messages, yielding them to the client.
-        This is a generator function that maintains a connection.
+        """Listens for messages and yields them to the client.
+
+        This is a generator function that maintains a connection with the client.
+        It adds a new queue to the listeners and then enters an infinite loop,
+        yielding messages as they become available.
+
+        Yields:
+            str: A message from the queue, formatted for SSE.
         """
         q = queue.Queue(maxsize=5)
         self.listeners.append(q)
@@ -63,7 +75,11 @@ class MessageAnnouncer:
             self.listeners.remove(q)
 
     def announce(self, msg):
-        """Announces a message to all listeners."""
+        """Announces a message to all listening clients.
+
+        Args:
+            msg (str): The message to announce.
+        """
         # Use a copy of the list to avoid issues if a client disconnects
         # during iteration.
         for q in list(self.listeners):
@@ -138,16 +154,39 @@ cache.init_app(app)
 # --- Cache Key Generation and Invalidation ---
 
 def get_version(key, default=1):
-    """Gets a version number for a cache key from the cache."""
+    """Gets a version number for a cache key from the cache.
+
+    Args:
+        key (str): The cache key for the version number.
+        default (int): The default version number to return if the key is not found.
+
+    Returns:
+        int: The version number.
+    """
     return cache.get(key) or default
 
 def make_tabs_cache_key(*args, **kwargs):
-    """Creates a cache key for the main tabs list, incorporating a version."""
+    """Creates a cache key for the main tabs list, incorporating a version.
+
+    Args:
+        *args: Additional arguments (unused).
+        **kwargs: Additional keyword arguments (unused).
+
+    Returns:
+        str: The generated cache key.
+    """
     version = get_version('tabs_version')
     return f'view/tabs/v{version}'
 
 def make_tab_feeds_cache_key(tab_id):
-    """Creates a cache key for a specific tab's feeds, incorporating version and query params."""
+    """Creates a cache key for a specific tab's feeds, incorporating version and query params.
+
+    Args:
+        tab_id (int): The ID of the tab.
+
+    Returns:
+        str: The generated cache key.
+    """
     tabs_version = get_version('tabs_version') # For unread counts
     tab_version = get_version(f'tab_{tab_id}_version')
     query_string = request.query_string.decode().replace('&', '_') # Sanitize for key
@@ -161,7 +200,11 @@ def invalidate_tabs_cache():
     logger.info(f"Invalidated tabs cache. New version: {new_version}")
 
 def invalidate_tab_feeds_cache(tab_id):
-    """Invalidates a specific tab's feed cache and the main tabs list cache."""
+    """Invalidates a specific tab's feed cache and the main tabs list cache.
+
+    Args:
+        tab_id (int): The ID of the tab to invalidate the cache for.
+    """
     version_key = f'tab_{tab_id}_version'
     new_version = get_version(version_key) + 1
     cache.set(version_key, new_version)
@@ -213,13 +256,27 @@ except (KeyboardInterrupt, SystemExit):
 
 @app.errorhandler(404)
 def not_found_error(error):
-    """Handles 404 Not Found errors with a JSON response."""
+    """Handles 404 Not Found errors with a JSON response.
+
+    Args:
+        error: The error object.
+
+    Returns:
+        A tuple containing a JSON response and the HTTP status code.
+    """
     logger.warning(f"404 Not Found: {request.path}")
     return jsonify({'error': 'Resource not found'}), 404
 
 @app.errorhandler(500)
 def internal_error(error):
-    """Handles 500 Internal Server Errors with a JSON response and logs the error."""
+    """Handles 500 Internal Server Errors with a JSON response and logs the error.
+
+    Args:
+        error: The error object.
+
+    Returns:
+        A tuple containing a JSON response and the HTTP status code.
+    """
     logger.error(f"500 Internal Server Error: {error}", exc_info=True)
     # Rollback the session in case the error was database-related
     db.session.rollback()
@@ -237,7 +294,14 @@ def serve_index():
 
 @app.route('/<path:filename>')
 def serve_static_files(filename):
-    """Serves static files like CSS and JS from the frontend folder."""
+    """Serves static files like CSS and JS from the frontend folder.
+
+    Args:
+        filename (str): The name of the file to serve.
+
+    Returns:
+        A Flask Response object containing the file, or a JSON error response.
+    """
     # Basic security check: prevent accessing files outside the frontend folder
     if ".." in filename or filename.startswith("/"):
         return jsonify({'error': 'Invalid path'}), 400
@@ -253,7 +317,11 @@ def stream():
 
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():
-    """Exports all feeds as an OPML file."""
+    """Exports all feeds as an OPML file.
+
+    Returns:
+        A Flask Response object containing the OPML file, or a JSON error response.
+    """
     try:
         feeds = Feed.query.all()
 
@@ -294,10 +362,20 @@ def _process_opml_outlines_recursive(
     skipped_count_wrapper,  # Use list/dict for mutable integer
     affected_tab_ids_set
 ):
-    """
-    Recursively processes OPML outline elements.
+    """Recursively processes OPML outline elements.
+
     Feeds are added to `newly_added_feeds_list` but not committed here.
     New tabs (folders) are committed immediately to get their IDs.
+
+    Args:
+        outline_elements (list): A list of XML elements to process.
+        current_tab_id (int): The ID of the current tab to add feeds to.
+        current_tab_name (str): The name of the current tab.
+        all_existing_feed_urls_set (set): A set of all existing feed URLs to prevent duplicates.
+        newly_added_feeds_list (list): A list to append new Feed objects to.
+        imported_count_wrapper (list): A list containing a single integer to track the imported count.
+        skipped_count_wrapper (list): A list containing a single integer to track the skipped count.
+        affected_tab_ids_set (set): A set to track the IDs of tabs that have new feeds added.
     """
     for outline_element in outline_elements:
         folder_type_attr = outline_element.get('type') # For Netvibes type skipping
@@ -591,13 +669,21 @@ def import_opml():
 @app.route('/api/tabs', methods=['GET'])
 @cache.cached(make_cache_key=make_tabs_cache_key)
 def get_tabs():
-    """Returns a list of all tabs, ordered by their 'order' field."""
+    """Returns a list of all tabs, ordered by their 'order' field.
+
+    Returns:
+        A JSON response containing a list of tab objects.
+    """
     tabs = Tab.query.order_by(Tab.order).all()
     return jsonify([tab.to_dict() for tab in tabs])
 
 @app.route('/api/tabs', methods=['POST'])
 def create_tab():
-    """Creates a new tab."""
+    """Creates a new tab.
+
+    Returns:
+        A tuple containing a JSON response and the HTTP status code.
+    """
     data = request.get_json()
     # Validate input data
     if not data or 'name' not in data or not data['name'].strip():
@@ -629,7 +715,14 @@ def create_tab():
 
 @app.route('/api/tabs/<int:tab_id>', methods=['PUT'])
 def rename_tab(tab_id):
-    """Renames an existing tab."""
+    """Renames an existing tab.
+
+    Args:
+        tab_id (int): The ID of the tab to rename.
+
+    Returns:
+        A tuple containing a JSON response and the HTTP status code.
+    """
     # Find the tab or return 404
     tab = db.get_or_404(Tab, tab_id)
 
@@ -824,7 +917,14 @@ def add_feed():
 
 @app.route('/api/feeds/<int:feed_id>', methods=['DELETE'])
 def delete_feed(feed_id):
-    """Deletes a feed and its associated items."""
+    """Deletes a feed and its associated items.
+
+    Args:
+        feed_id (int): The ID of the feed to delete.
+
+    Returns:
+        A tuple containing a JSON response and the HTTP status code.
+    """
     # Find feed or return 404
     feed = db.get_or_404(Feed, feed_id)
     try:
@@ -843,7 +943,14 @@ def delete_feed(feed_id):
 
 @app.route('/api/feeds/<int:feed_id>', methods=['PUT'])
 def update_feed_url(feed_id):
-    """Updates a feed's URL and name."""
+    """Updates a feed's URL and name.
+
+    Args:
+        feed_id (int): The ID of the feed to update.
+
+    Returns:
+        A tuple containing a JSON response and the HTTP status code.
+    """
     # Find feed or return 404
     feed = db.get_or_404(Feed, feed_id)
     
@@ -911,7 +1018,14 @@ def update_feed_url(feed_id):
 
 @app.route('/api/items/<int:item_id>/read', methods=['POST'])
 def mark_item_read(item_id):
-    """Marks a specific feed item as read."""
+    """Marks a specific feed item as read.
+
+    Args:
+        item_id (int): The ID of the feed item to mark as read.
+
+    Returns:
+        A tuple containing a JSON response and the HTTP status code.
+    """
     # Find item or return 404
     item = db.session.get(FeedItem, item_id)
     if not item:
@@ -938,9 +1052,10 @@ def mark_item_read(item_id):
 
 @app.route('/api/feeds/update-all', methods=['POST'])
 def api_update_all_feeds():
-    """
-    Triggers an update for all feeds in the system.
-    Returns the count of processed feeds and new items.
+    """Triggers an update for all feeds in the system.
+
+    Returns:
+        A tuple containing a JSON response and the HTTP status code.
     """
     logger.info("Received request to update all feeds.")
     try:

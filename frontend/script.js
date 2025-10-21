@@ -28,9 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Displays a toast notification.
-     * @param {string} message - The message to display.
-     * @param {string} type - The type of toast ('success', 'error', 'info').
-     * @param {number} duration - The duration in milliseconds.
+     * @param {string} message The message to display.
+     * @param {string} [type='info'] The type of toast ('success', 'error', 'info').
+     * @param {number} [duration=3000] The duration in milliseconds.
      */
     function showToast(message, type = 'info', duration = 3000) {
         const toastContainer = document.getElementById('toast-container');
@@ -87,7 +87,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Real-Time Update Logic (SSE) ---
 
-    /** Initializes the Server-Sent Events (SSE) connection to receive real-time updates. */
+    /**
+     * Initializes the Server-Sent Events (SSE) connection to receive real-time updates.
+     */
     async function initializeSSE() {
         console.log('Initializing SSE connection...');
         const eventSource = new EventSource('/api/stream');
@@ -127,7 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Feed Refresh Logic ---
 
-    /** Handles the click event for the "Refresh All Feeds" button. */
+    /**
+     * Handles the click event for the "Refresh All Feeds" button.
+     */
     async function handleRefreshAllFeeds() {
         console.log("Triggering refresh for all feeds...");
         const originalButtonText = refreshAllFeedsButton.textContent;
@@ -200,7 +204,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- OPML Export/Import Functions ---
 
-    /** Handles the click event for the "Export OPML" button. */
+    /**
+     * Handles the click event for the "Export OPML" button.
+     */
     async function handleExportOpml() {
         console.log("Exporting OPML...");
         const originalButtonText = exportOpmlButton.textContent;
@@ -241,7 +247,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /** Handles the file selection for OPML import. */
+    /**
+     * Handles the file selection for OPML import.
+     * @param {Event} event The file input change event.
+     */
     async function handleImportOpmlFileSelect(event) {
         const file = event.target.files[0];
         if (!file) {
@@ -312,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Renders the tab buttons in the header.
-     * @param {Array<object>} tabs - An array of tab objects from the API.
+     * @param {Array<object>} tabs An array of tab objects from the API.
      */
     function renderTabs(tabs) {
         allTabs = tabs;
@@ -372,7 +381,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Creates a single feed widget.
-     * @param {object} feed - The feed object from the API (including unread_count and items).
+     * @param {object} feed The feed object from the API (including unread_count and items).
+     * @returns {HTMLDivElement} The feed widget element.
      */
     function createFeedWidget(feed) {
         const widget = document.createElement('div');
@@ -500,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Sets the specified tab as active, loads its content if needed, and shows/hides widgets.
-     * @param {number} tabId - The ID of the tab to activate.
+     * @param {number} tabId The ID of the tab to activate.
      */
     async function setActiveTab(tabId) {
         activeTabId = tabId;
@@ -629,9 +639,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Handles the click event for a feed widget's edit button.
-     * @param {number} feedId - The ID of the feed to edit.
-     * @param {string} currentUrl - The current URL of the feed.
-     * @param {string} currentName - The current name of the feed.
+     * @param {number} feedId The ID of the feed to edit.
+     * @param {string} currentUrl The current URL of the feed.
+     * @param {string} currentName The current name of the feed.
      */
     function handleEditFeed(feedId, currentUrl, currentName) {
         console.log(`Editing feed: ${feedId}`);
