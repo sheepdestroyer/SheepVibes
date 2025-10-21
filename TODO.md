@@ -93,7 +93,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Minimize frontend re-renders.
 *   [x] **Documentation:**
     *   [x] Write `README.md` covering setup instructions (building/running with Podman), configuration, and basic usage.
-    *   [x] Add comments to the code.
+    *   [x] Add comments to the code (JSDoc for frontend, Google Style for backend).
 *   [x] **Testing:**
     *   [x] Add basic unit tests for backend logic (feed parsing, database interactions).
     *   [x] Add basic unit tests for backend logic (API endpoints).
@@ -109,8 +109,8 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Future Considerations
 
+*   [x] Import/Export OPML feed lists.
 *   [ ] Widget resizing/reordering (drag and drop).
-*   [ ] Import/Export OPML feed lists.
 *   [ ] Different widget view types (e.g., list vs. expanded).
 *   [ ] User authentication.
 *   [ ] Keyword filtering/highlighting within feeds.

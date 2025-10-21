@@ -10,7 +10,14 @@ db = SQLAlchemy()
 # --- Database Models ---
 
 class Tab(db.Model):
-    """Represents a tab for organizing feeds."""
+    """Represents a tab for organizing feeds.
+
+    Attributes:
+        id (int): The primary key.
+        name (str): The name of the tab.
+        order (int): The display order of the tab.
+        feeds (relationship): A relationship to the feeds in this tab.
+    """
     __tablename__ = 'tabs'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -21,7 +28,11 @@ class Tab(db.Model):
     feeds = db.relationship('Feed', backref='tab', lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
-        """Serializes the Tab object to a dictionary, including unread count."""
+        """Serializes the Tab object to a dictionary.
+
+        Returns:
+            dict: A dictionary representation of the tab, including the unread count.
+        """
         # Calculate total unread count for all feeds within this tab
         total_unread = db.session.query(db.func.count(FeedItem.id)).join(Feed).filter(
             Feed.tab_id == self.id,
@@ -36,7 +47,17 @@ class Tab(db.Model):
         }
 
 class Feed(db.Model):
-    """Represents an RSS/Atom feed source."""
+    """Represents an RSS/Atom feed source.
+
+    Attributes:
+        id (int): The primary key.
+        tab_id (int): The foreign key for the tab this feed belongs to.
+        name (str): The name of the feed.
+        url (str): The URL of the feed.
+        site_link (str): The URL of the feed's website.
+        last_updated_time (datetime): The last time the feed was updated.
+        items (relationship): A relationship to the items in this feed.
+    """
     __tablename__ = 'feeds'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -51,7 +72,11 @@ class Feed(db.Model):
     items = db.relationship('FeedItem', backref='feed', lazy='dynamic', cascade='all, delete-orphan')
 
     def to_dict(self):
-        """Serializes the Feed object to a dictionary, including unread count."""
+        """Serializes the Feed object to a dictionary.
+
+        Returns:
+            dict: A dictionary representation of the feed, including the unread count.
+        """
         # Calculate unread count for this specific feed
         unread_count = db.session.query(db.func.count(FeedItem.id)).filter(
             FeedItem.feed_id == self.id,
@@ -69,7 +94,18 @@ class Feed(db.Model):
         }
 
 class FeedItem(db.Model):
-    """Represents a single item within an RSS/Atom feed."""
+    """Represents a single item within an RSS/Atom feed.
+
+    Attributes:
+        id (int): The primary key.
+        feed_id (int): The foreign key for the feed this item belongs to.
+        title (str): The title of the feed item.
+        link (str): The URL of the feed item.
+        published_time (datetime): The time the item was published.
+        fetched_time (datetime): The time the item was fetched.
+        is_read (bool): Whether the item has been read.
+        guid (str): The GUID of the feed item.
+    """
     __tablename__ = 'feed_items'
     id = db.Column(db.Integer, primary_key=True)
     feed_id = db.Column(db.Integer, db.ForeignKey('feeds.id', ondelete='CASCADE'), nullable=False, index=True) # Add index
@@ -87,6 +123,15 @@ class FeedItem(db.Model):
 
     @validates('published_time', 'fetched_time')
     def validate_datetime_utc(self, key, dt):
+        """Validates that the datetime is UTC.
+
+        Args:
+            key (str): The name of the field being validated.
+            dt (datetime.datetime): The datetime object to validate.
+
+        Returns:
+            datetime.datetime: The validated datetime object.
+        """
         if dt is None:
             return None
         if dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None:
@@ -118,7 +163,11 @@ class FeedItem(db.Model):
         return iso_string.replace('+00:00', 'Z')
 
     def to_dict(self):
-        """Returns a dictionary representation of the feed item."""
+        """Serializes the FeedItem object to a dictionary.
+
+        Returns:
+            dict: A dictionary representation of the feed item.
+        """
         return {
             'id': self.id,
             'feed_id': self.feed_id,

@@ -19,11 +19,12 @@ def parse_published_time(entry):
     """Attempts to parse the published time from a feed entry.
 
     Args:
-        entry: A feedparser entry object.
+        entry (feedparser.FeedParserDict): A feedparser entry object.
 
     Returns:
-        A datetime object representing the published time (UTC aware).
-        Falls back to current UTC time if parsing fails.
+        datetime.datetime: A datetime object representing the published time
+                           (UTC aware). Falls back to the current UTC time if
+                           parsing fails.
     """
     parsed_dt = None
     if hasattr(entry, 'published_parsed') and entry.published_parsed:
@@ -69,10 +70,11 @@ def fetch_feed(feed_url):
     """Fetches and parses a feed using feedparser.
 
     Args:
-        feed_url: The URL of the RSS/Atom feed.
+        feed_url (str): The URL of the RSS/Atom feed.
 
     Returns:
-        A feedparser dictionary object, or None if fetching/parsing fails.
+        feedparser.FeedParserDict: A feedparser dictionary object, or None if
+                                   fetching/parsing fails.
     """
     logger.info(f"Fetching feed: {feed_url}")
     try:
@@ -110,11 +112,12 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     """Processes entries from a parsed feed and adds new items to the database.
 
     Args:
-        feed_db_obj: The Feed database object (SQLAlchemy model instance).
-        parsed_feed: The dictionary object returned by feedparser.parse().
+        feed_db_obj (Feed): The Feed database object (SQLAlchemy model instance).
+        parsed_feed (feedparser.FeedParserDict): The dictionary object returned
+                                                 by feedparser.parse().
 
     Returns:
-        The number of new items added to the database for this feed.
+        int: The number of new items added to the database for this feed.
     """
     if not parsed_feed:
         logger.error(f"process_feed_entries called with a null parsed_feed for feed ID {feed_db_obj.id if feed_db_obj else 'Unknown'}")
@@ -282,7 +285,7 @@ def fetch_and_update_feed(feed_id):
     """Fetches a single feed by ID, processes its entries, and updates the database.
 
     Args:
-        feed_id: The database ID of the Feed to update.
+        feed_id (int): The database ID of the Feed to update.
 
     Returns:
         A tuple (success, new_items_count):
@@ -325,7 +328,7 @@ def fetch_and_update_feed(feed_id):
 
 def update_all_feeds():
     """Iterates through all feeds in the database, fetches updates, and processes entries.
-    
+
     Returns:
         A tuple (total_feeds_processed_successfully, total_new_items):
         - total_feeds_processed_successfully (int): Number of feeds where fetch and process stages completed without critical failure.
