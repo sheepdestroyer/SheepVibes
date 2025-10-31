@@ -843,6 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Error loading more items:', error);
+            showToast('Error loading more items. Please try again later.', 'error');
         } finally {
             itemList.dataset.loading = 'false'; // Reset loading flag
         }
