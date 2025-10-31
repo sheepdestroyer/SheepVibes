@@ -61,6 +61,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Constants for infinite scrolling
     const SCROLL_BUFFER = 20; // pixels from bottom to trigger loading
     const ITEMS_PER_PAGE = 10; // number of items to load per scroll
+    const SCROLL_THROTTLE_DELAY = 200; // milliseconds to throttle scroll events
+
+    /**
+     * A simple throttle utility function to limit function execution frequency.
+     * @param {function} callback - The function to throttle.
+     * @param {number} delay - The delay in milliseconds between executions.
+     * @returns {function} The throttled function.
+     */
+    function throttle(callback, delay) {
+        let isThrottled = false;
+        return function(...args) {
+            if (!isThrottled) {
+                callback.apply(this, args);
+                isThrottled = true;
+                setTimeout(() => {
+                    isThrottled = false;
+                }, delay);
+            }
+        };
+    }
 
     /**
      * Creates a list item element for a feed item.
@@ -465,12 +485,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Keep track of the number of items currently shown
         itemList.dataset.offset = feed.items.length;
         itemList.dataset.feedId = feed.id;
+        itemList.dataset.tabId = feed.tab_id; // Store tabId to avoid DOM traversal
         // Flags to prevent multiple loads and to know when all items have been loaded
         itemList.dataset.loading = 'false';
         itemList.dataset.allItemsLoaded = 'false';
 
         // Add the scroll event listener
-        itemList.addEventListener('scroll', handleScrollLoadMore);
+        itemList.addEventListener('scroll', throttle(handleScrollLoadMore, SCROLL_THROTTLE_DELAY));
 
         // Render items
         if (feed.items && feed.items.length > 0) {
@@ -791,6 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
         itemList.dataset.loading = 'true'; // Set loading flag
 
         const feedId = itemList.dataset.feedId;
+        const tabId = itemList.dataset.tabId; // Use stored tabId instead of DOM traversal
         let offset = parseInt(itemList.dataset.offset, 10);
         const limit = ITEMS_PER_PAGE; // Number of items to fetch per scroll
 
@@ -798,8 +820,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const newItems = await fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`);
 
             if (newItems && newItems.length > 0) {
-                const feedWidget = itemList.closest('.feed-widget');
-                const tabId = feedWidget.dataset.tabId;
                 newItems.forEach(item => {
                     const listItem = createFeedItemElement(item, (li) => {
                         handleMarkItemRead(item.id, li, feedId, tabId);
