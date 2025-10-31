@@ -495,12 +495,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render items
         if (feed.items && feed.items.length > 0) {
+            const fragment = document.createDocumentFragment();
             feed.items.forEach(item => {
                 const listItem = createFeedItemElement(item, (li) => {
                     handleMarkItemRead(item.id, li, feed.id, feed.tab_id);
                 });
-                itemList.appendChild(listItem);
+                fragment.appendChild(listItem);
             });
+            itemList.appendChild(fragment);
         } else {
             itemList.innerHTML = '<li>No items found for this feed.</li>';
         }
@@ -820,12 +822,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const newItems = await fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`);
 
             if (newItems && newItems.length > 0) {
+                const fragment = document.createDocumentFragment();
                 newItems.forEach(item => {
                     const listItem = createFeedItemElement(item, (li) => {
                         handleMarkItemRead(item.id, li, feedId, tabId);
                     });
-                    itemList.appendChild(listItem);
+                    fragment.appendChild(listItem);
                 });
+                itemList.appendChild(fragment);
 
                 // Update the offset for the next fetch
                 itemList.dataset.offset = offset + newItems.length;
