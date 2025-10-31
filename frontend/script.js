@@ -58,6 +58,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper Functions ---
 
+    // Constants for infinite scrolling
+    const SCROLL_BUFFER = 20; // pixels from bottom to trigger loading
+    const ITEMS_PER_PAGE = 10; // number of items to load per scroll
+    const SCROLL_THROTTLE_DELAY = 200; // milliseconds to throttle scroll events
+
+    /**
+     * A simple throttle utility function to limit function execution frequency.
+     * @param {function} callback - The function to throttle.
+     * @param {number} delay - The delay in milliseconds between executions.
+     * @returns {function} The throttled function.
+     */
+    function throttle(callback, delay) {
+        let isThrottled = false;
+        return function(...args) {
+            if (!isThrottled) {
+                callback.apply(this, args);
+                isThrottled = true;
+                setTimeout(() => {
+                    isThrottled = false;
+                }, delay);
+            }
+        };
+    }
+
+    /**
+     * Creates a list item element for a feed item.
+     * @param {object} item - The feed item object.
+     * @param {function} clickHandler - The function to execute on link click.
+     * @returns {HTMLLIElement} The created list item element.
+     */
+    function createFeedItemElement(item, clickHandler) {
+        const listItem = document.createElement('li');
+        listItem.dataset.itemId = item.id;
+        listItem.classList.add(item.is_read ? 'read' : 'unread');
+
+        const link = document.createElement('a');
+        link.href = item.link;
+        link.textContent = item.title;
+        link.target = '_blank';
+        link.addEventListener('click', () => clickHandler(listItem));
+        listItem.appendChild(link);
+
+        const timestamp = document.createElement('span');
+        timestamp.textContent = formatDate(item.published_time || item.fetched_time);
+        listItem.appendChild(timestamp);
+
+        return listItem;
+    }
+
     /**
      * Formats an ISO date string into a user-friendly relative or absolute time.
      * @param {string | null} isoString - The ISO date string to format.
@@ -443,26 +492,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemList = document.createElement('ul');
         widget.appendChild(itemList);
 
+        // Keep track of the number of items currently shown
+        itemList.dataset.offset = feed.items.length;
+        itemList.dataset.feedId = feed.id;
+        itemList.dataset.tabId = feed.tab_id; // Store tabId to avoid DOM traversal
+        // Flags to prevent multiple loads and to know when all items have been loaded
+        itemList.dataset.loading = 'false';
+        itemList.dataset.allItemsLoaded = 'false';
+
+        // Add the scroll event listener
+        itemList.addEventListener('scroll', throttle(handleScrollLoadMore, SCROLL_THROTTLE_DELAY));
+
         // Render items
         if (feed.items && feed.items.length > 0) {
+            const fragment = document.createDocumentFragment();
             feed.items.forEach(item => {
-                const listItem = document.createElement('li');
-                listItem.dataset.itemId = item.id;
-                listItem.classList.add(item.is_read ? 'read' : 'unread');
-
-                const link = document.createElement('a');
-                link.href = item.link;
-                link.textContent = item.title;
-                link.target = '_blank';
-                link.addEventListener('click', () => handleMarkItemRead(item.id, listItem, feed.id, feed.tab_id));
-                listItem.appendChild(link);
-
-                const timestamp = document.createElement('span');
-                timestamp.textContent = formatDate(item.published_time || item.fetched_time);
-                listItem.appendChild(timestamp);
-
-                itemList.appendChild(listItem);
+                const listItem = createFeedItemElement(item, (li) => {
+                    handleMarkItemRead(item.id, li, feed.id, feed.tab_id);
+                });
+                fragment.appendChild(listItem);
             });
+            itemList.appendChild(fragment);
         } else {
             itemList.innerHTML = '<li>No items found for this feed.</li>';
         }
@@ -754,6 +804,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Mark Item as Read Logic ---
+
+    /**
+     * Handles scrolling to load more items when reaching the bottom of a feed's item list.
+     * @param {Event} event - The scroll event.
+     */
+    async function handleScrollLoadMore(event) {
+        const itemList = event.target;
+
+        // Check if we are near the bottom of the list
+        const isAtBottom = (itemList.scrollTop + itemList.clientHeight) >= itemList.scrollHeight - SCROLL_BUFFER;
+        const isLoading = itemList.dataset.loading === 'true';
+        const allItemsLoaded = itemList.dataset.allItemsLoaded === 'true';
+
+        if (!isAtBottom || isLoading || allItemsLoaded) {
+            return; // Exit if not at the bottom, or if we're already loading or all items are loaded
+        }
+
+        itemList.dataset.loading = 'true'; // Set loading flag
+
+        const feedId = itemList.dataset.feedId;
+        const tabId = itemList.dataset.tabId; // Use stored tabId instead of DOM traversal
+        let offset = parseInt(itemList.dataset.offset, 10);
+        const limit = ITEMS_PER_PAGE; // Number of items to fetch per scroll
+
+        try {
+            const newItems = await fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`);
+
+            if (newItems && newItems.length > 0) {
+                const fragment = document.createDocumentFragment();
+                newItems.forEach(item => {
+                    const listItem = createFeedItemElement(item, (li) => {
+                        handleMarkItemRead(item.id, li, feedId, tabId);
+                    });
+                    fragment.appendChild(listItem);
+                });
+                itemList.appendChild(fragment);
+
+                // Update the offset for the next fetch
+                itemList.dataset.offset = offset + newItems.length;
+            } else {
+                // No more items to load
+                itemList.dataset.allItemsLoaded = 'true';
+                const noMoreItemsMsg = document.createElement('li');
+                noMoreItemsMsg.textContent = 'No more items';
+                noMoreItemsMsg.classList.add('no-more-items-message');
+                itemList.appendChild(noMoreItemsMsg);
+            }
+        } catch (error) {
+            console.error('Error loading more items:', error);
+            showToast('Error loading more items. Please try again later.', 'error');
+        } finally {
+            itemList.dataset.loading = 'false'; // Reset loading flag
+        }
+    }
 
     /**
      * Handles the click event on a feed item link to mark it as read.

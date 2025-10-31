@@ -13,6 +13,9 @@ from .models import db, Feed, FeedItem
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
+# Maximum number of items to keep per feed for cache eviction
+MAX_ITEMS_PER_FEED = 100
+
 # --- Helper Functions ---
 
 def parse_published_time(entry):
@@ -278,6 +281,34 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         db.session.rollback()
         logger.error(f"Generic error committing new items for feed {feed_db_obj.name}: {e}", exc_info=True)
         return 0 # Return 0 as no items were successfully committed in this case
+
+    # --- Cache Eviction Logic ---
+    # After adding new items, check if the total number of items exceeds the limit.
+    # If so, delete the oldest items to keep the total at the limit.
+    current_item_count = db.session.query(FeedItem).filter_by(feed_id=feed_db_obj.id).count()
+
+    if current_item_count > MAX_ITEMS_PER_FEED:
+        num_to_delete = current_item_count - MAX_ITEMS_PER_FEED
+        
+        # Use a subquery to find and delete the oldest items in a single operation.
+        # This is more efficient than fetching IDs into application memory.
+        oldest_item_ids_q = (
+            db.session.query(FeedItem.id)
+            .filter_by(feed_id=feed_db_obj.id)
+            .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
+            .limit(num_to_delete)
+        )
+
+        # The `delete()` method returns the number of rows deleted.
+        deleted_count = db.session.query(FeedItem).filter(FeedItem.id.in_(oldest_item_ids_q)).delete(synchronize_session=False)
+
+        if deleted_count > 0:
+            logger.info(f"Evicted {deleted_count} oldest items from feed '{feed_db_obj.name}' to enforce item limit.")
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Error committing eviction of old items for feed '{feed_db_obj.name}': {e}", exc_info=True)
 
     return committed_items_count
 

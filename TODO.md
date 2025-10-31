@@ -107,6 +107,10 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
   * [x] Updated frontend API configuration for production
   * [x] Fixed frontend error handling syntax and UX
 
+## Documentation & Process Improvements
+
+*   [x] Added code review cycle documentation for maintaining PR descriptions across review cycles
+
 ## Future Considerations
 
 *   [x] Import/Export OPML feed lists.

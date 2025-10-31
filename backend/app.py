@@ -99,6 +99,10 @@ allowed_origins_str = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:8
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',') if origin.strip()]
 CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 
+# Constants
+MAX_PAGINATION_LIMIT = 100
+DEFAULT_PAGINATION_LIMIT = 10
+
 # Test specific configuration
 # Check app.config first in case it's set by test runner, then env var
 if app.config.get('TESTING') or os.environ.get('TESTING') == 'true':
@@ -1092,6 +1096,36 @@ def update_feed(feed_id):
     except Exception as e:
         logger.error(f"Error during manual update for feed {feed.id}: {e}", exc_info=True)
         return jsonify({'error': f'Failed to update feed {feed.id}. An unexpected error occurred.'}), 500
+
+@app.route('/api/feeds/<int:feed_id>/items', methods=['GET'])
+def get_feed_items(feed_id):
+    """Returns a paginated list of items for a specific feed."""
+    # Ensure the feed exists, or return a 404 error
+    db.get_or_404(Feed, feed_id)
+
+    # Get offset and limit from the request's query string, with default values
+    try:
+        offset = int(request.args.get('offset', 0))
+        limit = int(request.args.get('limit', DEFAULT_PAGINATION_LIMIT))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Offset and limit parameters must be valid integers.'}), 400
+
+    # Validate and cap pagination parameters
+    if offset < 0:
+        return jsonify({'error': 'Offset cannot be negative.'}), 400
+    if limit <= 0:
+        return jsonify({'error': 'Limit must be positive.'}), 400
+    limit = min(limit, MAX_PAGINATION_LIMIT)
+
+    # Query the database for the items, ordered by date
+    items = FeedItem.query.filter_by(feed_id=feed_id)\
+        .order_by(FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc())\
+        .offset(offset)\
+        .limit(limit)\
+        .all()
+
+    # Return the items as a JSON response
+    return jsonify([item.to_dict() for item in items])
 
 # --- Application Initialization and Startup ---
 
