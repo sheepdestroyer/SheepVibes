@@ -35,7 +35,7 @@ usage() {
     echo "  --wait              Wait for comments to be available"
     echo "  --poll-interval SEC  Polling interval in seconds (default: 60)"
     echo ""
-    echo "When --wait is used and comments are found, they are saved to comments.json"
+    echo "When --wait is used and comments are found, they are saved to comments_<PR#>.json"
 }
 
 # Function to check if required tools are available
@@ -147,7 +147,7 @@ extract_google_comments() {
     [
         .[] | 
         select(
-            (.user.login | test("[Gg]oogle|[Cc]ode|[Aa]ssist|[Bb]ot")) or
+            (.user.login | test("gemini-code-assist")) or
             (.body | test("[Gg]oogle|[Cc]ode|[Aa]ssist"))
         ) |
         {
@@ -208,7 +208,7 @@ check_pr_review_status() {
         local state=$(echo "$reviews" | jq -r ".[$i].state")
         
         # Check for Google Code Assist patterns
-        if [[ "$reviewer" =~ [Gg]oogle|[Cc]ode|[Aa]ssist|[Bb]ot ]]; then
+        if [[ "$reviewer" =~ gemini-code-assist ]]; then
             google_assist_found=true
             echo -e "${GREEN}Found Google Code Assist review: ${state}${NC}"
         fi
@@ -220,7 +220,7 @@ check_pr_review_status() {
         local body=$(echo "$comments" | jq -r ".[$i].body")
         
         # Check for Google Code Assist patterns
-        if [[ "$commenter" =~ [Gg]oogle|[Cc]ode|[Aa]ssist|[Bb]ot ]] || \
+        if [[ "$commenter" =~ gemini-code-assist ]] || \
            [[ "$body" =~ [Gg]oogle|[Cc]ode|[Aa]ssist ]]; then
             google_comments=$((google_comments + 1))
         fi
@@ -245,7 +245,7 @@ check_pr_review_status() {
                 local commenter=$(echo "$comments" | jq -r ".[$i].user.login")
                 local body=$(echo "$comments" | jq -r ".[$i].body")
                 
-                if [[ "$commenter" =~ [Gg]oogle|[Cc]ode|[Aa]ssist|[Bb]ot ]] || \
+                if [[ "$commenter" =~ gemini-code-assist ]] || \
                    [[ "$body" =~ [Gg]oogle|[Cc]ode|[Aa]ssist ]]; then
                     google_comments=$((google_comments + 1))
                 fi
@@ -274,7 +274,7 @@ check_pr_review_status() {
     fi
 }
 
-# Function to update tracking file with simple locking
+# Function to update tracking file with simple locking and comment tracking
 update_tracking_file() {
     local branch_name="$1"
     local pr_number="$2"
@@ -309,16 +309,24 @@ update_tracking_file() {
 EOF
     fi
     
-    # Update tracking file
+    # Get existing branch data to preserve comments
+    local existing_comments="[]"
+    if jq -e ".branches[\"$branch_name\"].comments" "$TRACKING_FILE" > /dev/null 2>&1; then
+        existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
+    fi
+    
+    # Update tracking file with comment tracking support
     local temp_file=$(mktemp)
     if jq --arg branch "$branch_name" \
           --arg pr "$pr_number" \
           --arg status "$review_status" \
           --arg updated "$(date -Iseconds)" \
+          --argjson comments "$existing_comments" \
           '.branches[$branch] = {
             pr_number: ($pr | tonumber? // $pr),
             review_status: $status,
-            last_updated: $updated
+            last_updated: $updated,
+            comments: $comments
           } | .last_updated = $updated' \
           "$TRACKING_FILE" > "$temp_file"; then
         mv "$temp_file" "$TRACKING_FILE"

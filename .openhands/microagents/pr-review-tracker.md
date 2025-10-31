@@ -85,8 +85,8 @@ This bash script checks the current Google Code Assist review status for a branc
 
 - **Authentication issues**: Update remote URL with current GITHUB_TOKEN
 - **Branch conflicts**: Create new unique branch names
-- **No comments received**: After waiting 10 minutes total, proceed to close and reopen
-- **Maximum cycles reached**: Stop after 10 iterations and report completion
+- **No comments received**: After waiting the maximum poll time (1 hour), proceed with manual code review
+- **API rate limits**: Script implements automatic rate limit handling with exponential backoff
 
 ## Workflow
 
@@ -98,7 +98,7 @@ This bash script checks the current Google Code Assist review status for a branc
    - Create PR with `draft: false` (always ready to review)
    - Include clear title and description
    - Update tracking file with PR number
-   - Push changes to trigger initial review
+   - Push changes and manually trigger an initial review with a `/gemini review` comment
 
 ### 3. Review Cycle
    - Use `check-review-status.sh` to monitor Google Code Assist status
