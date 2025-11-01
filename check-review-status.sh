@@ -261,24 +261,34 @@ local reviews
         fi
     fi
     
-    # Extract and save comments if any are found
-    if [ $google_comments -gt 0 ]; then
-        local comments_file="comments_${pr_number}.json"
-        local extracted_count=$(extract_google_comments "$pr_number" "$comments_file")
-        if [ $extracted_count -gt 0 ]; then
-            echo -e "${GREEN}Google Code Assist has provided ${extracted_count} comment(s) - saved to ${comments_file}${NC}"
-            echo "Commented"
-        else
-             echo -e "${YELLOW}No new Google Code Assist comments found${NC}"
-             echo "Started"
-        fi
-    elif [ "$google_assist_found" = true ]; then
-        echo -e "${YELLOW}Google Code Assist has started review but no comments yet${NC}"
-        echo "Started"
+    # If the script hasn't exited by now, it means no "No remaining issues" comment was found.
+    # Determine the final status based on total Google Code Assist comments and review states.
+    
+    local final_review_status="None"
+    
+    if [ "$google_comments" -gt 0 ]; then
+        final_review_status="Commented"
+        echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}"
     else
-        echo -e "${YELLOW}No Google Code Assist activity detected${NC}"
-        echo "None"
+        # If no comments, check if there's any review (e.g., PENDING or APPROVED/CHANGES_REQUESTED without a body)
+        local google_review_state=$(echo "$reviews" | jq -r '[.[] | select(.user.login == "gemini-code-assist[bot]" and .state != "PENDING")] | .[0].state // ""')
+        if [ -n "$google_review_state" ]; then
+            # If a review state is found but no comments, it means it started but didn't leave a body.
+            final_review_status="Started"
+            echo -e "${YELLOW}Google Code Assist has started a review (state: ${google_review_state}) but no comments yet.${NC}"
+        else
+            # Also check for PENDING reviews
+            local pending_reviews=$(echo "$reviews" | jq '[.[] | select(.user.login == "gemini-code-assist[bot]" and .state == "PENDING")] | length')
+            if [ "$pending_reviews" -gt 0 ]; then
+                 final_review_status="Started"
+                 echo -e "${YELLOW}Google Code Assist has a pending review.${NC}"
+            else
+                final_review_status="None"
+                echo -e "${YELLOW}No Google Code Assist activity detected.${NC}"
+            fi
+        fi
     fi
+    echo "$final_review_status"
 }
 
 # Function to update tracking file with atomic flock locking and comment tracking
