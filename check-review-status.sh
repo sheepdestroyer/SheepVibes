@@ -186,9 +186,16 @@ check_pr_review_status() {
     echo -e "${BLUE}PR Title: ${pr_title}${NC}"
     
     # Get reviews for this PR
-    local reviews=$(github_api_request "/pulls/${pr_number}/reviews")
-    local review_count=$(echo "$reviews" | jq length)
-    
+local reviews
+    local review_count
+    for i in {1..3}; do
+        reviews=$(github_api_request "/pulls/${pr_number}/reviews")
+        review_count=$(echo "$reviews" | jq length)
+        if [ "$review_count" -gt 5 ]; then
+            break
+        fi
+        sleep 10
+    done
     echo -e "${BLUE}Found ${review_count} reviews${NC}"
     
     # Check for Google Code Assist activity
