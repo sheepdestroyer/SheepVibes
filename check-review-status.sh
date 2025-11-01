@@ -187,16 +187,8 @@ check_pr_review_status() {
     echo -e "${BLUE}PR Title: ${pr_title}${NC}"
     
     # Get reviews for this PR
-local reviews
-    local review_count
-    for i in {1..3}; do
-        reviews=$(github_api_request "/pulls/${pr_number}/reviews")
-        review_count=$(echo "$reviews" | jq length)
-        if [ "$review_count" -gt 5 ]; then
-            break
-        fi
-        sleep 10
-    done
+    local reviews=$(github_api_request "/pulls/${pr_number}/reviews")
+    local review_count=$(echo "$reviews" | jq length)
     echo -e "${BLUE}Found ${review_count} reviews${NC}"
     
     # Check for Google Code Assist activity
@@ -209,15 +201,20 @@ local reviews
     if [ "$google_comments" -gt 0 ]; then
         google_assist_found=true
         # Process the comments to check for "No remaining issues."
-        jq -c '.[]' "$comments_file" | while read -r comment; do
+        local no_issues_found=false
+        while IFS= read -r comment; do
             body=$(echo "$comment" | jq -r '.body')
-            echo "Processing comment: $body"
             if echo "$body" | grep -q "No remaining issues"; then
                 echo "No remaining issues."
-                echo "None" # Indicate no comments for the tracking file
-                exit 0
+                no_issues_found=true
+                break
             fi
-        done
+        done < <(jq -c '.[]' "$comments_file")
+        
+        if [ "$no_issues_found" = true ]; then
+            echo "None" # Indicate no comments for the tracking file
+            return 0
+        fi
     fi
     
     # If waiting for comments and none found, poll until comments are available
@@ -225,7 +222,7 @@ local reviews
         echo -e "${YELLOW}Waiting for Google Code Assist comments (polling every ${poll_interval}s)...${NC}"
         local poll_count=0
         local current_poll_interval=${poll_interval}
-        local max_polls=5 # Maximum 5 polls (initial 2 minutes, increasing up to 5 minutes)
+        local max_polls=5 # Maximum 5 polls (initial 2 minutes, increasing up to 5 minutes total)
         
         while [ $google_comments -eq 0 ] && [ $poll_count -lt $max_polls ]; do
             echo -e "${BLUE}Sleeping for ${current_poll_interval} seconds...${NC}"
@@ -244,15 +241,21 @@ local reviews
             echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}"
             
             if [ "$google_comments" -gt 0 ]; then
-                jq -c '.[]' "$comments_file" | while read -r comment; do
+                local no_issues_found=false
+                while IFS= read -r comment; do
                     body=$(echo "$comment" | jq -r '.body')
                     echo "Processing comment: $body"
                     if echo "$body" | grep -q "No remaining issues"; then
                         echo "No remaining issues."
-                        echo "None" # Indicate no comments for the tracking file
-                        exit 0
+                        no_issues_found=true
+                        break
                     fi
-                done
+                done < <(jq -c '.[]' "$comments_file")
+                
+                if [ "$no_issues_found" = true ]; then
+                    echo "None" # Indicate no comments for the tracking file
+                    return 0
+                fi
             fi
         done
         
@@ -403,7 +406,7 @@ main() {
     fi
     
     # Check review status
-    local review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" "$poll_interval")
+    local review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" "$poll_interval" "$max_polls")
     
     # Update tracking file if branch name was provided
     if [ -n "$branch_name" ]; then
@@ -411,7 +414,14 @@ main() {
         if [ "$review_status" = "Commented" ]; then
             comments_file="comments_${pr_number}.json"
         fi
-        update_tracking_file "$branch_name" "$pr_number" "$review_status" "$comments_file"
+        
+        # Clean the status by removing color codes and extracting just the status
+        local clean_status=$(echo "$review_status" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(None|Started|Commented)$" | head -1)
+        if [ -z "$clean_status" ]; then
+            clean_status="$review_status"
+        fi
+        
+        update_tracking_file "$branch_name" "$pr_number" "$clean_status" "$comments_file"
     fi
     
     echo "$review_status"

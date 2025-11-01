@@ -82,7 +82,7 @@ This bash script checks the current Google Code Assist review status for a branc
 
 - **Authentication issues**: Update remote URL with current GITHUB_TOKEN
 - **Branch conflicts**: Create new unique branch names
-- **No comments received**: After waiting the maximum poll time (1 hour), proceed with manual code review
+- **No comments received**: After waiting the maximum poll time (5 polls, up to 5 minutes total), proceed with manual code review
 - **API rate limits**: Script implements automatic rate limit handling with exponential backoff
 
 ### trigger-review.sh
@@ -109,7 +109,7 @@ This bash script posts a `/gemini review` comment to a PR to trigger a new revie
     - Address all "todo" comments and update their status to "addressed" in the tracking file.
     - Push your changes and trigger a new review with `./trigger-review.sh [pr-number]`.
 
-4.  **Cycle End**: The review cycle ends when `check-review-status.sh` exits with code 2, which means that Google Code Assist has no remaining issues.
+4.  **Cycle End**: The review cycle ends when `check-review-status.sh` returns "None" status, which means that Google Code Assist has no remaining issues.
 
 5.  **Completion**: When all comments are addressed and the PR is approved, merge the PR.
 ## Usage Examples
