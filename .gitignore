@@ -51,4 +51,5 @@ Thumbs.db
 .aider*
 
 .openhands/sessions/
+.openhands/settings.json
 
