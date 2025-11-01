@@ -85,17 +85,29 @@ This bash script checks the current Google Code Assist review status for a branc
 - **No comments received**: After waiting the maximum poll time (1 hour), proceed with manual code review
 - **API rate limits**: Script implements automatic rate limit handling with exponential backoff
 
+### trigger-review.sh
+
+This bash script posts a `/gemini review` comment to a PR to trigger a new review:
+
+```bash
+#!/bin/bash
+# Usage: ./trigger-review.sh [pr-number]
+
+# Example:
+#   ./trigger-review.sh 123
+```
+
 ## Workflow
 
 1.  **Branch Setup**: Create a new branch with a meaningful name.
 
-2.  **PR Creation**: Create a PR and mark it as ready for review. Push your changes and trigger an initial review with a `/gemini review` comment.
+2.  **PR Creation**: Create a PR and mark it as ready for review. Push your changes and trigger an initial review with `./trigger-review.sh [pr-number]`
 
 3.  **Review Cycle**:
     - Use `check-review-status.sh` to monitor the review status.
     - When comments are received, they are added to the `pr-review-tracker.json` file with a "todo" status.
     - Address all "todo" comments and update their status to "addressed" in the tracking file.
-    - Push your changes and trigger a new review with another `/gemini review` comment.
+    - Push your changes and trigger a new review with `./trigger-review.sh [pr-number]`.
 
 4.  **Cycle End**: The review cycle ends when `check-review-status.sh` exits with code 2, which means that Google Code Assist has no remaining issues.
 
