@@ -142,29 +142,25 @@ extract_google_comments() {
     local pr_number="$1"
     local comments_file="$2"
     
-    # Get all timeline events for this PR
-    local timeline_events=$(github_api_request "/issues/${pr_number}/timeline")
+    # Get all reviews for this PR
+    local reviews=$(github_api_request "/pulls/${pr_number}/reviews")
     
     # Filter for comments made by Google Code Assist and extract relevant info
-    echo "$timeline_events" | jq '
+    echo "$reviews" | jq '
     [
         .[] | 
         select(
-            .actor.login == "gemini-code-assist[bot]" and .body
-        ) |
-        {
-            id: .id,
-            user: .actor.login,
-            body: .body,
-            created_at: .created_at,
-            html_url: .html_url,
-            path: (.path // ""),
-            position: (.position // ""),
-            line: (.line // "")
-        }
-    ]' > "$comments_file"
+            .user.login == "gemini-code-assist[bot]" and .body
+        )
+    ] | sort_by(.submitted_at) | reverse | .[0] | {
+        id: .id,
+        user: .user.login,
+        body: .body,
+        submitted_at: .submitted_at,
+        html_url: .html_url
+    }' > "$comments_file"
     
-    local comment_count=$(jq length "$comments_file")
+    local comment_count=$(jq 'if . == null then 0 else 1 end' "$comments_file")
     echo "$comment_count"
 }
 
@@ -193,20 +189,15 @@ check_pr_review_status() {
     local reviews=$(github_api_request "/pulls/${pr_number}/reviews")
     local review_count=$(echo "$reviews" | jq length)
     
-    # Get comments for this PR
-    local comments=$(github_api_request "/issues/${pr_number}/comments")
-    local comment_count=$(echo "$comments" | jq length)
-    
-    echo -e "${BLUE}Found ${review_count} reviews and ${comment_count} comments${NC}"
+    echo -e "${BLUE}Found ${review_count} reviews${NC}"
     
     # Check for Google Code Assist activity
-    # Google Code Assist typically appears as a user or bot account
     local google_assist_found=false
     local google_comments=0
     
     # Check reviews for Google Code Assist
     local assist_reviews
-    assist_reviews=$(echo "$reviews" | jq -r '.[] | select(.user.login == "gemini-code-assist[bot]") | .state')
+    assist_reviews=$(echo "$reviews" | jq -r '[.[] | select(.user.login == "gemini-code-assist[bot]")] | .[0] | .state')
     if [ -n "$assist_reviews" ]; then
         google_assist_found=true
         echo "$assist_reviews" | while read -r state; do
@@ -215,18 +206,15 @@ check_pr_review_status() {
     fi
     
     # Check comments for Google Code Assist using single jq command
-    google_comments=0
-    if [ ! -z "$comments" ] && [ "$comments" != "[]" ]; then
-        google_comments=$(echo "$comments" | jq '[.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))] | length')
-        if [ "$google_comments" -gt 0 ]; then
-            echo "$comments" | jq -c '.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))' | while read -r comment; do
-                body=$(echo "$comment" | jq -r '.body')
-                if echo "$body" | grep -q "No remaining issues"; then
-                    echo "Gemini Code Assist has no remaining issues."
-                    exit 2
-                fi
-            done
-        fi
+    google_comments=$(echo "$reviews" | jq '[.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))] | length')
+    if [ "$google_comments" -gt 0 ]; then
+        echo "$reviews" | jq -c '.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))' | while read -r comment; do
+            body=$(echo "$comment" | jq -r '.body')
+            if echo "$body" | grep -q "No remaining issues"; then
+                echo "Gemini Code Assist has no remaining issues."
+                exit 2
+            fi
+        done
     fi
     
     # If waiting for comments and none found, poll until comments are available
@@ -240,15 +228,19 @@ check_pr_review_status() {
             poll_count=$((poll_count + 1))
             
             # Re-check for comments
-            comments=$(github_api_request "/issues/${pr_number}/comments")
-            comment_count=$(echo "$comments" | jq length)
-            google_comments=$(echo "$comments" | jq '[.[] | select(.user.login | test("gemini-code-assist") or (.body | test("Google Code Assist")))] | length')
+            reviews=$(github_api_request "/pulls/${pr_number}/reviews")
+            review_count=$(echo "$reviews" | jq length)
+            google_comments=$(echo "$reviews" | jq '[.[] | select(.user.login | test("gemini-code-assist") or (.body | test("Google Code Assist")))] | length')
             
             echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}"
         done
         
         if [ $google_comments -eq 0 ]; then
-            echo -e "${YELLOW}No Google Code Assist comments received after ${max_polls} polls${NC}"
+            echo -e "${YELLOW}No Google Code Assist commentsMATRIX Labs, a creator of open-source artificial intelligence (AI) and machine learning (ML) tools, has announced the launch of its new open-source platform, MATRIX VISION. The platform is designed to help developers build computer vision applications for the Internet of Things (IoT) and other devices.
+
+MATRIX VISION is a free and open-source platform that provides developers with a complete set of tools for building and deploying computer vision applications. The platform includes a graphical user interface (GUI) for creating and training models, a set of pre-trained models for common computer vision tasks, and a software development kit (SDK) for deploying models to devices.
+
+received after ${max_polls} polls${NC}"
         fi
     fi
     
@@ -256,8 +248,13 @@ check_pr_review_status() {
     if [ $google_comments -gt 0 ]; then
         local comments_file="comments_${pr_number}.json"
         local extracted_count=$(extract_google_comments "$pr_number" "$comments_file")
-        echo -e "${GREEN}Google Code Assist has provided ${extracted_count} comment(s) - saved to ${comments_file}${NC}"
-        echo "Commented"
+        if [ $extracted_count -gt 0 ]; then
+            echo -e "${GREEN}Google Code Assist has provided ${extracted_count} comment(s) - saved to ${comments_file}${NC}"
+            echo "Commented"
+        else
+             echo -e "${YELLOW}No new Google Code Assist comments found${NC}"
+             echo "Started"
+        fi
     elif [ "$google_assist_found" = true ]; then
         echo -e "${YELLOW}Google Code Assist has started review but no comments yet${NC}"
         echo "Started"

@@ -87,32 +87,19 @@ This bash script checks the current Google Code Assist review status for a branc
 
 ## Workflow
 
-### 1. Branch Setup
-   - Create a new branch with meaningful name
-   - Add branch entry to tracking file with initial state
+1.  **Branch Setup**: Create a new branch with a meaningful name.
 
-### 2. PR Creation
-   - Create PR with `draft: false` (always ready to review)
-   - Include clear title and description
-   - Update tracking file with PR number
-   - Push changes and manually trigger an initial review with a `/gemini review` comment
+2.  **PR Creation**: Create a PR and mark it as ready for review. Push your changes and trigger an initial review with a `/gemini review` comment.
 
-### 3. Review Cycle
-   - Use `check-review-status.sh` to monitor Google Code Assist status
-   - Update tracking file with current review status
-   - When comments are received, add them to tracking file with "todo" status
-   - Address all "todo" comments
-   - Update comment status to "addressed" when fixed
-   - Push changes and manually trigger Google Code Assist using `/gemini review` comment for re-review
+3.  **Review Cycle**:
+    - Use `check-review-status.sh` to monitor the review status.
+    - When comments are received, they are added to the `pr-review-tracker.json` file with a "todo" status.
+    - Address all "todo" comments and update their status to "addressed" in the tracking file.
+    - Push your changes and trigger a new review with another `/gemini review` comment.
 
-### 4. Completion
-   - When all comments are addressed and PR is approved
-   - Merge the PR
+4.  **Cycle End**: The review cycle ends when `check-review-status.sh` exits with code 2, which means that Google Code Assist has no remaining issues.
 
-
-### 5. Cycle End
-
-   - The review cycle ends when `check-review-status.sh` exits with code 2, which indicates that Google Code Assist has no remaining issues.
+5.  **Completion**: When all comments are addressed and the PR is approved, merge the PR.
 ## Usage Examples
 
 ### Creating a New Feature Branch

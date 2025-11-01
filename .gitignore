@@ -49,3 +49,6 @@ backend/venv/
 .DS_Store
 Thumbs.db
 .aider*
+
+.openhands/sessions/
+
