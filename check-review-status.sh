@@ -137,29 +137,24 @@ get_pr_from_branch() {
     fi
 }
 
-# Function to extract and save Google Code Assist comments
+# Function to extract and save Google Code Assist comments from timeline
 extract_google_comments() {
     local pr_number="$1"
     local comments_file="$2"
     
-    # Get all comments for this PR
-    local comments=$(github_api_request "/issues/${pr_number}/comments")
-    local review_comments=$(github_api_request "/pulls/${pr_number}/comments")
+    # Get all timeline events for this PR
+    local timeline_events=$(github_api_request "/issues/${pr_number}/timeline")
     
-    # Combine and filter for Google Code Assist comments
-    local all_comments=$(echo "$comments" "$review_comments" | jq -s 'add')
-    
-    # Filter for Google Code Assist comments and extract relevant info
-    echo "$all_comments" | jq '
+    # Filter for comments made by Google Code Assist and extract relevant info
+    echo "$timeline_events" | jq '
     [
         .[] | 
         select(
-            (.user.login | test("gemini-code-assist")) or
-            (.body | test("Google Code Assist"))
+            .actor.login == "gemini-code-assist[bot]" and .body
         ) |
         {
             id: .id,
-            user: .user.login,
+            user: .actor.login,
             body: .body,
             created_at: .created_at,
             html_url: .html_url,
@@ -210,19 +205,17 @@ check_pr_review_status() {
     local google_comments=0
     
     # Check reviews for Google Code Assist
-    for i in $(seq 0 $((review_count - 1))); do
-        local reviewer=$(echo "$reviews" | jq -r ".[$i].user.login")
-        local state=$(echo "$reviews" | jq -r ".[$i].state")
-        
-        # Check for Google Code Assist patterns
-        if [[ "$reviewer" =~ gemini-code-assist ]]; then
-            google_assist_found=true
+    local assist_reviews
+    assist_reviews=$(echo "$reviews" | jq -r '.[] | select(.user.login == "gemini-code-assist[bot]") | .state')
+    if [ -n "$assist_reviews" ]; then
+        google_assist_found=true
+        echo "$assist_reviews" | while read -r state; do
             echo -e "${GREEN}Found Google Code Assist review: ${state}${NC}"
-        fi
-    done
+        done
+    fi
     
     # Check comments for Google Code Assist using single jq command
-    google_comments=$(echo "$comments" | jq '[.[] | select(.user.login | test("gemini-code-assist") or (.body | test("Google Code Assist")))] | length')
+    google_comments=$(echo "$comments" | jq '[.[] | select(.user.login == "gemini-code-assist[bot]")] | length')
     
     # If waiting for comments and none found, poll until comments are available
     if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
@@ -376,9 +369,9 @@ main() {
         pr_number=$(get_pr_from_branch "$branch_name")
         
         if [ -z "$pr_number" ]; then
-            echo -e "${RED}No open PR found for branch: ${branch_name}${NC}"
+            echo -e "${RED}No open PR found for branch: ${branch_name}${NC}" >&2
             echo "None"
-            exit 1
+            exit 0
         fi
     fi
     
