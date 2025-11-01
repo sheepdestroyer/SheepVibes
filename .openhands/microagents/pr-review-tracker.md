@@ -156,7 +156,7 @@ git push origin feat/new-feature
 
 1. **Manual Trigger Required**: You must manually comment `/gemini review` in the PR after pushing changes
 2. **API Rate Limits**: The script implements polling with 60-second intervals to avoid hitting GitHub API limits
-3. **Concurrent Access**: Avoid running multiple instances of the script on the same branch simultaneously
+3. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
 4. **Fallback Strategy**: If Google Code Assist doesn't respond within 1 hour, proceed with manual code review
 5. **Error Recovery**: If the tracking file becomes corrupted, delete it and the script will recreate it
 

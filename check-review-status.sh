@@ -13,8 +13,15 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_OWNER="sheepdestroyer"
-REPO_NAME="SheepVibes"
+REPO_SLUG=$(git remote get-url origin 2>/dev/null | sed -e 's/.*github.com[:\/]//' -e 's/\.git$//')
+if [ -n "$REPO_SLUG" ]; then
+    REPO_OWNER=$(echo "$REPO_SLUG" | cut -d'/' -f1)
+    REPO_NAME=$(echo "$REPO_SLUG" | cut -d'/' -f2)
+else
+    # Fallback to hardcoded values if git remote is not available
+    REPO_OWNER="sheepdestroyer"
+    REPO_NAME="SheepVibes"
+fi
 TRACKING_FILE="pr-review-tracker.json"
 GITHUB_API_BASE="https://api.github.com"
 
@@ -61,12 +68,13 @@ github_api_request() {
     while [ $retry_count -lt $max_retries ]; do
         local response
         local http_code
+        local headers_file=$(mktemp)
         
         if [ -z "$GITHUB_TOKEN" ]; then
             echo -e "${YELLOW}Warning: GITHUB_TOKEN not set. Using unauthenticated requests (rate limited).${NC}" >&2
-            response=$(curl -s -w "\n%{http_code}" -H "Accept: application/vnd.github.v3+json" "$url")
+            response=$(curl -s -w "\n%{http_code}" -D "$headers_file" -H "Accept: application/vnd.github.v3+json" "$url")
         else
-            response=$(curl -s -w "\n%{http_code}" -H "Authorization: token $GITHUB_TOKEN" \
+            response=$(curl -s -w "\n%{http_code}" -D "$headers_file" -H "Authorization: token $GITHUB_TOKEN" \
                  -H "Accept: application/vnd.github.v3+json" \
                  "$url")
         fi
@@ -75,14 +83,10 @@ github_api_request() {
         local response_body=$(echo "$response" | head -n -1)
         
         # Check for rate limiting (HTTP 429 or 403 with rate limit message)
-        if [ "$http_code" = "429" ] || [ "$http_code" = "403" ]; then
+        if [ "$http_code" = "429" ] || { [ "$http_code" = "403" ] && echo "$response_body" | grep -q "API rate limit exceeded"; }; then
             local reset_time
-            if [ -n "$GITHUB_TOKEN" ]; then
-                reset_time=$(curl -s -I -H "Authorization: token $GITHUB_TOKEN" \
-                    "$url" | grep -i "x-ratelimit-reset" | cut -d' ' -f2 | tr -d '\r')
-            else
-                reset_time=$(curl -s -I "$url" | grep -i "x-ratelimit-reset" | cut -d' ' -f2 | tr -d '\r')
-            fi
+            reset_time=$(grep -i "x-ratelimit-reset" "$headers_file" | cut -d' ' -f2 | tr -d '\r')
+            rm -f "$headers_file"
             
             if [ -n "$reset_time" ]; then
                 local current_time=$(date +%s)
@@ -95,6 +99,9 @@ github_api_request() {
                     continue
                 fi
             fi
+        else
+            # Clean up headers file if not rate limited
+            rm -f "$headers_file"
         fi
         
         # Check for successful response
@@ -148,7 +155,7 @@ extract_google_comments() {
         .[] | 
         select(
             (.user.login | test("gemini-code-assist")) or
-            (.body | test("[Gg]oogle|[Cc]ode|[Aa]ssist"))
+            (.body | test("Google Code Assist"))
         ) |
         {
             id: .id,
@@ -214,17 +221,8 @@ check_pr_review_status() {
         fi
     done
     
-    # Check comments for Google Code Assist
-    for i in $(seq 0 $((comment_count - 1))); do
-        local commenter=$(echo "$comments" | jq -r ".[$i].user.login")
-        local body=$(echo "$comments" | jq -r ".[$i].body")
-        
-        # Check for Google Code Assist patterns
-        if [[ "$commenter" =~ gemini-code-assist ]] || \
-           [[ "$body" =~ [Gg]oogle|[Cc]ode|[Aa]ssist ]]; then
-            google_comments=$((google_comments + 1))
-        fi
-    done
+    # Check comments for Google Code Assist using single jq command
+    google_comments=$(echo "$comments" | jq '[.[] | select(.user.login | test("gemini-code-assist") or (.body | test("Google Code Assist")))] | length')
     
     # If waiting for comments and none found, poll until comments are available
     if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
@@ -239,17 +237,7 @@ check_pr_review_status() {
             # Re-check for comments
             comments=$(github_api_request "/issues/${pr_number}/comments")
             comment_count=$(echo "$comments" | jq length)
-            google_comments=0
-            
-            for i in $(seq 0 $((comment_count - 1))); do
-                local commenter=$(echo "$comments" | jq -r ".[$i].user.login")
-                local body=$(echo "$comments" | jq -r ".[$i].body")
-                
-                if [[ "$commenter" =~ gemini-code-assist ]] || \
-                   [[ "$body" =~ [Gg]oogle|[Cc]ode|[Aa]ssist ]]; then
-                    google_comments=$((google_comments + 1))
-                fi
-            done
+            google_comments=$(echo "$comments" | jq '[.[] | select(.user.login | test("gemini-code-assist") or (.body | test("Google Code Assist")))] | length')
             
             echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}"
         done
