@@ -215,7 +215,10 @@ check_pr_review_status() {
     fi
     
     # Check comments for Google Code Assist using single jq command
-    google_comments=$(echo "$comments" | jq '[.[] | select(.user.login == "gemini-code-assist[bot]")] | length')
+    google_comments=0
+    if [ ! -z "$comments" ] && [ "$comments" != "[]" ]; then
+        google_comments=$(echo "$comments" | jq '[.[] | select(.user.login == "gemini-code-assist[bot]")] | length')
+    fi
     
     # If waiting for comments and none found, poll until comments are available
     if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
@@ -230,7 +233,10 @@ check_pr_review_status() {
             # Re-check for comments
             comments=$(github_api_request "/issues/${pr_number}/comments")
             comment_count=$(echo "$comments" | jq length)
-            google_comments=$(echo "$comments" | jq '[.[] | select(.user.login | test("gemini-code-assist") or (.body | test("Google Code Assist")))] | length')
+            google_comments=0
+            if [ ! -z "$comments" ] && [ "$comments" != "[]" ]; then
+                google_comments=$(echo "$comments" | jq '[.[] | select(.user.login == "gemini-code-assist[bot]")] | length')
+            fi
             
             echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}"
         done
