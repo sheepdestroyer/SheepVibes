@@ -53,3 +53,8 @@ Thumbs.db
 .openhands/sessions/
 .openhands/settings.json
 
+comments_*.json
+final-test-*.txt
+pr-review-tracker.json
+
+

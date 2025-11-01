@@ -154,10 +154,10 @@ git push origin feat/new-feature
 
 ## Known Limitations and Workarounds
 
-1. **Manual Trigger Required**: You must manually comment `/gemini review` in the PR after pushing changes
-2. **API Rate Limits**: The script implements polling with 60-second intervals to avoid hitting GitHub API limits
+1. **Automated Trigger**: Use `trigger-review.sh` to automatically post `/gemini review` comments to the PR after pushing changes.
+2. **API Rate Limits**: The script implements polling with increasing intervals (2-5 minutes) to avoid hitting GitHub API limits.
 3. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
-4. **Fallback Strategy**: If Google Code Assist doesn't respond within 1 hour, proceed with manual code review
+4. **Fallback Strategy**: If Google Code Assist doesn't respond after 5 polls (max 5 minutes), proceed with manual code review.
 5. **Error Recovery**: If the tracking file becomes corrupted, delete it and the script will recreate it
 
 ## Integration with Existing Workflows
