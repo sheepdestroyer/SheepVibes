@@ -13,14 +13,20 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_SLUG=$(git remote get-url origin 2>/dev/null | sed -e 's/.*github.com[:\/]//' -e 's/\.git$//')
-if [ -n "$REPO_SLUG" ]; then
-    REPO_OWNER=$(echo "$REPO_SLUG" | cut -d'/' -f1)
-    REPO_NAME=$(echo "$REPO_SLUG" | cut -d'/' -f2)
+# Use environment variables if provided, otherwise detect from git remote
+if [ -n "${GITHUB_REPO_OWNER:-}" ] && [ -n "${GITHUB_REPO_NAME:-}" ]; then
+    REPO_OWNER="$GITHUB_REPO_OWNER"
+    REPO_NAME="$GITHUB_REPO_NAME"
 else
-    # Fallback to hardcoded values if git remote is not available
-    REPO_OWNER="sheepdestroyer"
-    REPO_NAME="SheepVibes"
+    REPO_SLUG=$(git remote get-url origin 2>/dev/null | sed -e 's/.*github.com[:\/]//' -e 's/\.git$//')
+    if [ -n "$REPO_SLUG" ]; then
+        REPO_OWNER=$(echo "$REPO_SLUG" | cut -d'/' -f1)
+        REPO_NAME=$(echo "$REPO_SLUG" | cut -d'/' -f2)
+    else
+        # Fallback to hardcoded values if git remote is not available
+        REPO_OWNER="sheepdestroyer"
+        REPO_NAME="SheepVibes"
+    fi
 fi
 TRACKING_FILE="pr-review-tracker.json"
 GITHUB_API_BASE="https://api.github.com"
@@ -173,7 +179,7 @@ check_pr_review_status() {
     
     echo -e "${BLUE}Checking review status for PR #${pr_number}...${NC}"
     
-    # Get PR details
+    # Get PR details and reviews in a single API call to reduce redundancy
     local pr_details=$(github_api_request "/pulls/${pr_number}")
     local pr_title=$(echo "$pr_details" | jq -r '.title')
     local pr_state=$(echo "$pr_details" | jq -r '.state')
@@ -186,7 +192,7 @@ check_pr_review_status() {
     
     echo -e "${BLUE}PR Title: ${pr_title}${NC}"
     
-    # Get reviews for this PR
+    # Get reviews for this PR (separate API call needed for full review data)
     local reviews=$(github_api_request "/pulls/${pr_number}/reviews")
     local review_count=$(echo "$reviews" | jq length)
     echo -e "${BLUE}Found ${review_count} reviews${NC}"
