@@ -320,7 +320,7 @@ EOF
         local new_comments="[]"
         if [ -n "$comments_file" ] && [ -f "$comments_file" ]; then
             # Map new comments to the required structure with "todo" status
-            new_comments=$(jq '[.[] | {id: .id, status: "todo", body: .body, created_at: .created_at}]' "$comments_file")
+            new_comments=$(jq '[.[] | {id: .id, status: "todo", body: .body, created_at: .submitted_at}]' "$comments_file")
         fi
 
         # Combine existing and new comments, avoiding duplicates by id
@@ -410,15 +410,15 @@ main() {
     
     # Update tracking file if branch name was provided
     if [ -n "$branch_name" ]; then
-        local comments_file=""
-        if [ "$review_status" = "Commented" ]; then
-            comments_file="comments_${pr_number}.json"
-        fi
-        
         # Clean the status by removing color codes and extracting just the status
         local clean_status=$(echo "$review_status" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(None|Started|Commented)$" | head -1)
         if [ -z "$clean_status" ]; then
             clean_status="$review_status"
+        fi
+        
+        local comments_file=""
+        if [ "$clean_status" = "Commented" ]; then
+            comments_file="comments_${pr_number}.json"
         fi
         
         update_tracking_file "$branch_name" "$pr_number" "$clean_status" "$comments_file"
