@@ -109,6 +109,10 @@ This bash script checks the current Google Code Assist review status for a branc
    - When all comments are addressed and PR is approved
    - Merge the PR
 
+
+### 5. Cycle End
+
+   - The review cycle ends when `check-review-status.sh` exits with code 2, which indicates that Google Code Assist has no remaining issues.
 ## Usage Examples
 
 ### Creating a New Feature Branch

@@ -215,7 +215,19 @@ check_pr_review_status() {
     fi
     
     # Check comments for Google Code Assist using single jq command
-    google_comments=$(echo "$comments" | jq '[.[] | select(.user.login == "gemini-code-assist[bot]")] | length')
+    google_comments=0
+    if [ ! -z "$comments" ] && [ "$comments" != "[]" ]; then
+        google_comments=$(echo "$comments" | jq '[.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))] | length')
+        if [ "$google_comments" -gt 0 ]; then
+            echo "$comments" | jq -c '.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))' | while read -r comment; do
+                body=$(echo "$comment" | jq -r '.body')
+                if echo "$body" | grep -q "No remaining issues"; then
+                    echo "Gemini Code Assist has no remaining issues."
+                    exit 2
+                fi
+            done
+        fi
+    fi
     
     # If waiting for comments and none found, poll until comments are available
     if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
