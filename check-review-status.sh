@@ -262,70 +262,70 @@ check_pr_review_status() {
     fi
 }
 
-# Function to update tracking file with simple locking and comment tracking
+# Function to update tracking file with atomic flock locking and comment tracking
 update_tracking_file() {
     local branch_name="$1"
     local pr_number="$2"
     local review_status="$3"
-    
-    # Simple file locking using a lock file
+    local comments_file="$4"
     local lock_file="${TRACKING_FILE}.lock"
     local lock_timeout=30
-    local lock_attempt=0
-    
-    # Wait for lock with timeout
-    while [ -f "$lock_file" ] && [ $lock_attempt -lt $lock_timeout ]; do
-        sleep 1
-        lock_attempt=$((lock_attempt + 1))
-    done
-    
-    if [ -f "$lock_file" ]; then
-        echo -e "${YELLOW}Warning: Could not acquire lock for tracking file after ${lock_timeout} seconds${NC}"
-        return 1
-    fi
-    
-    # Create lock file
-    touch "$lock_file"
-    
-    if [ ! -f "$TRACKING_FILE" ]; then
-        # Create initial tracking file
-        cat > "$TRACKING_FILE" << EOF
+
+    (
+        # Atomically acquire an exclusive lock with a timeout.
+        if ! flock -x -w "$lock_timeout" 200; then
+            echo -e "${YELLOW}Warning: Could not acquire lock for tracking file after ${lock_timeout} seconds${NC}" >&2
+            exit 1
+        fi
+
+        if [ ! -f "$TRACKING_FILE" ]; then
+            # Create initial tracking file
+            cat > "$TRACKING_FILE" << EOF
 {
   "branches": {},
   "last_updated": "$(date -Iseconds)"
 }
 EOF
-    fi
-    
-    # Get existing branch data to preserve comments
-    local existing_comments="[]"
-    if jq -e ".branches[\"$branch_name\"].comments" "$TRACKING_FILE" > /dev/null 2>&1; then
-        existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
-    fi
-    
-    # Update tracking file with comment tracking support
-    local temp_file=$(mktemp)
-    if jq --arg branch "$branch_name" \
-          --arg pr "$pr_number" \
-          --arg status "$review_status" \
-          --arg updated "$(date -Iseconds)" \
-          --argjson comments "$existing_comments" \
-          '.branches[$branch] = {
-            pr_number: ($pr | tonumber? // $pr),
-            review_status: $status,
-            last_updated: $updated,
-            comments: $comments
-          } | .last_updated = $updated' \
-          "$TRACKING_FILE" > "$temp_file"; then
-        mv "$temp_file" "$TRACKING_FILE"
-        echo -e "${GREEN}Updated tracking file: $TRACKING_FILE${NC}"
-    else
-        echo -e "${RED}Error: Failed to update tracking file${NC}"
-        rm -f "$temp_file"
-    fi
-    
-    # Remove lock file
-    rm -f "$lock_file"
+        fi
+
+        # Get existing branch data to preserve comments
+        local existing_comments="[]"
+        if jq -e ".branches[\"$branch_name\"].comments" "$TRACKING_FILE" > /dev/null 2>&1; then
+            existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
+        fi
+
+        # If new comments are available, prepare them for insertion
+        local new_comments="[]"
+        if [ -n "$comments_file" ] && [ -f "$comments_file" ]; then
+            # Map new comments to the required structure with "todo" status
+            new_comments=$(jq '[.[] | {id: .id, status: "todo", body: .body, created_at: .created_at}]' "$comments_file")
+        fi
+
+        # Combine existing and new comments, avoiding duplicates by id
+        local all_comments=$(jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments"))
+
+        # Update tracking file
+        local temp_file=$(mktemp)
+        if jq --arg branch "$branch_name" \
+              --arg pr "$pr_number" \
+              --arg status "$review_status" \
+              --arg updated "$(date -Iseconds)" \
+              --argjson comments "$all_comments" \
+              '.branches[$branch] = {
+                pr_number: ($pr | tonumber? // $pr),
+                review_status: $status,
+                last_updated: $updated,
+                comments: $comments
+              } | .last_updated = $updated' \
+              "$TRACKING_FILE" > "$temp_file"; then
+            mv "$temp_file" "$TRACKING_FILE"
+            echo -e "${GREEN}Updated tracking file: $TRACKING_FILE${NC}"
+        else
+            echo -e "${RED}Error: Failed to update tracking file${NC}" >&2
+            rm -f "$temp_file"
+            exit 1
+        fi
+    ) 200>"$lock_file"
 }
 
 # Main function
@@ -387,7 +387,11 @@ main() {
     
     # Update tracking file if branch name was provided
     if [ -n "$branch_name" ]; then
-        update_tracking_file "$branch_name" "$pr_number" "$review_status"
+        local comments_file=""
+        if [ "$review_status" = "Commented" ]; then
+            comments_file="comments_${pr_number}.json"
+        fi
+        update_tracking_file "$branch_name" "$pr_number" "$review_status" "$comments_file"
     fi
     
     echo "$review_status"
