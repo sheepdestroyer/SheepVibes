@@ -217,7 +217,8 @@ local reviews
     if [ "$google_comments" -gt 0 ]; then
         echo "$reviews" | jq -c '.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))' | while read -r comment; do
             body=$(echo "$comment" | jq -r '.body')
-            if echo "$body" | grep -q "No remaining issues"; then
+                echo "Processing comment: $body"
+                if echo "$body" | grep -q "No remaining issues"; then
                 echo "Gemini Code Assist has no remaining issues."
                 exit 2
             fi
