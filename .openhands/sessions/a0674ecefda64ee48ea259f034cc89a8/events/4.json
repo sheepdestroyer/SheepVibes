@@ -1,0 +1,1 @@
+{"id": 4, "timestamp": "2025-10-06T21:35:23.584644", "source": "user", "message": "Retrieving content for: Use the GitHub API with the GITHUB_TOKEN environme", "action": "recall", "args": {"recall_type": "workspace_context", "query": "Use the GitHub API with the GITHUB_TOKEN environment variable to retrieve PR details.", "thought": ""}}
