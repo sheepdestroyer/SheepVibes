@@ -1,13 +1,10 @@
 ---
-name: PR Review Tracker
-type: keyword-triggered
-version: 1.0
-agent: CodeActAgent
 triggers:
 - review-cycle
 - pr-review
 - code-review
 - google-code-assist
+agent: CodeActAgent
 ---
 
 # PR Review Tracker Microagent

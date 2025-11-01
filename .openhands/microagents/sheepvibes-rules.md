@@ -1,9 +1,5 @@
 ---
-name: SheepVibes Rules
-type: knowledge
-version: 1.0.0
 agent: CodeActAgent
-triggers: []
 ---
 
 # SheepVibes Repository Rules and Guidelines
