@@ -67,12 +67,12 @@ This bash script checks the current Google Code Assist review status for a branc
 # Examples:
 #   ./check-review-status.sh feat/new-widget
 #   ./check-review-status.sh 123 --wait
-#   ./check-review-status.sh feat/new-widget --wait --poll-interval 30
+#   ./check-review-status.sh feat/new-widget --wait --poll-interval 120
 ```
 
 **Features**:
 - Checks Google Code Assist review status (None, Started, Commented)
-- With `--wait` flag: Polls for comments until available (up to 1 hour)
+- With `--wait` flag: Polls for comments until available, starting at 2 minutes and increasing up to 5 minutes (max 5 polls).
 - Extracts and saves Google Code Assist comments to `comments_<PR#>.json`
 - Updates the global tracking file automatically
 
@@ -134,7 +134,7 @@ git push origin feat/new-feature
 ./check-review-status.sh feat/new-feature --wait
 
 # Wait with custom polling interval
-./check-review-status.sh feat/new-feature --wait --poll-interval 30
+./check-review-status.sh feat/new-feature --wait --poll-interval 120
 ```
 
 ## Configuration
