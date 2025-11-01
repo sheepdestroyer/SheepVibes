@@ -224,11 +224,19 @@ local reviews
     if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
         echo -e "${YELLOW}Waiting for Google Code Assist comments (polling every ${poll_interval}s)...${NC}"
         local poll_count=0
-        local max_polls=60  # Maximum 1 hour of polling (60 * 60s)
+        local current_poll_interval=${poll_interval}
+        local max_polls=5 # Maximum 5 polls (initial 2 minutes, increasing up to 5 minutes)
         
         while [ $google_comments -eq 0 ] && [ $poll_count -lt $max_polls ]; do
-            sleep "$poll_interval"
+            echo -e "${BLUE}Sleeping for ${current_poll_interval} seconds...${NC}"
+            sleep "$current_poll_interval"
             poll_count=$((poll_count + 1))
+            
+            # Increase poll_interval by 30 seconds for each subsequent poll, up to 300 seconds (5 minutes)
+            current_poll_interval=$((current_poll_interval + 30))
+            if [ "$current_poll_interval" -gt 300 ]; then
+                current_poll_interval=300
+            fi
             
             # Re-check for comments
             google_comments=$(extract_google_comments "$pr_number" "$comments_file")
