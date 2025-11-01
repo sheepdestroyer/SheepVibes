@@ -151,16 +151,16 @@ extract_google_comments() {
         .[] | 
         select(
             .user.login == "gemini-code-assist[bot]" and .body
-        )
-    ] | sort_by(.submitted_at) | reverse | .[0] | {
-        id: .id,
-        user: .user.login,
-        body: .body,
-        submitted_at: .submitted_at,
-        html_url: .html_url
-    }' > "$comments_file"
+        ) | {
+            id: .id,
+            user: .user.login,
+            body: .body,
+            submitted_at: .submitted_at,
+            html_url: .html_url
+        }
+    ]' > "$comments_file"
     
-    local comment_count=$(jq 'if . == null then 0 else 1 end' "$comments_file")
+    local comment_count=$(jq length "$comments_file")
     echo "$comment_count"
 }
 
@@ -201,25 +201,18 @@ local reviews
     
     # Check for Google Code Assist activity
     local google_assist_found=false
-    local google_comments=0
+    local comments_file="comments_${pr_number}.json"
     
-    # Check reviews for Google Code Assist
-    local assist_reviews
-    assist_reviews=$(echo "$reviews" | jq -r '[.[] | select(.user.login == "gemini-code-assist[bot]")] | .[0] | .state')
-    if [ -n "$assist_reviews" ]; then
-        google_assist_found=true
-        echo "$assist_reviews" | while read -r state; do
-            echo -e "${GREEN}Found Google Code Assist review: ${state}${NC}"
-        done
-    fi
+    # Extract initial Google Code Assist comments
+    local google_comments=$(extract_google_comments "$pr_number" "$comments_file")
     
-    # Check comments for Google Code Assist using single jq command
-    google_comments=$(echo "$reviews" | jq '[.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))] | length')
     if [ "$google_comments" -gt 0 ]; then
-        echo "$reviews" | jq -c '.[] | select(.user.login | test("gemini-code-assist|Google Code Assist"))' | while read -r comment; do
+        google_assist_found=true
+        # Process the comments to check for "No remaining issues."
+        jq -c '.[]' "$comments_file" | while read -r comment; do
             body=$(echo "$comment" | jq -r '.body')
-                echo "Processing comment: $body"
-                if echo "$body" | grep -q "No remaining issues"; then
+            echo "Processing comment: $body"
+            if echo "$body" | grep -q "No remaining issues"; then
                 echo "No remaining issues."
                 echo "None" # Indicate no comments for the tracking file
                 exit 0
@@ -238,11 +231,21 @@ local reviews
             poll_count=$((poll_count + 1))
             
             # Re-check for comments
-            reviews=$(github_api_request "/pulls/${pr_number}/reviews")
-            review_count=$(echo "$reviews" | jq length)
-            google_comments=$(echo "$reviews" | jq '[.[] | select(.user.login | test("gemini-code-assist") or (.body | test("Google Code Assist")))] | length')
+            google_comments=$(extract_google_comments "$pr_number" "$comments_file")
             
             echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}"
+            
+            if [ "$google_comments" -gt 0 ]; then
+                jq -c '.[]' "$comments_file" | while read -r comment; do
+                    body=$(echo "$comment" | jq -r '.body')
+                    echo "Processing comment: $body"
+                    if echo "$body" | grep -q "No remaining issues"; then
+                        echo "No remaining issues."
+                        echo "None" # Indicate no comments for the tracking file
+                        exit 0
+                    fi
+                done
+            fi
         done
         
         if [ $google_comments -eq 0 ]; then
