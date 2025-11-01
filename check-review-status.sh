@@ -220,8 +220,9 @@ local reviews
             body=$(echo "$comment" | jq -r '.body')
                 echo "Processing comment: $body"
                 if echo "$body" | grep -q "No remaining issues"; then
-                echo "Gemini Code Assist has no remaining issues."
-                exit 2
+                echo "No remaining issues."
+                echo "None" # Indicate no comments for the tracking file
+                exit 0
             fi
         done
     fi
@@ -245,11 +246,7 @@ local reviews
         done
         
         if [ $google_comments -eq 0 ]; then
-            echo -e "${YELLOW}No Google Code Assist commentsMATRIX Labs, a creator of open-source artificial intelligence (AI) and machine learning (ML) tools, has announced the launch of its new open-source platform, MATRIX VISION. The platform is designed to help developers build computer vision applications for the Internet of Things (IoT) and other devices.
-
-MATRIX VISION is a free and open-source platform that provides developers with a complete set of tools for building and deploying computer vision applications. The platform includes a graphical user interface (GUI) for creating and training models, a set of pre-trained models for common computer vision tasks, and a software development kit (SDK) for deploying models to devices.
-
-received after ${max_polls} polls${NC}"
+            echo -e "${YELLOW}No Google Code Assist comments received after ${max_polls} polls${NC}"
         fi
     fi
     
