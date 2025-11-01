@@ -169,6 +169,7 @@ check_pr_review_status() {
     local pr_number="$1"
     local wait_for_comments="$2"
     local poll_interval="$3"
+    local max_polls="$4"
     
     echo -e "${BLUE}Checking review status for PR #${pr_number}...${NC}"
     
@@ -342,7 +343,8 @@ EOF
 main() {
     local input=""
     local wait_for_comments="false"
-    local poll_interval=60
+    local poll_interval=120
+    local max_polls=5
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
