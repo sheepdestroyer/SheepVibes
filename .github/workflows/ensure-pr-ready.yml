@@ -1,0 +1,68 @@
+
+name: Ensure PR Ready for Review
+
+on:
+  pull_request:
+    types: [opened, reopened, converted_to_draft, synchronize]
+  workflow_dispatch:  # Allow manual triggering
+  schedule:
+    # Run every hour to catch any PRs that might have been missed
+    - cron: '0 * * * *'
+
+jobs:
+  ensure-pr-ready:
+    name: Ensure PR is Ready for Review
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+    
+    - name: Ensure PR is ready for review
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Make scripts executable
+        chmod +x ./set-pr-ready.sh
+        chmod +x ./ensure-pr-ready-workflow.sh
+        chmod +x ./scripts/common.sh
+        
+        # If this is triggered by a specific PR event, process that PR
+        if [ -n "${{ github.event.pull_request.number }}" ]; then
+          echo "Processing specific PR: ${{ github.event.pull_request.number }}"
+          ./set-pr-ready.sh "${{ github.event.pull_request.number }}"
+        else
+          # Otherwise, run the full workflow to check all PRs
+          echo "Running full PR readiness check"
+          ./ensure-pr-ready-workflow.sh
+        fi
+    
+    - name: Commit and push tracking file updates
+      if: always()
+      run: |
+        if [ -f "pr-review-tracker.json" ]; then
+          git config --local user.email "openhands@all-hands.dev"
+          git config --local user.name "openhands"
+          
+          # Check if tracking file has changes
+          if ! git diff --quiet pr-review-tracker.json; then
+            git add pr-review-tracker.json
+            git commit -m "chore: update PR review tracking [skip ci]"
+            git push
+          else
+            echo "No changes to tracking file"
+          fi
+        fi

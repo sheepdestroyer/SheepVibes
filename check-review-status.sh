@@ -169,12 +169,9 @@ check_for_no_remaining_issues() {
     
     # Check if any comment contains a completion signal
     # Use more specific patterns to avoid matching comments about the feature itself
-    while IFS= read -r comment; do
-        local body=$(echo "$comment" | jq -r '.body')
-        if echo "$body" | grep -qE "^(No remaining issues|All issues resolved|All fixed|No issues remaining)"; then
-            return 0  # No remaining issues found
-        fi
-    done < <(jq -c '.[]' "$comments_file")
+    if jq -e 'any(.[] | .body; test("^(No remaining issues|All issues resolved|All fixed|No issues remaining)"))' "$comments_file" > /dev/null; then
+        return 0  # Completion signal found
+    fi
     
     return 1  # No completion signal found
 }
@@ -535,6 +532,7 @@ main() {
             echo -e "${RED}No open PR found for branch: ${branch_name}${NC}" >&2
             echo "{\"status\": \"None\", \"comments\": 0}"
             # Update tracking file to clear comments for closed PR
+            pr_state="closed"
             if ! update_tracking_file "$branch_name" "" "None" ""; then
                 echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
                 exit 1
