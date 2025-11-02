@@ -2,6 +2,13 @@
 
 ## 2025-11-02
 
+- **Fix: Code review fixes for PR review tracker**
+  - Fixed critical subshell bug in check_for_no_remaining_issues function
+  - Fixed exit code handling for no open PR scenario (now returns code 2 as documented)
+  - Fixed usage function formatting and consistency with heredoc
+  - Updated documentation to match actual polling behavior (5 polls × 120s = 10 minutes total)
+  - Verified all fixes with comprehensive testing
+
 - **Fix: Implemented proper microagent workflow executor**
   - Fixed workflow continuation logic that was stopping prematurely
   - Implemented strict state machine workflow from pr-review-tracker.md
