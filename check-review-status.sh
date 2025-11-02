@@ -343,44 +343,34 @@ update_tracking_file() {
 EOF
     fi
 
-    # If PR is closed, clear all comments. Otherwise, preserve existing comments and add new ones.
-    local all_comments_file=$(mktemp "${TMPDIR:-/tmp}/all-comments.XXXXXX")
-    TEMP_FILES+=("$all_comments_file")
-    
-    if [ "$pr_state" != "open" ]; then
-        # PR is closed - clear all comments
-        echo "[]" > "$all_comments_file"
-        echo -e "${YELLOW}Clearing all comments for closed PR #${pr_number}${NC}" >&2
-    else
-        # PR is open - preserve existing comments and add new ones
-        local existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
-
-        # If new comments are available, prepare them for insertion
-        local new_comments="[]"
-        if [ -n "$comments_file" ] && [ -f "$comments_file" ]; then
-            # Map new comments to the required structure with "todo" status
-            new_comments=$(jq '[.[] | {id: .id, status: "todo", body: .body, created_at: .submitted_at}]' "$comments_file")
-        fi
-
-        # Combine existing and new comments, avoiding duplicates by id
-        jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments") > "$all_comments_file"
-    fi
-
-    # Update tracking file
+    # Update tracking file with a single jq command using --slurpfile for comments
     local temp_file=$(mktemp "${TMPDIR:-/tmp}/review-status-temp.XXXXXX")
     TEMP_FILES+=("$temp_file")
+    
     if jq --arg branch "$branch_name" \
           --arg pr "$pr_number" \
           --arg status "$review_status" \
           --arg updated "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-          --slurpfile comments "$all_comments_file" \
+          --arg pr_state "$pr_state" \
+          --slurpfile new_comments "$comments_file" \
           '.last_updated = $updated |
            .branches[$branch] |= (
             . // {pr_number: ($pr | tonumber? // $pr), comments: []}
            ) |
            .branches[$branch].review_status = $status |
            .branches[$branch].last_updated = $updated |
-           .branches[$branch].comments = $comments[0]' \
+           .branches[$branch].comments = (
+             if $pr_state != "open" then
+               []  # Clear all comments for closed PRs
+             elif ($new_comments | length) > 0 then
+               # Combine existing comments with new ones, avoiding duplicates
+               (.branches[$branch].comments // []) + 
+               ($new_comments[0] | map({id: .id, status: "todo", body: .body, created_at: .submitted_at})) |
+               unique_by(.id)
+             else
+               .branches[$branch].comments // []
+             end
+           )' \
           "$TRACKING_FILE" > "$temp_file"; then
         mv "$temp_file" "$TRACKING_FILE"
         echo -e "${GREEN}Updated tracking file: $TRACKING_FILE${NC}" >&2
