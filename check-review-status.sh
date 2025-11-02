@@ -101,7 +101,7 @@ github_api_request() {
                 local current_time=$(date +%s)
                 local wait_time=$((reset_time - current_time + 10))  # Add 10 seconds buffer
                 
-                if [ $wait_time -gt 0 ]; then
+                if [ "$wait_time" -gt 0 ]; then
                     echo -e "${YELLOW}Rate limit hit. Waiting ${wait_time} seconds...${NC}" >&2
                     sleep "$wait_time"
                     retry_count=$((retry_count + 1))
@@ -234,7 +234,7 @@ check_pr_review_status() {
         local current_poll_interval=${poll_interval}
         # Use the max_polls parameter passed to the function
         
-        while [ $google_comments -eq 0 ] && [ $poll_count -lt $max_polls ]; do
+        while [ "$google_comments" -eq 0 ] && [ "$poll_count" -lt "$max_polls" ]; do
             echo -e "${BLUE}Sleeping for ${current_poll_interval} seconds...${NC}" >&2
             sleep "$current_poll_interval"
             poll_count=$((poll_count + 1))
@@ -251,12 +251,12 @@ check_pr_review_status() {
             echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}" >&2
         done
         
-        if [ $google_comments -eq 0 ]; then
+        if [ "$google_comments" -eq 0 ]; then
             echo -e "${YELLOW}No Google Code Assist comments received after ${max_polls} polls${NC}" >&2
         fi
     fi
     
-    if [ $google_comments -gt 0 ]; then
+    if [ "$google_comments" -gt 0 ]; then
         echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}" >&2
         echo "{\"status\": \"Commented\", \"comments\": ${google_comments}}"
     else
