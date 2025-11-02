@@ -18,7 +18,7 @@ Track and manage GitHub PR code reviews through a simplified workflow that elimi
 ## Core Principles
 
 1. **Global Tracking**: Maintain a dedicated global file (`pr-review-tracker.json`) with sections for each working branch
-2. **Review Status Tracking**: Track Google Code Assist review status (None, Started, Commented) for each PR
+2. **Review Status Tracking**: Track Google Code Assist review status (None, Commented) for each PR
 3. **Comment Management**: Track individual review comments with status (todo, addressed)
 4. **Comment-Based Trigger**: Trigger Google Code Assist using `/gemini review` comment after each push instead of closing/reopening PRs
 5. **Ready to Review**: Always mark PRs as ready to review immediately after creation
@@ -86,7 +86,7 @@ This script checks the current Google Code Assist review status for a branch or 
 
 - **Authentication issues**: Update remote URL with current GITHUB_TOKEN
 - **Branch conflicts**: Create new unique branch names
-- **No comments received**: After waiting the maximum poll time (5 polls, for a total of 15 minutes), proceed with manual code review
+- **No comments received**: After waiting the maximum poll time (5 polls, for a total of 3 minutes), proceed with manual code review
 - **API rate limits**: Script implements automatic rate limit handling with exponential backoff
 - **Google Code Assist daily quota**: Workflow continues if new comments exist after rate limit warning or 24 hours have passed
 
@@ -182,7 +182,7 @@ The review cycle is managed by the microagent using a strict state machine that 
 ## Known Limitations and Workarounds
 
 1. **Automated Trigger**: Use `trigger-review.sh` to automatically post `/gemini review` comments to the PR after pushing changes.
-2. **API Rate Limits**: The script implements dedicated rate limit handling with exponential backoff for API requests. Additionally, the polling mechanism (60s initial wait, then every 30s) is used to wait for asynchronous code review comments while avoiding excessive API calls.
+2. **API Rate Limits**: The script implements dedicated rate limit handling with exponential backoff for API requests. Additionally, the polling mechanism (60s initial wait, then every 30s for up to 3 minutes total) is used to wait for asynchronous code review comments while avoiding excessive API calls.
 3. **Google Code Assist Rate Limits**: The script now detects Google Code Assist's daily quota limit message and will pause the review cycle when detected.
 4. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
 5. **Fallback Strategy**: If Google Code Assist doesn't respond after the configured number of polls, proceed with manual code review.
