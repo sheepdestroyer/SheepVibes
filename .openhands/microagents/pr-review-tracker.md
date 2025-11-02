@@ -88,7 +88,7 @@ This script checks the current Google Code Assist review status for a branch or 
 
 - **Authentication issues**: Update remote URL with current GITHUB_TOKEN
 - **Branch conflicts**: Create new unique branch names
-- **No comments received**: After waiting the maximum poll time (5 polls, for a total of 3 minutes), proceed with manual code review
+- **No comments received**: After waiting the maximum poll time (5 polls with intervals starting at 120 seconds and increasing by 30 seconds each poll, for a total of 15 minutes), proceed with manual code review
 - **API rate limits**: Script implements automatic rate limit handling with exponential backoff
 - **Google Code Assist daily quota**: Workflow continues if new comments exist after rate limit warning or 24 hours have passed
 
@@ -100,7 +100,7 @@ This script triggers a new Google Code Assist review by posting a `/gemini revie
 # Usage: ./trigger-review.sh [pr-number]
 ```
 
-### update-tracking.sh
+### update-tracking-efficient.sh
 
 This script updates the tracking file with new comments from a JSON file. It serves a distinct purpose from the `update_tracking_file` function in `check-review-status.sh`:
 
@@ -108,10 +108,11 @@ This script updates the tracking file with new comments from a JSON file. It ser
 - **Batch Processing**: Useful for bulk updates when multiple comment files need to be processed
 - **Standalone Operation**: Can be run independently without triggering full review status checks
 - **Integration Testing**: Facilitates testing of comment tracking logic in isolation
+- **Efficient Processing**: Uses temporary files to handle large comment datasets without command line argument limits
 
 ```bash
-# Usage: ./update-tracking.sh <pr-number> <branch-name>
-# Example: ./update-tracking.sh 162 feat/unified-pr-tracker
+# Usage: ./update-tracking-efficient.sh <pr-number> <branch-name>
+# Example: ./update-tracking-efficient.sh 162 feat/unified-pr-tracker
 ```
 
 **Features**:
@@ -119,6 +120,9 @@ This script updates the tracking file with new comments from a JSON file. It ser
 - Handles comment deduplication by ID
 - Updates last_updated timestamp
 - Uses file locking to prevent concurrent access issues
+- Efficiently processes large comment files using temporary files
+
+**Note**: The `update-tracking.sh` script is deprecated and should not be used as it can fail with large comment datasets due to command line argument limits.
 
 ## Microagent-Driven Workflow (Strict State Machine)
 
@@ -127,7 +131,7 @@ The review cycle is managed by the microagent using a strict state machine that 
 ### Core Workflow Rules
 
 1. **Only one PR per feature** - The first Google Code Assist review is triggered by opening the PR and marking it "Ready for review"
-2. **Polling Logic** - After the first initial push and PR opening, the microagent checks regularly (every 30 seconds after the first minute) until a new Google Code Assist review has been posted
+2. **Polling Logic** - After the first initial push and PR opening, the microagent checks regularly (with configurable polling intervals, defaulting to 120 seconds initial wait then 120 seconds per poll) until a new Google Code Assist review has been posted
 3. **Comment Management** - All code review concerns must be addressed in order and kept track of
 4. **Review Triggering** - After each round of fixes, the microagent pushes to the initial branch and posts `/gemini review` on the PR. This must only be done once between each Google Code Assist reviews
 5. **No Review Spamming** - If a review exists that has unaddressed comments, do not ask for a new review. All Google Code Assist comments must be fixed and the new code pushed before asking again for a new review
@@ -205,14 +209,14 @@ The review cycle is managed by the microagent using a strict state machine that 
 - **This microagent explicitly replaces** the previous `code-review-cycle.md` and `pr-ready-review.md` microagents
 - **Follow all SheepVibes testing requirements**: Run backend tests with Redis before creating PRs
 - **Update documentation**: Always update CHANGELOG.md and TODO.md upon task completion
-- **Polling Logic**: The waiting logic (60s initial wait, then every 30s) is implemented within `check-review-status.sh --wait` script
+- **Polling Logic**: The waiting logic (120s initial wait, then every 120s) is implemented within `check-review-status.sh --wait` script
 - **State Enforcement**: The microagent must strictly enforce the state machine workflow to prevent review spamming
 - **Comment Tracking**: All comments must be tracked in `pr-review-tracker.json` and addressed before triggering new reviews
 
 ## Known Limitations and Workarounds
 
 1. **Automated Trigger**: Use `trigger-review.sh` to automatically post `/gemini review` comments to the PR after pushing changes.
-2. **API Rate Limits**: The script implements dedicated rate limit handling with exponential backoff for API requests. Additionally, the polling mechanism (60s initial wait, then every 30s for up to 3 minutes total) is used to wait for asynchronous code review comments while avoiding excessive API calls.
+2. **API Rate Limits**: The script implements dedicated rate limit handling with exponential backoff for API requests. Additionally, the polling mechanism (120s initial wait, then every 120s for up to 15 minutes total) is used to wait for asynchronous code review comments while avoiding excessive API calls.
 3. **Google Code Assist Rate Limits**: The script now detects Google Code Assist's daily quota limit message and will pause the review cycle when detected.
 4. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
 5. **Fallback Strategy**: If Google Code Assist doesn't respond after the configured number of polls, proceed with manual code review.

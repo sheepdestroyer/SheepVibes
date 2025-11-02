@@ -100,9 +100,8 @@ process_todo_comments() {
     # Process each TODO comment
     echo "$todo_comments" | while IFS= read -r comment; do
         local comment_id=$(echo "$comment" | jq -r '.id')
-        local priority=$(echo "$comment" | jq -r '.body' | grep -o "critical\\|high\\|medium" | head -1 || echo "unknown")
         
-        log "Processing comment $comment_id (priority: $priority)"
+        log "Processing comment $comment_id"
         
         # Here the microagent would implement the actual fix
         # For now, we'll just mark it as addressed to demonstrate the workflow
@@ -156,8 +155,13 @@ main_workflow() {
                         # Push changes (simulated)
                         log "Pushing changes to branch: $branch"
                         git add -A
-                        git commit -m "Fix: Address Google Code Assist comments - cycle $cycle_count" || true
-                        git push origin "$branch" || true
+                        # Check if there are changes to commit
+                        if git diff-index --quiet HEAD --; then
+                            log "No changes to commit - skipping commit and push"
+                        else
+                            git commit -m "Fix: Address Google Code Assist comments - cycle $cycle_count"
+                            git push origin "$branch"
+                        fi
                         
                         # Trigger new review
                         log "Triggering new Google Code Assist review"

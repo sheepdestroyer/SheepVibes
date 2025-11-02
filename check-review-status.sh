@@ -56,8 +56,9 @@ usage() {
     echo "  2 - PR is not open (state is not 'open')"
     echo ""
     echo "Options:"
-    echo "  --wait              Wait for comments to be available (60s initial wait, then 30s intervals)"
-    echo "  --poll-interval SEC  Polling interval in seconds (default: 120, but --wait uses fixed 60s/30s logic)"
+echo "  --wait              Wait for comments to be available (uses poll-interval for all waits)"
+echo "  --poll-interval SEC  Polling interval in seconds (default: 120)"
+echo "  --max-polls NUM     Maximum number of polling attempts (default: 5)"
     echo ""
     echo "When --wait is used and comments are found, they are saved to comments_<PR#>.json"
 }
@@ -287,7 +288,7 @@ extract_google_comments() {
 check_pr_review_status() {
     local pr_number="$1"
     local wait_for_comments="$2"
-    local poll_interval=30
+    local poll_interval="$3"
     local max_polls="$4"
     local pr_title="$5"
     local pr_state="$6"
@@ -317,26 +318,26 @@ check_pr_review_status() {
     
     # If waiting for comments, poll until NEW comments are available
     if [ "$wait_for_comments" = "true" ]; then
-        echo -e "${YELLOW}Waiting for NEW Google Code Assist comments (initial 60s wait, then polling every 30s)...${NC}" >&2
+        echo -e "${YELLOW}Waiting for NEW Google Code Assist comments (initial ${poll_interval}s wait, then polling every ${poll_interval}s)...${NC}" >&2
         
         local initial_comment_count=$google_comments
         local poll_count=0
 
         echo -e "${BLUE}Initial comment count: ${initial_comment_count}${NC}" >&2
 
-        # Initial 60 second wait (first minute)
-        echo -e "${BLUE}Initial wait: 60 seconds...${NC}" >&2
-        sleep 60
+        # Initial wait
+        echo -e "${BLUE}Initial wait: ${poll_interval} seconds...${NC}" >&2
+        sleep "$poll_interval"
         poll_count=$((poll_count + 1))
 
         # Re-check for comments after initial wait
         google_comments=$(extract_google_comments "$pr_number" "$comments_file")
         echo -e "${BLUE}After initial wait: ${google_comments} Google Code Assist comments found${NC}" >&2
 
-        # Continue polling every 30 seconds if no NEW comments found
+        # Continue polling every poll_interval seconds if no NEW comments found
         while [ "$google_comments" -eq "$initial_comment_count" ] && [ "$poll_count" -lt "$max_polls" ]; do
-            echo -e "${BLUE}Sleeping for 30 seconds...${NC}" >&2
-            sleep 30
+            echo -e "${BLUE}Sleeping for ${poll_interval} seconds...${NC}" >&2
+            sleep "$poll_interval"
             poll_count=$((poll_count + 1))
 
             # Re-check for comments
@@ -412,7 +413,9 @@ EOF
     fi
 
     # Combine existing and new comments, avoiding duplicates by id
-    local all_comments=$(jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments"))
+    local all_comments_file=$(mktemp "${TMPDIR:-/tmp}/all-comments.XXXXXX")
+    TEMP_FILES+=("$all_comments_file")
+    jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments") > "$all_comments_file"
 
     # Update tracking file
     local temp_file=$(mktemp "${TMPDIR:-/tmp}/review-status-temp.XXXXXX")
@@ -421,12 +424,12 @@ EOF
           --arg pr "$pr_number" \
           --arg status "$review_status" \
           --arg updated "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-          --argjson comments "$all_comments" \
+          --slurpfile comments "$all_comments_file" \
           '.branches[$branch] = {
             pr_number: ($pr | tonumber? // $pr),
             review_status: $status,
             last_updated: $updated,
-            comments: $comments
+            comments: $comments[0]
           } | .last_updated = $updated' \
           "$TRACKING_FILE" > "$temp_file"; then
         mv "$temp_file" "$TRACKING_FILE"
@@ -446,6 +449,7 @@ main() {
     local input=""
     local wait_for_comments="false"
     local max_polls=5  # Default maximum number of polling attempts
+    local poll_interval="$DEFAULT_POLL_INTERVAL"
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
@@ -457,6 +461,24 @@ main() {
             --wait)
                 wait_for_comments="true"
                 shift
+                ;;
+            --poll-interval)
+                if [[ $# -gt 1 && "$2" =~ ^[0-9]+$ ]]; then
+                    poll_interval="$2"
+                    shift 2
+                else
+                    echo -e "${RED}Error: --poll-interval requires a numeric argument${NC}" >&2
+                    exit 1
+                fi
+                ;;
+            --max-polls)
+                if [[ $# -gt 1 && "$2" =~ ^[0-9]+$ ]]; then
+                    max_polls="$2"
+                    shift 2
+                else
+                    echo -e "${RED}Error: --max-polls requires a numeric argument${NC}" >&2
+                    exit 1
+                fi
                 ;;
             *)
                 input="$1"
@@ -505,7 +527,7 @@ main() {
     
     # Check review status
     local review_status
-    review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" 30 "$max_polls" "$pr_title" "$pr_state")
+    review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" "$poll_interval" "$max_polls" "$pr_title" "$pr_state")
     local check_status_exit_code=$?
     
     # Update tracking file if branch name was provided
