@@ -287,7 +287,7 @@ extract_google_comments() {
 check_pr_review_status() {
     local pr_number="$1"
     local wait_for_comments="$2"
-    local poll_interval="$3"
+    local poll_interval=30
     local max_polls="$4"
     local pr_title="$5"
     local pr_state="$6"
@@ -499,7 +499,7 @@ main() {
     
     # Check review status
     local review_status
-    review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" "$poll_interval" "$max_polls" "$pr_title" "$pr_state")
+    review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" 30 "$max_polls" "$pr_title" "$pr_state")
     local check_status_exit_code=$?
     
     # Update tracking file if branch name was provided
