@@ -146,8 +146,8 @@ The review cycle is managed by the microagent using a strict state machine that 
 #### State: `Processing` (Loop)
 1. **Read State**: Agent re-reads `pr-review-tracker.json` to get current status
 2. **Check Stop Conditions**:
-   - If `review_status == "RateLimited"`: **Stop** - Cycle finished due to quota limit
    - If `review_status == "Complete"`: **Stop** - Cycle finished successfully (based on semantic analysis by agent)
+   - If `review_status == "RateLimited"` AND no new actionable comments for 24 hours: **Stop** - Cycle finished due to quota limit exhaustion
 3. **Check Review Status**:
    - If `review_status == "Commented"`:
      - Read all comments from `pr-review-tracker.json` where `status: "todo"`
@@ -162,6 +162,14 @@ The review cycle is managed by the microagent using a strict state machine that 
    - If `review_status == "None"` (e.g., if Gemini didn't respond after the wait):
      - Call `trigger-review.sh <pr_number>` to re-trigger
      - Call `check-review-status.sh --wait`
+     - Return to start of `Processing` loop
+   - If `review_status == "RateLimited"` AND actionable comments exist:
+     - Address *all* "todo" comments in order
+     - Update `pr-review-tracker.json` to mark all addressed comments as `status: "addressed"`
+     - Push the new code to the branch
+     - Wait for rate limit to clear (check every 30 minutes)
+     - Call `trigger-review.sh <pr_number>` *exactly once* when rate limit clears
+     - Call `check-review-status.sh --wait` to wait for the *next* review
      - Return to start of `Processing` loop
 
 ### Implementation Guidelines
