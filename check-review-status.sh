@@ -39,28 +39,30 @@ get_repo_info
 
 # Function to print usage
 usage() {
-    echo "Usage: $0 [branch-name|pr-number] [--wait] [--poll-interval SECONDS]"
-    echo ""
-    echo "Examples:"
-    echo "  $0 feat/new-widget"
-    echo "  $0 123"
-    echo "  $0 feat/new-widget --wait"
-    echo "  $0 123 --wait --poll-interval 30"
-    echo ""
-    echo "This script checks the Google Code Assist review status for a given branch or PR number."
-    echo "Returns: None, Commented, Complete, or RateLimited"
-    echo ""
-    echo "Exit Codes:"
-    echo "  0 - Success with review status output (including when no open PR is found)"
-    echo "  1 - Error occurred (e.g., authentication, API failure)"
-    echo "  2 - PR is not open (state is not 'open')"
-    echo ""
-    echo "Options:"
-echo "  --wait              Wait for comments to be available (uses poll-interval for all waits)"
-echo "  --poll-interval SEC  Polling interval in seconds (default: 120)"
-echo "  --max-polls NUM     Maximum number of polling attempts (default: 5)"
-    echo ""
-    echo "When --wait is used and comments are found, they are saved to comments_<PR#>.json"
+    cat << EOF
+Usage: $0 [branch-name|pr-number] [--wait] [--poll-interval SECONDS] [--max-polls NUM]
+
+Examples:
+  $0 feat/new-widget
+  $0 123
+  $0 feat/new-widget --wait
+  $0 123 --wait --poll-interval 30
+
+This script checks the Google Code Assist review status for a given branch or PR number.
+Returns: None, Commented, Complete, or RateLimited
+
+Exit Codes:
+  0 - Success with review status output (including when no open PR is found)
+  1 - Error occurred (e.g., authentication, API failure)
+  2 - PR is not open (state is not 'open')
+
+Options:
+  --wait              Wait for comments to be available (uses poll-interval for all waits)
+  --poll-interval SEC  Polling interval in seconds (default: 120)
+  --max-polls NUM     Maximum number of polling attempts (default: 5)
+
+When --wait is used and comments are found, they are saved to comments_<PR#>.json
+EOF
 }
 
 # Function to check if required tools are available
@@ -167,11 +169,14 @@ check_for_no_remaining_issues() {
     
     # Check if any comment contains a completion signal
     # Use more specific patterns to avoid matching comments about the feature itself
-    if jq -e '.[] | select(.body | test("^No remaining issues|^All issues resolved|^All fixed|^No issues remaining"; "i"))' "$comments_file" > /dev/null 2>&1; then
-        return 0  # No remaining issues found
-    else
-        return 1  # No completion signal found
-    fi
+    while IFS= read -r comment; do
+        local body=$(echo "$comment" | jq -r '.body')
+        if echo "$body" | grep -qE "^(No remaining issues|All issues resolved|All fixed|No issues remaining)"; then
+            return 0  # No remaining issues found
+        fi
+    done < <(jq -c '.[]' "$comments_file")
+    
+    return 1  # No completion signal found
 }
 
 # Function to check if Google Code Assist has hit daily quota limit
@@ -405,20 +410,28 @@ update_tracking_file() {
 EOF
     fi
 
-    # Get existing branch data to preserve comments
-    local existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
-
-    # If new comments are available, prepare them for insertion
-    local new_comments="[]"
-    if [ -n "$comments_file" ] && [ -f "$comments_file" ]; then
-        # Map new comments to the required structure with "todo" status
-        new_comments=$(jq '[.[] | {id: .id, status: "todo", body: .body, created_at: .submitted_at}]' "$comments_file")
-    fi
-
-    # Combine existing and new comments, avoiding duplicates by id
+    # If PR is closed, clear all comments. Otherwise, preserve existing comments and add new ones.
     local all_comments_file=$(mktemp "${TMPDIR:-/tmp}/all-comments.XXXXXX")
     TEMP_FILES+=("$all_comments_file")
-    jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments") > "$all_comments_file"
+    
+    if [ "$review_status" = "None" ] && [ -z "$comments_file" ]; then
+        # PR is closed - clear all comments
+        echo "[]" > "$all_comments_file"
+        echo -e "${YELLOW}Clearing all comments for closed PR #${pr_number}${NC}" >&2
+    else
+        # PR is open - preserve existing comments and add new ones
+        local existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
+
+        # If new comments are available, prepare them for insertion
+        local new_comments="[]"
+        if [ -n "$comments_file" ] && [ -f "$comments_file" ]; then
+            # Map new comments to the required structure with "todo" status
+            new_comments=$(jq '[.[] | {id: .id, status: "todo", body: .body, created_at: .submitted_at}]' "$comments_file")
+        fi
+
+        # Combine existing and new comments, avoiding duplicates by id
+        jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments") > "$all_comments_file"
+    fi
 
     # Update tracking file
     local temp_file=$(mktemp "${TMPDIR:-/tmp}/review-status-temp.XXXXXX")
@@ -521,7 +534,12 @@ main() {
         if [ -z "$pr_info" ]; then
             echo -e "${RED}No open PR found for branch: ${branch_name}${NC}" >&2
             echo "{\"status\": \"None\", \"comments\": 0}"
-            exit 0
+            # Update tracking file to clear comments for closed PR
+            if ! update_tracking_file "$branch_name" "" "None" ""; then
+                echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
+                exit 1
+            fi
+            exit 2
         fi
         
         pr_number=$(echo "$pr_info" | jq -r '.number')
@@ -541,6 +559,13 @@ main() {
         local comments_file=""
         if [ "$(echo "$review_status" | jq -r '.comments')" -gt 0 ]; then
             comments_file="comments_${pr_number}.json"
+        fi
+        
+        # If PR is closed, clear comments and set status to None
+        if [ "$pr_state" != "open" ]; then
+            echo -e "${YELLOW}PR #${pr_number} is closed - clearing comments from tracking file${NC}" >&2
+            clean_status="None"
+            comments_file=""  # Don't add new comments for closed PRs
         fi
         
         if ! update_tracking_file "$branch_name" "$pr_number" "$clean_status" "$comments_file"; then
