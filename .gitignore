@@ -49,3 +49,8 @@ backend/venv/
 .DS_Store
 Thumbs.db
 .aider*
+
+# PR Review Tracker generated files
+pr-review-tracker.json
+pr-review-tracker.json.lock
+comments_*.json

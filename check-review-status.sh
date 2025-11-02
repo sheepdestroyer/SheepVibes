@@ -179,7 +179,6 @@ check_pr_review_status() {
     
     echo -e "${BLUE}Checking review status for PR #${pr_number}...${NC}"
     
-    # Get PR details and reviews in a single API call to reduce redundancy
     local pr_details=$(github_api_request "/pulls/${pr_number}")
     local pr_title=$(echo "$pr_details" | jq -r '.title')
     local pr_state=$(echo "$pr_details" | jq -r '.state')
@@ -270,17 +269,9 @@ check_pr_review_status() {
         fi
     fi
     
-    # Extract and save comments if any are found
     if [ $google_comments -gt 0 ]; then
-        local comments_file="comments_${pr_number}.json"
-        local extracted_count=$(extract_google_comments "$pr_number" "$comments_file")
-        if [ $extracted_count -gt 0 ]; then
-            echo -e "${GREEN}Google Code Assist has provided ${extracted_count} comment(s) - saved to ${comments_file}${NC}"
-            echo "Commented"
-        else
-             echo -e "${YELLOW}No new Google Code Assist comments found${NC}"
-             echo "Started"
-        fi
+        echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}"
+        echo "Commented"
     elif [ "$google_assist_found" = true ]; then
         echo -e "${YELLOW}Google Code Assist has started review but no comments yet${NC}"
         echo "Started"
@@ -348,7 +339,6 @@ EOF
               "$TRACKING_FILE" > "$temp_file"; then
             mv "$temp_file" "$TRACKING_FILE"
             echo -e "${GREEN}Updated tracking file: $TRACKING_FILE${NC}"
-            exit 0
         else
             echo -e "${RED}Error: Failed to update tracking file${NC}" >&2
             rm -f "$temp_file"
@@ -410,7 +400,7 @@ main() {
         if [ -z "$pr_number" ]; then
             echo -e "${RED}No open PR found for branch: ${branch_name}${NC}" >&2
             echo "None"
-            exit 0
+            exit 2
         fi
     fi
     

@@ -72,7 +72,7 @@ This bash script checks the current Google Code Assist review status for a branc
 
 **Features**:
 - Checks Google Code Assist review status (None, Started, Commented)
-- With `--wait` flag: Polls for comments until available, starting at 120 seconds (2 minutes) and increasing by 30 seconds up to 300 seconds (5 minutes), with maximum 5 polls
+- With `--wait` flag: Polls for comments until available, starting at 120 seconds (2 minutes) and increasing by 30 seconds up to 300 seconds (5 minutes), with maximum 5 polls (total wait time: 15 minutes)
 - Extracts and saves Google Code Assist comments to `comments_<PR#>.json`
 - Updates the global tracking file automatically
 
@@ -162,7 +162,7 @@ git push origin feat/new-feature
 1. **Automated Trigger**: Use `trigger-review.sh` to automatically post `/gemini review` comments to the PR after pushing changes.
 2. **API Rate Limits**: The script implements polling with increasing intervals (120 seconds to 300 seconds) to avoid hitting GitHub API limits.
 3. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
-4. **Fallback Strategy**: If Google Code Assist doesn't respond after 5 polls (max 5 minutes), proceed with manual code review.
+4. **Fallback Strategy**: If Google Code Assist doesn't respond after 5 polls (total wait time: 15 minutes), proceed with manual code review.
 5. **Error Recovery**: If the tracking file becomes corrupted, delete it and the script will recreate it
 
 ## Integration with Existing Workflows
