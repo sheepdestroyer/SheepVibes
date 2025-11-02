@@ -23,9 +23,8 @@ else
         REPO_OWNER=$(echo "$REPO_SLUG" | cut -d'/' -f1)
         REPO_NAME=$(echo "$REPO_SLUG" | cut -d'/' -f2)
     else
-        # Fallback to hardcoded values if git remote is not available
-        REPO_OWNER="sheepdestroyer"
-        REPO_NAME="SheepVibes"
+        echo -e "${RED}Error: Could not determine repository owner and name from git remote.${NC}" >&2
+        exit 1
     fi
 fi
 TRACKING_FILE="pr-review-tracker.json"
@@ -129,15 +128,15 @@ github_api_request() {
     return 1
 }
 
-# Function to get PR number from branch name
-get_pr_from_branch() {
+# Function to get PR info from branch name
+get_pr_info_from_branch() {
     local branch_name="$1"
     
     # Get open PRs for this branch
     local pr_data=$(github_api_request "/pulls?head=${REPO_OWNER}:${branch_name}&state=open")
     
     if [ "$(echo "$pr_data" | jq length)" -gt 0 ]; then
-        echo "$pr_data" | jq -r '.[0].number'
+        echo "$pr_data" | jq -r '.[0] | {number: .number, title: .title, state: .state}'
     else
         echo ""
     fi
@@ -176,12 +175,16 @@ check_pr_review_status() {
     local wait_for_comments="$2"
     local poll_interval="$3"
     local max_polls="$4"
+    local pr_title="$5"
+    local pr_state="$6"
     
     echo -e "${BLUE}Checking review status for PR #${pr_number}...${NC}" >&2
     
-    local pr_details=$(github_api_request "/pulls/${pr_number}")
-    local pr_title=$(echo "$pr_details" | jq -r '.title')
-    local pr_state=$(echo "$pr_details" | jq -r '.state')
+    if [ -z "$pr_title" ] || [ -z "$pr_state" ]; then
+        local pr_details=$(github_api_request "/pulls/${pr_number}")
+        pr_title=$(echo "$pr_details" | jq -r '.title')
+        pr_state=$(echo "$pr_details" | jq -r '.state')
+    fi
     
     if [ "$pr_state" != "open" ]; then
         echo -e "${YELLOW}PR #${pr_number} is not open (state: $pr_state)${NC}"
@@ -361,17 +364,21 @@ main() {
     else
         branch_name="$input"
         echo -e "${BLUE}Checking branch: ${branch_name}${NC}" >&2
-        pr_number=$(get_pr_from_branch "$branch_name")
+        local pr_info=$(get_pr_info_from_branch "$branch_name")
         
-        if [ -z "$pr_number" ]; then
+        if [ -z "$pr_info" ]; then
             echo -e "${RED}No open PR found for branch: ${branch_name}${NC}" >&2
-            echo "None"
-            exit 2
+            echo "{\"status\": \"None\", \"comments\": 0}"
+            exit 0
         fi
+        
+        pr_number=$(echo "$pr_info" | jq -r '.number')
+        local pr_title=$(echo "$pr_info" | jq -r '.title')
+        local pr_state=$(echo "$pr_info" | jq -r '.state')
     fi
     
     # Check review status
-    local review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" "$poll_interval" "$max_polls")
+    local review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" "$poll_interval" "$max_polls" "$pr_title" "$pr_state")
     
     # Update tracking file if branch name was provided
     if [ -n "$branch_name" ]; then
