@@ -57,27 +57,7 @@ Exit Codes:
 EOF
 }
 
-# Function to make GitHub API request
-github_api_request() {
-    local method="$1"
-    local endpoint="$2"
-    local data="$3"
-    local url="${GITHUB_API}/repos/${REPO_OWNER}/${REPO_NAME}${endpoint}"
-    
-    local curl_cmd=("curl" "-s" "-X" "$method")
-    
-    curl_cmd+=("-H" "Authorization: token $GITHUB_TOKEN")
-    curl_cmd+=("-H" "Accept: application/vnd.github.v3+json")
-    
-    if [ -n "$data" ]; then
-        curl_cmd+=("-H" "Content-Type: application/json")
-        curl_cmd+=("-d" "$data")
-    fi
-    
-    curl_cmd+=("$url")
-    
-    "${curl_cmd[@]}"
-}
+
 
 # Function to get all open PRs
 get_open_prs() {
@@ -88,7 +68,7 @@ get_open_prs() {
         endpoint="${endpoint}&head=${REPO_OWNER}:${branch_filter}"
     fi
     
-    github_api_request "GET" "$endpoint" ""
+    github_api_request "$endpoint"
 }
 
 # Function to mark PR as ready for review
@@ -103,19 +83,32 @@ mark_pr_ready() {
     
     printf "${BLUE}Marking PR #${pr_number} as ready for review...${NC}\n"
     
-    response=$(github_api_request "PATCH" "/pulls/${pr_number}" '{"draft":false}')
+    local url="${GITHUB_API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/pulls/${pr_number}"
+    local response
+    local http_code
     
-    if echo "$response" | jq -e '.id' > /dev/null 2>&1; then
+    response=$(curl -s -w "\n%{http_code}" \
+        -X PATCH \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Content-Type: application/json" \
+        -d '{"draft":false}' \
+        "$url")
+    
+    http_code=$(echo "$response" | tail -n1)
+    local response_body=$(echo "$response" | head -n -1)
+    
+    if [ "$http_code" = "200" ]; then
         printf "${GREEN}Successfully marked PR #${pr_number} as ready for review${NC}\n"
         return 0
     else
-        printf "${RED}Failed to mark PR #${pr_number} as ready for review${NC}\n" >&2
-        printf "Response: %s\n" "$response" >&2
+        printf "${RED}Failed to mark PR #${pr_number} as ready for review (HTTP $http_code)${NC}\n" >&2
+        printf "Response: %s\n" "$response_body" >&2
         return 1
     fi
 }
 
-# Function to update tracking file
+
 # Main function
 main() {
     local dry_run=false
