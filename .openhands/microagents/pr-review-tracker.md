@@ -87,7 +87,7 @@ This script checks the current Google Code Assist review status for a branch or 
 
 - **Authentication issues**: Update remote URL with current GITHUB_TOKEN
 - **Branch conflicts**: Create new unique branch names
-- **No comments received**: After waiting the maximum poll time (5 polls, up to 15 minutes total), proceed with manual code review
+- **No comments received**: After waiting the maximum poll time (5 polls, for a total of 15 minutes), proceed with manual code review
 - **API rate limits**: Script implements automatic rate limit handling with exponential backoff
 
 ### trigger-review.sh
@@ -141,7 +141,7 @@ The review cycle is managed by the microagent, which uses the scripts to interac
 ## Known Limitations and Workarounds
 
 1. **Automated Trigger**: Use `trigger-review.sh` to automatically post `/gemini review` comments to the PR after pushing changes.
-2. **API Rate Limits**: The script implements polling with increasing intervals (120 seconds to 240 seconds for the default 5 polls) to avoid hitting GitHub API limits.
+2. **API Rate Limits**: The script implements polling with increasing intervals (120 seconds to 240 seconds for the default 5 polls, totaling 15 minutes) to avoid hitting GitHub API limits.
 3. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
 4. **Fallback Strategy**: If Google Code Assist doesn't respond after 5 polls (total wait time: up to 15 minutes), proceed with manual code review.
 5. **Error Recovery**: If the tracking file becomes corrupted, delete it and the script will recreate it

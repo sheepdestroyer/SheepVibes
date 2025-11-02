@@ -231,7 +231,7 @@ check_pr_review_status() {
         echo -e "${YELLOW}Waiting for Google Code Assist comments (polling every ${poll_interval}s)...${NC}" >&2
         local poll_count=0
         local current_poll_interval=${poll_interval}
-        local max_polls=5 # Maximum 5 polls (initial 2 minutes, increasing up to 15 minutes total)
+        # Use the max_polls parameter passed to the function
         
         while [ $google_comments -eq 0 ] && [ $poll_count -lt $max_polls ]; do
             echo -e "${BLUE}Sleeping for ${current_poll_interval} seconds...${NC}" >&2
@@ -337,7 +337,7 @@ main() {
     local input=""
     local wait_for_comments="false"
     local poll_interval=120
-    local max_polls=5
+    local max_polls=5  # Default maximum number of polling attempts
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
