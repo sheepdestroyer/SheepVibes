@@ -81,9 +81,9 @@ if [ "$WAIT_FOR_REVIEW" = true ]; then
     echo -e "${BLUE}Waiting for Google Code Assist review to complete...${NC}"
     
     # Wait for initial review (5 minutes maximum)
-    local max_wait=300  # 5 minutes
-    local wait_interval=30  # 30 seconds
-    local elapsed=0
+    max_wait=300  # 5 minutes
+    wait_interval=30  # 30 seconds
+    elapsed=0
     
     while [ $elapsed -lt $max_wait ]; do
         sleep $wait_interval
