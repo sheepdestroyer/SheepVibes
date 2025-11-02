@@ -79,7 +79,7 @@ github_api_request() {
     while [ $retry_count -lt $max_retries ]; do
         local response
         local http_code
-        local headers_file=$(mktemp -t review-status-headers.XXXXXX)
+        local headers_file=$(mktemp "${TMPDIR:-/tmp}/review-status-headers.XXXXXX")
         TEMP_FILES+=("$headers_file")
         
         if [ -z "${GITHUB_TOKEN:-}" ]; then
@@ -168,7 +168,7 @@ extract_google_comments() {
     local comments_file="$2"
     
     # Get all review comments for this PR with pagination support
-    local temp_file=$(mktemp -t review-status-temp.XXXXXX)
+    local temp_file=$(mktemp "${TMPDIR:-/tmp}/review-status-temp.XXXXXX")
     TEMP_FILES+=("$temp_file")
     echo "[]" > "$temp_file"
     local page=1
@@ -182,6 +182,21 @@ extract_google_comments() {
         if [ "$comment_count" -gt 0 ]; then
             # Append the whole page of comments at once, which is more efficient
             jq -s '.[0] + .[1]' "$temp_file" <(echo "$comments_page") > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
+            page=$((page + 1))
+        else
+            has_more=false
+        fi
+    done
+
+    # Also get issue comments (where Google Code Assist posts summary comments)
+    page=1
+    has_more=true
+    while [ "$has_more" = true ]; do
+        local issue_comments_page=$(github_api_request "/issues/${pr_number}/comments?page=${page}&per_page=100")
+        local issue_comment_count=$(echo "$issue_comments_page" | jq length)
+        
+        if [ "$issue_comment_count" -gt 0 ]; then
+            jq -s '.[0] + .[1]' "$temp_file" <(echo "$issue_comments_page") > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
             page=$((page + 1))
         else
             has_more=false
