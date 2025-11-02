@@ -173,9 +173,9 @@ elif [ "$CONTINUE_CYCLE" = true ]; then
             fi
         fi
         
-        echo -e "${YELLOW}Issues found in round $current_round. Please address them and push changes.${NC}"
-        echo -e "${BLUE}When ready, the script will automatically trigger the next review cycle...${NC}"
-        read -p "Press Enter to continue to next round (or Ctrl+C to stop)..."
+        echo -e "${YELLOW}Issues found in round $current_round. The microagent will address them and push changes.${NC}"
+        echo -e "${BLUE}Automatically triggering next review cycle in 10 seconds...${NC}"
+        sleep 10
         
         # Trigger next review cycle
         echo -e "${BLUE}Triggering next review cycle...${NC}"
