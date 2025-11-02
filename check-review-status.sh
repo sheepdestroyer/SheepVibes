@@ -177,7 +177,7 @@ check_pr_review_status() {
     local poll_interval="$3"
     local max_polls="$4"
     
-    echo -e "${BLUE}Checking review status for PR #${pr_number}...${NC}"
+    echo -e "${BLUE}Checking review status for PR #${pr_number}...${NC}" >&2
     
     local pr_details=$(github_api_request "/pulls/${pr_number}")
     local pr_title=$(echo "$pr_details" | jq -r '.title')
@@ -189,7 +189,7 @@ check_pr_review_status() {
         return
     fi
     
-    echo -e "${BLUE}PR Title: ${pr_title}${NC}"
+    echo -e "${BLUE}PR Title: ${pr_title}${NC}" >&2
     
     # Check for Google Code Assist activity
     local google_assist_found=false
@@ -219,13 +219,13 @@ check_pr_review_status() {
     
     # If waiting for comments and none found, poll until comments are available
     if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
-        echo -e "${YELLOW}Waiting for Google Code Assist comments (polling every ${poll_interval}s)...${NC}"
+        echo -e "${YELLOW}Waiting for Google Code Assist comments (polling every ${poll_interval}s)...${NC}" >&2
         local poll_count=0
         local current_poll_interval=${poll_interval}
         local max_polls=5 # Maximum 5 polls (initial 2 minutes, increasing up to 5 minutes total)
         
         while [ $google_comments -eq 0 ] && [ $poll_count -lt $max_polls ]; do
-            echo -e "${BLUE}Sleeping for ${current_poll_interval} seconds...${NC}"
+            echo -e "${BLUE}Sleeping for ${current_poll_interval} seconds...${NC}" >&2
             sleep "$current_poll_interval"
             poll_count=$((poll_count + 1))
             
@@ -260,7 +260,7 @@ check_pr_review_status() {
         done
         
         if [ $google_comments -eq 0 ]; then
-            echo -e "${YELLOW}No Google Code Assist comments received after ${max_polls} polls${NC}"
+            echo -e "${YELLOW}No Google Code Assist comments received after ${max_polls} polls${NC}" >&2
         fi
     fi
     
@@ -386,10 +386,10 @@ main() {
     # Determine if input is PR number or branch name
     if [[ "$input" =~ ^[0-9]+$ ]]; then
         pr_number="$input"
-        echo -e "${BLUE}Checking PR #${pr_number}${NC}"
+        echo -e "${BLUE}Checking PR #${pr_number}${NC}" >&2
     else
         branch_name="$input"
-        echo -e "${BLUE}Checking branch: ${branch_name}${NC}"
+        echo -e "${BLUE}Checking branch: ${branch_name}${NC}" >&2
         pr_number=$(get_pr_from_branch "$branch_name")
         
         if [ -z "$pr_number" ]; then
