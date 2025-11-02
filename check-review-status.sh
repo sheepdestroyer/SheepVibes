@@ -439,7 +439,6 @@ EOF
 main() {
     local input=""
     local wait_for_comments="false"
-    local poll_interval=120
     local max_polls=5  # Default maximum number of polling attempts
     
     # Parse command line arguments
@@ -452,14 +451,6 @@ main() {
             --wait)
                 wait_for_comments="true"
                 shift
-                ;;
-            --poll-interval)
-                if [ -z "${2:-}" ]; then
-                    echo -e "${RED}Error: --poll-interval requires an argument.${NC}" >&2
-                    exit 1
-                fi
-                poll_interval="$2"
-                shift 2
                 ;;
             *)
                 input="$1"
