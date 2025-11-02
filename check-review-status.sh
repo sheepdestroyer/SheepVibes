@@ -204,8 +204,8 @@ check_pr_review_status() {
         local no_issues_found=false
         while IFS= read -r comment; do
             body=$(echo "$comment" | jq -r '.body')
-            if echo "$body" | grep -q "No remaining issues"; then
-                echo "No remaining issues."
+            if echo "$body" | grep -qiE "no.*remaining.*issue|no.*issue.*remaining|all.*issue.*resolved|all.*fixed"; then
+                echo "No remaining issues." >&2
                 no_issues_found=true
                 break
             fi
@@ -238,15 +238,15 @@ check_pr_review_status() {
             # Re-check for comments
             google_comments=$(extract_google_comments "$pr_number" "$comments_file")
             
-            echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}"
+            echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}" >&2
             
             if [ "$google_comments" -gt 0 ]; then
                 local no_issues_found=false
                 while IFS= read -r comment; do
                     body=$(echo "$comment" | jq -r '.body')
-                    echo "Processing comment: $body"
-                    if echo "$body" | grep -q "No remaining issues"; then
-                        echo "No remaining issues."
+                    echo "Processing comment: $body" >&2
+                    if echo "$body" | grep -qiE "no.*remaining.*issue|no.*issue.*remaining|all.*issue.*resolved|all.*fixed"; then
+                        echo "No remaining issues." >&2
                         no_issues_found=true
                         break
                     fi
@@ -265,13 +265,13 @@ check_pr_review_status() {
     fi
     
     if [ $google_comments -gt 0 ]; then
-        echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}"
+        echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}" >&2
         echo "Commented"
     elif [ "$google_assist_found" = true ]; then
-        echo -e "${YELLOW}Google Code Assist has started review but no comments yet${NC}"
+        echo -e "${YELLOW}Google Code Assist has started review but no comments yet${NC}" >&2
         echo "Started"
     else
-        echo -e "${YELLOW}No Google Code Assist activity detected${NC}"
+        echo -e "${YELLOW}No Google Code Assist activity detected${NC}" >&2
         echo "None"
     fi
 }
