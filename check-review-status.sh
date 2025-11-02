@@ -8,6 +8,9 @@ set -euo pipefail
 # Global array to track temporary files for cleanup
 TEMP_FILES=()
 
+# Configuration
+GOOGLE_BOT_USERNAME="${GOOGLE_BOT_USERNAME:-gemini-code-assist[bot]}"
+
 # Cleanup function to remove temporary files
 cleanup() {
     rm -f "${TEMP_FILES[@]}"
@@ -174,11 +177,11 @@ extract_google_comments() {
     
     # Filter for comments made by Google Code Assist and extract relevant info
     # Note: we alias 'created_at' to 'submitted_at' for consistency with the tracking file format.
-    jq '
+    jq --arg bot_username "$GOOGLE_BOT_USERNAME" '
     [
         .[] |
         select(
-            .user.login == "gemini-code-assist[bot]"
+            .user.login == $bot_username
         ) | {
             id: .id,
             user: .user.login,
@@ -353,6 +356,10 @@ main() {
                 shift
                 ;;
             --poll-interval)
+                if [ -z "${2:-}" ]; then
+                    echo -e "${RED}Error: --poll-interval requires an argument.${NC}" >&2
+                    exit 1
+                fi
                 poll_interval="$2"
                 shift 2
                 ;;
