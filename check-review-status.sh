@@ -384,6 +384,7 @@ update_tracking_file() {
     local pr_number="$2"
     local review_status="$3"
     local comments_file="$4"
+    local pr_state="$5"
     local lock_file="${TRACKING_FILE}.lock"
     local lock_timeout=30
 
@@ -532,8 +533,7 @@ main() {
             echo -e "${RED}No open PR found for branch: ${branch_name}${NC}" >&2
             echo "{\"status\": \"None\", \"comments\": 0}"
             # Update tracking file to clear comments for closed PR
-            pr_state="closed"
-            if ! update_tracking_file "$branch_name" "" "None" ""; then
+            if ! update_tracking_file "$branch_name" "" "None" "" "closed"; then
                 echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
                 exit 1
             fi
@@ -562,7 +562,7 @@ main() {
         # Note: Comment clearing for closed PRs is handled in update_tracking_file function
         # based on pr_state, so we don't need to modify clean_status or comments_file here
         
-        if ! update_tracking_file "$branch_name" "$pr_number" "$clean_status" "$comments_file"; then
+        if ! update_tracking_file "$branch_name" "$pr_number" "$clean_status" "$comments_file" "$pr_state"; then
             echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
             exit 1
         fi

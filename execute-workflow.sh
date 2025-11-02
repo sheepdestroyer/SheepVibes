@@ -201,9 +201,8 @@ main_workflow() {
             "RateLimited")
                 log "State: Rate limited - Waiting 1 minute before retry"
                 sleep 60
-                # Check if rate limit has cleared
-                ./check-review-status.sh "$pr_number"
-                ./update-tracking-efficient.sh "$pr_number" "$branch"
+                # Check if rate limit has cleared and update tracking file
+                ./check-review-status.sh "$branch"
                 ;;
                 
             *)

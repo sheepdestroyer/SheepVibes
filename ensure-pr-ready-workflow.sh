@@ -141,11 +141,12 @@ EOF
            --arg pr "$pr_number" \
            --arg action "$action" \
            --arg timestamp "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-           '.branches[$branch] = (.branches[$branch] // {}) | 
-            .branches[$branch].pr_number = $pr |
-            .branches[$branch].last_action = $action |
-            .branches[$branch].last_updated = $timestamp |
-            .last_updated = $timestamp' \
+           '.last_updated = $timestamp |
+            .branches[$branch] = (.branches[$branch] // {}) + {
+                pr_number: ($pr | tonumber? // $pr),
+                last_action: $action,
+                last_updated: $timestamp
+            }' \
            "$TRACKING_FILE" > "$temp_file"
         
         mv "$temp_file" "$TRACKING_FILE"
