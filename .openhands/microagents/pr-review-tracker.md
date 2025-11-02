@@ -1,10 +1,11 @@
 ---
+name: Code Review Cycle
+agent: CodeActAgent
 triggers:
-- review-cycle
-- pr-review
 - code-review
 - google-code-assist
-agent: CodeActAgent
+- pr-review
+- review-cycle
 ---
 
 # PR Review Tracker Microagent
@@ -21,7 +22,7 @@ Track and manage GitHub PR code reviews through a simplified workflow that elimi
 2. **Review Status Tracking**: Track Google Code Assist review status (None, Commented) for each PR
 3. **Comment Management**: Track individual review comments with status (todo, addressed)
 4. **Comment-Based Trigger**: Trigger Google Code Assist using `/gemini review` comment after each push instead of closing/reopening PRs
-5. **Ready to Review**: Always mark PRs as ready to review immediately after creation
+5. **Ready to Review**: Always mark PRs as "Ready for review" immediately after creation
 
 ## Global Tracking File Structure
 
