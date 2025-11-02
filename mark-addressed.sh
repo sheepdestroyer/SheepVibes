@@ -32,8 +32,8 @@ COMMENT_ID_ARRAY=$(printf '%s\n' "${COMMENT_IDS[@]}" | jq -R . | jq -s 'map(tonu
     flock -x 200 || exit 1
     
     # Update the specified comments as addressed
-    jq --arg branch "$BRANCH_NAME" --argjson ids "$COMMENT_ID_ARRAY" \
-       '(.branches[$branch].comments[] | select(.id | IN($ids[])) | .status) = "addressed"' \
+    jq --arg branch "$BRANCH_NAME" --argjson ids "$COMMENT_ID_ARRAY" --arg updated "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+       '(.branches[$branch].comments[] | select(.id | IN($ids[])) | .status) = "addressed" | .branches[$branch].last_updated = $updated | .last_updated = $updated' \
        "$TRACKING_FILE" > "${TRACKING_FILE}.tmp" && mv "${TRACKING_FILE}.tmp" "$TRACKING_FILE"
     
     echo "Marked comments ${COMMENT_IDS[*]} as addressed for branch $BRANCH_NAME"

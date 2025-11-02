@@ -48,7 +48,7 @@ usage() {
     echo "  $0 123 --wait --poll-interval 30"
     echo ""
     echo "This script checks the Google Code Assist review status for a given branch or PR number."
-    echo "Returns: None or Commented"
+    echo "Returns: None, Commented, Complete, or RateLimited"
     echo ""
     echo "Exit Codes:"
     echo "  0 - Success with review status output (including when no open PR is found)"

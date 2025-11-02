@@ -31,8 +31,8 @@ fi
     flock -x 200 || exit 1
     
     # Extract new comments and add them to tracking file with deduplication
-    jq --arg branch "$BRANCH_NAME" --argjson new_comments "$(jq '[.[] | {id, status: "todo", body, created_at: .submitted_at}]' "$COMMENTS_FILE")" \
-       '.branches[$branch].comments = ((.branches[$branch].comments // []) + $new_comments) | unique_by(.id)' \
+    jq --arg branch "$BRANCH_NAME" --argjson new_comments "$(jq '[.[] | {id, status: "todo", body, created_at: .submitted_at}]' "$COMMENTS_FILE")" --arg updated "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+       '.branches[$branch].comments = ((.branches[$branch].comments // []) + $new_comments) | unique_by(.id) | .branches[$branch].last_updated = $updated | .last_updated = $updated' \
        "$TRACKING_FILE" > "${TRACKING_FILE}.tmp" && mv "${TRACKING_FILE}.tmp" "$TRACKING_FILE"
     
     echo "Updated tracking file with new comments from $COMMENTS_FILE for branch $BRANCH_NAME"

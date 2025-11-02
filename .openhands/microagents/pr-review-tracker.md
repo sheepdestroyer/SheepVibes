@@ -66,7 +66,7 @@ This script checks the current Google Code Assist review status for a branch or 
 ```
 
 **Features**:
-- Checks Google Code Assist review status (`None`, `Started`, `Commented`)
+- Checks Google Code Assist review status (`None`, `Commented`, `Complete`, `RateLimited`)
 - With `--wait` flag, polls for comments until they are available
 - Returns a JSON object with the review status and the number of comments
 
@@ -167,7 +167,7 @@ The review cycle is managed by the microagent using a strict state machine that 
      - Address *all* "todo" comments in order
      - Update `pr-review-tracker.json` to mark all addressed comments as `status: "addressed"`
      - Push the new code to the branch
-     - Wait for rate limit to clear (check every 30 minutes)
+     - Wait for rate limit to clear (check every 1 minute using `RATE_LIMIT_CHECK_INTERVAL=60`)
      - Call `trigger-review.sh <pr_number>` *exactly once* when rate limit clears
      - Call `check-review-status.sh --wait` to wait for the *next* review
      - Return to start of `Processing` loop
