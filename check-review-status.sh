@@ -3,7 +3,7 @@
 # check-review-status.sh - Check Google Code Assist review status for a branch or PR
 # Usage: ./check-review-status.sh [branch-name|pr-number] [--wait] [--poll-interval SECONDS]
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -238,7 +238,7 @@ check_pr_review_status() {
             sleep "$current_poll_interval"
             poll_count=$((poll_count + 1))
             
-            # Increase poll_interval by 30 seconds for each subsequent poll, up to 240 seconds (4 minutes)
+            # Increase poll_interval by 30 seconds for each subsequent poll, up to 300 seconds (5 minutes)
             current_poll_interval=$((current_poll_interval + 30))
             if [ "$current_poll_interval" -gt 300 ]; then
                 current_poll_interval=300
@@ -378,6 +378,10 @@ main() {
     if [[ "$input" =~ ^[0-9]+$ ]]; then
         pr_number="$input"
         echo -e "${BLUE}Checking PR #${pr_number}${NC}" >&2
+        # Get PR details when PR number is provided directly
+        local pr_info=$(gh api "repos/$REPO_OWNER/$REPO_NAME/pulls/$pr_number")
+        pr_title=$(echo "$pr_info" | jq -r '.title')
+        pr_state=$(echo "$pr_info" | jq -r '.state')
     else
         branch_name="$input"
         echo -e "${BLUE}Checking branch: ${branch_name}${NC}" >&2
@@ -390,8 +394,8 @@ main() {
         fi
         
         pr_number=$(echo "$pr_info" | jq -r '.number')
-        local pr_title=$(echo "$pr_info" | jq -r '.title')
-        local pr_state=$(echo "$pr_info" | jq -r '.state')
+        pr_title=$(echo "$pr_info" | jq -r '.title')
+        pr_state=$(echo "$pr_info" | jq -r '.state')
     fi
     
     # Check review status
