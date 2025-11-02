@@ -200,21 +200,6 @@ check_pr_review_status() {
     
     if [ "$google_comments" -gt 0 ]; then
         google_assist_found=true
-        # Process the comments to check for "No remaining issues."
-        local no_issues_found=false
-        while IFS= read -r comment; do
-            body=$(echo "$comment" | jq -r '.body')
-            if echo "$body" | grep -qiE "no.*remaining.*issue|no.*issue.*remaining|all.*issue.*resolved|all.*fixed"; then
-                echo "No remaining issues." >&2
-                no_issues_found=true
-                break
-            fi
-        done < <(jq -c '.[]' "$comments_file")
-        
-        if [ "$no_issues_found" = true ]; then
-            echo "None" # Indicate no comments for the tracking file
-            return 0
-        fi
     fi
     
     # If waiting for comments and none found, poll until comments are available
@@ -241,21 +226,7 @@ check_pr_review_status() {
             echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}" >&2
             
             if [ "$google_comments" -gt 0 ]; then
-                local no_issues_found=false
-                while IFS= read -r comment; do
-                    body=$(echo "$comment" | jq -r '.body')
-                    echo "Processing comment: $body" >&2
-                    if echo "$body" | grep -qiE "no.*remaining.*issue|no.*issue.*remaining|all.*issue.*resolved|all.*fixed"; then
-                        echo "No remaining issues." >&2
-                        no_issues_found=true
-                        break
-                    fi
-                done < <(jq -c '.[]' "$comments_file")
-                
-                if [ "$no_issues_found" = true ]; then
-                    echo "None" # Indicate no comments for the tracking file
-                    return 0
-                fi
+                :
             fi
         done
         
@@ -266,13 +237,13 @@ check_pr_review_status() {
     
     if [ $google_comments -gt 0 ]; then
         echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}" >&2
-        echo "Commented"
+        echo "{\"status\": \"Commented\", \"comments\": ${google_comments}}"
     elif [ "$google_assist_found" = true ]; then
         echo -e "${YELLOW}Google Code Assist has started review but no comments yet${NC}" >&2
-        echo "Started"
+        echo "{\"status\": \"Started\", \"comments\": 0}"
     else
         echo -e "${YELLOW}No Google Code Assist activity detected${NC}" >&2
-        echo "None"
+        echo "{\"status\": \"None\", \"comments\": 0}"
     fi
 }
 
@@ -404,11 +375,7 @@ main() {
     
     # Update tracking file if branch name was provided
     if [ -n "$branch_name" ]; then
-        # Clean the status by removing color codes and extracting just the status
-        local clean_status=$(echo "$review_status" | sed 's/\x1b\[[0-9;]*m//g' | grep -E "^(None|Started|Commented)$" | head -1)
-        if [ -z "$clean_status" ]; then
-            clean_status="$review_status"
-        fi
+        local clean_status=$(echo "$review_status" | jq -r '.status')
         
         local comments_file=""
         if [ "$clean_status" = "Commented" ]; then
@@ -421,7 +388,7 @@ main() {
         fi
     fi
     
-    echo "$review_status"
+    echo "$review_status" | jq .
 }
 
 # Run main function with all arguments

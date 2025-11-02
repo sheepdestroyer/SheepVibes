@@ -58,24 +58,24 @@ The `pr-review-tracker.json` file maintains state for all working branches:
 
 ### check-review-status.sh
 
-This bash script checks the current Google Code Assist review status for a branch or PR and can wait for comments to be available:
+This script checks the current Google Code Assist review status for a branch or PR and returns a JSON object with the status and comment count.
 
 ```bash
-#!/bin/bash
-# Usage: ./check-review-status.sh [branch-name|pr-number] [--wait] [--poll-interval SECONDS]
-
-# Examples:
-#   ./check-review-status.sh feat/new-widget
-#   ./check-review-status.sh 123 --wait
-#   ./check-review-status.sh feat/new-widget --wait --poll-interval 120
+# Usage: ./check-review-status.sh [branch-name|pr-number] [--wait]
 ```
 
 **Features**:
-- Checks Google Code Assist review status (None, Started, Commented)
-- With `--wait` flag: Polls for comments until available, starting at 60 seconds (1 minute) and increasing by 30 seconds up to 300 seconds (5 minutes), with maximum 5 polls (total wait time: 15 minutes)
-- With `--continue` flag: Automatically continues review-fix cycles until Google Code Assist explicitly says no issues remain (max rounds configurable, default: 10)
-- Extracts and saves Google Code Assist comments to `comments_<PR#>.json`
-- Updates the global tracking file automatically
+- Checks Google Code Assist review status (`None`, `Started`, `Commented`)
+- With `--wait` flag, polls for comments until they are available
+- Returns a JSON object with the review status and the number of comments
+
+**Output Format**:
+```json
+{
+  "status": "Commented",
+  "comments": 5
+}
+```
 
 **Exit Codes**:
 - `0`: Success with review status output
@@ -93,54 +93,35 @@ This bash script checks the current Google Code Assist review status for a branc
 
 ### trigger-review.sh
 
-This bash script posts a `/gemini review` comment to a PR to trigger a new review:
+This script triggers a new Google Code Assist review by posting a `/gemini review` comment to the specified PR.
 
 ```bash
-#!/bin/bash
 # Usage: ./trigger-review.sh [pr-number]
-
-# Example:
-#   ./trigger-review.sh 123
 ```
 
-## Workflow
+## Microagent-Driven Workflow
 
-1.  **Branch Setup**: Create a new branch with a meaningful name.
+The review cycle is managed by the microagent, which uses the scripts to interact with GitHub.
 
-2.  **PR Creation**: Create a PR and mark it as ready for review. Push your changes and trigger an initial review with `./trigger-review.sh [pr-number]`
+1.  **PR Creation**: The microagent creates a PR and triggers an initial review using `trigger-review.sh`.
+2.  **Review Monitoring**: The microagent uses `check-review-status.sh` to monitor the review status.
+3.  **Comment Analysis**: When comments are received, the microagent analyzes them to determine if they are actionable.
+4.  **Addressing Feedback**: If the comments are actionable, the microagent addresses the feedback and pushes the changes.
+5.  **Re-triggering Review**: After pushing changes, the microagent triggers a new review using `trigger-review.sh`.
+6.  **Cycle End**: The cycle ends when the microagent determines that there are no more actionable comments. This can be because Google Code Assist reports no issues, or because the microagent has addressed all comments.
 
-3.  **Review Cycle**:
-    - Use `check-review-status.sh` to monitor the review status.
-    - When comments are received, they are added to the `pr-review-tracker.json` file with a "todo" status.
-    - Address all "todo" comments and update their status to "addressed" in the tracking file.
-    - Push your changes and trigger a new review with `./trigger-review.sh [pr-number]`.
-
-4.  **Cycle End**: The review cycle ends when `check-review-status.sh` returns "None" status, which means that Google Code Assist has no remaining issues, or when the maximum number of review rounds is reached.
-
-5.  **Completion**: When all comments are addressed and the PR is approved, merge the PR.
 ## Usage Examples
-
-### Creating a New Feature Branch
-```bash
-git checkout -b feat/new-feature
-# Make changes, add tests
-git add .
-git commit -m "feat: Add new feature"
-git push origin feat/new-feature
-# Create PR and mark ready to review
-# Comment /gemini review in PR
-```
 
 ### Monitoring Review Status
 ```bash
-# Check current status
+# Get the current review status and comment count
 ./check-review-status.sh feat/new-feature
+```
 
-# Wait for comments
-./check-review-status.sh feat/new-feature --wait
-
-# Wait with custom polling interval
-./check-review-status.sh feat/new-feature --wait --poll-interval 120
+### Triggering a New Review
+```bash
+# Trigger a new review for PR #123
+./trigger-review.sh 123
 ```
 
 ## Configuration
