@@ -13,7 +13,7 @@ This microagent provides a comprehensive system for tracking and managing GitHub
 
 ## Purpose
 
-Track and manage GitHub PR code reviews through a simplified workflow that eliminates the need to close/reopen PRs for fresh reviews. Instead, manually trigger Google Code Assist using `/gemini review` comment after each push.
+Track and manage GitHub PR code reviews through a simplified workflow that eliminates the need to close/reopen PRs for fresh reviews. The review can be triggered either manually by a developer or automatically by the microagent using `/gemini review` comment after each push.
 
 ## Core Principles
 
@@ -141,7 +141,7 @@ The review cycle is managed by the microagent, which uses the scripts to interac
 ## Known Limitations and Workarounds
 
 1. **Automated Trigger**: Use `trigger-review.sh` to automatically post `/gemini review` comments to the PR after pushing changes.
-2. **API Rate Limits**: The script implements polling with increasing intervals (120 seconds to 300 seconds) to avoid hitting GitHub API limits.
+2. **API Rate Limits**: The script implements polling with increasing intervals (120 seconds to 240 seconds for the default 5 polls) to avoid hitting GitHub API limits.
 3. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
 4. **Fallback Strategy**: If Google Code Assist doesn't respond after 5 polls (total wait time: up to 15 minutes), proceed with manual code review.
 5. **Error Recovery**: If the tracking file becomes corrupted, delete it and the script will recreate it

@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # Script to trigger Google Code Assist review by posting /gemini review comment
-# and optionally wait for completion
-# Usage: ./trigger-review.sh [pr-number] [--wait]
+# Usage: ./trigger-review.sh [pr-number]
 
 set -euo pipefail
 

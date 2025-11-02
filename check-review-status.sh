@@ -159,11 +159,8 @@ extract_google_comments() {
         local comment_count=$(echo "$comments_page" | jq length)
         
         if [ "$comment_count" -gt 0 ]; then
-            # Process each comment individually to avoid argument list limits
-            for i in $(seq 0 $((comment_count - 1))); do
-                local comment=$(echo "$comments_page" | jq ".[$i]")
-                jq ". + [$comment]" "$temp_file" > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
-            done
+            # Append the whole page of comments at once, which is more efficient
+            jq -s '.[0] + .[1]' "$temp_file" <(echo "$comments_page") > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
             page=$((page + 1))
         else
             has_more=false
@@ -234,14 +231,14 @@ check_pr_review_status() {
         echo -e "${YELLOW}Waiting for Google Code Assist comments (polling every ${poll_interval}s)...${NC}" >&2
         local poll_count=0
         local current_poll_interval=${poll_interval}
-        local max_polls=5 # Maximum 5 polls (initial 2 minutes, increasing up to 5 minutes total)
+        local max_polls=5 # Maximum 5 polls (initial 2 minutes, increasing up to 15 minutes total)
         
         while [ $google_comments -eq 0 ] && [ $poll_count -lt $max_polls ]; do
             echo -e "${BLUE}Sleeping for ${current_poll_interval} seconds...${NC}" >&2
             sleep "$current_poll_interval"
             poll_count=$((poll_count + 1))
             
-            # Increase poll_interval by 30 seconds for each subsequent poll, up to 300 seconds (5 minutes)
+            # Increase poll_interval by 30 seconds for each subsequent poll, up to 240 seconds (4 minutes)
             current_poll_interval=$((current_poll_interval + 30))
             if [ "$current_poll_interval" -gt 300 ]; then
                 current_poll_interval=300
@@ -251,10 +248,6 @@ check_pr_review_status() {
             google_comments=$(extract_google_comments "$pr_number" "$comments_file")
             
             echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}" >&2
-            
-            if [ "$google_comments" -gt 0 ]; then
-                :
-            fi
         done
         
         if [ $google_comments -eq 0 ]; then
