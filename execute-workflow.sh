@@ -177,13 +177,9 @@ main_workflow() {
                         log "Triggering new Google Code Assist review"
                         ./trigger-review.sh "$pr_number"
                         
-                        # Wait for new comments
-                        log "Waiting for new Google Code Assist comments..."
-                        ./check-review-status.sh "$pr_number" --wait
-                        
-                        # Update tracking with new comments
-                        log "Updating tracking with new comments"
-                        ./update-tracking-efficient.sh "$pr_number" "$branch"
+                        # Wait for new comments and update tracking file
+                        log "Waiting for new Google Code Assist comments and updating tracking file..."
+                        ./check-review-status.sh "$branch" --wait
                     else
                         error "Failed to process TODO comments"
                         return 1
@@ -192,16 +188,14 @@ main_workflow() {
                     warn "State: Commented but no TODO comments - This should not happen"
                     # Trigger review to get new comments
                     ./trigger-review.sh "$pr_number"
-                    ./check-review-status.sh "$pr_number" --wait
-                    ./update-tracking-efficient.sh "$pr_number" "$branch"
+                    ./check-review-status.sh "$branch" --wait
                 fi
                 ;;
                 
             "None")
                 log "State: No comments - Triggering initial review"
                 ./trigger-review.sh "$pr_number"
-                ./check-review-status.sh "$pr_number" --wait
-                ./update-tracking-efficient.sh "$pr_number" "$branch"
+                ./check-review-status.sh "$branch" --wait
                 ;;
                 
             "RateLimited")
