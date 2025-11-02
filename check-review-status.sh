@@ -414,7 +414,7 @@ EOF
     local all_comments_file=$(mktemp "${TMPDIR:-/tmp}/all-comments.XXXXXX")
     TEMP_FILES+=("$all_comments_file")
     
-    if [ "$review_status" = "None" ] && [ -z "$comments_file" ]; then
+    if [ "$pr_state" != "open" ]; then
         # PR is closed - clear all comments
         echo "[]" > "$all_comments_file"
         echo -e "${YELLOW}Clearing all comments for closed PR #${pr_number}${NC}" >&2
@@ -561,12 +561,8 @@ main() {
             comments_file="comments_${pr_number}.json"
         fi
         
-        # If PR is closed, clear comments and set status to None
-        if [ "$pr_state" != "open" ]; then
-            echo -e "${YELLOW}PR #${pr_number} is closed - clearing comments from tracking file${NC}" >&2
-            clean_status="None"
-            comments_file=""  # Don't add new comments for closed PRs
-        fi
+        # Note: Comment clearing for closed PRs is handled in update_tracking_file function
+        # based on pr_state, so we don't need to modify clean_status or comments_file here
         
         if ! update_tracking_file "$branch_name" "$pr_number" "$clean_status" "$comments_file"; then
             echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
