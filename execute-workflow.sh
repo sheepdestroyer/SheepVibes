@@ -97,20 +97,27 @@ process_todo_comments() {
         return 1
     fi
     
-    # Process each TODO comment
+    # Process each TODO comment - MICROAGENT MUST IMPLEMENT ACTUAL FIXES
     echo "$todo_comments" | while IFS= read -r comment; do
         local comment_id=$(echo "$comment" | jq -r '.id')
+        local comment_body=$(echo "$comment" | jq -r '.body')
         
-        log "Processing comment $comment_id"
+        log "Processing comment $comment_id: $comment_body"
         
-        # Here the microagent would implement the actual fix
-        # For now, we'll just mark it as addressed to demonstrate the workflow
-        ./mark-addressed.sh "$branch" "$comment_id"
+        # CRITICAL: Microagent must implement actual fixes here
+        # This is where the AI agent reads the comment and makes code changes
+        # For now, we'll log the comment but NOT mark it as addressed
+        # until actual fixes are implemented
         
-        log "Marked comment $comment_id as addressed"
+        warn "TODO: Implement actual fix for comment $comment_id"
+        warn "Comment: $comment_body"
+        
+        # DO NOT mark as addressed until actual fixes are implemented
+        # ./mark-addressed.sh "$branch" "$comment_id"
     done
     
-    return 0
+    error "No actual fixes implemented - workflow cannot continue"
+    return 1
 }
 
 main_workflow() {
