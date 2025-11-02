@@ -15,25 +15,16 @@ NC='\033[0m' # No Color
 # GitHub API configuration
 GITHUB_API="https://api.github.com"
 
-# Use environment variables if provided, otherwise detect from git remote
-if [ -n "${GITHUB_REPO_OWNER:-}" ] && [ -n "${GITHUB_REPO_NAME:-}" ]; then
-    REPO_OWNER="$GITHUB_REPO_OWNER"
-    REPO_NAME="$GITHUB_REPO_NAME"
-else
-    REPO_SLUG=$(git remote get-url origin 2>/dev/null | sed -e 's/.*github.com[:\/]//' -e 's/\.git$//')
-    if [ -n "$REPO_SLUG" ]; then
-        REPO_OWNER=$(echo "$REPO_SLUG" | cut -d'/' -f1)
-        REPO_NAME=$(echo "$REPO_SLUG" | cut -d'/' -f2)
-    else
-        echo -e "${RED}Error: Could not determine repository owner and name from git remote.${NC}" >&2
-        exit 1
-    fi
-fi
-REPO="${REPO_OWNER}/${REPO_NAME}"
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/scripts/common.sh"
+
+# Get repository owner and name
+get_repo_info
 
 # Check if GITHUB_TOKEN is set
 if [ -z "${GITHUB_TOKEN:-}" ]; then
-    echo -e "${RED}Error: GITHUB_TOKEN environment variable is not set${NC}" >&2
+    printf "${RED}Error: GITHUB_TOKEN environment variable is not set${NC}\n" >&2
     exit 1
 fi
 
@@ -58,11 +49,11 @@ PR_NUMBER="$1"
 
 # Validate PR number is numeric
 if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
-    echo -e "${RED}Error: PR number must be numeric${NC}" >&2
+    printf "${RED}Error: PR number must be numeric${NC}\n" >&2
     exit 1
 fi
 
-echo -e "${YELLOW}Triggering Google Code Assist review for PR #$PR_NUMBER...${NC}"
+printf "${YELLOW}Triggering Google Code Assist review for PR #$PR_NUMBER...${NC}\n"
 
 # Post /gemini review comment
 response=$(curl -s -X POST \
@@ -74,11 +65,11 @@ response=$(curl -s -X POST \
 
 # Check if the request was successful
 if echo "$response" | jq -e '.id' > /dev/null 2>&1; then
-    echo -e "${GREEN}Successfully posted /gemini review comment to PR #$PR_NUMBER${NC}"
+    printf "${GREEN}Successfully posted /gemini review comment to PR #$PR_NUMBER${NC}\n"
 else
-    echo -e "${RED}Failed to post comment to PR #$PR_NUMBER${NC}" >&2
-    echo "Response: $response" >&2
+    printf "${RED}Failed to post comment to PR #$PR_NUMBER${NC}\n" >&2
+    printf "Response: %s\n" "$response" >&2
     exit 1
 fi
 
-echo -e "${GREEN}Google Code Assist review has been triggered.${NC}"
+printf "${GREEN}Google Code Assist review has been triggered.${NC}\n"

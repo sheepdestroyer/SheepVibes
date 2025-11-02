@@ -5,6 +5,13 @@
 
 set -euo pipefail
 
+# Configuration
+TRACKING_FILE="pr-review-tracker.json"
+LOCK_FILE="/tmp/pr-review-tracker.lock"
+MAX_POLLS=5
+DEFAULT_POLL_INTERVAL=120
+GOOGLE_BOT_USERNAME="gemini-code-assist[bot]"
+
 # Global array to track temporary files for cleanup
 TEMP_FILES=()
 
@@ -50,8 +57,8 @@ usage() {
     echo "Returns: None or Commented"
     echo ""
     echo "Options:"
-    echo "  --wait              Wait for comments to be available"
-    echo "  --poll-interval SEC  Polling interval in seconds (default: 120)"
+    echo "  --wait              Wait for comments to be available (60s initial wait, then 30s intervals)"
+    echo "  --poll-interval SEC  Polling interval in seconds (default: 120, but --wait uses fixed 60s/30s logic)"
     echo ""
     echo "When --wait is used and comments are found, they are saved to comments_<PR#>.json"
 }
@@ -107,7 +114,6 @@ github_api_request() {
                 if [ "$wait_time" -gt 0 ]; then
                     echo -e "${YELLOW}Rate limit hit. Waiting ${wait_time} seconds...${NC}" >&2
                     sleep "$wait_time"
-                    retry_count=$((retry_count + 1))
                     continue
                 fi
             fi
@@ -140,7 +146,10 @@ get_pr_info_from_branch() {
     local branch_name="$1"
     
     # Get open PRs for this branch
-    local pr_data=$(github_api_request "/pulls?head=${REPO_OWNER}:${branch_name}&state=open")
+    local pr_data
+    if ! pr_data=$(github_api_request "/pulls?head=${REPO_OWNER}:${branch_name}&state=open"); then
+        return 1  # Propagate API request failure
+    fi
     
     if [ "$(echo "$pr_data" | jq length)" -gt 0 ]; then
         echo "$pr_data" | jq -r '.[0] | {number: .number, title: .title, state: .state}'
@@ -160,6 +169,55 @@ check_for_no_remaining_issues() {
     else
         return 1  # No completion signal found
     fi
+}
+
+# Function to check if Google Code Assist has hit daily quota limit
+check_for_rate_limit() {
+    local comments_file="$1"
+
+    # Find the most recent rate limit message
+    local rate_limit_comment=$(jq -r '
+        [.[] | select(.body | test("You have reached your daily quota limit"; "i"))] 
+        | sort_by(.submitted_at) 
+        | last
+    ' "$comments_file")
+
+    # If no rate limit message found, return false
+    if [ "$rate_limit_comment" = "null" ] || [ -z "$rate_limit_comment" ]; then
+        return 1  # No rate limit detected
+    fi
+
+    # Extract the timestamp of the rate limit message
+    local rate_limit_time=$(echo "$rate_limit_comment" | jq -r '.submitted_at')
+    
+    # Check if there are any comments that came AFTER the rate limit message
+    local newer_comments=$(jq --arg rate_limit_time "$rate_limit_time" '
+        [.[] | select(.submitted_at > $rate_limit_time)] | length
+    ' "$comments_file")
+
+    # If there are newer comments, the quota may have reset - don't pause
+    if [ "$newer_comments" -gt 0 ]; then
+        echo -e "${YELLOW}Rate limit detected but newer comments exist - continuing workflow${NC}" >&2
+        return 1  # Don't pause workflow
+    fi
+
+    # Check if 24 hours have passed since the rate limit message
+    local current_time=$(date -u +%s)
+    local rate_limit_timestamp=$(date -u -d "$rate_limit_time" +%s 2>/dev/null || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$rate_limit_time" +%s 2>/dev/null)
+    
+    if [ -n "$rate_limit_timestamp" ]; then
+        local time_since_rate_limit=$((current_time - rate_limit_timestamp))
+        local twenty_four_hours=$((24 * 60 * 60))
+        
+        if [ "$time_since_rate_limit" -ge "$twenty_four_hours" ]; then
+            echo -e "${YELLOW}Rate limit detected but 24 hours have passed - continuing workflow${NC}" >&2
+            return 1  # Don't pause workflow
+        fi
+    fi
+
+    # If we get here, rate limit is active and workflow should pause
+    echo -e "${YELLOW}Active rate limit detected - workflow paused${NC}" >&2
+    return 0  # Rate limit active, pause workflow
 }
 
 # Function to extract and save Google Code Assist comments from timeline with pagination
@@ -260,21 +318,23 @@ check_pr_review_status() {
     
     # If waiting for comments and none found, poll until comments are available
     if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
-        echo -e "${YELLOW}Waiting for Google Code Assist comments (polling every ${poll_interval}s)...${NC}" >&2
+        echo -e "${YELLOW}Waiting for Google Code Assist comments (initial 60s wait, then polling every 30s)...${NC}" >&2
         local poll_count=0
-        local current_poll_interval=${poll_interval}
-        # Use the max_polls parameter passed to the function
         
+        # Initial 60 second wait (first minute)
+        echo -e "${BLUE}Initial wait: 60 seconds...${NC}" >&2
+        sleep 60
+        poll_count=$((poll_count + 1))
+        
+        # Re-check for comments after initial wait
+        google_comments=$(extract_google_comments "$pr_number" "$comments_file")
+        echo -e "${BLUE}After initial wait: ${google_comments} Google Code Assist comments found${NC}" >&2
+        
+        # Continue polling every 30 seconds if no comments found
         while [ "$google_comments" -eq 0 ] && [ "$poll_count" -lt "$max_polls" ]; do
-            echo -e "${BLUE}Sleeping for ${current_poll_interval} seconds...${NC}" >&2
-            sleep "$current_poll_interval"
+            echo -e "${BLUE}Sleeping for 30 seconds...${NC}" >&2
+            sleep 30
             poll_count=$((poll_count + 1))
-            
-            # Increase poll_interval by 30 seconds for each subsequent poll, up to 300 seconds (5 minutes)
-            current_poll_interval=$((current_poll_interval + 30))
-            if [ "$current_poll_interval" -gt 300 ]; then
-                current_poll_interval=300
-            fi
             
             # Re-check for comments
             google_comments=$(extract_google_comments "$pr_number" "$comments_file")
@@ -290,8 +350,12 @@ check_pr_review_status() {
     if [ "$google_comments" -gt 0 ]; then
         echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}" >&2
         
+        # Check if Google Code Assist has hit daily quota limit
+        if check_for_rate_limit "$comments_file"; then
+            echo -e "${YELLOW}Google Code Assist has reached daily quota limit - review cycle paused${NC}" >&2
+            echo "{\"status\": \"RateLimited\", \"comments\": ${google_comments}}"
         # Check if Google Code Assist has indicated no remaining issues
-        if check_for_no_remaining_issues "$comments_file"; then
+        elif check_for_no_remaining_issues "$comments_file"; then
             echo -e "${GREEN}Google Code Assist indicates no remaining issues - review cycle complete${NC}" >&2
             echo "{\"status\": \"Complete\", \"comments\": ${google_comments}}"
         else
@@ -426,7 +490,11 @@ main() {
     else
         branch_name="$input"
         echo -e "${BLUE}Checking branch: ${branch_name}${NC}" >&2
-        local pr_info=$(get_pr_info_from_branch "$branch_name")
+        local pr_info
+        if ! pr_info=$(get_pr_info_from_branch "$branch_name"); then
+            echo -e "${RED}Error: Failed to fetch PR information for branch: ${branch_name}${NC}" >&2
+            exit 1
+        fi
         
         if [ -z "$pr_info" ]; then
             echo -e "${RED}No open PR found for branch: ${branch_name}${NC}" >&2
