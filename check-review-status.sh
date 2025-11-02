@@ -53,7 +53,7 @@ usage() {
     echo "Exit Codes:"
     echo "  0 - Success with review status output (including when no open PR is found)"
     echo "  1 - Error occurred (e.g., authentication, API failure)"
-    echo "  2 - Rate limit detected (GitHub API or Google Code Assist quota limit)"
+    echo "  2 - PR is not open (state is not 'open')"
     echo ""
     echo "Options:"
     echo "  --wait              Wait for comments to be available (60s initial wait, then 30s intervals)"
