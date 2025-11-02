@@ -91,7 +91,7 @@ if [ "$WAIT_FOR_REVIEW" = true ]; then
         
         # Check review status using the check-review-status script
         echo -e "${BLUE}Checking review status... (${elapsed}s elapsed)${NC}"
-        review_status=$(bash check-review-status.sh "$PR_NUMBER" 2>/dev/null | grep -E "^(None|Started|Commented)$" | head -1)
+        review_status=$(bash check-review-status.sh "$PR_NUMBER" | grep -E "^(None|Started|Commented)$" | head -1)
         
         if [ "$review_status" = "Commented" ]; then
             echo -e "${GREEN}Google Code Assist review completed with comments${NC}"

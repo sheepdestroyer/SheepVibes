@@ -191,11 +191,6 @@ check_pr_review_status() {
     
     echo -e "${BLUE}PR Title: ${pr_title}${NC}"
     
-    # Get reviews for this PR (separate API call needed for full review data)
-    local reviews=$(github_api_request "/pulls/${pr_number}/reviews")
-    local review_count=$(echo "$reviews" | jq length)
-    echo -e "${BLUE}Found ${review_count} reviews${NC}"
-    
     # Check for Google Code Assist activity
     local google_assist_found=false
     local comments_file="comments_${pr_number}.json"
@@ -420,7 +415,10 @@ main() {
             comments_file="comments_${pr_number}.json"
         fi
         
-        update_tracking_file "$branch_name" "$pr_number" "$clean_status" "$comments_file"
+        if ! update_tracking_file "$branch_name" "$pr_number" "$clean_status" "$comments_file"; then
+            echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
+            exit 1
+        fi
     fi
     
     echo "$review_status"
