@@ -169,7 +169,7 @@ check_for_no_remaining_issues() {
     
     # Check if any comment contains a completion signal
     # Use more specific patterns to avoid matching comments about the feature itself
-    if jq -e 'any(.[] | .body; test("^(No remaining issues|All issues resolved|All fixed|No issues remaining)"))' "$comments_file" > /dev/null; then
+    if jq -e 'any(.[] | .body; test("^(No remaining issues|All issues resolved|All fixed|No issues remaining)"; "i"))' "$comments_file" > /dev/null; then
         return 0  # Completion signal found
     fi
     
@@ -577,3 +577,4 @@ main() {
 
 # Run main function with all arguments
 main "$@"
+

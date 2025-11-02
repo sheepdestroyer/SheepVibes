@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # ensure-pr-ready-workflow.sh - Workflow to ensure all opened PRs are marked as "Ready for review"
@@ -268,3 +267,4 @@ main() {
 
 # Run main function with all arguments
 main "$@"
+
