@@ -24,22 +24,16 @@ BRANCH_NAME="$1"
 shift
 COMMENT_IDS=("$@")
 
-# Build the jq filter for multiple comment IDs
-FILTER=""
-for id in "${COMMENT_IDS[@]}"; do
-    if [ -n "$FILTER" ]; then
-        FILTER="$FILTER or "
-    fi
-    FILTER="$FILTER .id == $id"
-done
+# Build a JSON array of comment IDs to pass to jq safely
+COMMENT_ID_ARRAY=$(printf '%s\n' "${COMMENT_IDS[@]}" | jq -R . | jq -s 'map(tonumber)')
 
 # Use file locking to prevent concurrent modifications
 (
     flock -x 200 || exit 1
     
     # Update the specified comments as addressed
-    jq --arg branch "$BRANCH_NAME" \
-       '(.branches[$branch].comments[] | select('"$FILTER"') | .status) = "addressed"' \
+    jq --arg branch "$BRANCH_NAME" --argjson ids "$COMMENT_ID_ARRAY" \
+       '(.branches[$branch].comments[] | select(.id | IN($ids[])) | .status) = "addressed"' \
        "$TRACKING_FILE" > "${TRACKING_FILE}.tmp" && mv "${TRACKING_FILE}.tmp" "$TRACKING_FILE"
     
     echo "Marked comments ${COMMENT_IDS[*]} as addressed for branch $BRANCH_NAME"

@@ -507,7 +507,9 @@ main() {
     fi
     
     # Check review status
-    local review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" "$poll_interval" "$max_polls" "$pr_title" "$pr_state")
+    local review_status
+    review_status=$(check_pr_review_status "$pr_number" "$wait_for_comments" "$poll_interval" "$max_polls" "$pr_title" "$pr_state")
+    local check_status_exit_code=$?
     
     # Update tracking file if branch name was provided
     if [ -n "$branch_name" ]; then
@@ -525,6 +527,10 @@ main() {
     fi
     
     echo "$review_status" | jq .
+
+    if [ "$check_status_exit_code" -ne 0 ]; then
+        exit "$check_status_exit_code"
+    fi
 }
 
 # Run main function with all arguments
