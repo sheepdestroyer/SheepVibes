@@ -5,12 +5,15 @@
 
 set -euo pipefail
 
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/scripts/common.sh"
+
 # Configuration
 TRACKING_FILE="pr-review-tracker.json"
 MAX_POLLS=5
 DEFAULT_POLL_INTERVAL=120
 GOOGLE_BOT_USERNAME="${GOOGLE_BOT_USERNAME:-gemini-code-assist[bot]}"
-GITHUB_API_BASE="https://api.github.com"
 
 # Global array to track temporary files for cleanup
 TEMP_FILES=()
@@ -76,74 +79,6 @@ check_dependencies() {
         echo -e "${RED}Error: curl is required but not installed.${NC}"
         exit 1
     fi
-}
-
-# Function to make GitHub API request with rate limit handling
-github_api_request() {
-    local endpoint="$1"
-    local url="${GITHUB_API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}${endpoint}"
-    local retry_count=0
-    local max_retries=3
-    
-    while [ $retry_count -lt $max_retries ]; do
-        local response
-        local http_code
-        local headers_file=$(mktemp "${TMPDIR:-/tmp}/review-status-headers.XXXXXX")
-        TEMP_FILES+=("$headers_file")
-        
-        local auth_header=()
-        if [ -n "${GITHUB_TOKEN:-}" ]; then
-            auth_header=("-H" "Authorization: token $GITHUB_TOKEN")
-        else
-            echo -e "${YELLOW}Warning: GITHUB_TOKEN not set. Using unauthenticated requests (rate limited).${NC}" >&2
-        fi
-
-        response=$(curl -s -w "\n%{http_code}" -D "$headers_file" \
-             -H "Accept: application/vnd.github.v3+json" \
-             "${auth_header[@]}" \
-             "$url")
-        
-        http_code=$(echo "$response" | tail -n1)
-        local response_body=$(echo "$response" | head -n -1)
-        
-        # Check for rate limiting (HTTP 429 or 403 with rate limit message)
-        if [ "$http_code" = "429" ] || { [ "$http_code" = "403" ] && echo "$response_body" | grep -iq "API rate limit exceeded"; }; then
-            local reset_time
-            reset_time=$(grep -i "x-ratelimit-reset" "$headers_file" | cut -d' ' -f2 | tr -d '\r')
-            rm -f "$headers_file"
-            
-            if [ -n "$reset_time" ]; then
-                local current_time=$(date +%s)
-                local wait_time=$((reset_time - current_time + 10))  # Add 10 seconds buffer
-                
-                if [ "$wait_time" -gt 0 ]; then
-                    echo -e "${YELLOW}Rate limit hit. Waiting ${wait_time} seconds...${NC}" >&2
-                    sleep "$wait_time"
-                    continue
-                fi
-            fi
-        else
-            # Clean up headers file if not rate limited
-            rm -f "$headers_file"
-        fi
-        
-        # Check for successful response
-        if [ "$http_code" = "200" ]; then
-            echo "$response_body"
-            return 0
-        fi
-        
-        # For other errors, retry with exponential backoff
-        retry_count=$((retry_count + 1))
-        if [ $retry_count -lt $max_retries ]; then
-            local backoff_time=$((2 ** retry_count))
-            echo -e "${YELLOW}API request failed (HTTP $http_code). Retrying in ${backoff_time}s...${NC}" >&2
-            sleep "$backoff_time"
-        fi
-    done
-    
-    echo -e "${RED}Failed to make GitHub API request after ${max_retries} attempts${NC}" >&2
-    return 1
 }
 
 # Function to get PR info from branch name

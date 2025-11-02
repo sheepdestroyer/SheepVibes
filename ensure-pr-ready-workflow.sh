@@ -116,43 +116,6 @@ mark_pr_ready() {
 }
 
 # Function to update tracking file
-update_tracking_file() {
-    local branch_name="$1"
-    local pr_number="$2"
-    local action="$3"
-    
-    if [ ! -f "$TRACKING_FILE" ]; then
-        printf "${YELLOW}Tracking file not found, creating new one...${NC}\n"
-        cat > "$TRACKING_FILE" << EOF
-{
-  "branches": {},
-  "last_updated": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-}
-EOF
-    fi
-    
-    # Use flock for atomic updates
-    local lock_file="${TRACKING_FILE}.lock"
-    (
-        flock -x 200
-        local temp_file=$(mktemp)
-        
-        jq --arg branch "$branch_name" \
-           --arg pr "$pr_number" \
-           --arg action "$action" \
-           --arg timestamp "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-           '.last_updated = $timestamp |
-            .branches[$branch] = (.branches[$branch] // {}) + {
-                pr_number: ($pr | tonumber? // $pr),
-                last_action: $action,
-                last_updated: $timestamp
-            }' \
-           "$TRACKING_FILE" > "$temp_file"
-        
-        mv "$temp_file" "$TRACKING_FILE"
-    ) 200>"$lock_file"
-}
-
 # Main function
 main() {
     local dry_run=false
@@ -235,7 +198,7 @@ main() {
                 
                 # Update tracking file if not dry run
                 if [ "$dry_run" = "false" ]; then
-                    update_tracking_file "$head_branch" "$pr_number" "marked_ready"
+                    ./check-review-status.sh "$head_branch"
                     printf "  ${GREEN}Tracking updated for branch ${head_branch}${NC}\n"
                 fi
             else
@@ -246,7 +209,7 @@ main() {
             
             # Update tracking file to reflect current status
             if [ "$dry_run" = "false" ]; then
-                update_tracking_file "$head_branch" "$pr_number" "already_ready"
+                ./check-review-status.sh "$head_branch"
             fi
         fi
         
