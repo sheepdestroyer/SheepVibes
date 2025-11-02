@@ -257,7 +257,7 @@ extract_google_comments() {
     
     # Filter for comments made by Google Code Assist and extract relevant info
     # Note: we alias 'created_at' to 'submitted_at' for consistency with the tracking file format.
-    jq --arg bot_username "$GOOGLE_BOT_USERNAME" '
+    jq --arg bot_username "$GOOGLE_BOT_USERNAME" -s '
     [
         .[] |
         select(
