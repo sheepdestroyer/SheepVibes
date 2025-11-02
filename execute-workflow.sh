@@ -132,18 +132,21 @@ main_workflow() {
         log "=== Workflow Cycle $cycle_count/$MAX_CYCLES ==="
         
         # Check if we should continue
-        if ! check_workflow_conditions "$branch" "$pr_number"; then
-            case $? in
-                2)
-                    success "Workflow completed normally"
-                    return 0
-                    ;;
-                *)
-                    error "Workflow error detected"
-                    return 1
-                    ;;
-            esac
-        fi
+        check_workflow_conditions "$branch" "$pr_number"
+        local condition_result=$?
+
+        case "$condition_result" in
+            0|3) # Continue workflow for normal operation or rate limiting
+                ;;
+            2) # Workflow complete
+                success "Workflow completed normally"
+                return 0
+                ;;
+            1) # Error
+                error "Workflow error detected"
+                return 1
+                ;;
+        esac
         
         # Get current state
         local tracking_data=$(jq -c ".branches[\"$branch\"]" "$TRACKING_FILE")

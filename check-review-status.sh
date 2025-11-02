@@ -428,12 +428,13 @@ EOF
           --arg status "$review_status" \
           --arg updated "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
           --slurpfile comments "$all_comments_file" \
-          '.branches[$branch] = {
-            pr_number: ($pr | tonumber? // $pr),
-            review_status: $status,
-            last_updated: $updated,
-            comments: $comments[0]
-          } | .last_updated = $updated' \
+          '.last_updated = $updated |
+           .branches[$branch] |= (
+            . // {pr_number: ($pr | tonumber? // $pr), comments: []}
+           ) |
+           .branches[$branch].review_status = $status |
+           .branches[$branch].last_updated = $updated |
+           .branches[$branch].comments = $comments[0]' \
           "$TRACKING_FILE" > "$temp_file"; then
         mv "$temp_file" "$TRACKING_FILE"
         echo -e "${GREEN}Updated tracking file: $TRACKING_FILE${NC}" >&2
