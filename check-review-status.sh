@@ -142,16 +142,31 @@ get_pr_info_from_branch() {
     fi
 }
 
-# Function to extract and save Google Code Assist comments from timeline
+# Function to extract and save Google Code Assist comments from timeline with pagination
 extract_google_comments() {
     local pr_number="$1"
     local comments_file="$2"
     
-    # Get all reviews for this PR
-    local reviews=$(github_api_request "/pulls/${pr_number}/reviews")
+    # Get all reviews for this PR with pagination support
+    local all_reviews="[]"
+    local page=1
+    local has_more=true
+    
+    while [ "$has_more" = true ]; do
+        local reviews=$(github_api_request "/pulls/${pr_number}/reviews?page=${page}&per_page=100")
+        local review_count=$(echo "$reviews" | jq length)
+        
+        if [ "$review_count" -gt 0 ]; then
+            # Merge with existing reviews
+            all_reviews=$(echo "$all_reviews" | jq ". + $reviews")
+            page=$((page + 1))
+        else
+            has_more=false
+        fi
+    done
     
     # Filter for comments made by Google Code Assist and extract relevant info
-    echo "$reviews" | jq '
+    echo "$all_reviews" | jq '
     [
         .[] | 
         select(

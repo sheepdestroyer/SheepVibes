@@ -78,9 +78,8 @@ This script checks the current Google Code Assist review status for a branch or 
 ```
 
 **Exit Codes**:
-- `0`: Success with review status output
+- `0`: Success with review status output (including when no open PR is found)
 - `1`: Error occurred
-- `2`: No open PR found for branch
 
 **Note**: To trigger a new Google Code Assist review, you must manually comment `/gemini review` in the GitHub PR interface after pushing changes.
 
@@ -142,9 +141,9 @@ The review cycle is managed by the microagent, which uses the scripts to interac
 ## Known Limitations and Workarounds
 
 1. **Automated Trigger**: Use `trigger-review.sh` to automatically post `/gemini review` comments to the PR after pushing changes.
-2. **API Rate Limits**: The script implements polling with increasing intervals (60 seconds to 300 seconds) to avoid hitting GitHub API limits.
+2. **API Rate Limits**: The script implements polling with increasing intervals (120 seconds to 300 seconds) to avoid hitting GitHub API limits.
 3. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
-4. **Fallback Strategy**: If Google Code Assist doesn't respond after 5 polls (total wait time: 15 minutes), proceed with manual code review.
+4. **Fallback Strategy**: If Google Code Assist doesn't respond after 5 polls (total wait time: up to 5 minutes), proceed with manual code review.
 5. **Error Recovery**: If the tracking file becomes corrupted, delete it and the script will recreate it
 
 ## Integration with Existing Workflows
