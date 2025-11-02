@@ -25,30 +25,50 @@ fi
 
 usage() {
     cat << EOF
-Usage: $0 [pr-number] [--wait]
+Usage: $0 [pr-number] [--wait|--continue [max-rounds]]
 
 Triggers Google Code Assist review by posting "/gemini review" comment to a PR.
 
 Options:
-  --wait    Wait for review completion and check status
+  --wait           Wait for review completion and check status
+  --continue       Automatically continue review-fix cycles until no issues remain
+  max-rounds       Maximum number of review cycles (default: 10)
 
 Example:
   $0 162
   $0 162 --wait
+  $0 162 --continue
+  $0 162 --continue 5
 EOF
 }
 
 # Parse command line arguments
-if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+if [ $# -lt 1 ] || [ $# -gt 3 ]; then
     usage
     exit 1
 fi
 
 PR_NUMBER="$1"
 WAIT_FOR_REVIEW=false
+CONTINUE_CYCLE=false
+MAX_ROUNDS=10
 
-if [ $# -eq 2 ] && [ "$2" = "--wait" ]; then
-    WAIT_FOR_REVIEW=true
+if [ $# -ge 2 ]; then
+    case "$2" in
+        --wait)
+            WAIT_FOR_REVIEW=true
+            ;;
+        --continue)
+            CONTINUE_CYCLE=true
+            if [ $# -eq 3 ] && [[ "$3" =~ ^[0-9]+$ ]]; then
+                MAX_ROUNDS="$3"
+            fi
+            ;;
+        *)
+            usage
+            exit 1
+            ;;
+    esac
 fi
 
 # Validate PR number is numeric
@@ -104,6 +124,68 @@ if [ "$WAIT_FOR_REVIEW" = true ]; then
     
     echo -e "${YELLOW}Google Code Assist review did not complete within ${max_wait}s timeout${NC}"
     exit 1
+elif [ "$CONTINUE_CYCLE" = true ]; then
+    echo -e "${BLUE}Starting automated review-fix cycle (max rounds: $MAX_ROUNDS)...${NC}"
+    
+    current_round=1
+    while [ $current_round -le $MAX_ROUNDS ]; do
+        echo -e "${BLUE}=== Round $current_round/$MAX_ROUNDS ===${NC}"
+        
+        # Wait for review completion
+        echo -e "${BLUE}Waiting for Google Code Assist review...${NC}"
+        max_wait=600  # 10 minutes per round
+        wait_interval=30
+        elapsed=0
+        review_completed=false
+        
+        while [ $elapsed -lt $max_wait ]; do
+            sleep $wait_interval
+            elapsed=$((elapsed + wait_interval))
+            
+            review_status=$(bash check-review-status.sh "$PR_NUMBER" | grep -E "^(None|Started|Commented)$" | head -1)
+            
+            if [ "$review_status" = "Commented" ] || [ "$review_status" = "None" ]; then
+                review_completed=true
+                break
+            fi
+        done
+        
+        if [ "$review_completed" = false ]; then
+            echo -e "${YELLOW}Review did not complete within ${max_wait}s timeout in round $current_round${NC}"
+            exit 1
+        fi
+        
+        # Check if no issues remain
+        if [ "$review_status" = "None" ]; then
+            echo -e "${GREEN}✓ Google Code Assist review completed - no issues found${NC}"
+            echo -e "${GREEN}All review cycles completed successfully!${NC}"
+            exit 0
+        fi
+        
+        # Check comments for "No remaining issues" or similar
+        comments_file="comments_${PR_NUMBER}.json"
+        if [ -f "$comments_file" ]; then
+            no_issues_found=$(jq -r '.[] | select(.body | test("no.*remaining.*issue|no.*issue.*remaining|all.*issue.*resolved|all.*fixed"; "i")) | .body' "$comments_file" 2>/dev/null | head -1)
+            if [ -n "$no_issues_found" ]; then
+                echo -e "${GREEN}✓ Google Code Assist confirmed no remaining issues${NC}"
+                echo -e "${GREEN}All review cycles completed successfully!${NC}"
+                exit 0
+            fi
+        fi
+        
+        echo -e "${YELLOW}Issues found in round $current_round. Please address them and push changes.${NC}"
+        echo -e "${BLUE}When ready, the script will automatically trigger the next review cycle...${NC}"
+        read -p "Press Enter to continue to next round (or Ctrl+C to stop)..."
+        
+        # Trigger next review cycle
+        echo -e "${BLUE}Triggering next review cycle...${NC}"
+        github_api_request "/issues/${PR_NUMBER}/comments" "POST" "{\"body\": \"/gemini review\"}" > /dev/null
+        
+        current_round=$((current_round + 1))
+    done
+    
+    echo -e "${YELLOW}Maximum rounds ($MAX_ROUNDS) reached. Manual review may be needed.${NC}"
+    exit 0
 else
     echo -e "${GREEN}Google Code Assist review has been triggered. Use './trigger-review.sh $PR_NUMBER --wait' to wait for completion.${NC}"
 fi

@@ -73,6 +73,7 @@ This bash script checks the current Google Code Assist review status for a branc
 **Features**:
 - Checks Google Code Assist review status (None, Started, Commented)
 - With `--wait` flag: Polls for comments until available, starting at 120 seconds (2 minutes) and increasing by 30 seconds up to 300 seconds (5 minutes), with maximum 5 polls (total wait time: 15 minutes)
+- With `--continue` flag: Automatically continues review-fix cycles until Google Code Assist explicitly says no issues remain (max rounds configurable, default: 10)
 - Extracts and saves Google Code Assist comments to `comments_<PR#>.json`
 - Updates the global tracking file automatically
 
