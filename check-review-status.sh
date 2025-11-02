@@ -149,6 +149,18 @@ get_pr_info_from_branch() {
     fi
 }
 
+# Function to check if Google Code Assist has indicated no remaining issues
+check_for_no_remaining_issues() {
+    local comments_file="$1"
+    
+    # Check if any comment contains a completion signal
+    if jq -e '.[] | select(.body | test("no.*remaining.*issue|no.*issue.*remaining|all.*issue.*resolved|all.*fixed"; "i"))' "$comments_file" > /dev/null 2>&1; then
+        return 0  # No remaining issues found
+    else
+        return 1  # No completion signal found
+    fi
+}
+
 # Function to extract and save Google Code Assist comments from timeline with pagination
 extract_google_comments() {
     local pr_number="$1"
@@ -261,7 +273,14 @@ check_pr_review_status() {
     
     if [ "$google_comments" -gt 0 ]; then
         echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}" >&2
-        echo "{\"status\": \"Commented\", \"comments\": ${google_comments}}"
+        
+        # Check if Google Code Assist has indicated no remaining issues
+        if check_for_no_remaining_issues "$comments_file"; then
+            echo -e "${GREEN}Google Code Assist indicates no remaining issues - review cycle complete${NC}" >&2
+            echo "{\"status\": \"Complete\", \"comments\": ${google_comments}}"
+        else
+            echo "{\"status\": \"Commented\", \"comments\": ${google_comments}}"
+        fi
     else
         echo -e "${YELLOW}No Google Code Assist activity detected${NC}" >&2
         echo "{\"status\": \"None\", \"comments\": 0}"
