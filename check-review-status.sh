@@ -147,18 +147,23 @@ extract_google_comments() {
     local pr_number="$1"
     local comments_file="$2"
     
-    # Get all reviews for this PR with pagination support
-    local all_reviews="[]"
+    # Get all review comments for this PR with pagination support
+    local temp_file=$(mktemp)
+    echo "[]" > "$temp_file"
     local page=1
     local has_more=true
     
     while [ "$has_more" = true ]; do
-        local reviews=$(github_api_request "/pulls/${pr_number}/reviews?page=${page}&per_page=100")
-        local review_count=$(echo "$reviews" | jq length)
+        # Use the /pulls/{pr_number}/comments endpoint to get line comments
+        local comments_page=$(github_api_request "/pulls/${pr_number}/comments?page=${page}&per_page=100")
+        local comment_count=$(echo "$comments_page" | jq length)
         
-        if [ "$review_count" -gt 0 ]; then
-            # Merge with existing reviews
-            all_reviews=$(echo "$all_reviews" | jq ". + $reviews")
+        if [ "$comment_count" -gt 0 ]; then
+            # Process each comment individually to avoid argument list limits
+            for i in $(seq 0 $((comment_count - 1))); do
+                local comment=$(echo "$comments_page" | jq ".[$i]")
+                jq ". + [$comment]" "$temp_file" > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
+            done
             page=$((page + 1))
         else
             has_more=false
@@ -166,22 +171,26 @@ extract_google_comments() {
     done
     
     # Filter for comments made by Google Code Assist and extract relevant info
-    echo "$all_reviews" | jq '
+    # Note: we alias 'created_at' to 'submitted_at' for consistency with the tracking file format.
+    jq '
     [
-        .[] | 
+        .[] |
         select(
-            .user.login == "gemini-code-assist[bot]" and .body
+            .user.login == "gemini-code-assist[bot]"
         ) | {
             id: .id,
             user: .user.login,
             body: .body,
-            submitted_at: .submitted_at,
+            submitted_at: .created_at,
             html_url: .html_url
         }
-    ]' > "$comments_file"
+    ]' "$temp_file" > "$comments_file"
     
-    local comment_count=$(jq length "$comments_file")
-    echo "$comment_count"
+    # Clean up temporary file
+    rm -f "$temp_file"
+    
+    local total_comment_count=$(jq length "$comments_file")
+    echo "$total_comment_count"
 }
 
 # Function to check review status for a PR
@@ -202,8 +211,8 @@ check_pr_review_status() {
     fi
     
     if [ "$pr_state" != "open" ]; then
-        echo -e "${YELLOW}PR #${pr_number} is not open (state: $pr_state)${NC}"
-        echo "None"
+        echo -e "${YELLOW}PR #${pr_number} is not open (state: $pr_state)${NC}" >&2
+        echo "{\"status\": \"None\", \"comments\": 0}"
         return
     fi
     
