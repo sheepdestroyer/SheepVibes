@@ -179,7 +179,12 @@ elif [ "$CONTINUE_CYCLE" = true ]; then
         
         # Trigger next review cycle
         echo -e "${BLUE}Triggering next review cycle...${NC}"
-        github_api_request "/issues/${PR_NUMBER}/comments" "POST" "{\"body\": \"/gemini review\"}" > /dev/null
+        curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/json" \
+            -d '{"body": "/gemini review"}' \
+            "$GITHUB_API/repos/$REPO/issues/$PR_NUMBER/comments" > /dev/null
         
         current_round=$((current_round + 1))
     done
