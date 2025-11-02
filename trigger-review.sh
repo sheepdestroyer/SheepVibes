@@ -174,9 +174,23 @@ elif [ "$CONTINUE_CYCLE" = true ]; then
         fi
         
         echo -e "${YELLOW}Issues found in round $current_round. The microagent will address them and push changes.${NC}"
-        echo -e "${BLUE}Automatically triggering next review cycle in 10 seconds...${NC}"
-        sleep 10
+        echo -e "${BLUE}Waiting 60 seconds for microagent to address issues and push changes...${NC}"
+        sleep 60
         
+        # Check if new commits were pushed before triggering next review
+        echo -e "${BLUE}Checking for new commits...${NC}"
+        git fetch origin
+        local_commit=$(git rev-parse HEAD)
+        remote_commit=$(git rev-parse origin/feat/unified-pr-tracker)
+        
+        if [ "$local_commit" = "$remote_commit" ]; then
+            echo -e "${YELLOW}No new commits detected. Microagent may still be working or no changes needed.${NC}"
+            echo -e "${BLUE}Waiting additional 30 seconds...${NC}"
+            sleep 30
+        else
+            echo -e "${GREEN}New commits detected! Proceeding with next review cycle.${NC}"
+        fi
+
         # Trigger next review cycle
         echo -e "${BLUE}Triggering next review cycle...${NC}"
         curl -s -X POST \
