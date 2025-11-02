@@ -154,7 +154,8 @@ check_for_no_remaining_issues() {
     local comments_file="$1"
     
     # Check if any comment contains a completion signal
-    if jq -e '.[] | select(.body | test("no.*remaining.*issue|no.*issue.*remaining|all.*issue.*resolved|all.*fixed"; "i"))' "$comments_file" > /dev/null 2>&1; then
+    # Use more specific patterns to avoid matching comments about the feature itself
+    if jq -e '.[] | select(.body | test("^No remaining issues|^All issues resolved|^All fixed|^No issues remaining"; "i"))' "$comments_file" > /dev/null 2>&1; then
         return 0  # No remaining issues found
     else
         return 1  # No completion signal found
