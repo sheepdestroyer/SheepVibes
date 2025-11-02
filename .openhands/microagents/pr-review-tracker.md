@@ -107,7 +107,7 @@ The review cycle is managed by the microagent, which uses the scripts to interac
 3.  **Comment Analysis**: When comments are received, the microagent analyzes them to determine if they are actionable.
 4.  **Addressing Feedback**: If the comments are actionable, the microagent addresses the feedback and pushes the changes.
 5.  **Re-triggering Review**: After pushing changes, the microagent triggers a new review using `trigger-review.sh`.
-6.  **Cycle End**: The cycle ends when the microagent determines that there are no more actionable comments. This can be because Google Code Assist reports no issues, or because the microagent has addressed all comments.
+6.  **Cycle End**: The cycle ends **only when Google Code Assist explicitly states "No remaining issues"** or provides a similar indication that the review is complete. The microagent must continue the cycle until this explicit completion signal is received.
 
 ## Usage Examples
 
