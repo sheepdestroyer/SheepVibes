@@ -52,6 +52,8 @@ The `pr-review-tracker.json` file maintains state for all working branches:
 
 - **None**: No Google Code Assist comments detected
 - **Commented**: Comments have been provided and need addressing
+- **Complete**: All comments have been addressed and no further action needed
+- **RateLimited**: Google Code Assist has reached daily quota limit
 
 ## Tools and Scripts
 

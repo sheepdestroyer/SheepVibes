@@ -38,7 +38,7 @@ done
     flock -x 200 || exit 1
     
     # Update the specified comments as addressed
-    jq --arg branch "$BRANCH_NAME" --arg filter "$FILTER" \
+    jq --arg branch "$BRANCH_NAME" \
        '(.branches[$branch].comments[] | select('"$FILTER"') | .status) = "addressed"' \
        "$TRACKING_FILE" > "${TRACKING_FILE}.tmp" && mv "${TRACKING_FILE}.tmp" "$TRACKING_FILE"
     

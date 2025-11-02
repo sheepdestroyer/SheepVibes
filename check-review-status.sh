@@ -409,7 +409,7 @@ EOF
     local all_comments=$(jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments"))
 
     # Update tracking file
-    local temp_file=$(mktemp -t review-status-temp.XXXXXX)
+    local temp_file=$(mktemp "${TMPDIR:-/tmp}/review-status-temp.XXXXXX")
     TEMP_FILES+=("$temp_file")
     if jq --arg branch "$branch_name" \
           --arg pr "$pr_number" \
