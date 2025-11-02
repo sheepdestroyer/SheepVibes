@@ -538,7 +538,7 @@ main() {
         local clean_status=$(echo "$review_status" | jq -r '.status')
         
         local comments_file=""
-        if [ "$clean_status" = "Commented" ]; then
+        if [ "$(echo "$review_status" | jq -r '.comments')" -gt 0 ]; then
             comments_file="comments_${pr_number}.json"
         fi
         

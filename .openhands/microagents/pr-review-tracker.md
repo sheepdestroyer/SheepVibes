@@ -216,7 +216,7 @@ The review cycle is managed by the microagent using a strict state machine that 
 ## Known Limitations and Workarounds
 
 1. **Automated Trigger**: Use `trigger-review.sh` to automatically post `/gemini review` comments to the PR after pushing changes.
-2. **API Rate Limits**: The script implements dedicated rate limit handling with exponential backoff for API requests. Additionally, the polling mechanism (120s initial wait, then every 120s for up to 15 minutes total) is used to wait for asynchronous code review comments while avoiding excessive API calls.
+2. **API Rate Limits**: The script implements dedicated rate limit handling with exponential backoff for API requests. Additionally, the polling mechanism (120s initial wait, then every 120s for up to 10 minutes total) is used to wait for asynchronous code review comments while avoiding excessive API calls.
 3. **Google Code Assist Rate Limits**: The script now detects Google Code Assist's daily quota limit message and will pause the review cycle when detected.
 4. **Concurrent Access**: The script uses file locking to prevent data corruption from simultaneous runs. While it is safe to run multiple instances, it is still recommended to avoid it where possible to prevent contention.
 5. **Fallback Strategy**: If Google Code Assist doesn't respond after the configured number of polls, proceed with manual code review.
