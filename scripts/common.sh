@@ -17,7 +17,7 @@ get_repo_info() {
             REPO_OWNER=$(echo "$REPO_SLUG" | cut -d'/' -f1)
             REPO_NAME=$(echo "$REPO_SLUG" | cut -d'/' -f2)
         else
-            printf "${RED}Error: Could not determine repository owner and name from git remote.${NC}\n" >&2
+            printf "Error: Could not determine repository owner and name from git remote.\n" >&2
             exit 1
         fi
     fi

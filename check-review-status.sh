@@ -7,16 +7,13 @@ set -euo pipefail
 
 # Configuration
 TRACKING_FILE="pr-review-tracker.json"
-LOCK_FILE="/tmp/pr-review-tracker.lock"
 MAX_POLLS=5
 DEFAULT_POLL_INTERVAL=120
-GOOGLE_BOT_USERNAME="gemini-code-assist[bot]"
+GOOGLE_BOT_USERNAME="${GOOGLE_BOT_USERNAME:-gemini-code-assist[bot]}"
+GITHUB_API_BASE="https://api.github.com"
 
 # Global array to track temporary files for cleanup
 TEMP_FILES=()
-
-# Configuration
-GOOGLE_BOT_USERNAME="${GOOGLE_BOT_USERNAME:-gemini-code-assist[bot]}"
 
 # Cleanup function to remove temporary files
 cleanup() {
@@ -33,15 +30,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
 # Source common functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/scripts/common.sh"
 
 # Get repository owner and name
 get_repo_info
-TRACKING_FILE="pr-review-tracker.json"
-GITHUB_API_BASE="https://api.github.com"
 
 # Function to print usage
 usage() {
@@ -225,10 +219,9 @@ extract_google_comments() {
     local pr_number="$1"
     local comments_file="$2"
     
-    # Get all review comments for this PR with pagination support
-    local temp_file=$(mktemp "${TMPDIR:-/tmp}/review-status-temp.XXXXXX")
-    TEMP_FILES+=("$temp_file")
-    echo "[]" > "$temp_file"
+    # Create a temporary file to collect raw JSON objects (one per line)
+    local raw_temp_file=$(mktemp "${TMPDIR:-/tmp}/review-status-raw.XXXXXX")
+    TEMP_FILES+=("$raw_temp_file")
     local page=1
     local has_more=true
     
@@ -238,8 +231,8 @@ extract_google_comments() {
         local comment_count=$(echo "$comments_page" | jq length)
         
         if [ "$comment_count" -gt 0 ]; then
-            # Append the whole page of comments at once, which is more efficient
-            jq -s '.[0] + .[1]' "$temp_file" <(echo "$comments_page") > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
+            # Write each comment as a separate JSON object on its own line
+            echo "$comments_page" | jq -c '.[]' >> "$raw_temp_file"
             page=$((page + 1))
         else
             has_more=false
@@ -254,7 +247,8 @@ extract_google_comments() {
         local issue_comment_count=$(echo "$issue_comments_page" | jq length)
         
         if [ "$issue_comment_count" -gt 0 ]; then
-            jq -s '.[0] + .[1]' "$temp_file" <(echo "$issue_comments_page") > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
+            # Write each comment as a separate JSON object on its own line
+            echo "$issue_comments_page" | jq -c '.[]' >> "$raw_temp_file"
             page=$((page + 1))
         else
             has_more=false
@@ -275,10 +269,10 @@ extract_google_comments() {
             submitted_at: .created_at,
             html_url: .html_url
         }
-    ]' "$temp_file" > "$comments_file"
+    ]' "$raw_temp_file" > "$comments_file"
     
     # Clean up temporary file
-    rm -f "$temp_file"
+    rm -f "$raw_temp_file"
     
     local total_comment_count=$(jq length "$comments_file")
     echo "$total_comment_count"
