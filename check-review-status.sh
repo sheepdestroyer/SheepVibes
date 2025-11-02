@@ -105,7 +105,7 @@ github_api_request() {
         local response_body=$(echo "$response" | head -n -1)
         
         # Check for rate limiting (HTTP 429 or 403 with rate limit message)
-        if [ "$http_code" = "429" ] || { [ "$http_code" = "403" ] && echo "$response_body" | grep -q "API rate limit exceeded"; }; then
+        if [ "$http_code" = "429" ] || { [ "$http_code" = "403" ] && echo "$response_body" | grep -iq "API rate limit exceeded"; }; then
             local reset_time
             reset_time=$(grep -i "x-ratelimit-reset" "$headers_file" | cut -d' ' -f2 | tr -d '\r')
             rm -f "$headers_file"
