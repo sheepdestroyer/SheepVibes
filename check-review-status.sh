@@ -315,37 +315,43 @@ check_pr_review_status() {
     local google_comments
     google_comments=$(extract_google_comments "$pr_number" "$comments_file")
     
-    # If waiting for comments and none found, poll until comments are available
-    if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
-        echo -e "${YELLOW}Waiting for Google Code Assist comments (initial 60s wait, then polling every 30s)...${NC}" >&2
-        local poll_count=0
+    # If waiting for comments, poll until NEW comments are available
+    if [ "$wait_for_comments" = "true" ]; then
+        echo -e "${YELLOW}Waiting for NEW Google Code Assist comments (initial 60s wait, then polling every 30s)...${NC}" >&2
         
+        local initial_comment_count=$google_comments
+        local poll_count=0
+
+        echo -e "${BLUE}Initial comment count: ${initial_comment_count}${NC}" >&2
+
         # Initial 60 second wait (first minute)
         echo -e "${BLUE}Initial wait: 60 seconds...${NC}" >&2
         sleep 60
         poll_count=$((poll_count + 1))
-        
+
         # Re-check for comments after initial wait
         google_comments=$(extract_google_comments "$pr_number" "$comments_file")
         echo -e "${BLUE}After initial wait: ${google_comments} Google Code Assist comments found${NC}" >&2
-        
-        # Continue polling every 30 seconds if no comments found
-        while [ "$google_comments" -eq 0 ] && [ "$poll_count" -lt "$max_polls" ]; do
+
+        # Continue polling every 30 seconds if no NEW comments found
+        while [ "$google_comments" -eq "$initial_comment_count" ] && [ "$poll_count" -lt "$max_polls" ]; do
             echo -e "${BLUE}Sleeping for 30 seconds...${NC}" >&2
             sleep 30
             poll_count=$((poll_count + 1))
-            
+
             # Re-check for comments
             google_comments=$(extract_google_comments "$pr_number" "$comments_file")
-            
-            echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found${NC}" >&2
+
+            echo -e "${BLUE}Poll ${poll_count}/${max_polls}: ${google_comments} Google Code Assist comments found (waiting for increase from ${initial_comment_count})${NC}" >&2
         done
-        
-        if [ "$google_comments" -eq 0 ]; then
-            echo -e "${YELLOW}No Google Code Assist comments received after ${max_polls} polls${NC}" >&2
+
+        if [ "$google_comments" -eq "$initial_comment_count" ]; then
+            echo -e "${YELLOW}No NEW Google Code Assist comments received after ${max_polls} polls${NC}" >&2
+        else
+            echo -e "${GREEN}NEW comments detected! Increased from ${initial_comment_count} to ${google_comments}${NC}" >&2
         fi
     fi
-    
+
     if [ "$google_comments" -gt 0 ]; then
         echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}" >&2
         
