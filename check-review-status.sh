@@ -5,6 +5,17 @@
 
 set -euo pipefail
 
+# Global array to track temporary files for cleanup
+TEMP_FILES=()
+
+# Cleanup function to remove temporary files
+cleanup() {
+    rm -f "${TEMP_FILES[@]}"
+}
+
+# Register cleanup function to run on exit
+trap cleanup EXIT
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -13,20 +24,12 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-# Use environment variables if provided, otherwise detect from git remote
-if [ -n "${GITHUB_REPO_OWNER:-}" ] && [ -n "${GITHUB_REPO_NAME:-}" ]; then
-    REPO_OWNER="$GITHUB_REPO_OWNER"
-    REPO_NAME="$GITHUB_REPO_NAME"
-else
-    REPO_SLUG=$(git remote get-url origin 2>/dev/null | sed -e 's/.*github.com[:\/]//' -e 's/\.git$//')
-    if [ -n "$REPO_SLUG" ]; then
-        REPO_OWNER=$(echo "$REPO_SLUG" | cut -d'/' -f1)
-        REPO_NAME=$(echo "$REPO_SLUG" | cut -d'/' -f2)
-    else
-        echo -e "${RED}Error: Could not determine repository owner and name from git remote.${NC}" >&2
-        exit 1
-    fi
-fi
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/scripts/common.sh"
+
+# Get repository owner and name
+get_repo_info
 TRACKING_FILE="pr-review-tracker.json"
 GITHUB_API_BASE="https://api.github.com"
 
@@ -41,7 +44,7 @@ usage() {
     echo "  $0 123 --wait --poll-interval 30"
     echo ""
     echo "This script checks the Google Code Assist review status for a given branch or PR number."
-    echo "Returns: None, Started, or Commented"
+    echo "Returns: None or Commented"
     echo ""
     echo "Options:"
     echo "  --wait              Wait for comments to be available"
@@ -73,7 +76,8 @@ github_api_request() {
     while [ $retry_count -lt $max_retries ]; do
         local response
         local http_code
-        local headers_file=$(mktemp)
+        local headers_file=$(mktemp -t review-status-headers.XXXXXX)
+        TEMP_FILES+=("$headers_file")
         
         if [ -z "${GITHUB_TOKEN:-}" ]; then
             echo -e "${YELLOW}Warning: GITHUB_TOKEN not set. Using unauthenticated requests (rate limited).${NC}" >&2
@@ -99,7 +103,7 @@ github_api_request() {
                 
                 if [ $wait_time -gt 0 ]; then
                     echo -e "${YELLOW}Rate limit hit. Waiting ${wait_time} seconds...${NC}" >&2
-                    sleep $wait_time
+                    sleep "$wait_time"
                     retry_count=$((retry_count + 1))
                     continue
                 fi
@@ -120,7 +124,7 @@ github_api_request() {
         if [ $retry_count -lt $max_retries ]; then
             local backoff_time=$((2 ** retry_count))
             echo -e "${YELLOW}API request failed (HTTP $http_code). Retrying in ${backoff_time}s...${NC}" >&2
-            sleep $backoff_time
+            sleep "$backoff_time"
         fi
     done
     
@@ -148,7 +152,8 @@ extract_google_comments() {
     local comments_file="$2"
     
     # Get all review comments for this PR with pagination support
-    local temp_file=$(mktemp)
+    local temp_file=$(mktemp -t review-status-temp.XXXXXX)
+    TEMP_FILES+=("$temp_file")
     echo "[]" > "$temp_file"
     local page=1
     local has_more=true
@@ -210,21 +215,17 @@ check_pr_review_status() {
     if [ "$pr_state" != "open" ]; then
         echo -e "${YELLOW}PR #${pr_number} is not open (state: $pr_state)${NC}" >&2
         echo "{\"status\": \"None\", \"comments\": 0}"
-        return
+        return 2
     fi
     
     echo -e "${BLUE}PR Title: ${pr_title}${NC}" >&2
     
     # Check for Google Code Assist activity
-    local google_assist_found=false
     local comments_file="comments_${pr_number}.json"
     
     # Extract initial Google Code Assist comments
-    local google_comments=$(extract_google_comments "$pr_number" "$comments_file")
-    
-    if [ "$google_comments" -gt 0 ]; then
-        google_assist_found=true
-    fi
+    local google_comments
+    google_comments=$(extract_google_comments "$pr_number" "$comments_file")
     
     # If waiting for comments and none found, poll until comments are available
     if [ "$wait_for_comments" = "true" ] && [ $google_comments -eq 0 ]; then
@@ -258,9 +259,6 @@ check_pr_review_status() {
     if [ $google_comments -gt 0 ]; then
         echo -e "${GREEN}Google Code Assist has provided ${google_comments} comment(s) - saved to ${comments_file}${NC}" >&2
         echo "{\"status\": \"Commented\", \"comments\": ${google_comments}}"
-    elif [ "$google_assist_found" = true ]; then
-        echo -e "${YELLOW}Google Code Assist has started review but no comments yet${NC}" >&2
-        echo "{\"status\": \"Started\", \"comments\": 0}"
     else
         echo -e "${YELLOW}No Google Code Assist activity detected${NC}" >&2
         echo "{\"status\": \"None\", \"comments\": 0}"
@@ -276,60 +274,64 @@ update_tracking_file() {
     local lock_file="${TRACKING_FILE}.lock"
     local lock_timeout=30
 
-    (
-        # Atomically acquire an exclusive lock with a timeout.
-        if ! flock -x -w "$lock_timeout" 200; then
-            echo -e "${YELLOW}Warning: Could not acquire lock for tracking file after ${lock_timeout} seconds${NC}" >&2
-            exit 1
-        fi
+    # Use file descriptor 200 for flock locking
+    exec 200>"$lock_file"
+    
+    # Atomically acquire an exclusive lock with a timeout.
+    if ! flock -x -w "$lock_timeout" 200; then
+        echo -e "${YELLOW}Warning: Could not acquire lock for tracking file after ${lock_timeout} seconds${NC}" >&2
+        exec 200>&-  # Close the file descriptor
+        return 1
+    fi
 
-        if [ ! -f "$TRACKING_FILE" ]; then
-            # Create initial tracking file
-            cat > "$TRACKING_FILE" << EOF
+    if [ ! -f "$TRACKING_FILE" ]; then
+        # Create initial tracking file
+        cat > "$TRACKING_FILE" << EOF
 {
   "branches": {},
-  "last_updated": "$(date -Iseconds)"
+  "last_updated": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 }
 EOF
-        fi
+    fi
 
-        # Get existing branch data to preserve comments
-        local existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
+    # Get existing branch data to preserve comments
+    local existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
 
-        # If new comments are available, prepare them for insertion
-        local new_comments="[]"
-        if [ -n "$comments_file" ] && [ -f "$comments_file" ]; then
-            # Map new comments to the required structure with "todo" status
-            new_comments=$(jq '[.[] | {id: .id, status: "todo", body: .body, created_at: .submitted_at}]' "$comments_file")
-        fi
+    # If new comments are available, prepare them for insertion
+    local new_comments="[]"
+    if [ -n "$comments_file" ] && [ -f "$comments_file" ]; then
+        # Map new comments to the required structure with "todo" status
+        new_comments=$(jq '[.[] | {id: .id, status: "todo", body: .body, created_at: .submitted_at}]' "$comments_file")
+    fi
 
-        # Combine existing and new comments, avoiding duplicates by id
-        local all_comments=$(jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments"))
+    # Combine existing and new comments, avoiding duplicates by id
+    local all_comments=$(jq -s '(.[0] + .[1]) | unique_by(.id)' <(echo "$existing_comments") <(echo "$new_comments"))
 
-        # Update tracking file
-        local temp_file=$(mktemp)
-        if jq --arg branch "$branch_name" \
-              --arg pr "$pr_number" \
-              --arg status "$review_status" \
-              --arg updated "$(date -Iseconds)" \
-              --argjson comments "$all_comments" \
-              '.branches[$branch] = {
-                pr_number: ($pr | tonumber? // $pr),
-                review_status: $status,
-                last_updated: $updated,
-                comments: $comments
-              } | .last_updated = $updated' \
-              "$TRACKING_FILE" > "$temp_file"; then
-            mv "$temp_file" "$TRACKING_FILE"
-            echo -e "${GREEN}Updated tracking file: $TRACKING_FILE${NC}"
-        else
-            echo -e "${RED}Error: Failed to update tracking file${NC}" >&2
-            rm -f "$temp_file"
-            exit 1
-        fi
-    ) 200>"$lock_file"
-    local subshell_exit=$?
-    return $subshell_exit
+    # Update tracking file
+    local temp_file=$(mktemp -t review-status-temp.XXXXXX)
+    TEMP_FILES+=("$temp_file")
+    if jq --arg branch "$branch_name" \
+          --arg pr "$pr_number" \
+          --arg status "$review_status" \
+          --arg updated "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --argjson comments "$all_comments" \
+          '.branches[$branch] = {
+            pr_number: ($pr | tonumber? // $pr),
+            review_status: $status,
+            last_updated: $updated,
+            comments: $comments
+          } | .last_updated = $updated' \
+          "$TRACKING_FILE" > "$temp_file"; then
+        mv "$temp_file" "$TRACKING_FILE"
+        echo -e "${GREEN}Updated tracking file: $TRACKING_FILE${NC}" >&2
+    else
+        echo -e "${RED}Error: Failed to update tracking file${NC}" >&2
+        rm -f "$temp_file"
+        exec 200>&-  # Close the file descriptor
+        return 1
+    fi
+    
+    exec 200>&-  # Close the file descriptor
 }
 
 # Main function
