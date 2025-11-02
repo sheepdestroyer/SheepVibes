@@ -100,6 +100,26 @@ This script triggers a new Google Code Assist review by posting a `/gemini revie
 # Usage: ./trigger-review.sh [pr-number]
 ```
 
+### update-tracking.sh
+
+This script updates the tracking file with new comments from a JSON file. It serves a distinct purpose from the `update_tracking_file` function in `check-review-status.sh`:
+
+- **Primary Use Case**: Manual synchronization of the tracking file when comments are fetched separately
+- **Batch Processing**: Useful for bulk updates when multiple comment files need to be processed
+- **Standalone Operation**: Can be run independently without triggering full review status checks
+- **Integration Testing**: Facilitates testing of comment tracking logic in isolation
+
+```bash
+# Usage: ./update-tracking.sh <pr-number> <branch-name>
+# Example: ./update-tracking.sh 162 feat/unified-pr-tracker
+```
+
+**Features**:
+- Merges new comments into the tracking file
+- Handles comment deduplication by ID
+- Updates last_updated timestamp
+- Uses file locking to prevent concurrent access issues
+
 ## Microagent-Driven Workflow (Strict State Machine)
 
 The review cycle is managed by the microagent using a strict state machine that enforces all workflow rules.
