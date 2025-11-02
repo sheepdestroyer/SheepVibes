@@ -88,7 +88,7 @@ This script checks the current Google Code Assist review status for a branch or 
 
 - **Authentication issues**: Update remote URL with current GITHUB_TOKEN
 - **Branch conflicts**: Create new unique branch names
-- **No comments received**: After waiting the maximum poll time (5 polls with intervals starting at 120 seconds and increasing by 30 seconds each poll, for a total of 15 minutes), proceed with manual code review
+- **No comments received**: After waiting the maximum poll time (5 polls with a fixed interval of 120 seconds each, for a total of 10 minutes), proceed with manual code review
 - **API rate limits**: Script implements automatic rate limit handling with exponential backoff
 - **Google Code Assist daily quota**: Workflow continues if new comments exist after rate limit warning or 24 hours have passed
 
