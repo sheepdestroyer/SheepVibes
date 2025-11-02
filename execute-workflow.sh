@@ -15,8 +15,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-BRANCH_NAME="${1:-feat/unified-pr-tracker}"
-PR_NUMBER="${2:-162}"
+BRANCH_NAME="$1"
+PR_NUMBER="$2"
 MAX_CYCLES=50
 TRACKING_FILE="pr-review-tracker.json"
 

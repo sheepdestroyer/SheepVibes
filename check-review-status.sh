@@ -89,14 +89,17 @@ github_api_request() {
         local headers_file=$(mktemp "${TMPDIR:-/tmp}/review-status-headers.XXXXXX")
         TEMP_FILES+=("$headers_file")
         
-        if [ -z "${GITHUB_TOKEN:-}" ]; then
-            echo -e "${YELLOW}Warning: GITHUB_TOKEN not set. Using unauthenticated requests (rate limited).${NC}" >&2
-            response=$(curl -s -w "\n%{http_code}" -D "$headers_file" -H "Accept: application/vnd.github.v3+json" "$url")
+        local auth_header=()
+        if [ -n "${GITHUB_TOKEN:-}" ]; then
+            auth_header=("-H" "Authorization: token $GITHUB_TOKEN")
         else
-            response=$(curl -s -w "\n%{http_code}" -D "$headers_file" -H "Authorization: token $GITHUB_TOKEN" \
-                 -H "Accept: application/vnd.github.v3+json" \
-                 "$url")
+            echo -e "${YELLOW}Warning: GITHUB_TOKEN not set. Using unauthenticated requests (rate limited).${NC}" >&2
         fi
+
+        response=$(curl -s -w "\n%{http_code}" -D "$headers_file" \
+             -H "Accept: application/vnd.github.v3+json" \
+             "${auth_header[@]}" \
+             "$url")
         
         http_code=$(echo "$response" | tail -n1)
         local response_body=$(echo "$response" | head -n -1)

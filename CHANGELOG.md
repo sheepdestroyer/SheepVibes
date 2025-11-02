@@ -10,7 +10,7 @@
   - Detected and processed 7 new actionable comments from latest review cycle
 
 - **Refactor: Enhanced PR Review Tracker Microagent with strict state machine**
-  - Fixed polling logic to match requirements (60s initial wait, then 30s intervals)
+  - Fixed polling logic to match requirements (120s initial wait, then 120s intervals)
   - Added Google Code Assist daily quota limit detection
   - Implemented strict state machine workflow to prevent review spamming
   - Enhanced comment tracking and validation before triggering new reviews
