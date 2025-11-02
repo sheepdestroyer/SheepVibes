@@ -348,12 +348,15 @@ EOF
               "$TRACKING_FILE" > "$temp_file"; then
             mv "$temp_file" "$TRACKING_FILE"
             echo -e "${GREEN}Updated tracking file: $TRACKING_FILE${NC}"
+            exit 0
         else
             echo -e "${RED}Error: Failed to update tracking file${NC}" >&2
             rm -f "$temp_file"
             exit 1
         fi
     ) 200>"$lock_file"
+    local subshell_exit=$?
+    return $subshell_exit
 }
 
 # Main function
