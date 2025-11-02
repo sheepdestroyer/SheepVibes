@@ -45,7 +45,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --wait              Wait for comments to be available"
-    echo "  --poll-interval SEC  Polling interval in seconds (default: 60)"
+    echo "  --poll-interval SEC  Polling interval in seconds (default: 120)"
     echo ""
     echo "When --wait is used and comments are found, they are saved to comments_<PR#>.json"
 }
@@ -75,7 +75,7 @@ github_api_request() {
         local http_code
         local headers_file=$(mktemp)
         
-        if [ -z "$GITHUB_TOKEN" ]; then
+        if [ -z "${GITHUB_TOKEN:-}" ]; then
             echo -e "${YELLOW}Warning: GITHUB_TOKEN not set. Using unauthenticated requests (rate limited).${NC}" >&2
             response=$(curl -s -w "\n%{http_code}" -D "$headers_file" -H "Accept: application/vnd.github.v3+json" "$url")
         else
@@ -294,10 +294,7 @@ EOF
         fi
 
         # Get existing branch data to preserve comments
-        local existing_comments="[]"
-        if jq -e ".branches[\"$branch_name\"].comments" "$TRACKING_FILE" > /dev/null 2>&1; then
-            existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
-        fi
+        local existing_comments=$(jq -c ".branches[\"$branch_name\"].comments // []" "$TRACKING_FILE")
 
         # If new comments are available, prepare them for insertion
         local new_comments="[]"
@@ -379,7 +376,7 @@ main() {
         pr_number="$input"
         echo -e "${BLUE}Checking PR #${pr_number}${NC}" >&2
         # Get PR details when PR number is provided directly
-        local pr_info=$(gh api "repos/$REPO_OWNER/$REPO_NAME/pulls/$pr_number")
+        local pr_info=$(github_api_request "/pulls/$pr_number")
         pr_title=$(echo "$pr_info" | jq -r '.title')
         pr_state=$(echo "$pr_info" | jq -r '.state')
     else
