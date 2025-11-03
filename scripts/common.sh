@@ -18,7 +18,7 @@ github_api_request() {
     local endpoint="$1"
     local url="${GITHUB_API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}${endpoint}"
     local retry_count=0
-    local max_retries=3
+    local max_retries=${GITHUB_API_MAX_RETRIES:-3}
     
     while [ $retry_count -lt $max_retries ]; do
         local response

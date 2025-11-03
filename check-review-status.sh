@@ -340,22 +340,28 @@ EOF
           --arg status "$review_status" \
           --arg updated "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
           --arg pr_state "$pr_state" \
-          --slurpfile new_comments "$comments_source_file" \
-          '.last_updated = $updated |
+          --slurpfile new_comments "$comments_source_file" ' 
+           # Update global timestamp
+           .last_updated = $updated |
+           # Initialize branch if it does not exist
            .branches[$branch] |= (
             . // {pr_number: ($pr | tonumber? // $pr), comments: []}
            ) |
+           # Update review status and timestamp for the branch
            .branches[$branch].review_status = $status |
            .branches[$branch].last_updated = $updated |
+           # Update comments list
            .branches[$branch].comments = (
              if $pr_state != "open" then
-               []  # Clear all comments for closed PRs
+               # Clear all comments for closed PRs
+               []
              elif ($new_comments | length) > 0 then
-               # Combine existing comments with new ones, avoiding duplicates
+               # Combine existing comments with new ones, avoiding duplicates by ID
                (.branches[$branch].comments // []) + 
                ($new_comments[0] | map({id: .id, status: "todo", body: .body, created_at: .submitted_at})) |
                unique_by(.id)
              else
+               # Keep existing comments if no new ones are provided
                .branches[$branch].comments // []
              end
            )' \

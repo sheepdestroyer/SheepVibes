@@ -146,27 +146,24 @@ main() {
         
         processed_count=$((processed_count + 1))
         
+        local should_update_tracker=false
         if [ "$is_draft" = "true" ]; then
             printf "  ${YELLOW}Status: DRAFT - needs to be marked as ready${NC}\n"
             
             if mark_pr_ready "$pr_number" "$dry_run"; then
                 marked_ready_count=$((marked_ready_count + 1))
-                
-                # Update tracking file if not dry run
-                if [ "$dry_run" = "false" ]; then
-                    ./check-review-status.sh "$head_branch"
-                    printf "  ${GREEN}Tracking updated for branch ${head_branch}${NC}\n"
-                fi
+                should_update_tracker=true
             else
                 errors_count=$((errors_count + 1))
             fi
         else
             printf "  ${GREEN}Status: Already ready for review${NC}\n"
-            
-            # Update tracking file to reflect current status
-            if [ "$dry_run" = "false" ]; then
-                ./check-review-status.sh "$head_branch"
-            fi
+            should_update_tracker=true
+        fi
+
+        if [ "$dry_run" = "false" ] && [ "$should_update_tracker" = "true" ]; then
+            ./check-review-status.sh "$head_branch"
+            printf "  ${GREEN}Tracking updated for branch ${head_branch}${NC}\n"
         fi
         
         printf "\n"

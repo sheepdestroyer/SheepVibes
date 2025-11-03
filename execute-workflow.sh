@@ -174,7 +174,7 @@ main_workflow() {
                             if git diff-index --quiet HEAD --; then
                                 log "No changes to commit - skipping commit and push"
                             else
-                                git commit -m "Fix: Address Google Code Assist comments - cycle $cycle_count"
+                                git commit -m "Fix: Address GCA comments for PR #$pr_number (cycle $cycle_count)"
                                 git push origin "$branch"
                             fi
                         )
@@ -218,7 +218,7 @@ main_workflow() {
         esac
         
         log "Cycle $cycle_count completed, checking next cycle..."
-        sleep 5  # Small delay between cycles
+        sleep "${WORKFLOW_CYCLE_DELAY:-5}"  # Small delay between cycles, configurable via WORKFLOW_CYCLE_DELAY
     done
     
     warn "Maximum cycles ($MAX_CYCLES) reached without completion"
