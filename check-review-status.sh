@@ -70,7 +70,7 @@ get_pr_info_from_branch() {
     
     # Get open PRs for this branch
     local pr_data
-    if ! pr_data=$(github_api_request "/pulls?head=${REPO_OWNER}:${branch_name}&state=open"); then
+    if ! pr_data=$(github_api_request "/pulls?head=${REPO_OWNER}:$(echo -n "$branch_name" | jq -sRr @uri)&state=open"); then
         return 1  # Propagate API request failure
     fi
     
@@ -455,7 +455,7 @@ main() {
                 echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
                 exit 1
             fi
-            exit 0
+            exit 2
         fi
         
         pr_number=$(echo "$pr_info" | jq -r '.number')
