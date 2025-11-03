@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 github_api_request() {
     local endpoint="$1"
     local method="${2:-GET}"
-    local data="$3"
+    local data="${3:-}"
     local url="${GITHUB_API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}${endpoint}"
     local retry_count=0
     local max_retries=${GITHUB_API_MAX_RETRIES:-3}
