@@ -164,23 +164,26 @@ main_workflow() {
                         
                         # Push changes (simulated)
                         log "Pushing changes to branch: $branch"
-                        # Use git status to find modified files and add them selectively
-                        # This avoids staging unrelated work-in-progress files
-                        modified_files=$(git status --porcelain | grep -E '^[ MARCU?]{2}' | cut -c4-)
-                        if [ -n "$modified_files" ]; then
-                            echo "$modified_files" | while IFS= read -r file; do
-                                if [ -n "$file" ]; then
-                                    git add "$file"
-                                fi
-                            done
-                        fi
-                        # Check if there are changes to commit
-                        if git diff-index --quiet HEAD --; then
-                            log "No changes to commit - skipping commit and push"
-                        else
-                            git commit -m "Fix: Address Google Code Assist comments - cycle $cycle_count"
-                            git push origin "$branch"
-                        fi
+                        (
+                            cd "$(git rev-parse --show-toplevel)"
+                            # Use git status to find modified files and add them selectively
+                            # This avoids staging unrelated work-in-progress files
+                            modified_files=$(git status --porcelain | grep -E '^[ MARCU?]{2}' | cut -c4-)
+                            if [ -n "$modified_files" ]; then
+                                echo "$modified_files" | while IFS= read -r file; do
+                                    if [ -n "$file" ]; then
+                                        git add "$file"
+                                    fi
+                                done
+                            fi
+                            # Check if there are changes to commit
+                            if git diff-index --quiet HEAD --; then
+                                log "No changes to commit - skipping commit and push"
+                            else
+                                git commit -m "Fix: Address Google Code Assist comments - cycle $cycle_count"
+                                git push origin "$branch"
+                            fi
+                        )
                         
                         # Trigger new review
                         log "Triggering new Google Code Assist review"

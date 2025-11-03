@@ -102,3 +102,40 @@ get_repo_info() {
     export REPO_OWNER REPO_NAME REPO
 }
 
+# Function to mark PR as ready for review
+mark_pr_ready() {
+    local pr_number="$1"
+    local dry_run="$2"
+    
+    if [ "$dry_run" = "true" ]; then
+        printf "${YELLOW}[DRY RUN] Would mark PR #${pr_number} as ready for review${NC}\n"
+        return 0
+    fi
+    
+    printf "${BLUE}Marking PR #${pr_number} as ready for review...${NC}\n"
+    
+    local url="${GITHUB_API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/pulls/${pr_number}"
+    local response
+    local http_code
+    
+    response=$(curl -s -w "\n%{http_code}" \
+        -X PATCH \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Content-Type: application/json" \
+        -d '{"draft":false}' \
+        "$url")
+    
+    http_code=$(echo "$response" | tail -n1)
+    local response_body=$(echo "$response" | head -n -1)
+    
+    if [ "$http_code" = "200" ]; then
+        printf "${GREEN}Successfully marked PR #${pr_number} as ready for review${NC}\n"
+        return 0
+    else
+        printf "${RED}Failed to mark PR #${pr_number} as ready for review (HTTP $http_code)${NC}\n" >&2
+        printf "Response: %s\n" "$response_body" >&2
+        return 1
+    fi
+}
+
