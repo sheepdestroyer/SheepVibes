@@ -455,7 +455,7 @@ main() {
                 echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
                 exit 1
             fi
-            exit 2
+            exit 0
         fi
         
         pr_number=$(echo "$pr_info" | jq -r '.number')
