@@ -60,7 +60,7 @@ printf "${YELLOW}Triggering Google Code Assist review for PR #$PR_NUMBER...${NC}
 
 # Post /gemini review comment
 data='{"body": "/gemini review"}'
-if github_api_request "/repos/$REPO/issues/$PR_NUMBER/comments" "POST" "$data" > /dev/null; then
+if github_api_request "/issues/$PR_NUMBER/comments" "POST" "$data" > /dev/null; then
     printf "${GREEN}Successfully posted /gemini review comment to PR #$PR_NUMBER${NC}\n"
 else
     printf "${RED}Failed to post comment to PR #$PR_NUMBER${NC}\n" >&2
