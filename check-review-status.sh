@@ -56,9 +56,9 @@ Exit Codes:
   2 - PR is not open (state is not 'open')
 
 Options:
-  --wait              Wait for comments to be available (uses poll-interval for all waits)
-  --poll-interval SEC  Polling interval in seconds (default: 120)
-  --max-polls NUM     Maximum number of polling attempts (default: 5)
+  --wait                Wait for comments to be available (uses poll-interval for all waits)
+  --poll-interval SEC   Polling interval in seconds (default: 120)
+  --max-polls NUM       Maximum number of polling attempts (default: 5)
 
 When --wait is used and comments are found, they are saved to comments_<PR#>.json
 EOF

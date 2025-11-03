@@ -170,7 +170,7 @@ main_workflow() {
                             # Stage all changes (new, modified, and deleted)
                             git add -A
                             # Check if there are changes to commit
-                            if git diff-index --quiet HEAD --; then
+                            if git diff-index --quiet --cached HEAD --; then
                                 log "No changes to commit - skipping commit and push"
                             else
                                 git commit -m "Fix: Address GCA comments for PR #$pr_number (cycle $cycle_count)"
