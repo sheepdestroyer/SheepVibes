@@ -166,16 +166,8 @@ main_workflow() {
                         log "Pushing changes to branch: $branch"
                         (
                             cd "$(git rev-parse --show-toplevel)"
-                            # Use git status to find modified files and add them selectively
-                            # This avoids staging unrelated work-in-progress files
-                            modified_files=$(git status --porcelain | grep -E '^[ MARCU?]{2}' | cut -c4-)
-                            if [ -n "$modified_files" ]; then
-                                echo "$modified_files" | while IFS= read -r file; do
-                                    if [ -n "$file" ]; then
-                                        git add "$file"
-                                    fi
-                                done
-                            fi
+                            # Stage all changes (new, modified, deleted) in the current directory
+                            git add -A
                             # Check if there are changes to commit
                             if git diff-index --quiet HEAD --; then
                                 log "No changes to commit - skipping commit and push"
