@@ -166,10 +166,8 @@ main_workflow() {
                         log "Pushing changes to branch: $branch"
                         (
                             cd "$(git rev-parse --show-toplevel)"
-                            # Stage only modified files (safer than git add -A)
-                            git add -u
-                            # Also add any new files in the current directory
-                            git add .
+                            # Stage all changes (new, modified, and deleted)
+                            git add -A
                             # Check if there are changes to commit
                             if git diff-index --quiet HEAD --; then
                                 log "No changes to commit - skipping commit and push"
