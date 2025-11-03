@@ -16,10 +16,20 @@ NC='\033[0m' # No Color
 # Robust GitHub API request function with rate limiting and retry logic
 github_api_request() {
     local endpoint="$1"
+    local method="${2:-GET}"
+    local data="$3"
     local url="${GITHUB_API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}${endpoint}"
     local retry_count=0
     local max_retries=${GITHUB_API_MAX_RETRIES:-3}
     
+    local curl_opts=()
+    if [[ "$method" != "GET" ]]; then
+        curl_opts+=("-X" "$method")
+        if [[ -n "$data" ]]; then
+            curl_opts+=("-H" "Content-Type: application/json" "-d" "$data")
+        fi
+    fi
+
     while [ $retry_count -lt $max_retries ]; do
         local response
         local http_code
@@ -36,6 +46,7 @@ github_api_request() {
         response=$(curl -s -w "\n%{http_code}" -D "$headers_file" \
              -H "Accept: application/vnd.github.v3+json" \
              "${auth_header[@]}" \
+             "${curl_opts[@]}" \
              "$url")
         
         http_code=$(echo "$response" | tail -n1)
@@ -53,16 +64,17 @@ github_api_request() {
                 if [ "$wait_time" -gt 0 ]; then
                     echo -e "${YELLOW}Rate limit hit. Waiting ${wait_time} seconds...${NC}" >&2
                     sleep "$wait_time"
+                    retry_count=$((retry_count + 1))
                     continue
                 fi
             fi
-        else
-            # Clean up headers file if not rate limited
-            rm -f "$headers_file"
         fi
         
-        # Check for successful response
-        if [ "$http_code" = "200" ]; then
+        # Clean up headers file if not rate limited
+        rm -f "$headers_file"
+        
+        # Check for successful response (2xx)
+        if [[ "$http_code" =~ ^2[0-9]{2}$ ]]; then
             echo "$response_body"
             return 0
         fi
@@ -73,11 +85,12 @@ github_api_request() {
             local backoff_time=$((2 ** retry_count))
             echo -e "${YELLOW}API request failed (HTTP $http_code). Retrying in ${backoff_time}s...${NC}" >&2
             sleep "$backoff_time"
+        else
+            echo -e "${RED}Failed to make GitHub API request to ${endpoint} after ${max_retries} attempts (HTTP $http_code)${NC}" >&2
+            echo "$response_body" >&2
+            return 1
         fi
     done
-    
-    echo -e "${RED}Failed to make GitHub API request after ${max_retries} attempts${NC}" >&2
-    return 1
 }
 
 # Get repository owner and name from git remote
@@ -127,27 +140,11 @@ mark_pr_ready() {
     
     printf "${BLUE}Marking PR #${pr_number} as ready for review...${NC}\n"
     
-    local url="${GITHUB_API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/pulls/${pr_number}"
-    local response
-    local http_code
-    
-    response=$(curl -s -w "\n%{http_code}" \
-        -X PATCH \
-        -H "Authorization: token $GITHUB_TOKEN" \
-        -H "Accept: application/vnd.github.v3+json" \
-        -H "Content-Type: application/json" \
-        -d '{"draft":false}' \
-        "$url")
-    
-    http_code=$(echo "$response" | tail -n1)
-    local response_body=$(echo "$response" | head -n -1)
-    
-    if [ "$http_code" = "200" ]; then
+    local data='{"draft":false}'
+    if github_api_request "/pulls/${pr_number}" "PATCH" "$data" > /dev/null; then
         printf "${GREEN}Successfully marked PR #${pr_number} as ready for review${NC}\n"
         return 0
     else
-        printf "${RED}Failed to mark PR #${pr_number} as ready for review (HTTP $http_code)${NC}\n" >&2
-        printf "Response: %s\n" "$response_body" >&2
         return 1
     fi
 }

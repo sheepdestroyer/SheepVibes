@@ -161,43 +161,24 @@ main_workflow() {
                     
                     # Process all TODO comments
                     if process_todo_comments "$branch" "$pr_number"; then
-                        log "All TODO comments processed, pushing changes and triggering new review"
-                        
-                        # Push changes (simulated)
-                        log "Pushing changes to branch: $branch"
-                        (
-                            cd "$(git rev-parse --show-toplevel)"
-                            # Stage all changes (new, modified, and deleted)
-                            git add -A
-                            # Check if there are changes to commit
-                            if git diff-index --quiet --cached HEAD --; then
-                                log "No changes to commit - skipping commit and push"
-                            else
-                                git commit -m "Fix: Address GCA comments for PR #$pr_number (cycle $cycle_count)"
-                                git push origin "$branch"
-                            fi
-                        )
-                        
-                        # Trigger new review
-                        log "Triggering new Google Code Assist review"
-                        ./trigger-review.sh "$pr_number"
-                        
-                        # Wait for new comments and update tracking file
-                        log "Waiting for new Google Code Assist comments and updating tracking file..."
-                        ./check-review-status.sh "$branch" --wait
+                        error "CRITICAL: Microagent must implement actual fixes before continuing"
+                        return 1
                     else
-                        error "Failed to process TODO comments"
+                        error "Cannot continue: Microagent must implement fixes for TODO comments"
                         return 1
                     fi
                 else
                     # Handle Commented state with no TODO comments and None state
                     if [ "$review_status" = "Commented" ]; then
-                        warn "State: Commented but no TODO comments - Triggering new review"
+                        warn "State: Commented but no TODO comments - This state should not trigger new reviews"
+                        log "Checking if this indicates workflow completion..."
+                        # Check if we should update status to Complete
+                        ./check-review-status.sh "$branch"
                     else
                         log "State: No comments - Triggering initial review"
+                        ./trigger-review.sh "$pr_number"
+                        ./check-review-status.sh "$branch" --wait
                     fi
-                    ./trigger-review.sh "$pr_number"
-                    ./check-review-status.sh "$branch" --wait
                 fi
                 ;;
                 

@@ -59,19 +59,11 @@ fi
 printf "${YELLOW}Triggering Google Code Assist review for PR #$PR_NUMBER...${NC}\n"
 
 # Post /gemini review comment
-response=$(curl -s -X POST \
-    -H "Authorization: token $GITHUB_TOKEN" \
-    -H "Accept: application/vnd.github.v3+json" \
-    -H "Content-Type: application/json" \
-    -d '{"body": "/gemini review"}' \
-    "$GITHUB_API/repos/$REPO/issues/$PR_NUMBER/comments")
-
-# Check if the request was successful
-if echo "$response" | jq -e '.id' > /dev/null 2>&1; then
+local data='{"body": "/gemini review"}'
+if github_api_request "/repos/$REPO/issues/$PR_NUMBER/comments" "POST" "$data" > /dev/null; then
     printf "${GREEN}Successfully posted /gemini review comment to PR #$PR_NUMBER${NC}\n"
 else
     printf "${RED}Failed to post comment to PR #$PR_NUMBER${NC}\n" >&2
-    printf "Response: %s\n" "$response" >&2
     exit 1
 fi
 
