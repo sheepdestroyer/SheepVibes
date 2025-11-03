@@ -100,7 +100,7 @@ check_for_rate_limit() {
 
     # Find the most recent rate limit message
     local rate_limit_comment=$(jq -r '
-        [.[] | select(.body | test("You have reached your daily quota limit"; "i"))] 
+        [.[] | select(.body | test("(> )?You have reached your daily quota limit"; "i"))] 
         | sort_by(.submitted_at) 
         | last
     ' "$comments_file")
@@ -455,7 +455,7 @@ main() {
                 echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
                 exit 1
             fi
-            exit 2
+            exit 0
         fi
         
         pr_number=$(echo "$pr_info" | jq -r '.number')

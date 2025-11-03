@@ -63,6 +63,9 @@ microagent_workflow() {
     local branch="$1"
     local pr_number="$2"
     local cycle_count=0
+    local last_action=""
+    local consecutive_same_state=0
+    local last_state=""
     
     log "Starting microagent-driven workflow for branch: $branch, PR: $pr_number"
     
@@ -70,7 +73,18 @@ microagent_workflow() {
         cycle_count=$((cycle_count + 1))
         log "=== Microagent Workflow Cycle $cycle_count/$MAX_CYCLES ==="
         
-        # Get current state
+        # CRITICAL: Always refresh PR state at the beginning of each cycle
+        # and wait for the update to complete before reading state
+        log "Refreshing PR state from GitHub..."
+        if ! ./check-review-status.sh "$branch" > /dev/null 2>&1; then
+            error "Failed to refresh PR state from GitHub"
+            return 1
+        fi
+        
+        # Small delay to ensure tracking file is updated
+        sleep 2
+        
+        # Get current state from freshly updated tracking file
         local state_info
         state_info=$(get_workflow_state "$branch")
         if [ $? -ne 0 ]; then
@@ -80,7 +94,21 @@ microagent_workflow() {
         
         IFS='|' read -r review_status todo_comments current_pr <<< "$state_info"
         
-        log "Current State - Review: $review_status, TODO Comments: $todo_comments, PR: $current_pr"
+        # Track state changes to prevent infinite loops
+        if [ "$review_status" = "$last_state" ]; then
+            consecutive_same_state=$((consecutive_same_state + 1))
+        else
+            consecutive_same_state=0
+            last_state="$review_status"
+        fi
+        
+        # Prevent infinite loops in same state
+        if [ "$consecutive_same_state" -gt 10 ]; then
+            error "Stuck in state '$review_status' for 10+ cycles - workflow terminated"
+            return 1
+        fi
+        
+        log "Current State - Review: $review_status, TODO Comments: $todo_comments, PR: $current_pr, Same State Cycles: $consecutive_same_state"
         
         # Strict State Machine Logic
         case "$review_status" in
@@ -124,9 +152,26 @@ microagent_workflow() {
                     return 1
                 else
                     warn "State: Commented but no TODO comments - checking completion status"
-                    # This might indicate workflow completion
-                    # Trigger one final check to see if status updates to Complete
+                    # Check if this indicates workflow completion
+                    # Update tracking and check if status should be Complete
                     ./check-review-status.sh "$branch"
+                    # After updating, check if we should transition to Complete
+                    sleep 2  # Small delay to ensure file is updated
+                    local new_state_info
+                    new_state_info=$(get_workflow_state "$branch")
+                    if [ $? -eq 0 ]; then
+                        IFS='|' read -r new_review_status new_todo_comments new_pr <<< "$new_state_info"
+                        if [ "$new_review_status" = "Complete" ]; then
+                            success "Workflow completed: All comments addressed and Google Code Assist indicates completion"
+                            return 0
+                        elif [ "$new_review_status" = "RateLimited" ]; then
+                            warn "Google Code Assist rate limited - workflow paused"
+                            sleep "$RATE_LIMIT_CHECK_INTERVAL"
+                        else
+                            log "Still in Commented state - waiting for Google Code Assist completion signal"
+                            sleep 10  # Wait before checking again
+                        fi
+                    fi
                 fi
                 ;;
                 
@@ -182,6 +227,13 @@ main() {
     if [ ! -f "$TRACKING_FILE" ]; then
         error "Tracking file not found: $TRACKING_FILE"
         error "Run check-review-status.sh first to initialize tracking"
+        exit 1
+    fi
+    
+    # CRITICAL: Always refresh PR state before starting workflow
+    log "Initial PR state refresh before starting workflow..."
+    if ! ./check-review-status.sh "$branch" > /dev/null 2>&1; then
+        error "Failed to refresh PR state from GitHub"
         exit 1
     fi
     

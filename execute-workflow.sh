@@ -124,6 +124,8 @@ main_workflow() {
     local branch="$1"
     local pr_number="$2"
     local cycle_count=0
+    local consecutive_same_state=0
+    local last_state=""
     
     log "Starting unified PR tracker workflow for branch: $branch, PR: $pr_number"
     
@@ -131,7 +133,18 @@ main_workflow() {
         cycle_count=$((cycle_count + 1))
         log "=== Workflow Cycle $cycle_count/$MAX_CYCLES ==="
         
-        # Check if we should continue
+        # CRITICAL: Always refresh PR state at the beginning of each cycle
+        # and wait for the update to complete before checking conditions
+        log "Refreshing PR state from GitHub..."
+        if ! ./check-review-status.sh "$branch" > /dev/null 2>&1; then
+            error "Failed to refresh PR state from GitHub"
+            return 1
+        fi
+        
+        # Small delay to ensure tracking file is updated
+        sleep 2
+        
+        # Check if we should continue with freshly updated state
         check_workflow_conditions "$branch" "$pr_number"
         local condition_result=$?
 
@@ -153,20 +166,32 @@ main_workflow() {
         local review_status=$(echo "$tracking_data" | jq -r '.review_status')
         local todo_comments=$(echo "$tracking_data" | jq '[.comments[] | select(.status == "todo")] | length')
         
+        # Track state changes to prevent infinite loops
+        if [ "$review_status" = "$last_state" ]; then
+            consecutive_same_state=$((consecutive_same_state + 1))
+        else
+            consecutive_same_state=0
+            last_state="$review_status"
+        fi
+        
+        # Prevent infinite loops in same state
+        if [ "$consecutive_same_state" -gt 10 ]; then
+            error "Stuck in state '$review_status' for 10+ cycles - workflow terminated"
+            return 1
+        fi
+        
+        log "Current State - Review: $review_status, TODO Comments: $todo_comments, Same State Cycles: $consecutive_same_state"
+        
         case "$review_status" in
             "Commented"|"None")
                 # Handle Commented state with TODO comments
                 if [ "$review_status" = "Commented" ] && [ "$todo_comments" -gt 0 ]; then
                     log "State: Commented with $todo_comments TODO comments - Processing comments"
                     
-                    # Process all TODO comments
-                    if process_todo_comments "$branch" "$pr_number"; then
-                        error "CRITICAL: Microagent must implement actual fixes before continuing"
-                        return 1
-                    else
-                        error "Cannot continue: Microagent must implement fixes for TODO comments"
-                        return 1
-                    fi
+                    # Process all TODO comments and then halt for the agent to work.
+                    process_todo_comments "$branch" "$pr_number"
+                    error "CRITICAL: Microagent must implement actual fixes for the comments listed above before continuing. Halting workflow."
+                    return 1
                 else
                     # Handle Commented state with no TODO comments and None state
                     if [ "$review_status" = "Commented" ]; then
@@ -174,6 +199,20 @@ main_workflow() {
                         log "Checking if this indicates workflow completion..."
                         # Check if we should update status to Complete
                         ./check-review-status.sh "$branch"
+                        # After updating, check if we should transition to Complete
+                        sleep 2  # Small delay to ensure file is updated
+                        local new_tracking_data=$(jq -c ".branches[\"$branch\"]" "$TRACKING_FILE")
+                        local new_review_status=$(echo "$new_tracking_data" | jq -r '.review_status')
+                        if [ "$new_review_status" = "Complete" ]; then
+                            success "Workflow completed: All comments addressed and Google Code Assist indicates completion"
+                            return 0
+                        elif [ "$new_review_status" = "RateLimited" ]; then
+                            log "Google Code Assist rate limited - workflow paused"
+                            sleep "${RATE_LIMIT_CHECK_INTERVAL:-60}"
+                        else
+                            log "Still in Commented state - waiting for Google Code Assist completion signal"
+                            sleep 10  # Wait before checking again
+                        fi
                     else
                         log "State: No comments - Triggering initial review"
                         ./trigger-review.sh "$pr_number"
