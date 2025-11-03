@@ -2,7 +2,6 @@
 name: Code Review Cycle
 agent: CodeActAgent
 triggers:
-- code-review
 - google-code-assist
 - pr-review
 - review-cycle
