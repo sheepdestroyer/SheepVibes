@@ -24,7 +24,7 @@ github_api_request() {
         local response
         local http_code
         local headers_file=$(mktemp "${TMPDIR:-/tmp}/review-status-headers.XXXXXX")
-        local TEMP_FILES=("$headers_file")
+        TEMP_FILES+=("$headers_file")
         
         local auth_header=()
         if [ -n "${GITHUB_TOKEN:-}" ]; then
@@ -45,7 +45,6 @@ github_api_request() {
         if [ "$http_code" = "429" ] || { [ "$http_code" = "403" ] && echo "$response_body" | grep -iq "API rate limit exceeded"; }; then
             local reset_time
             reset_time=$(grep -i "x-ratelimit-reset" "$headers_file" | cut -d' ' -f2 | tr -d '\r')
-            rm -f "$headers_file"
             
             if [ -n "$reset_time" ]; then
                 local current_time=$(date +%s)
