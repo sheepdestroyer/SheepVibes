@@ -22,6 +22,9 @@ source "$SCRIPT_DIR/scripts/common.sh"
 # Get repository owner and name
 get_repo_info
 
+# Check dependencies
+check_dependencies
+
 # Check if GITHUB_TOKEN is set
 if [ -z "${GITHUB_TOKEN:-}" ]; then
     printf "${RED}Error: GITHUB_TOKEN environment variable is not set${NC}\n" >&2

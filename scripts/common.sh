@@ -102,10 +102,23 @@ get_repo_info() {
     export REPO_OWNER REPO_NAME REPO
 }
 
+# Function to check required dependencies
+check_dependencies() {
+    if ! command -v jq &> /dev/null; then
+        echo -e "${RED}Error: jq is required but not installed.${NC}"
+        exit 1
+    fi
+    
+    if ! command -v curl &> /dev/null; then
+        echo -e "${RED}Error: curl is required but not installed.${NC}"
+        exit 1
+    fi
+}
+
 # Function to mark PR as ready for review
 mark_pr_ready() {
     local pr_number="$1"
-    local dry_run="$2"
+    local dry_run="${2:-false}"  # Default to false if not provided
     
     if [ "$dry_run" = "true" ]; then
         printf "${YELLOW}[DRY RUN] Would mark PR #${pr_number} as ready for review${NC}\n"

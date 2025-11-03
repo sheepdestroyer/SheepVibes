@@ -64,19 +64,6 @@ When --wait is used and comments are found, they are saved to comments_<PR#>.jso
 EOF
 }
 
-# Function to check if required tools are available
-check_dependencies() {
-    if ! command -v jq &> /dev/null; then
-        echo -e "${RED}Error: jq is required but not installed.${NC}"
-        exit 1
-    fi
-    
-    if ! command -v curl &> /dev/null; then
-        echo -e "${RED}Error: curl is required but not installed.${NC}"
-        exit 1
-    fi
-}
-
 # Function to get PR info from branch name
 get_pr_info_from_branch() {
     local branch_name="$1"
@@ -342,13 +329,18 @@ EOF
     # Update tracking file with a single jq command using --slurpfile for comments
     local temp_file=$(mktemp "${TMPDIR:-/tmp}/review-status-temp.XXXXXX")
     TEMP_FILES+=("$temp_file")
+
+    local comments_source_file="$comments_file"
+    if [[ -z "$comments_file" ]]; then
+        comments_source_file="/dev/null"
+    fi
     
     if jq --arg branch "$branch_name" \
           --arg pr "$pr_number" \
           --arg status "$review_status" \
           --arg updated "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
           --arg pr_state "$pr_state" \
-          --slurpfile new_comments "$comments_file" \
+          --slurpfile new_comments "$comments_source_file" \
           '.last_updated = $updated |
            .branches[$branch] |= (
             . // {pr_number: ($pr | tonumber? // $pr), comments: []}
