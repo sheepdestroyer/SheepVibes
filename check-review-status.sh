@@ -200,8 +200,7 @@ extract_google_comments() {
         }
     ]' "$raw_temp_file" > "$comments_file"
     
-    # Clean up temporary file
-    rm -f "$raw_temp_file"
+    # Temporary file will be cleaned up by trap handler via TEMP_FILES array
     
     local total_comment_count=$(jq length "$comments_file")
     echo "$total_comment_count"

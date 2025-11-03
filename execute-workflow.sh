@@ -154,8 +154,9 @@ main_workflow() {
         local todo_comments=$(echo "$tracking_data" | jq '[.comments[] | select(.status == "todo")] | length')
         
         case "$review_status" in
-            "Commented")
-                if [ "$todo_comments" -gt 0 ]; then
+            "Commented"|"None")
+                # Handle Commented state with TODO comments
+                if [ "$review_status" = "Commented" ] && [ "$todo_comments" -gt 0 ]; then
                     log "State: Commented with $todo_comments TODO comments - Processing comments"
                     
                     # Process all TODO comments
@@ -189,22 +190,20 @@ main_workflow() {
                         return 1
                     fi
                 else
-                    warn "State: Commented but no TODO comments - This should not happen"
-                    # Trigger review to get new comments
+                    # Handle Commented state with no TODO comments and None state
+                    if [ "$review_status" = "Commented" ]; then
+                        warn "State: Commented but no TODO comments - Triggering new review"
+                    else
+                        log "State: No comments - Triggering initial review"
+                    fi
                     ./trigger-review.sh "$pr_number"
                     ./check-review-status.sh "$branch" --wait
                 fi
                 ;;
                 
-            "None")
-                log "State: No comments - Triggering initial review"
-                ./trigger-review.sh "$pr_number"
-                ./check-review-status.sh "$branch" --wait
-                ;;
-                
             "RateLimited")
                 log "State: Rate limited - Waiting 1 minute before retry"
-                sleep 60
+                sleep "${RATE_LIMIT_CHECK_INTERVAL:-60}"
                 # Check if rate limit has cleared and update tracking file
                 ./check-review-status.sh "$branch"
                 ;;
