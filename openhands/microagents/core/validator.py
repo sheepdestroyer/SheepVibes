@@ -54,6 +54,10 @@ class MicroagentValidator:
             if step.on_failure and step.on_failure not in step_ids:
                 errors.append(f"Invalid on_failure reference in step '{step.id}': {step.on_failure}")
 
+        # Validate required steps form a valid path
+        required_steps = [s for s in workflow.steps if s.required]
+        if required_steps and not self._forms_valid_path(required_steps):
+            errors.append("Required steps do not form a valid execution path")
         if errors:
             raise ValidationError("; ".join(errors))
 
