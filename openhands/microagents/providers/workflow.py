@@ -121,16 +121,31 @@ class WorkflowExecutor:
         """Evaluate single gate condition"""
         check = gate.get("check")
         expected_value = gate.get("value", True)
+        operator = gate.get("operator", "equals")
 
-        # This is a simple implementation of a real gate evaluation.
+        # This implementation supports a few basic operators.
         # For a more robust and flexible solution, this could be replaced with
         # a proper expression language (e.g., using a library like
         # py-expression-eval) that can handle more complex conditions,
         # comparisons, and logical operators.
         for result in results:
             if isinstance(result, dict) and check in result:
-                if result[check] == expected_value:
-                    return True
+                actual_value = result[check]
+                if operator == "equals":
+                    if actual_value == expected_value:
+                        return True
+                elif operator == "not_equals":
+                    if actual_value != expected_value:
+                        return True
+                elif operator == "contains":
+                    if expected_value in actual_value:
+                        return True
+                elif operator == "greater_than":
+                    if actual_value > expected_value:
+                        return True
+                elif operator == "less_than":
+                    if actual_value < expected_value:
+                        return True
         return False
 
     def _get_step_by_id(self, step_id: str) -> Optional[WorkflowStep]:

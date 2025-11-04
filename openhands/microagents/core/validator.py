@@ -58,9 +58,33 @@ class MicroagentValidator:
             raise ValidationError("; ".join(errors))
 
     def _forms_valid_path(self, steps: List[WorkflowStep]) -> bool:
-        """Check if required steps form a valid path (simplified)"""
+        """Check if required steps form a valid path using DFS."""
         if not steps:
             return True
-        # A more complex graph validation could be implemented here
-        # For now, we'll just check that there's at least one step
-        return len(steps) > 0
+
+        steps_map = {step.id: step for step in steps}
+        visited = set()
+
+        # In a real scenario, you would start from a defined "start" step.
+        # Here, we'll just use the first step in the list.
+        q = [steps[0].id]
+
+        while q:
+            step_id = q.pop(0)
+            if step_id in visited:
+                # Cycle detected
+                return False
+            visited.add(step_id)
+
+            step = steps_map.get(step_id)
+            if not step:
+                # Invalid step reference
+                return False
+
+            if step.on_success and step.on_success != "workflow_complete":
+                q.append(step.on_success)
+            if step.on_failure:
+                q.append(step.on_failure)
+
+        # Check if all required steps are reachable
+        return len(visited) == len(steps)

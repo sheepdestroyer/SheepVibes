@@ -53,7 +53,10 @@ class MicroagentCache:
             value = cached['value']
             self._memory_cache[cache_key] = {'value': value, 'timestamp': cached_time}
             return value
-        except (json.JSONDecodeError, FileNotFoundError, KeyError, TypeError):
+        except (json.JSONDecodeError, FileNotFoundError):
+            return None
+        except (KeyError, TypeError) as e:
+            print(f"Cache corruption detected: {e}")
             return None
 
     def set(self, content: str, value: Any) -> None:
