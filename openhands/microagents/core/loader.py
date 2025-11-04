@@ -55,10 +55,9 @@ class MicroagentLoader:
     def _load_context_file(self, filepath: Path) -> None:
         """Load single context provider"""
         content = filepath.read_text()
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
 
         if self.cache:
-            cached = self.cache.get(content_hash)
+            cached = self.cache.get(content)
             if cached:
                 context = self._deserialize_context(cached)
                 self.registry.register_context(context)
@@ -69,22 +68,21 @@ class MicroagentLoader:
             domain=filepath.stem,
             content=content,
             filepath=filepath,
-            checksum=content_hash
+            checksum=hashlib.sha256(content.encode()).hexdigest()
         )
 
         self.validator.validate_context(context)
         self.registry.register_context(context)
 
         if self.cache:
-            self.cache.set(content_hash, self._serialize_context(context))
+            self.cache.set(content, self._serialize_context(context))
 
     def _load_workflow_file(self, filepath: Path) -> None:
         """Load single workflow controller"""
         content = filepath.read_text()
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
 
         if self.cache:
-            cached = self.cache.get(content_hash)
+            cached = self.cache.get(content)
             if cached:
                 workflow = self._deserialize_workflow(cached)
                 self.registry.register_workflow(workflow)
@@ -97,7 +95,7 @@ class MicroagentLoader:
         self.registry.register_workflow(workflow)
 
         if self.cache:
-            self.cache.set(content_hash, self._serialize_workflow(workflow))
+            self.cache.set(content, self._serialize_workflow(workflow))
 
     def _parse_workflow(self, data: Dict[str, Any]) -> WorkflowController:
         """Parse workflow from YAML"""

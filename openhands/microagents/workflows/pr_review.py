@@ -120,18 +120,27 @@ class PRReviewWorkflow:
             self.executor.register_action_handler(action_type, handler)
 
     async def fetch_diff(self, params):
-        """Fetches the diff of the current branch."""
+        """Fetches the diff of the pull request."""
+        pr_data = self.executor.step_results.get('pr_data')
+        if not pr_data:
+            return {"success": False, "error": "PR data not found"}
+
+        base_ref = pr_data.get('base', {}).get('ref')
+        head_sha = pr_data.get('head', {}).get('sha')
+
+        if not (base_ref and head_sha):
+            return {"success": False, "error": "Base or head ref not found in PR data"}
+
         try:
-            # Create a temporary branch to get a diff
-            self.git_repo.git.checkout('-b', 'temp_branch_for_diff')
-            # Create a dummy commit
-            with open("dummy_file_for_diff.txt", "w") as f:
-                f.write("dummy content")
-            self.git_repo.git.add('.')
-            self.git_repo.git.commit('-m', 'dummy commit')
-            diff = self.git_repo.git.diff('HEAD~1', 'HEAD')
-            self.git_repo.git.checkout('-')
-            self.git_repo.git.branch('-D', 'temp_branch_for_diff')
+            # Ensure remotes are up-to-date
+            self.git_repo.remotes.origin.fetch()
+
+            # Get the merge base
+            merge_base = self.git_repo.merge_base(f'origin/{base_ref}', head_sha)
+            if not merge_base:
+                return {"success": False, "error": "Could not find merge base"}
+
+            diff = self.git_repo.git.diff(merge_base[0].hexsha, head_sha)
             return {"success": True, "diff": diff}
         except Exception as e:
             return {"success": False, "error": str(e)}

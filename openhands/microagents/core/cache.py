@@ -53,7 +53,7 @@ class MicroagentCache:
             value = cached['value']
             self._memory_cache[cache_key] = {'value': value, 'timestamp': cached_time}
             return value
-        except Exception:
+        except (json.JSONDecodeError, FileNotFoundError, KeyError, TypeError):
             return None
 
     def set(self, content: str, value: Any) -> None:

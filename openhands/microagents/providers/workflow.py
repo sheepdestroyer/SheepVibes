@@ -122,8 +122,11 @@ class WorkflowExecutor:
         check = gate.get("check")
         expected_value = gate.get("value")
 
-        # This is a simple example of a real gate evaluation.
-        # A more robust implementation would use a proper expression language.
+        # This is a simple implementation of a real gate evaluation.
+        # For a more robust and flexible solution, this could be replaced with
+        # a proper expression language (e.g., using a library like
+        # py-expression-eval) that can handle more complex conditions,
+        # comparisons, and logical operators.
         for result in results:
             if isinstance(result, dict) and check in result:
                 if result[check] == expected_value:

@@ -51,9 +51,9 @@ This script checks the Google Code Assist review status for a given branch or PR
 Returns: None, Commented, Complete, or RateLimited
 
 Exit Codes:
-  0 - Success with review status output (including when no open PR is found)
+  0 - Success with review status output
   1 - Error occurred (e.g., authentication, API failure)
-  2 - PR is not open (state is not 'open')
+  2 - No open PR found for the given branch, or the PR is not open
 
 Options:
   --wait                Wait for comments to be available (uses poll-interval for all waits)
@@ -455,7 +455,7 @@ main() {
                 echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
                 exit 1
             fi
-            exit 0
+            exit 2
         fi
         
         pr_number=$(echo "$pr_info" | jq -r '.number')

@@ -155,7 +155,7 @@ The review cycle is managed by the microagent using a strict state machine that 
 3. **Check Review Status**:
    - If `review_status == "Commented"`:
      - Read all comments from `pr-review-tracker.json` where `status: "todo"`
-     - **If no "todo" comments exist**: This state is invalid. Agent should re-trigger by calling `trigger-review.sh <pr_number>` and go to wait step
+     - **If no "todo" comments exist**: This is a valid state where the agent has addressed all comments and is waiting for the next review cycle. The agent should wait for new comments to arrive after a new review has been triggered.
      - **If "todo" comments exist**:
        - Address *all* "todo" comments in order
        - Update `pr-review-tracker.json` to mark all addressed comments as `status: "addressed"`
