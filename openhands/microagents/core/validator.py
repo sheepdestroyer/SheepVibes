@@ -58,7 +58,7 @@ class MicroagentValidator:
             raise ValidationError("; ".join(errors))
 
     def _forms_valid_path(self, steps: List[WorkflowStep]) -> bool:
-        """Check if required steps form a valid path using DFS."""
+        """Check if required steps form a valid path using BFS."""
         if not steps:
             return True
 
