@@ -7,6 +7,7 @@ from openhands.microagents.core.validator import MicroagentValidator
 from openhands.microagents.models.context_model import ContextProvider
 from openhands.microagents.models.workflow_model import WorkflowController, WorkflowStep, StepType
 import hashlib
+from dataclasses import asdict
 
 class MicroagentLoader:
     """Single source of truth for loading microagents"""
@@ -54,31 +55,53 @@ class MicroagentLoader:
     def _load_context_file(self, filepath: Path) -> None:
         """Load single context provider"""
         content = filepath.read_text()
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
 
-        # Create context provider
+        if self.cache:
+            cached = self.cache.get(content_hash)
+            if cached:
+                context = self._deserialize_context(cached)
+                self.registry.register_context(context)
+                return
+
         context = ContextProvider(
             name=filepath.stem,
             domain=filepath.stem,
             content=content,
             filepath=filepath,
-            checksum=hashlib.sha256(content.encode()).hexdigest()
+            checksum=content_hash
         )
 
-        # Validate
         self.validator.validate_context(context)
-
-        # Register
         self.registry.register_context(context)
+
+        if self.cache:
+            self.cache.set(content_hash, self._serialize_context(context))
 
     def _load_workflow_file(self, filepath: Path) -> None:
         """Load single workflow controller"""
         content = filepath.read_text()
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
 
-        # Parse YAML
+        if self.cache:
+            cached = self.cache.get(content_hash)
+            if cached:
+                workflow = self._deserialize_workflow(cached)
+                self.registry.register_workflow(workflow)
+                return
+
         data = yaml.safe_load(content)
+        workflow = self._parse_workflow(data)
 
-        # Create workflow controller
-        workflow = WorkflowController(
+        self.validator.validate_workflow(workflow)
+        self.registry.register_workflow(workflow)
+
+        if self.cache:
+            self.cache.set(content_hash, self._serialize_workflow(workflow))
+
+    def _parse_workflow(self, data: Dict[str, Any]) -> WorkflowController:
+        """Parse workflow from YAML"""
+        return WorkflowController(
             name=data['name'],
             version=str(data['version']),
             description=data['description'],
@@ -87,12 +110,6 @@ class MicroagentLoader:
             error_handling=data.get('error_handling', {}),
             exit_criteria=data.get('exit_criteria', {})
         )
-
-        # Validate
-        self.validator.validate_workflow(workflow)
-
-        # Register
-        self.registry.register_workflow(workflow)
 
     def _parse_step(self, step_data: Dict[str, Any]) -> WorkflowStep:
         """Parse workflow step from YAML"""
@@ -106,3 +123,33 @@ class MicroagentLoader:
             on_success=step_data.get('on_success'),
             on_failure=step_data.get('on_failure')
         )
+
+    def _serialize_context(self, context: ContextProvider) -> Dict[str, Any]:
+        """Serialize ContextProvider to a dict"""
+        data = asdict(context)
+        data['filepath'] = str(data['filepath'])
+        return data
+
+    def _deserialize_context(self, data: Dict[str, Any]) -> ContextProvider:
+        """Deserialize a dict to a ContextProvider"""
+        data['filepath'] = Path(data['filepath'])
+        return ContextProvider(**data)
+
+    def _serialize_workflow(self, workflow: WorkflowController) -> Dict[str, Any]:
+        """Serialize WorkflowController to a dict"""
+        data = asdict(workflow)
+        for step in data['steps']:
+            step['type'] = step['type'].value
+        return data
+
+    def _deserialize_workflow(self, data: Dict[str, Any]) -> WorkflowController:
+        """Deserialize a dict to a WorkflowController"""
+        data['steps'] = [
+            WorkflowStep(
+                **{
+                    **step,
+                    'type': StepType(step['type'])
+                }
+            ) for step in data['steps']
+        ]
+        return WorkflowController(**data)

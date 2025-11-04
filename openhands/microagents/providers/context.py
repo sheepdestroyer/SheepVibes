@@ -38,13 +38,13 @@ class ContextProviderService:
             result.append(context.content)
             token_count += estimated_tokens
 
-        return "\\n\\n---\\n\\n".join(result)
+        return "\n\n---\n\n".join(result)
 
     def _format_contexts(self, contexts: List[ContextProvider]) -> str:
         """Format contexts for display"""
         sections = []
         for ctx in contexts:
             sections.append(
-                f"# {ctx.domain.upper()} Context\\n\\n{ctx.content}"
+                f"# {ctx.domain.upper()} Context\n\n{ctx.content}"
             )
-        return "\\n\\n".join(sections)
+        return "\n\n".join(sections)

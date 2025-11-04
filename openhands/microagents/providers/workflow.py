@@ -118,12 +118,17 @@ class WorkflowExecutor:
         return True
 
     def _evaluate_gate(self, gate: Dict[str, Any], results: List[Any]) -> bool:
-        """Evaluate single gate condition (placeholder)"""
-        # This should be replaced with a real evaluation engine
+        """Evaluate single gate condition"""
         check = gate.get("check")
-        # In a real implementation, you would look at the action results.
-        # For now, we'll just simulate a pass.
-        return True
+        expected_value = gate.get("value")
+
+        # This is a simple example of a real gate evaluation.
+        # A more robust implementation would use a proper expression language.
+        for result in results:
+            if isinstance(result, dict) and check in result:
+                if result[check] == expected_value:
+                    return True
+        return False
 
     def _get_step_by_id(self, step_id: str) -> Optional[WorkflowStep]:
         for step in self.workflow.steps:

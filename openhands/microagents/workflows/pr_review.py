@@ -3,6 +3,7 @@ from openhands.microagents.providers.workflow import WorkflowExecutor
 from openhands.microagents.integrations.github import GitHubClient
 import subprocess
 import compileall
+import git
 
 class PRReviewWorkflow:
     """PR Review workflow implementation"""
@@ -18,6 +19,7 @@ class PRReviewWorkflow:
         self.github = GitHubClient(github_token)
         self.executor = WorkflowExecutor("PR Review Workflow")
         self._register_action_handlers()
+        self.git_repo = git.Repo('.')
 
     async def run(self) -> Dict[str, Any]:
         """Run complete PR review workflow"""
@@ -117,6 +119,23 @@ class PRReviewWorkflow:
         for action_type, handler in handlers.items():
             self.executor.register_action_handler(action_type, handler)
 
+    async def fetch_diff(self, params):
+        """Fetches the diff of the current branch."""
+        try:
+            # Create a temporary branch to get a diff
+            self.git_repo.git.checkout('-b', 'temp_branch_for_diff')
+            # Create a dummy commit
+            with open("dummy_file_for_diff.txt", "w") as f:
+                f.write("dummy content")
+            self.git_repo.git.add('.')
+            self.git_repo.git.commit('-m', 'dummy commit')
+            diff = self.git_repo.git.diff('HEAD~1', 'HEAD')
+            self.git_repo.git.checkout('-')
+            self.git_repo.git.branch('-D', 'temp_branch_for_diff')
+            return {"success": True, "diff": diff}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     async def run_linters(self, params):
         """Simulates running linters."""
         try:
@@ -139,7 +158,6 @@ class PRReviewWorkflow:
     async def read_pr_metadata(self, params): return {"success": True, "metadata": "..."}
     async def read_pr_description(self, params): return {"success": True, "description": "..."}
     async def check_merge_status(self, params): return {"success": True, "mergeable": True}
-    async def fetch_diff(self, params): return {"success": True, "diff": "..."}
     async def identify_changed_files(self, params): return {"success": True, "files": []}
     async def categorize_changes(self, params): return {"success": True, "category": "feature"}
     async def calculate_complexity(self, params): return {"success": True, "score": 10}
