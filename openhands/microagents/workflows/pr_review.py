@@ -132,8 +132,12 @@ class PRReviewWorkflow:
             return {"success": False, "error": "Base or head ref not found in PR data"}
 
         if self.github.token == "dummy_token":
-            head_sha = self.git_repo.head.commit.hexsha
-            base_ref = self.git_repo.git.rev_list('--max-parents=0', 'HEAD')
+            try:
+                head_sha = self.git_repo.head.commit.hexsha
+                base_ref = self.git_repo.git.rev_list('--max-parents=0', 'HEAD')
+            except git.exc.GitCommandError:
+                # Fallback for shallow repos or other errors
+                base_ref = 'HEAD~1'
 
         try:
             # Ensure remotes are up-to-date
@@ -172,14 +176,24 @@ class PRReviewWorkflow:
     async def detect_code_smells(self, params):
         """Simulates detecting code smells."""
         try:
-            # Simulate detecting code smells by searching for "TODO" and "FIXME"
+            # Simulate detecting code smells by searching for "TODO", "FIXME", and long lines
             smells = []
-            todo_smells = subprocess.run(["grep", "-r", "TODO", "openhands"], capture_output=True, text=True)
+
+            # Check for TODO comments in Python files
+            todo_smells = subprocess.run(["grep", "-r", "--include=*.py", "TODO", "openhands"], capture_output=True, text=True)
             if todo_smells.stdout:
-                smells.append(todo_smells.stdout)
-            fixme_smells = subprocess.run(["grep", "-r", "FIXME", "openhands"], capture_output=True, text=True)
+                smells.append(f"TODO comments found in Python files:\n{todo_smells.stdout}")
+
+            # Check for FIXME comments in Python files
+            fixme_smells = subprocess.run(["grep", "-r", "--include=*.py", "FIXME", "openhands"], capture_output=True, text=True)
             if fixme_smells.stdout:
-                smells.append(fixme_smells.stdout)
+                smells.append(f"FIXME comments found in Python files:\n{fixme_smells.stdout}")
+
+            # Check for long lines in Python files
+            long_lines = subprocess.run(["grep", "-r", "--include=*.py", ".\\{120,\\}", "openhands"], capture_output=True, text=True)
+            if long_lines.stdout:
+                smells.append(f"Long lines found in Python files:\n{long_lines.stdout}")
+
             return {"success": True, "smells": smells}
         except Exception as e:
             return {"success": False, "error": str(e)}

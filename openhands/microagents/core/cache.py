@@ -1,8 +1,11 @@
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Optional, Any, Dict
 from datetime import datetime, timedelta
+
+logging.basicConfig(level=logging.INFO)
 
 class MicroagentCache:
     """File-based cache with TTL and deduplication"""
@@ -43,20 +46,22 @@ class MicroagentCache:
             with open(cache_path) as f:
                 cached = json.load(f)
 
-            # Check TTL
             cached_time = datetime.fromisoformat(cached['timestamp'])
             if datetime.now() - cached_time > self.ttl:
                 cache_path.unlink()  # Expired
                 return None
 
-            # Populate memory cache
             value = cached['value']
             self._memory_cache[cache_key] = {'value': value, 'timestamp': cached_time}
             return value
-        except (json.JSONDecodeError, FileNotFoundError):
-            return None
-        except (KeyError, TypeError) as e:
-            print(f"Cache corruption detected: {e}")
+        except FileNotFoundError:
+            return None  # File not found is a normal cache miss
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logging.warning(f"Cache corruption detected in {cache_path}: {e}")
+            try:
+                cache_path.unlink()  # Attempt to remove corrupted file
+            except OSError as unlink_error:
+                logging.error(f"Failed to remove corrupted cache file {cache_path}: {unlink_error}")
             return None
 
     def set(self, content: str, value: Any) -> None:

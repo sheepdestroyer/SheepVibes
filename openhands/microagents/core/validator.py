@@ -62,33 +62,44 @@ class MicroagentValidator:
             raise ValidationError("; ".join(errors))
 
     def _forms_valid_path(self, steps: List[WorkflowStep]) -> bool:
-        """Check if required steps form a valid path using BFS."""
+        """Check if required steps form a valid path using BFS and ensuring a single starting point."""
         if not steps:
             return True
 
         steps_map = {step.id: step for step in steps}
-        visited = set()
+        step_ids = set(steps_map.keys())
 
-        # In a real scenario, you would start from a defined "start" step.
-        # Here, we'll just use the first step in the list.
-        q = [steps[0].id]
+        # Identify potential targets of transitions
+        targets = set()
+        for step in steps:
+            if step.on_success and step.on_success in step_ids:
+                targets.add(step.on_success)
+            if step.on_failure and step.on_failure in step_ids:
+                targets.add(step.on_failure)
+
+        # A valid workflow should have exactly one step that is not a target of any other step
+        start_nodes = step_ids - targets
+        if len(start_nodes) != 1:
+            return False  # No single, clear starting point
+
+        start_node = start_nodes.pop()
+
+        # Perform BFS from the identified start node
+        q = [start_node]
+        visited = set()
 
         while q:
             step_id = q.pop(0)
             if step_id in visited:
-                # Cycle detected
-                return False
+                continue # Already visited, but not a cycle in this context
+
             visited.add(step_id)
-
             step = steps_map.get(step_id)
-            if not step:
-                # Invalid step reference
-                return False
 
-            if step.on_success and step.on_success != "workflow_complete":
+            if step.on_success and step.on_success in step_ids:
                 q.append(step.on_success)
-            if step.on_failure:
+            if step.on_failure and step.on_failure in step_ids:
                 q.append(step.on_failure)
 
-        # Check if all required steps are reachable
-        return len(visited) == len(steps)
+        # Check if all required steps are reachable from the start node
+        return visited == step_ids
