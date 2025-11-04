@@ -120,7 +120,7 @@ class WorkflowExecutor:
     def _evaluate_gate(self, gate: Dict[str, Any], results: List[Any]) -> bool:
         """Evaluate single gate condition"""
         check = gate.get("check")
-        expected_value = gate.get("value")
+        expected_value = gate.get("value", True)
 
         # This is a simple implementation of a real gate evaluation.
         # For a more robust and flexible solution, this could be replaced with

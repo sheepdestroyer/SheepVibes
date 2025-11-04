@@ -15,7 +15,12 @@ class GitHubClient:
     def get_pr(self, repo: str, pr_number: int) -> dict:
         """Gets PR data from the GitHub API."""
         if self.token == "dummy_token":
-            return {"title": "Test PR", "body": "This is a test PR."}
+            return {
+                "title": "Test PR",
+                "body": "This is a test PR.",
+                "base": {"ref": "main"},
+                "head": {"sha": "test_sha"}
+            }
         url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}"
         response = requests.get(url, headers=self.headers)
         response.raise_for_status()

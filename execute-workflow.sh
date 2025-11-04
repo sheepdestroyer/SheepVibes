@@ -244,7 +244,7 @@ main_workflow() {
                         warn "State: Commented but no TODO comments - This state should not trigger new reviews"
                         log "Checking if this indicates workflow completion..."
                         # Check if we should update status to Complete
-                        ./check-review-status.sh "$branch"
+                        ./check-review-status.sh "$branch" > /dev/null
                         # After updating, check if we should transition to Complete
                         sleep 2  # Small delay to ensure file is updated
                         local new_tracking_data=$(jq -c ".branches[\"$branch\"]" "$TRACKING_FILE")
@@ -262,7 +262,7 @@ main_workflow() {
                     else
                         log "State: No comments - Triggering initial review"
                         ./trigger-review.sh "$pr_number"
-                        ./check-review-status.sh "$branch" --wait
+                        ./check-review-status.sh "$branch" --wait > /dev/null
                     fi
                 fi
                 ;;
