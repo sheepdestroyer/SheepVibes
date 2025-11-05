@@ -62,44 +62,44 @@ class MicroagentValidator:
             raise ValidationError("; ".join(errors))
 
     def _forms_valid_path(self, steps: List[WorkflowStep]) -> bool:
-        """Check if required steps form a valid path using BFS and ensuring a single starting point."""
+        """Check if required steps form a valid path using DFS for cycle detection."""
         if not steps:
             return True
 
         steps_map = {step.id: step for step in steps}
         step_ids = set(steps_map.keys())
 
-        # Identify potential targets of transitions
-        targets = set()
-        for step in steps:
-            if step.on_success and step.on_success in step_ids:
-                targets.add(step.on_success)
-            if step.on_failure and step.on_failure in step_ids:
-                targets.add(step.on_failure)
-
-        # A valid workflow should have exactly one step that is not a target of any other step
+        # Find start nodes (nodes with no incoming edges)
+        targets = {s.on_success for s in steps if s.on_success in step_ids}
+        targets.update({s.on_failure for s in steps if s.on_failure in step_ids})
         start_nodes = step_ids - targets
-        if len(start_nodes) != 1:
-            return False  # No single, clear starting point
 
-        start_node = start_nodes.pop()
+        if not start_nodes:
+            return False  # No start node, likely a cycle
 
-        # Perform BFS from the identified start node
-        q = [start_node]
+        # DFS for cycle detection
+        visiting = set()
         visited = set()
 
-        while q:
-            step_id = q.pop(0)
-            if step_id in visited:
-                continue # Already visited, but not a cycle in this context
-
-            visited.add(step_id)
+        def has_cycle(step_id):
+            visiting.add(step_id)
             step = steps_map.get(step_id)
 
-            if step.on_success and step.on_success in step_ids:
-                q.append(step.on_success)
-            if step.on_failure and step.on_failure in step_ids:
-                q.append(step.on_failure)
+            for next_step_id in [step.on_success, step.on_failure]:
+                if next_step_id in visiting:
+                    return True  # Cycle detected
+                if next_step_id in step_ids and next_step_id not in visited:
+                    if has_cycle(next_step_id):
+                        return True
 
-        # Check if all required steps are reachable from the start node
-        return visited == step_ids
+            visiting.remove(step_id)
+            visited.add(step_id)
+            return False
+
+        for start_node in start_nodes:
+            if start_node not in visited:
+                if has_cycle(start_node):
+                    return False
+
+        # Check for reachability
+        return len(visited) == len(step_ids)

@@ -44,3 +44,10 @@ steps:
       - id: "set_pr_labels"
         type: "set_pr_labels"
     on_success: "workflow_complete"
+
+  - id: "workflow_complete"
+    name: "Workflow Complete"
+    type: "completion"
+    actions:
+      - id: "log_completion"
+        type: "log_metrics"

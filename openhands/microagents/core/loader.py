@@ -142,12 +142,5 @@ class MicroagentLoader:
 
     def _deserialize_workflow(self, data: Dict[str, Any]) -> WorkflowController:
         """Deserialize a dict to a WorkflowController"""
-        data['steps'] = [
-            WorkflowStep(
-                **{
-                    **step,
-                    'type': StepType(step['type'])
-                }
-            ) for step in data['steps']
-        ]
+        data['steps'] = [self._parse_step(step) for step in data.get('steps', [])]
         return WorkflowController(**data)

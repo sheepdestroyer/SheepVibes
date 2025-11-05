@@ -102,30 +102,20 @@ implement_fixes() {
             continue
         fi
 
-        # Apply each code block as a patch
-        echo "$code_blocks" | while read -r patch_content; do
-            if [ -z "$patch_content" ]; then
-                continue
-            fi
-
-            # Create a temporary patch file
-            local patch_file=$(mktemp)
-            echo -e "$patch_content" > "$patch_file"
-
-            # Apply the patch
-            if git apply --check "$patch_file"; then
-                if git apply "$patch_file"; then
-                    success "Successfully applied patch for a comment."
-                    changes_made=true
-                else
-                    error "Failed to apply patch for a comment."
-                fi
+        # Apply the patch
+        local patch_file=$(mktemp)
+        TEMP_FILES+=("$patch_file")
+        echo -e "$code_blocks" > "$patch_file"
+        if git apply --check "$patch_file"; then
+            if git apply "$patch_file"; then
+                success "Successfully applied patch from a comment."
+                changes_made=true
             else
-                error "Patch check failed for a comment."
+                error "Failed to apply patch from a comment."
             fi
-
-            rm "$patch_file"
-        done
+        else
+            error "Patch check failed for a comment."
+        fi
     done < <(jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE")
     
     if [ "$changes_made" = true ]; then
