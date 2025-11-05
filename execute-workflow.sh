@@ -120,7 +120,7 @@ implement_fixes() {
     
     if [ "$changes_made" = true ]; then
         log "Committing applied fixes..."
-        git add .
+        git add -u
         git commit -m "feat: Apply automated code review fixes"
         return 0
     else

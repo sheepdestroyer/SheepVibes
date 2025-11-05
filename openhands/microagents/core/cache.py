@@ -48,7 +48,10 @@ class MicroagentCache:
 
             cached_time = datetime.fromisoformat(cached['timestamp'])
             if datetime.now() - cached_time > self.ttl:
-                cache_path.unlink()  # Expired
+                try:
+                    cache_path.unlink()  # Expired
+                except OSError as e:
+                    logging.warning(f"Failed to remove expired cache file {cache_path}: {e}")
                 return None
 
             value = cached['value']
