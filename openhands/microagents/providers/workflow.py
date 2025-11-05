@@ -76,11 +76,17 @@ class WorkflowExecutor:
         self.current_step_id = step.id
         self._log_event('step_start', {'step_id': step.id, 'step_name': step.name})
 
-        action_results = []
+        action_results = {}
         step_success = True
         for action in step.actions:
+            action_id = action.get('id')
+            if not action_id:
+                self._log_event('action_error', {'error': 'Action missing id'})
+                step_success = False
+                continue
+
             result = await self._execute_action(action)
-            action_results.append(result)
+            action_results[action_id] = result
             if not result.get('success', True):
                 step_success = False
 
@@ -117,36 +123,38 @@ class WorkflowExecutor:
                 return False
         return True
 
-    def _evaluate_gate(self, gate: Dict[str, Any], results: List[Any]) -> bool:
-        """Evaluate single gate condition"""
+    def _evaluate_gate(self, gate: Dict[str, Any], results: Dict[str, Any]) -> bool:
+        """Evaluate single gate condition against a specific action's result."""
         check = gate.get("check")
+        action_id = gate.get("action_id")
         expected_value = gate.get("value", True)
         operator = gate.get("operator", "equals")
 
-        # This implementation supports a few basic operators.
-        # For a more robust and flexible solution, this could be replaced with
-        # a proper expression language (e.g., using a library like
-        # py-expression-eval) that can handle more complex conditions,
-        # comparisons, and logical operators.
-        for result in results:
-            if isinstance(result, dict) and check in result:
-                actual_value = result[check]
-                if operator == "equals":
-                    if actual_value == expected_value:
-                        return True
-                elif operator == "not_equals":
-                    if actual_value != expected_value:
-                        return True
-                elif operator == "contains":
-                    if expected_value in actual_value:
-                        return True
-                elif operator == "greater_than":
-                    if actual_value > expected_value:
-                        return True
-                elif operator == "less_than":
-                    if actual_value < expected_value:
-                        return True
-        return False
+        if not action_id:
+            self._log_event('gate_error', {'error': 'Gate missing action_id'})
+            return False
+
+        action_result = results.get(action_id)
+        if not action_result or not isinstance(action_result, dict) or check not in action_result:
+            return False
+
+        actual_value = action_result[check]
+
+        if operator == "equals":
+            return actual_value == expected_value
+        elif operator == "not_equals":
+            return actual_value != expected_value
+        elif operator == "contains":
+            return expected_value in actual_value
+        elif operator == "not_contains":
+            return expected_value not in actual_value
+        elif operator == "greater_than":
+            return actual_value > expected_value
+        elif operator == "less_than":
+            return actual_value < expected_value
+        else:
+            self._log_event('gate_error', {'error': f'Unsupported operator: {operator}'})
+            return False
 
     def _get_step_by_id(self, step_id: str) -> Optional[WorkflowStep]:
         for step in self.workflow.steps:

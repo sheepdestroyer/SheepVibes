@@ -1,0 +1,46 @@
+name: PR Review Workflow
+version: '1.0'
+description: "Automated PR review workflow"
+steps:
+  - id: "initial_setup"
+    name: "Initial Setup"
+    type: "setup"
+    actions:
+      - id: "read_pr_metadata"
+        type: "read_pr_metadata"
+      - id: "fetch_diff"
+        type: "fetch_diff"
+    on_success: "analyze_changes"
+
+  - id: "analyze_changes"
+    name: "Analyze Changes"
+    type: "analysis"
+    actions:
+      - id: "run_linters"
+        type: "run_linters"
+      - id: "detect_code_smells"
+        type: "detect_code_smells"
+    gates:
+      - check: "lint_passed"
+        action_id: "run_linters"
+        value: true
+    on_success: "generate_report"
+    on_failure: "generate_report"
+
+  - id: "generate_report"
+    name: "Generate Report"
+    type: "reporting"
+    actions:
+      - id: "generate_markdown_report"
+        type: "generate_markdown_report"
+    on_success: "post_review"
+
+  - id: "post_review"
+    name: "Post Review"
+    type: "communication"
+    actions:
+      - id: "post_github_comment"
+        type: "post_github_comment"
+      - id: "set_pr_labels"
+        type: "set_pr_labels"
+    on_success: "workflow_complete"

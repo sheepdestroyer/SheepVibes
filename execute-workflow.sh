@@ -91,11 +91,11 @@ implement_fixes() {
     log "Implementing fixes for TODO comments on branch: $branch"
     
     # Process each TODO comment individually
-    jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE" | while read -r comment; do
+    while read -r comment; do
         local body=$(echo "$comment" | jq -r '.body')
 
         # Extract all code blocks from the comment body
-        local code_blocks=$(echo "$body" | grep -o '```diff\s*[^`]*' | sed 's/```diff//')
+        local code_blocks=$(echo "$body" | awk '/```diff/{flag=1; next} /```/{flag=0} flag')
 
         if [ -z "$code_blocks" ]; then
             warn "No diff code blocks found in comment. Skipping."
@@ -126,7 +126,7 @@ implement_fixes() {
 
             rm "$patch_file"
         done
-    done
+    done < <(jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE")
     
     if [ "$changes_made" = true ]; then
         log "Committing applied fixes..."
