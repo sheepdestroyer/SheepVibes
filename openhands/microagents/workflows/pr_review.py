@@ -37,7 +37,7 @@ class PRReviewWorkflow:
     async def _post_review(self, result: Dict[str, Any]) -> None:
         """Post review results to GitHub"""
         summary_step_result = result.get('results', {}).get('generate_review_summary', {})
-        review_summary = summary_step_result.get('actions', [{}])[0].get('review_summary', 'No summary generated.')
+        review_summary = summary_step_result.get('actions', {}).get('generate_markdown_report', {}).get('report', 'No summary generated.')
 
         self.github.post_pr_comment(
             self.repo,
@@ -59,7 +59,7 @@ class PRReviewWorkflow:
         """Determine labels based on workflow result"""
         labels = ["reviewed"]
         analyze_step_result = result.get('results', {}).get('analyze_changes', {})
-        change_category = analyze_step_result.get('actions', [{}])[0].get('change_category')
+        change_category = analyze_step_result.get('actions', {}).get('categorize_changes', {}).get('category')
         if change_category:
             labels.append(change_category)
         return labels

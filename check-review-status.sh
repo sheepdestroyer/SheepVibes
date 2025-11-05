@@ -87,7 +87,7 @@ check_for_no_remaining_issues() {
     
     # Check if any comment contains a completion signal
     # Use more flexible patterns to avoid matching comments about the feature itself
-    if jq -e 'any(.[] | .body; test("No remaining issues|All issues resolved|All fixed|No issues remaining|Looks good to merge|Ready to merge|LGTM"; "i"))' "$comments_file" > /dev/null; then
+    if jq -e 'any(.[] | .body; test("^(No remaining issues|All issues resolved|All fixed|No issues remaining|Looks good to merge|Ready to merge|LGTM)$"; "im"))' "$comments_file" > /dev/null; then
         return 0  # Completion signal found
     fi
     

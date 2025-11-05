@@ -115,7 +115,7 @@ class WorkflowExecutor:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    def _check_gates(self, gates: List[Dict[str, Any]], results: List[Any]) -> bool:
+    def _check_gates(self, gates: List[Dict[str, Any]], results: Dict[str, Any]) -> bool:
         """Check if all gates pass"""
         for gate in gates:
             if not self._evaluate_gate(gate, results):

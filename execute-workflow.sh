@@ -95,7 +95,7 @@ implement_fixes() {
         local body=$(echo "$comment" | jq -r '.body')
 
         # Extract all code blocks from the comment body
-        local code_blocks=$(echo "$body" | awk '/```diff/{flag=1; next} /```/{flag=0} flag')
+        local code_blocks=$(echo "$body" | sed -n '/^```diff/,/^```/p' | sed '1d;$d')
 
         if [ -z "$code_blocks" ]; then
             warn "No diff code blocks found in comment. Skipping."
