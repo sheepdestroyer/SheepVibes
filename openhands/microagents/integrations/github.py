@@ -22,7 +22,7 @@ class GitHubClient:
                 "head": {"sha": "test_sha"}
             }
         url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}"
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self.headers, timeout=30)
         response.raise_for_status()
         return response.json()
 
@@ -33,7 +33,7 @@ class GitHubClient:
             return
         url = f"{self.base_url}/repos/{repo}/issues/{pr_number}/comments"
         data = {"body": comment}
-        response = requests.post(url, headers=self.headers, json=data)
+        response = requests.post(url, headers=self.headers, json=data, timeout=30)
         response.raise_for_status()
 
     def add_labels(self, repo: str, pr_number: int, labels: List[str]):
@@ -43,7 +43,7 @@ class GitHubClient:
             return
         url = f"{self.base_url}/repos/{repo}/issues/{pr_number}/labels"
         data = {"labels": labels}
-        response = requests.post(url, headers=self.headers, json=data)
+        response = requests.post(url, headers=self.headers, json=data, timeout=30)
         response.raise_for_status()
 
     def approve_pr(self, repo: str, pr_number: int):
@@ -53,7 +53,7 @@ class GitHubClient:
             return
         url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}/reviews"
         data = {"event": "APPROVE"}
-        response = requests.post(url, headers=self.headers, json=data)
+        response = requests.post(url, headers=self.headers, json=data, timeout=30)
         response.raise_for_status()
 
     def request_changes(self, repo: str, pr_number: int, comment: str):
@@ -63,5 +63,5 @@ class GitHubClient:
             return
         url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}/reviews"
         data = {"body": comment, "event": "REQUEST_CHANGES"}
-        response = requests.post(url, headers=self.headers, json=data)
+        response = requests.post(url, headers=self.headers, json=data, timeout=30)
         response.raise_for_status()

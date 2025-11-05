@@ -4,17 +4,19 @@ import logging
 from pathlib import Path
 from typing import Optional, Any, Dict
 from datetime import datetime, timedelta
+from collections import OrderedDict
 
 logging.basicConfig(level=logging.INFO)
 
 class MicroagentCache:
     """File-based cache with TTL and deduplication"""
 
-    def __init__(self, cache_dir: Path, ttl_seconds: int = 3600):
+    def __init__(self, cache_dir: Path, ttl_seconds: int = 3600, max_size: int = 128):
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.ttl = timedelta(seconds=ttl_seconds)
-        self._memory_cache: Dict[str, Dict[str, Any]] = {}
+        self.max_size = max_size
+        self._memory_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
 
     def _get_cache_key(self, content: str) -> str:
         """Generate deterministic cache key"""
@@ -29,6 +31,7 @@ class MicroagentCache:
 
         # Check memory cache first
         if cache_key in self._memory_cache:
+            self._memory_cache.move_to_end(cache_key)
             cached = self._memory_cache[cache_key]
             cached_time = cached['timestamp']
             if datetime.now() - cached_time <= self.ttl:
@@ -75,6 +78,9 @@ class MicroagentCache:
 
         # Update memory cache
         self._memory_cache[cache_key] = {'value': value, 'timestamp': now}
+        self._memory_cache.move_to_end(cache_key)
+        if len(self._memory_cache) > self.max_size:
+            self._memory_cache.popitem(last=False)
 
         # Update file cache
         with open(cache_path, 'w') as f:
