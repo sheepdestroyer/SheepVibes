@@ -127,15 +127,18 @@ check_for_rate_limit() {
     # Check if 24 hours have passed since the rate limit message
     local current_time=$(date -u +%s)
     local rate_limit_timestamp=$(echo "$rate_limit_time" | awk -f "${SCRIPT_DIR}/scripts/iso8601_to_epoch.awk")
+
+    if [ -z "$rate_limit_timestamp" ]; then
+        echo -e "${YELLOW}Warning: Failed to parse rate limit timestamp '${rate_limit_time}'. Assuming rate limit is still active.${NC}" >&2
+        return 0 # Pause workflow as a precaution
+    fi
+
+    local time_since_rate_limit=$((current_time - rate_limit_timestamp))
+    local twenty_four_hours=$((24 * 60 * 60))
     
-    if [ -n "$rate_limit_timestamp" ]; then
-        local time_since_rate_limit=$((current_time - rate_limit_timestamp))
-        local twenty_four_hours=$((24 * 60 * 60))
-        
-        if [ "$time_since_rate_limit" -ge "$twenty_four_hours" ]; then
-            echo -e "${YELLOW}Rate limit detected but 24 hours have passed - continuing workflow${NC}" >&2
-            return 1  # Don't pause workflow
-        fi
+    if [ "$time_since_rate_limit" -ge "$twenty_four_hours" ]; then
+        echo -e "${YELLOW}Rate limit detected but 24 hours have passed - continuing workflow${NC}" >&2
+        return 1  # Don't pause workflow
     fi
 
     # If we get here, rate limit is active and workflow should pause

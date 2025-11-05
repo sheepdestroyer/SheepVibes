@@ -132,12 +132,8 @@ class PRReviewWorkflow:
             return {"success": False, "error": "Base or head ref not found in PR data"}
 
         if self.github.token == "dummy_token":
-            try:
-                head_sha = self.git_repo.head.commit.hexsha
-                base_ref = self.git_repo.git.rev_list('--max-parents=0', 'HEAD')
-            except git.exc.GitCommandError:
-                # Fallback for shallow repos or other errors
-                base_ref = 'HEAD~1'
+            head_sha = self.git_repo.head.commit.hexsha
+            base_ref = 'main'  # Assume 'main' for local simulation
 
         try:
             # Ensure remotes are up-to-date

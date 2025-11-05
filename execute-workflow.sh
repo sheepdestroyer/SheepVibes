@@ -83,31 +83,60 @@ check_workflow_conditions() {
 }
 
 # Function to implement actual fixes for TODO comments
-# This is where the microagent would read comments and implement code changes
 implement_fixes() {
     local branch="$1"
     local pr_number="$2"
+    local changes_made=false
     
     log "Implementing fixes for TODO comments on branch: $branch"
     
-    # Get TODO comments
-    local todo_comments
-    todo_comments=$(jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE")
+    # Process each TODO comment individually
+    jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE" | while read -r comment; do
+        local body=$(echo "$comment" | jq -r '.body')
+
+        # Extract all code blocks from the comment body
+        local code_blocks=$(echo "$body" | grep -o '```diff\s*[^`]*' | sed 's/```diff//')
+
+        if [ -z "$code_blocks" ]; then
+            warn "No diff code blocks found in comment. Skipping."
+            continue
+        fi
+
+        # Apply each code block as a patch
+        echo "$code_blocks" | while read -r patch_content; do
+            if [ -z "$patch_content" ]; then
+                continue
+            fi
+
+            # Create a temporary patch file
+            local patch_file=$(mktemp)
+            echo -e "$patch_content" > "$patch_file"
+
+            # Apply the patch
+            if git apply --check "$patch_file"; then
+                if git apply "$patch_file"; then
+                    success "Successfully applied patch for a comment."
+                    changes_made=true
+                else
+                    error "Failed to apply patch for a comment."
+                fi
+            else
+                error "Patch check failed for a comment."
+            fi
+
+            rm "$patch_file"
+        done
+    done
     
-    if [ -z "$todo_comments" ]; then
-        warn "No TODO comments found to fix"
+    if [ "$changes_made" = true ]; then
+        log "Committing applied fixes..."
+        git add .
+        git commit -m "feat: Apply automated code review fixes"
+        return 0
+    else
+        warn "No changes were made by the microagent."
         return 1
     fi
-    
-    # Create a dummy file to represent the code changes
-    echo "This file represents the fixes for the TODO comments." > fixes.txt
-    git add fixes.txt
-    git commit --allow-empty -m "feat: Implement fixes for review comments"
-    
-    # For now, simulate that fixes have been implemented
-    # In a real microagent, this is where actual code changes would be made
-    warn "SIMULATION: Fixes would be implemented here by microagent"
-    return 0
 }
 
 # Complete workflow for processing TODO comments with all required steps
@@ -124,17 +153,17 @@ process_todo_comments() {
     fi
     
     # Step 2: Get all TODO comment IDs to mark as addressed
-    local todo_comment_ids
-    todo_comment_ids=$(jq -r ".branches[\"$branch\"].comments[] | select(.status == \"todo\") | .id" "$TRACKING_FILE")
-    
-    if [ -z "$todo_comment_ids" ]; then
+    local todo_comment_ids_array
+    mapfile -t todo_comment_ids_array < <(jq -r ".branches[\"$branch\"].comments[] | select(.status == \"todo\") | .id" "$TRACKING_FILE")
+
+    if [ ${#todo_comment_ids_array[@]} -eq 0 ]; then
         warn "No TODO comments found to mark as addressed"
         return 1
     fi
-    
+
     # Step 3: Mark all TODO comments as addressed
-    log "Marking comments as addressed: $todo_comment_ids"
-    if ! ./mark-addressed.sh "$branch" $todo_comment_ids; then
+    log "Marking comments as addressed: ${todo_comment_ids_array[*]}"
+    if ! ./mark-addressed.sh "$branch" "${todo_comment_ids_array[@]}"; then
         error "Failed to mark comments as addressed"
         return 1
     fi
