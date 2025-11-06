@@ -174,8 +174,8 @@ process_todo_comments() {
     fi
     
     # Step 4: Push changes to branch (simulated - in real workflow would commit and push)
-    log "SIMULATION: Changes would be committed and pushed to branch: $branch"
-    warn "In real workflow: git commit and git push would happen here"
+    log "SIMULATION: Changes have been committed and would be pushed to branch: $branch"
+    warn "In real workflow: git push would happen here"
     
     # Step 5: Trigger new review
     log "Triggering new Google Code Assist review for PR: $pr_number"

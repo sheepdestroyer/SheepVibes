@@ -4,6 +4,7 @@ from openhands.microagents.integrations.github import GitHubClient
 import subprocess
 import compileall
 import git
+import asyncio
 
 class PRReviewWorkflow:
     """PR Review workflow implementation"""
@@ -152,58 +153,82 @@ class PRReviewWorkflow:
             return {"success": False, "error": str(e)}
 
     async def run_linters(self, params):
-        """Simulates running linters."""
+        """Runs linters asynchronously."""
         try:
-            # Simulate running a linter by checking python syntax
-            subprocess.run(["ruff", "check", "openhands"], check=True, capture_output=True, text=True)
+            proc = await asyncio.create_subprocess_exec(
+                "ruff", "check", "openhands",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            _stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                return {"success": False, "lint_passed": False, "error": stderr.decode()}
             return {"success": True, "lint_passed": True}
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        except FileNotFoundError as e:
             return {"success": False, "lint_passed": False, "error": str(e)}
 
     async def scan_dependencies(self, params):
-        """Simulates scanning dependencies for vulnerabilities."""
+        """Scans dependencies for vulnerabilities asynchronously."""
         try:
-            # Simulate a dependency scan by running pip check
-            subprocess.run(["safety", "check"], check=True, capture_output=True, text=True)
+            proc = await asyncio.create_subprocess_exec(
+                "safety", "check",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            _stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                return {"success": False, "vulnerabilities": ["Inconsistent dependencies found"], "error": stderr.decode()}
             return {"success": True, "vulnerabilities": []}
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        except FileNotFoundError as e:
             return {"success": False, "vulnerabilities": ["Inconsistent dependencies found"], "error": str(e)}
 
     async def detect_code_smells(self, params):
-        """Simulates detecting code smells."""
+        """Detects code smells asynchronously."""
         try:
-            # Simulate detecting code smells by searching for "TODO", "FIXME", and long lines
             smells = []
 
             # Check for TODO comments in Python files
-            todo_smells = subprocess.run(["grep", "-r", "--include=*.py", "TODO", "openhands"], capture_output=True, text=True)
-            if todo_smells.stdout:
-                smells.append(f"TODO comments found in Python files:\n{todo_smells.stdout}")
+            proc = await asyncio.create_subprocess_exec(
+                "grep", "-r", "--include=*.py", "TODO", "openhands",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            if stdout:
+                smells.append(f"TODO comments found in Python files:\n{stdout.decode()}")
 
             # Check for FIXME comments in Python files
-            fixme_smells = subprocess.run(["grep", "-r", "--include=*.py", "FIXME", "openhands"], capture_output=True, text=True)
-            if fixme_smells.stdout:
-                smells.append(f"FIXME comments found in Python files:\n{fixme_smells.stdout}")
+            proc = await asyncio.create_subprocess_exec(
+                "grep", "-r", "--include=*.py", "FIXME", "openhands",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            if stdout:
+                smells.append(f"FIXME comments found in Python files:\n{stdout.decode()}")
 
             # Check for long lines in Python files
-            long_lines = subprocess.run(["grep", "-r", "--include=*.py", ".\\{120,\\}", "openhands"], capture_output=True, text=True)
-            if long_lines.stdout:
-                smells.append(f"Long lines found in Python files:\n{long_lines.stdout}")
+            proc = await asyncio.create_subprocess_exec(
+                "grep", "-r", "--include=*.py", ".\\{120,\\}", "openhands",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            if stdout:
+                smells.append(f"Long lines found in Python files:\n{stdout.decode()}")
 
             return {"success": True, "smells": smells}
-        except Exception as e:
+        except FileNotFoundError as e:
             return {"success": False, "error": str(e)}
 
     async def analyze_logic(self, params):
-        """Simulates analyzing logic."""
+        """Analyzes logic asynchronously."""
         try:
-            # Simulate analyzing logic by searching for complex conditional statements
             logic_issues = []
-            complex_conditionals = subprocess.run(["grep", "-r", "if.*and.*or", "openhands"], capture_output=True, text=True)
-            if complex_conditionals.stdout:
-                logic_issues.append(complex_conditionals.stdout)
+            proc = await asyncio.create_subprocess_exec(
+                "grep", "-r", "if.*and.*or", "openhands",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            if stdout:
+                logic_issues.append(stdout.decode())
             return {"success": True, "logic_issues": logic_issues}
-        except Exception as e:
+        except FileNotFoundError as e:
             return {"success": False, "error": str(e)}
 
     # Placeholder Action Handlers
