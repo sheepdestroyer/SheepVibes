@@ -1,5 +1,5 @@
 import requests
-from typing import List
+from typing import List, Optional
 
 class GitHubClient:
     """A client for interacting with the GitHub API."""
@@ -46,13 +46,15 @@ class GitHubClient:
         response = requests.post(url, headers=self.headers, json=data, timeout=30)
         response.raise_for_status()
 
-    def approve_pr(self, repo: str, pr_number: int):
+    def approve_pr(self, repo: str, pr_number: int, comment: Optional[str] = None):
         """Approves a PR."""
         if self.token == "dummy_token":
             print(f"Approving PR {pr_number} in {repo}")
             return
         url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}/reviews"
         data = {"event": "APPROVE"}
+        if comment:
+            data["body"] = comment
         response = requests.post(url, headers=self.headers, json=data, timeout=30)
         response.raise_for_status()
 

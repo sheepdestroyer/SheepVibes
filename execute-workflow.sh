@@ -98,18 +98,20 @@ implement_fixes() {
     local branch="$1"
     local pr_number="$2"
     local changes_made=false
+    local successful_ids=()
     
     log "Implementing fixes for TODO comments on branch: $branch"
     
     # Process each TODO comment individually
     while read -r comment; do
+        local comment_id=$(echo "$comment" | jq -r '.id')
         local body=$(echo "$comment" | jq -r '.body')
 
         # Extract all code blocks from the comment body
-        local code_blocks=$(echo "$body" | sed -n '/^```diff/,/^```/p' | sed '1d;$d')
+        local code_blocks=$(echo "$body" | tr -d '\r' | sed -n '/^```diff/,/^```/p' | sed '1d;$d')
 
         if [ -z "$code_blocks" ]; then
-            warn "No diff code blocks found in comment. Skipping."
+            warn "No diff code blocks found in comment ID $comment_id. Skipping."
             continue
         fi
 
@@ -119,13 +121,14 @@ implement_fixes() {
         echo -e "$code_blocks" > "$patch_file"
         if git apply --check "$patch_file"; then
             if git apply "$patch_file"; then
-                success "Successfully applied patch from a comment."
+                success "Successfully applied patch from comment ID $comment_id."
                 changes_made=true
+                successful_ids+=("$comment_id")
             else
-                error "Failed to apply patch from a comment."
+                error "Failed to apply patch from comment ID $comment_id."
             fi
         else
-            error "Patch check failed for a comment."
+            error "Patch check failed for comment ID $comment_id."
         fi
     done < <(jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE")
     
@@ -133,6 +136,7 @@ implement_fixes() {
         log "Committing applied fixes..."
         git add -u
         git commit -m "feat: Apply automated code review fixes"
+        echo "${successful_ids[@]}"
         return 0
     else
         warn "No changes were made by the microagent."
@@ -147,24 +151,24 @@ process_todo_comments() {
     
     log "Starting complete TODO comment processing workflow for branch: $branch"
     
-    # Step 1: Implement actual fixes
-    if ! implement_fixes "$branch" "$pr_number"; then
+    # Step 1: Implement actual fixes and get the IDs of successfully applied comments
+    local successful_ids_str
+    if ! successful_ids_str=$(implement_fixes "$branch" "$pr_number"); then
         error "Failed to implement fixes for TODO comments"
         return 1
     fi
     
-    # Step 2: Get all TODO comment IDs to mark as addressed
-    local todo_comment_ids_array
-    mapfile -t todo_comment_ids_array < <(jq -r ".branches[\"$branch\"].comments[] | select(.status == \"todo\") | .id" "$TRACKING_FILE")
+    # Step 2: Convert the string of IDs to an array
+    local successful_ids_array=($successful_ids_str)
 
-    if [ ${#todo_comment_ids_array[@]} -eq 0 ]; then
-        warn "No TODO comments found to mark as addressed"
+    if [ ${#successful_ids_array[@]} -eq 0 ]; then
+        warn "No comments were successfully addressed"
         return 1
     fi
 
-    # Step 3: Mark all TODO comments as addressed
-    log "Marking comments as addressed: ${todo_comment_ids_array[*]}"
-    if ! ./mark-addressed.sh "$branch" "${todo_comment_ids_array[@]}"; then
+    # Step 3: Mark all successfully addressed comments
+    log "Marking comments as addressed: ${successful_ids_array[*]}"
+    if ! ./mark-addressed.sh "$branch" "${successful_ids_array[@]}"; then
         error "Failed to mark comments as addressed"
         return 1
     fi
