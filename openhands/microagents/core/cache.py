@@ -3,7 +3,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional, Any, Dict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class MicroagentCache:
             self._memory_cache.move_to_end(cache_key)
             cached = self._memory_cache[cache_key]
             cached_time = cached['timestamp']
-            if datetime.now() - cached_time <= self.ttl:
+            if datetime.now(timezone.utc) - cached_time <= self.ttl:
                 return cached['value']
             else:
                 # Expired, remove from memory
@@ -50,7 +50,7 @@ class MicroagentCache:
                 cached = json.load(f)
 
             cached_time = datetime.fromisoformat(cached['timestamp'])
-            if datetime.now() - cached_time > self.ttl:
+            if datetime.now(timezone.utc) - cached_time > self.ttl:
                 try:
                     cache_path.unlink()  # Expired
                 except OSError as e:
@@ -74,7 +74,7 @@ class MicroagentCache:
         """Cache value with timestamp"""
         cache_key = self._get_cache_key(content)
         cache_path = self._get_cache_path(cache_key)
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         # Update memory cache
         self._memory_cache[cache_key] = {'value': value, 'timestamp': now}

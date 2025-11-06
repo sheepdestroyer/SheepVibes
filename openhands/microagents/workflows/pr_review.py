@@ -176,10 +176,10 @@ class PRReviewWorkflow:
             )
             _stdout, stderr = await proc.communicate()
             if proc.returncode != 0:
-                return {"success": False, "vulnerabilities": ["Inconsistent dependencies found"], "error": stderr.decode()}
+                return {"success": False, "vulnerabilities": [], "error": stderr.decode()}
             return {"success": True, "vulnerabilities": []}
         except FileNotFoundError as e:
-            return {"success": False, "vulnerabilities": ["Inconsistent dependencies found"], "error": str(e)}
+            return {"success": False, "vulnerabilities": [], "error": str(e)}
 
     async def detect_code_smells(self, params):
         """Detects code smells asynchronously."""
@@ -206,9 +206,7 @@ class PRReviewWorkflow:
         class LogicAnalyzer(ast.NodeVisitor):
             def visit_If(self, node):
                 if isinstance(node.test, ast.BoolOp):
-                    if isinstance(node.test.op, (ast.And, ast.Or)):
-                        if len(node.test.values) > 1:
-                            logic_issues.append(f"Complex boolean expression at line {node.lineno}")
+                    logic_issues.append(f"Complex boolean expression at line {node.lineno}")
                 self.generic_visit(node)
 
         try:
