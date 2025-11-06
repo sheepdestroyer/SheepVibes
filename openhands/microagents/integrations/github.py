@@ -4,8 +4,9 @@ from typing import List, Optional
 class GitHubClient:
     """A client for interacting with the GitHub API."""
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, dummy_mode: bool = False):
         self.token = token
+        self.dummy_mode = dummy_mode or token == "dummy_token"
         self.headers = {
             "Authorization": f"token {self.token}",
             "Accept": "application/vnd.github.v3+json"
@@ -14,7 +15,7 @@ class GitHubClient:
 
     def get_pr(self, repo: str, pr_number: int) -> dict:
         """Gets PR data from the GitHub API."""
-        if self.token == "dummy_token":
+        if self.dummy_mode:
             return {
                 "title": "Test PR",
                 "body": "This is a test PR.",
@@ -28,7 +29,7 @@ class GitHubClient:
 
     def post_pr_comment(self, repo: str, pr_number: int, comment: str):
         """Posts a comment on a PR."""
-        if self.token == "dummy_token":
+        if self.dummy_mode:
             print(f"Posting comment to PR {pr_number} in {repo}:\\n{comment}")
             return
         url = f"{self.base_url}/repos/{repo}/issues/{pr_number}/comments"
@@ -38,7 +39,7 @@ class GitHubClient:
 
     def add_labels(self, repo: str, pr_number: int, labels: List[str]):
         """Adds labels to a PR."""
-        if self.token == "dummy_token":
+        if self.dummy_mode:
             print(f"Adding labels {labels} to PR {pr_number} in {repo}")
             return
         url = f"{self.base_url}/repos/{repo}/issues/{pr_number}/labels"
@@ -48,7 +49,7 @@ class GitHubClient:
 
     def approve_pr(self, repo: str, pr_number: int, comment: Optional[str] = None):
         """Approves a PR."""
-        if self.token == "dummy_token":
+        if self.dummy_mode:
             print(f"Approving PR {pr_number} in {repo}")
             return
         url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}/reviews"
@@ -60,7 +61,7 @@ class GitHubClient:
 
     def request_changes(self, repo: str, pr_number: int, comment: str):
         """Requests changes on a PR."""
-        if self.token == "dummy_token":
+        if self.dummy_mode:
             print(f"Requesting changes on PR {pr_number} in {repo} with comment: {comment}")
             return
         url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}/reviews"

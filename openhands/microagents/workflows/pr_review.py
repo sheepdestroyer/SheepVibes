@@ -4,6 +4,8 @@ from openhands.microagents.integrations.github import GitHubClient
 import subprocess
 import git
 import asyncio
+import ast
+import glob
 
 class PRReviewWorkflow:
     """PR Review workflow implementation"""
@@ -182,52 +184,42 @@ class PRReviewWorkflow:
     async def detect_code_smells(self, params):
         """Detects code smells asynchronously."""
         try:
-            smells = []
-
-            # Check for TODO comments in Python files
+            # Check for long lines, TODOs, and FIXMEs using ruff
             proc = await asyncio.create_subprocess_exec(
-                "grep", "-r", "--include=*.py", "TODO", "openhands",
+                "ruff", "check", "openhands", "--select", "E501,T101",
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            stdout, _ = await proc.communicate()
-            if stdout:
-                smells.append(f"TODO comments found in Python files:\n{stdout.decode()}")
-
-            # Check for FIXME comments in Python files
-            proc = await asyncio.create_subprocess_exec(
-                "grep", "-r", "--include=*.py", "FIXME", "openhands",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, _ = await proc.communicate()
-            if stdout:
-                smells.append(f"FIXME comments found in Python files:\n{stdout.decode()}")
-
-            # Check for long lines in Python files
-            proc = await asyncio.create_subprocess_exec(
-                "grep", "-r", "--include=*.py", ".\\{120,\\}", "openhands",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, _ = await proc.communicate()
-            if stdout:
-                smells.append(f"Long lines found in Python files:\n{stdout.decode()}")
-
-            return {"success": True, "smells": smells}
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0 and stdout:
+                smells = stdout.decode().strip().split('\n')
+                return {"success": True, "smells": smells}
+            elif proc.returncode != 0:
+                return {"success": False, "error": stderr.decode()}
+            return {"success": True, "smells": []}
         except FileNotFoundError as e:
             return {"success": False, "error": str(e)}
 
     async def analyze_logic(self, params):
         """Analyzes logic asynchronously."""
+        logic_issues = []
+
+        class LogicAnalyzer(ast.NodeVisitor):
+            def visit_If(self, node):
+                if isinstance(node.test, ast.BoolOp):
+                    if isinstance(node.test.op, (ast.And, ast.Or)):
+                        if len(node.test.values) > 1:
+                            logic_issues.append(f"Complex boolean expression at line {node.lineno}")
+                self.generic_visit(node)
+
         try:
-            logic_issues = []
-            proc = await asyncio.create_subprocess_exec(
-                "grep", "-r", "if.*and.*or", "openhands",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, _ = await proc.communicate()
-            if stdout:
-                logic_issues.append(stdout.decode())
+            for filepath in glob.glob("openhands/**/*.py", recursive=True):
+                with open(filepath, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    tree = ast.parse(content)
+                    analyzer = LogicAnalyzer()
+                    analyzer.visit(tree)
             return {"success": True, "logic_issues": logic_issues}
-        except FileNotFoundError as e:
+        except Exception as e:
             return {"success": False, "error": str(e)}
 
     # Placeholder Action Handlers

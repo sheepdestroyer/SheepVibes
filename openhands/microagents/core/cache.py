@@ -6,7 +6,7 @@ from typing import Optional, Any, Dict
 from datetime import datetime, timedelta
 from collections import OrderedDict
 
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class MicroagentCache:
     """File-based cache with TTL and deduplication"""
@@ -54,7 +54,7 @@ class MicroagentCache:
                 try:
                     cache_path.unlink()  # Expired
                 except OSError as e:
-                    logging.warning(f"Failed to remove expired cache file {cache_path}: {e}")
+                    logger.warning(f"Failed to remove expired cache file {cache_path}: {e}")
                 return None
 
             value = cached['value']
@@ -63,11 +63,11 @@ class MicroagentCache:
         except FileNotFoundError:
             return None  # File not found is a normal cache miss
         except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logging.warning(f"Cache corruption detected in {cache_path}: {e}")
+            logger.warning(f"Cache corruption detected in {cache_path}: {e}")
             try:
                 cache_path.unlink()  # Attempt to remove corrupted file
             except OSError as unlink_error:
-                logging.error(f"Failed to remove corrupted cache file {cache_path}: {unlink_error}")
+                logger.error(f"Failed to remove corrupted cache file {cache_path}: {unlink_error}")
             return None
 
     def set(self, content: str, value: Any) -> None:
