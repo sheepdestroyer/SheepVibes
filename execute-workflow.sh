@@ -118,7 +118,7 @@ implement_fixes() {
         # Apply the patch
         local patch_file=$(mktemp)
         TEMP_FILES+=("$patch_file")
-        echo -e "$code_blocks" > "$patch_file"
+        printf "%s\n" "$code_blocks" > "$patch_file"
         if git apply --check "$patch_file"; then
             if git apply "$patch_file"; then
                 success "Successfully applied patch from comment ID $comment_id."

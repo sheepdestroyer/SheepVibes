@@ -46,7 +46,7 @@ class MicroagentCache:
             return None
 
         try:
-            with open(cache_path) as f:
+            with open(cache_path, encoding="utf-8") as f:
                 cached = json.load(f)
 
             cached_time = datetime.fromisoformat(cached['timestamp'])
@@ -83,7 +83,7 @@ class MicroagentCache:
             self._memory_cache.popitem(last=False)
 
         # Update file cache
-        with open(cache_path, 'w') as f:
+        with open(cache_path, 'w', encoding='utf-8') as f:
             json.dump({
                 'timestamp': now.isoformat(),
                 'value': value

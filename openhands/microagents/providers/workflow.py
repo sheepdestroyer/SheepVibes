@@ -87,7 +87,7 @@ class WorkflowExecutor:
 
             result = await self._execute_action(action)
             action_results[action_id] = result
-            if not result.get('success', True):
+            if not result.get('success', False):
                 step_success = False
 
         gates_passed = self._check_gates(step.gates, action_results) if step.gates else True

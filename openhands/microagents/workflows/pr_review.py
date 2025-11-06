@@ -2,7 +2,6 @@ from typing import Dict, Any, List
 from openhands.microagents.providers.workflow import WorkflowExecutor
 from openhands.microagents.integrations.github import GitHubClient
 import subprocess
-import compileall
 import git
 import asyncio
 
