@@ -135,7 +135,11 @@ class WorkflowExecutor:
             return False
 
         action_result = results.get(action_id)
-        if not action_result or not isinstance(action_result, dict) or check not in action_result:
+        if not action_result or not isinstance(action_result, dict):
+            self._log_event('gate_error', {'error': f'Result for action_id "{action_id}" not found or not a dictionary.'})
+            return False
+        if check not in action_result:
+            self._log_event('gate_error', {'error': f'Check key "{check}" not found in result for action_id "{action_id}".'})
             return False
 
         actual_value = action_result[check]

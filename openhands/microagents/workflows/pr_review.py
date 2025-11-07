@@ -133,13 +133,13 @@ class PRReviewWorkflow:
         if not (base_ref and head_sha):
             return {"success": False, "error": "Base or head ref not found in PR data"}
 
-        if self.github.token == "dummy_token":
+        if self.github.dummy_mode:
             head_sha = self.git_repo.head.commit.hexsha
             base_ref = 'main'  # Assume 'main' for local simulation
 
         try:
             # Ensure remotes are up-to-date
-            if self.github.token != "dummy_token":
+            if not self.github.dummy_mode:
                 self.git_repo.remotes.origin.fetch()
                 merge_base = self.git_repo.merge_base(f'origin/{base_ref}', head_sha)
             else:

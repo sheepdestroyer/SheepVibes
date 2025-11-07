@@ -59,6 +59,9 @@ class MicroagentCache:
 
             value = cached['value']
             self._memory_cache[cache_key] = {'value': value, 'timestamp': cached_time}
+            self._memory_cache.move_to_end(cache_key)
+            if len(self._memory_cache) > self.max_size:
+                self._memory_cache.popitem(last=False)
             return value
         except FileNotFoundError:
             return None  # File not found is a normal cache miss
