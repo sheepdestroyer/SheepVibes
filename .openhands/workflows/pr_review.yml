@@ -1,0 +1,175 @@
+name: PR Review Workflow
+version: '2.0'
+description: "Comprehensive PR review with mandatory gates"
+steps:
+  - id: "preflight"
+    name: "Pre-Flight Validation"
+    type: "validation"
+    required: true
+    actions:
+      - id: "read_pr_metadata"
+        type: "read_pr_metadata"
+      - id: "read_pr_description"
+        type: "read_pr_description"
+      - id: "check_merge_status"
+        type: "check_merge_status"
+    on_success: "analyze_changes"
+
+  - id: "analyze_changes"
+    name: "Analyze PR Changes"
+    type: "analysis"
+    required: true
+    actions:
+      - id: "fetch_diff"
+        type: "fetch_diff"
+      - id: "identify_changed_files"
+        type: "identify_changed_files"
+      - id: "categorize_changes"
+        type: "categorize_changes"
+      - id: "calculate_complexity"
+        type: "calculate_complexity"
+    on_success: "code_quality"
+
+  - id: "code_quality"
+    name: "Code Quality Analysis"
+    type: "analysis"
+    required: true
+    actions:
+      - id: "run_linters"
+        type: "run_linters"
+      - id: "check_test_coverage"
+        type: "check_test_coverage"
+      - id: "detect_code_smells"
+        type: "detect_code_smells"
+      - id: "check_naming_conventions"
+        type: "check_naming_conventions"
+      - id: "verify_documentation"
+        type: "verify_documentation"
+    on_success: "security_scan"
+
+  - id: "security_scan"
+    name: "Security Vulnerability Scan"
+    type: "security"
+    required: true
+    actions:
+      - id: "scan_dependencies"
+        type: "scan_dependencies"
+      - id: "detect_secrets"
+        type: "detect_secrets"
+      - id: "check_sql_injection"
+        type: "check_sql_injection"
+      - id: "check_xss_vulnerabilities"
+        type: "check_xss_vulnerabilities"
+      - id: "validate_input_sanitization"
+        type: "validate_input_sanitization"
+    on_success: "architectural_review"
+
+  - id: "architectural_review"
+    name: "Architecture & Design Review"
+    type: "analysis"
+    required: true
+    actions:
+      - id: "check_design_patterns"
+        type: "check_design_patterns"
+      - id: "validate_separation_of_concerns"
+        type: "validate_separation_of_concerns"
+      - id: "review_api_design"
+        type: "review_api_design"
+      - id: "check_dependency_direction"
+        type: "check_dependency_direction"
+      - id: "validate_error_handling"
+        type: "validate_error_handling"
+      - id: "review_performance_implications"
+        type: "review_performance_implications"
+    on_success: "functional_review"
+
+  - id: "functional_review"
+    name: "Functional Correctness Review"
+    type: "analysis"
+    required: true
+    actions:
+      - id: "analyze_logic"
+        type: "analyze_logic"
+      - id: "check_edge_cases"
+        type: "check_edge_cases"
+      - id: "validate_error_scenarios"
+        type: "validate_error_scenarios"
+      - id: "review_test_cases"
+        type: "review_test_cases"
+      - id: "check_business_logic"
+        type: "check_business_logic"
+    on_success: "compatibility_check"
+
+  - id: "compatibility_check"
+    name: "Backwards Compatibility Check"
+    type: "validation"
+    required: true
+    actions:
+      - id: "check_breaking_changes"
+        type: "check_breaking_changes"
+      - id: "validate_api_versioning"
+        type: "validate_api_versioning"
+      - id: "check_migration_path"
+        type: "check_migration_path"
+      - id: "verify_deprecation_notices"
+        type: "verify_deprecation_notices"
+    on_success: "documentation_review"
+
+  - id: "documentation_review"
+    name: "Documentation Review"
+    type: "analysis"
+    required: true
+    actions:
+      - id: "check_code_comments"
+        type: "check_code_comments"
+      - id: "validate_readme_updates"
+        type: "validate_readme_updates"
+      - id: "check_changelog_entry"
+        type: "check_changelog_entry"
+      - id: "verify_api_docs"
+        type: "verify_api_docs"
+      - id: "validate_migration_guides"
+        type: "validate_migration_guides"
+    on_success: "generate_review_summary"
+
+  - id: "generate_review_summary"
+    name: "Generate Review Summary"
+    type: "report"
+    required: true
+    actions:
+      - id: "aggregate_findings"
+        type: "aggregate_findings"
+      - id: "generate_markdown_report"
+        type: "generate_markdown_report"
+      - id: "calculate_review_score"
+        type: "calculate_review_score"
+    on_success: "post_review"
+
+  - id: "post_review"
+    name: "Post Review Results"
+    type: "action"
+    required: true
+    actions:
+      - id: "post_github_comment"
+        type: "post_github_comment"
+      - id: "add_inline_comments"
+        type: "add_inline_comments"
+      - id: "set_pr_labels"
+        type: "set_pr_labels"
+      - id: "request_changes_if_needed"
+        type: "request_changes_if_needed"
+      - id: "approve_if_passing"
+        type: "approve_if_passing"
+    on_success: "workflow_complete"
+
+  - id: "workflow_complete"
+    name: "Review Workflow Complete"
+    type: "completion"
+    required: true
+    actions:
+      - id: "update_workflow_state"
+        type: "update_workflow_state"
+      - id: "send_notification"
+        type: "send_notification"
+      - id: "log_metrics"
+        type: "log_metrics"
