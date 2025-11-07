@@ -116,7 +116,7 @@ implement_fixes() {
 
             local patch_file=$(mktemp)
             TEMP_FILES+=("$patch_file")
-            printf "%s" "$code_block" > "$patch_file"
+            printf "%s\n" "$code_block" > "$patch_file"
 
             # Apply the patch
             if git apply --check "$patch_file"; then
