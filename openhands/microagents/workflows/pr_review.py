@@ -160,8 +160,10 @@ class PRReviewWorkflow:
                 "ruff", "check", "openhands",
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            _stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0 and stdout:
+                return {"success": True, "lint_passed": False, "output": stdout.decode()}
+            elif proc.returncode != 0:
                 return {"success": False, "lint_passed": False, "error": stderr.decode()}
             return {"success": True, "lint_passed": True}
         except FileNotFoundError as e:
@@ -174,8 +176,12 @@ class PRReviewWorkflow:
                 "safety", "check",
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            _stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0 and stdout:
+                # Vulnerabilities found
+                return {"success": True, "vulnerabilities": stdout.decode().strip().split('\n')}
+            elif proc.returncode != 0:
+                # Error running safety
                 return {"success": False, "vulnerabilities": [], "error": stderr.decode()}
             return {"success": True, "vulnerabilities": []}
         except FileNotFoundError as e:
