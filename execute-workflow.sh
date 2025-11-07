@@ -107,28 +107,33 @@ implement_fixes() {
         local comment_id=$(echo "$comment" | jq -r '.id')
         local body=$(echo "$comment" | jq -r '.body')
 
-        # Extract all code blocks from the comment body
-        local code_blocks=$(echo "$body" | tr -d '\r' | sed -n '/^```diff/,/^```/p' | sed '1d;$d')
-
-        if [ -z "$code_blocks" ]; then
-            warn "No diff code blocks found in comment ID $comment_id. Skipping."
-            continue
-        fi
-
-        # Apply the patch
-        local patch_file=$(mktemp)
-        TEMP_FILES+=("$patch_file")
-        printf "%s\n" "$code_blocks" > "$patch_file"
-        if git apply --check "$patch_file"; then
-            if git apply "$patch_file"; then
-                success "Successfully applied patch from comment ID $comment_id."
-                changes_made=true
-                successful_ids+=("$comment_id")
-            else
-                error "Failed to apply patch from comment ID $comment_id."
+        local comment_applied_this_time=false
+        # Use a robust awk parser to handle multiple diff blocks in a single comment
+        while IFS= read -r -d '' code_block; do
+            if [ -z "$code_block" ]; then
+                continue
             fi
-        else
-            error "Patch check failed for comment ID $comment_id."
+
+            local patch_file=$(mktemp)
+            TEMP_FILES+=("$patch_file")
+            printf "%s" "$code_block" > "$patch_file"
+
+            # Apply the patch
+            if git apply --check "$patch_file"; then
+                if git apply "$patch_file"; then
+                    success "Successfully applied one patch from comment ID $comment_id."
+                    changes_made=true
+                    comment_applied_this_time=true
+                else
+                    error "Failed to apply one patch from comment ID $comment_id."
+                fi
+            else
+                error "Patch check failed for one patch from comment ID $comment_id."
+            fi
+        done < <(echo "$body" | tr -d '\r' | awk 'BEGIN{RS="```";ORS="\0"} /^\s*diff/ {sub(/^\s*diff\s*\n/, ""); print}')
+
+        if [ "$comment_applied_this_time" = true ]; then
+            successful_ids+=("$comment_id")
         fi
     done < <(jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE")
     
