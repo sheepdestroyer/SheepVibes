@@ -5,6 +5,17 @@
 
 set -euo pipefail
 
+# Global array to track temporary files for cleanup
+TEMP_FILES=()
+
+# Cleanup function to remove temporary files
+cleanup() {
+    rm -f "${TEMP_FILES[@]}"
+}
+
+# Register cleanup function to run on exit
+trap cleanup EXIT
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'

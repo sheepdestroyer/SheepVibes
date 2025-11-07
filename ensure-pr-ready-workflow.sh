@@ -173,7 +173,7 @@ main() {
         fi
 
         if [ "$dry_run" = "false" ] && [ "$should_update_tracker" = "true" ]; then
-            ./check-review-status.sh "$head_branch"
+            ./check-review-status.sh "$head_branch" > /dev/null
             printf "  ${GREEN}Tracking updated for branch ${head_branch}${NC}\n"
         fi
         

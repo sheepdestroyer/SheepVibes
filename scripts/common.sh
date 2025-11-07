@@ -126,6 +126,11 @@ check_dependencies() {
         echo -e "${RED}Error: curl is required but not installed.${NC}"
         exit 1
     fi
+
+    if ! (awk 'BEGIN { exit !(mktime("1970 1 1 0 0 0")) }' 2>/dev/null); then
+        echo -e "${RED}Error: Your awk implementation does not support mktime(). GNU Awk (gawk) is required.${NC}"
+        exit 1
+    fi
 }
 
 # Function to mark PR as ready for review
