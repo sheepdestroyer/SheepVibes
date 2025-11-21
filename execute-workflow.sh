@@ -130,7 +130,7 @@ implement_fixes() {
             else
                 error "Patch check failed for one patch from comment ID $comment_id."
             fi
-        done < <(echo "$body" | tr -d '\r' | awk 'BEGIN{RS="```";ORS="\0"} /^\s*diff/ {sub(/^\s*diff\s*\n/, ""); print}')
+        done < <(echo "$body" | tr -d '\r' | awk '/^```diff/ {f=1;b="";next} /^```/ && f {printf "%s%c",b,0;f=0;next} f{b=b?b"\n"$0:$0}')
 
         if [ "$comment_applied_this_time" = true ]; then
             successful_ids+=("$comment_id")
