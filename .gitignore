@@ -54,3 +54,4 @@ Thumbs.db
 pr-review-tracker.json
 pr-review-tracker.json.lock
 comments_*.json
+.openhands/.microagent-cache/

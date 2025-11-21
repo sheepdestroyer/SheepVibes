@@ -51,9 +51,9 @@ This script checks the Google Code Assist review status for a given branch or PR
 Returns: None, Commented, Complete, or RateLimited
 
 Exit Codes:
-  0 - Success with review status output (including when no open PR is found)
+  0 - Success with review status output
   1 - Error occurred (e.g., authentication, API failure)
-  2 - PR is not open (state is not 'open')
+  2 - No open PR found for the given branch, or the PR is not open
 
 Options:
   --wait                Wait for comments to be available (uses poll-interval for all waits)
@@ -86,8 +86,8 @@ check_for_no_remaining_issues() {
     local comments_file="$1"
     
     # Check if any comment contains a completion signal
-    # Use more specific patterns to avoid matching comments about the feature itself
-    if jq -e 'any(.[] | .body; test("^(No remaining issues|All issues resolved|All fixed|No issues remaining)"; "i"))' "$comments_file" > /dev/null; then
+    # Use more flexible patterns to avoid matching comments about the feature itself
+    if jq -e 'any(.[] | .body | gsub("\r"; ""); test("^(No remaining issues|All issues resolved|All fixed|No issues remaining|Looks good to merge|Ready to merge|LGTM)\\s*$"; "im"))' "$comments_file" > /dev/null; then
         return 0  # Completion signal found
     fi
     
@@ -126,16 +126,19 @@ check_for_rate_limit() {
 
     # Check if 24 hours have passed since the rate limit message
     local current_time=$(date -u +%s)
-    local rate_limit_timestamp=$(date -u -d "$rate_limit_time" +%s 2>/dev/null || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$rate_limit_time" +%s 2>/dev/null)
+    local rate_limit_timestamp=$(echo "$rate_limit_time" | awk -f "${SCRIPT_DIR}/scripts/iso8601_to_epoch.awk")
+
+    if [ -z "$rate_limit_timestamp" ]; then
+        echo -e "${YELLOW}Warning: Failed to parse rate limit timestamp '${rate_limit_time}'. Assuming rate limit is still active.${NC}" >&2
+        return 0 # Pause workflow as a precaution
+    fi
+
+    local time_since_rate_limit=$((current_time - rate_limit_timestamp))
+    local twenty_four_hours=$((24 * 60 * 60))
     
-    if [ -n "$rate_limit_timestamp" ]; then
-        local time_since_rate_limit=$((current_time - rate_limit_timestamp))
-        local twenty_four_hours=$((24 * 60 * 60))
-        
-        if [ "$time_since_rate_limit" -ge "$twenty_four_hours" ]; then
-            echo -e "${YELLOW}Rate limit detected but 24 hours have passed - continuing workflow${NC}" >&2
-            return 1  # Don't pause workflow
-        fi
+    if [ "$time_since_rate_limit" -ge "$twenty_four_hours" ]; then
+        echo -e "${YELLOW}Rate limit detected but 24 hours have passed - continuing workflow${NC}" >&2
+        return 1  # Don't pause workflow
     fi
 
     # If we get here, rate limit is active and workflow should pause
@@ -427,6 +430,12 @@ main() {
     
     check_dependencies
     
+    # Check for GITHUB_TOKEN
+    if [ -z "${GITHUB_TOKEN:-}" ]; then
+        echo -e "${RED}Error: GITHUB_TOKEN environment variable is not set.${NC}" >&2
+        exit 1
+    fi
+
     local pr_number=""
     local branch_name=""
     
@@ -441,6 +450,7 @@ main() {
     else
         branch_name="$input"
         echo -e "${BLUE}Checking branch: ${branch_name}${NC}" >&2
+        echo -e "${BLUE}Fetching PR info for branch '${branch_name}'...${NC}" >&2
         local pr_info
         if ! pr_info=$(get_pr_info_from_branch "$branch_name"); then
             echo -e "${RED}Error: Failed to fetch PR information for branch: ${branch_name}${NC}" >&2
@@ -455,7 +465,7 @@ main() {
                 echo -e "${RED}Error: Failed to update tracking file. Exiting.${NC}" >&2
                 exit 1
             fi
-            exit 0
+            exit 2
         fi
         
         pr_number=$(echo "$pr_info" | jq -r '.number')

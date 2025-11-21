@@ -7,6 +7,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Global array to track temporary files for cleanup
+TEMP_FILES=()
+
+# Cleanup function to remove temporary files
+cleanup() {
+    rm -f "${TEMP_FILES[@]}"
+}
+
+# Register cleanup function to run on exit
+trap cleanup EXIT
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -83,39 +94,59 @@ check_workflow_conditions() {
 }
 
 # Function to implement actual fixes for TODO comments
-# This is where the microagent would read comments and implement code changes
 implement_fixes() {
     local branch="$1"
     local pr_number="$2"
+    local changes_made=false
+    local successful_ids=()
     
     log "Implementing fixes for TODO comments on branch: $branch"
     
-    # Get TODO comments
-    local todo_comments
-    todo_comments=$(jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE")
+    # Process each TODO comment individually
+    while read -r comment; do
+        local comment_id=$(echo "$comment" | jq -r '.id')
+        local body=$(echo "$comment" | jq -r '.body')
+
+        local comment_applied_this_time=false
+        # Use a robust awk parser to handle multiple diff blocks in a single comment
+        while IFS= read -r -d '' code_block; do
+            if [ -z "$code_block" ]; then
+                continue
+            fi
+
+            local patch_file=$(mktemp)
+            TEMP_FILES+=("$patch_file")
+            printf "%s\n" "$code_block" > "$patch_file"
+
+            # Apply the patch
+            if git apply --check "$patch_file"; then
+                if git apply "$patch_file"; then
+                    success "Successfully applied one patch from comment ID $comment_id."
+                    changes_made=true
+                    comment_applied_this_time=true
+                else
+                    error "Failed to apply one patch from comment ID $comment_id."
+                fi
+            else
+                error "Patch check failed for one patch from comment ID $comment_id."
+            fi
+        done < <(echo "$body" | tr -d '\r' | awk '/^```diff/ {f=1;b="";next} /^```/ && f {printf "%s%c",b,0;f=0;next} f{b=b?b"\n"$0:$0}')
+
+        if [ "$comment_applied_this_time" = true ]; then
+            successful_ids+=("$comment_id")
+        fi
+    done < <(jq -c ".branches[\"$branch\"].comments[] | select(.status == \"todo\")" "$TRACKING_FILE")
     
-    if [ -z "$todo_comments" ]; then
-        warn "No TODO comments found to fix"
+    if [ "$changes_made" = true ]; then
+        log "Committing applied fixes..."
+        git add -u
+        git commit -m "feat: Apply automated code review fixes"
+        echo "${successful_ids[@]}"
+        return 0
+    else
+        warn "No changes were made by the microagent."
         return 1
     fi
-    
-    # Collect comment IDs for later marking as addressed
-    local comment_ids=()
-    echo "$todo_comments" | while IFS= read -r comment; do
-        local comment_id=$(echo "$comment" | jq -r '.id')
-        local comment_body=$(echo "$comment" | jq -r '.body')
-        
-        log "Analyzing comment $comment_id for implementation"
-        warn "TODO: Microagent must implement actual code fix for: $comment_body"
-        
-        # Store comment ID for later marking
-        comment_ids+=("$comment_id")
-    done
-    
-    # For now, simulate that fixes have been implemented
-    # In a real microagent, this is where actual code changes would be made
-    warn "SIMULATION: Fixes would be implemented here by microagent"
-    return 0
 }
 
 # Complete workflow for processing TODO comments with all required steps
@@ -125,31 +156,31 @@ process_todo_comments() {
     
     log "Starting complete TODO comment processing workflow for branch: $branch"
     
-    # Step 1: Implement actual fixes
-    if ! implement_fixes "$branch" "$pr_number"; then
+    # Step 1: Implement actual fixes and get the IDs of successfully applied comments
+    local successful_ids_str
+    if ! successful_ids_str=$(implement_fixes "$branch" "$pr_number"); then
         error "Failed to implement fixes for TODO comments"
         return 1
     fi
     
-    # Step 2: Get all TODO comment IDs to mark as addressed
-    local todo_comment_ids
-    todo_comment_ids=$(jq -r ".branches[\"$branch\"].comments[] | select(.status == \"todo\") | .id" "$TRACKING_FILE")
-    
-    if [ -z "$todo_comment_ids" ]; then
-        warn "No TODO comments found to mark as addressed"
+    # Step 2: Convert the string of IDs to an array
+    local successful_ids_array=($successful_ids_str)
+
+    if [ ${#successful_ids_array[@]} -eq 0 ]; then
+        warn "No comments were successfully addressed"
         return 1
     fi
-    
-    # Step 3: Mark all TODO comments as addressed
-    log "Marking comments as addressed: $todo_comment_ids"
-    if ! ./mark-addressed.sh "$branch" $todo_comment_ids; then
+
+    # Step 3: Mark all successfully addressed comments
+    log "Marking comments as addressed: ${successful_ids_array[*]}"
+    if ! ./mark-addressed.sh "$branch" "${successful_ids_array[@]}"; then
         error "Failed to mark comments as addressed"
         return 1
     fi
     
     # Step 4: Push changes to branch (simulated - in real workflow would commit and push)
-    log "SIMULATION: Changes would be committed and pushed to branch: $branch"
-    warn "In real workflow: git commit and git push would happen here"
+    log "SIMULATION: Changes have been committed and would be pushed to branch: $branch"
+    warn "In real workflow: git push would happen here"
     
     # Step 5: Trigger new review
     log "Triggering new Google Code Assist review for PR: $pr_number"
@@ -244,7 +275,7 @@ main_workflow() {
                         warn "State: Commented but no TODO comments - This state should not trigger new reviews"
                         log "Checking if this indicates workflow completion..."
                         # Check if we should update status to Complete
-                        ./check-review-status.sh "$branch"
+                        ./check-review-status.sh "$branch" > /dev/null
                         # After updating, check if we should transition to Complete
                         sleep 2  # Small delay to ensure file is updated
                         local new_tracking_data=$(jq -c ".branches[\"$branch\"]" "$TRACKING_FILE")
@@ -262,7 +293,7 @@ main_workflow() {
                     else
                         log "State: No comments - Triggering initial review"
                         ./trigger-review.sh "$pr_number"
-                        ./check-review-status.sh "$branch" --wait
+                        ./check-review-status.sh "$branch" --wait > /dev/null
                     fi
                 fi
                 ;;

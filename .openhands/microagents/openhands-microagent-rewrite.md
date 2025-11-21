@@ -180,8 +180,7 @@ steps:
     on_failure:
       action: "block"
       message: "Pre-flight checks failed. Cannot proceed with review."
-    on_success:
-      next_step: "analyze_changes"
+    on_success: "analyze_changes"
 
   # Step 2: Change Analysis
   - id: "analyze_changes"
