@@ -179,7 +179,7 @@ class PRReviewWorkflow:
             stdout, stderr = await proc.communicate()
             if proc.returncode != 0 and stdout:
                 # Vulnerabilities found
-                return {"success": True, "vulnerabilities": stdout.decode().strip().split('\n')}
+                return {"success": True, "vulnerabilities": list(filter(None, stdout.decode().strip().split('\n')))}
             elif proc.returncode != 0:
                 # Error running safety
                 return {"success": False, "vulnerabilities": [], "error": stderr.decode()}
