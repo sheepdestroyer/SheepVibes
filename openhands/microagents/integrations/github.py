@@ -68,3 +68,35 @@ class GitHubClient:
         data = {"body": comment, "event": "REQUEST_CHANGES"}
         response = requests.post(url, headers=self.headers, json=data, timeout=30)
         response.raise_for_status()
+
+    def get_pr_comments(self, repo: str, pr_number: int, since: Optional[str] = None) -> List[dict]:
+        """Gets comments on a PR (issues comments + review comments)."""
+        if self.dummy_mode:
+            return []
+
+        comments = []
+
+        # Fetch Issue Comments (General conversation)
+        self._fetch_comments_paginated(f"{self.base_url}/repos/{repo}/issues/{pr_number}/comments", comments, since)
+
+        # Fetch Review Comments (Line comments)
+        self._fetch_comments_paginated(f"{self.base_url}/repos/{repo}/pulls/{pr_number}/comments", comments, since)
+
+        return comments
+
+    def _fetch_comments_paginated(self, url: str, comments: List[dict], since: Optional[str] = None):
+        """Helper to fetch comments with pagination."""
+        params = {"per_page": 100}
+        if since:
+            params["since"] = since
+
+        while url:
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+            comments.extend(response.json())
+
+            if 'next' in response.links:
+                url = response.links['next']['url']
+                params = {} # Params are included in the next link
+            else:
+                url = None
