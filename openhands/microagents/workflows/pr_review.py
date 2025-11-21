@@ -161,9 +161,9 @@ class PRReviewWorkflow:
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
-            if proc.returncode != 0 and stdout:
-                return {"success": True, "lint_passed": False, "output": stdout.decode()}
-            elif proc.returncode != 0:
+            if proc.returncode != 0:
+                if stdout:
+                    return {"success": True, "lint_passed": False, "output": stdout.decode()}
                 return {"success": False, "lint_passed": False, "error": stderr.decode()}
             return {"success": True, "lint_passed": True}
         except FileNotFoundError as e:
