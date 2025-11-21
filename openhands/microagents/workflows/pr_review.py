@@ -10,6 +10,7 @@ import re
 import time
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 
 class PRReviewWorkflow:
@@ -72,7 +73,7 @@ class PRReviewWorkflow:
             try:
                 with open(processed_comments_file, 'r') as f:
                     processed_ids = set(json.load(f))
-            except Exception:
+            except (FileNotFoundError, json.JSONDecodeError):
                 pass
 
         print(f"Starting autonomous loop for PR {self.pr_number}...")
@@ -180,18 +181,22 @@ class PRReviewWorkflow:
 
     def _apply_patch(self, patch_content: str) -> bool:
         """Applies a patch content."""
+        patch_file_name = None
         try:
-            with open("temp.patch", "w") as f:
-                f.write(patch_content + "\n")
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.patch', encoding='utf-8') as f:
+                patch_file_name = f.name
+                f.write(patch_content)
+                if not patch_content.endswith('\n'):
+                    f.write('\n')
 
-            self.git_repo.git.apply("temp.patch")
-            os.remove("temp.patch")
+            self.git_repo.git.apply(patch_file_name)
             return True
         except Exception as e:
             print(f"Patch failed: {e}")
-            if os.path.exists("temp.patch"):
-                os.remove("temp.patch")
             return False
+        finally:
+            if patch_file_name and os.path.exists(patch_file_name):
+                os.remove(patch_file_name)
 
     def _commit_and_push(self, message: str):
         """Commits and pushes changes."""

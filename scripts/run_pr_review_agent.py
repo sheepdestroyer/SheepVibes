@@ -34,8 +34,12 @@ async def main():
             # Parse owner/name from url
             # git@github.com:owner/name.git or https://github.com/owner/name.git
             if "github.com" in url:
-                parts = url.split("github.com")[-1].strip("/").replace(".git", "").split("/")
-                repo = f"{parts[-2]}/{parts[-1]}"
+                if '@' in url:
+                    # SSH URL: git@github.com:owner/repo.git
+                    repo = url.split(':')[-1].replace('.git', '')
+                else:
+                    # HTTPS URL: https://github.com/owner/repo.git
+                    repo = url.split('github.com/')[-1].replace('.git', '')
         except Exception as e:
             print(f"Error detecting repo: {e}")
 

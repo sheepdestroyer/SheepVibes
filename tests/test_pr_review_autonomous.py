@@ -76,6 +76,23 @@ class TestPRReviewAutonomous(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(patches), 1)
         self.assertIn("-foo", patches[0])
 
+    @patch('openhands.microagents.workflows.pr_review.tempfile.NamedTemporaryFile')
+    @patch('openhands.microagents.workflows.pr_review.os.remove')
+    @patch('openhands.microagents.workflows.pr_review.os.path.exists')
+    def test_apply_patch(self, mock_exists, mock_remove, mock_tempfile):
+        mock_exists.return_value = True
+
+        mock_file = MagicMock()
+        mock_file.name = "/tmp/random.patch"
+        mock_tempfile.return_value.__enter__.return_value = mock_file
+
+        result = self.workflow._apply_patch("diff content")
+
+        self.assertTrue(result)
+        self.assertTrue(mock_file.write.called)
+        self.mock_repo.git.apply.assert_called_with("/tmp/random.patch")
+        mock_remove.assert_called_with("/tmp/random.patch")
+
     @patch('openhands.microagents.workflows.pr_review.asyncio.sleep')
     async def test_run_autonomous_loop_complete(self, mock_sleep):
         # Mock comments to return Complete immediately
