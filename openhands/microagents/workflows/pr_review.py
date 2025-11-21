@@ -6,6 +6,11 @@ import git
 import asyncio
 import ast
 import glob
+import re
+import time
+import json
+import os
+from datetime import datetime, timezone
 
 class PRReviewWorkflow:
     """PR Review workflow implementation"""
@@ -56,6 +61,152 @@ class PRReviewWorkflow:
             self.github.approve_pr(self.repo, self.pr_number)
         elif recommendation == 'request_changes':
             self.github.request_changes(self.repo, self.pr_number, "Changes requested based on automated review.")
+
+    async def run_autonomous_loop(self, max_cycles: int = 50, interval_seconds: int = 120):
+        """Runs the autonomous PR review loop."""
+        cycle = 0
+        processed_comments_file = f".processed_comments_{self.pr_number}.json"
+        processed_ids = set()
+
+        if os.path.exists(processed_comments_file):
+            try:
+                with open(processed_comments_file, 'r') as f:
+                    processed_ids = set(json.load(f))
+            except Exception:
+                pass
+
+        print(f"Starting autonomous loop for PR {self.pr_number}...")
+
+        while cycle < max_cycles:
+            cycle += 1
+            print(f"=== Cycle {cycle}/{max_cycles} ===")
+
+            # Fetch all comments
+            comments = self.github.get_pr_comments(self.repo, self.pr_number)
+
+            # Check status
+            status = self._check_google_status(comments)
+            print(f"Current Status: {status}")
+
+            if status == "Complete":
+                print("Review completed by Google Code Assist.")
+                return {"success": True, "status": "Complete"}
+
+            if status == "RateLimited":
+                print("Rate limited. Waiting...")
+                await asyncio.sleep(interval_seconds)
+                continue
+
+            # Check for TODO comments
+            todo_comments = [
+                c for c in comments
+                if c['id'] not in processed_ids
+                and c['user']['login'] == 'gemini-code-assist[bot]'
+                and '```diff' in c.get('body', '')
+            ]
+
+            if todo_comments:
+                print(f"Found {len(todo_comments)} actionable comments.")
+                newly_processed = self._apply_fixes(todo_comments)
+                processed_ids.update(newly_processed)
+
+                # Save processed IDs
+                with open(processed_comments_file, 'w') as f:
+                    json.dump(list(processed_ids), f)
+
+                if newly_processed:
+                    self._commit_and_push("feat: Apply automated code review fixes")
+                    self._trigger_google_review()
+
+            elif status == "None":
+                print("No reviews yet. Triggering initial review.")
+                self._trigger_google_review()
+
+            else:
+                print("Waiting for Google Code Assist...")
+
+            await asyncio.sleep(interval_seconds)
+
+    def _check_google_status(self, comments: List[dict]) -> str:
+        """Determines the status based on Google Code Assist comments."""
+        bot_comments = [
+            c for c in comments
+            if c['user']['login'] == 'gemini-code-assist[bot]'
+        ]
+
+        if not bot_comments:
+            return "None"
+
+        bot_comments.sort(key=lambda x: x['created_at'])
+        last_comment = bot_comments[-1]
+        body = last_comment['body']
+
+        if re.search(r'^(No remaining issues|All issues resolved|All fixed|No issues remaining|Looks good to merge|Ready to merge|LGTM)\s*$', body, re.IGNORECASE | re.MULTILINE):
+            return "Complete"
+
+        if "You have reached your daily quota limit" in body:
+            return "RateLimited"
+
+        return "Commented"
+
+    def _apply_fixes(self, comments: List[dict]) -> List[int]:
+        """Applies fixes from comments."""
+        applied_ids = []
+        for comment in comments:
+            try:
+                patches = self._extract_patches(comment['body'])
+                if not patches:
+                    continue
+
+                all_patches_successful = True
+                for patch in patches:
+                    if not self._apply_patch(patch):
+                        all_patches_successful = False
+                        break
+
+                if all_patches_successful:
+                    applied_ids.append(comment['id'])
+                    print(f"Applied fix from comment {comment['id']}")
+            except Exception as e:
+                print(f"Failed to process comment {comment['id']}: {e}")
+
+        return applied_ids
+
+    def _extract_patches(self, text: str) -> List[str]:
+        """Extracts diff blocks from text."""
+        pattern = r"```diff\n(.*?)```"
+        matches = re.findall(pattern, text, re.DOTALL)
+        return matches
+
+    def _apply_patch(self, patch_content: str) -> bool:
+        """Applies a patch content."""
+        try:
+            with open("temp.patch", "w") as f:
+                f.write(patch_content + "\n")
+
+            self.git_repo.git.apply("temp.patch")
+            os.remove("temp.patch")
+            return True
+        except Exception as e:
+            print(f"Patch failed: {e}")
+            if os.path.exists("temp.patch"):
+                os.remove("temp.patch")
+            return False
+
+    def _commit_and_push(self, message: str):
+        """Commits and pushes changes."""
+        if self.github.dummy_mode:
+            print(f"Dummy: Commit '{message}' and Push")
+            return
+
+        self.git_repo.git.add(u=True)
+        self.git_repo.index.commit(message)
+        origin = self.git_repo.remote(name='origin')
+        origin.push()
+
+    def _trigger_google_review(self):
+        """Triggers Google Code Assist review."""
+        self.github.post_pr_comment(self.repo, self.pr_number, "/gemini review")
 
     def _determine_labels(self, result: Dict[str, Any]) -> List[str]:
         """Determine labels based on workflow result"""
