@@ -177,10 +177,10 @@ class PRReviewWorkflow:
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await proc.communicate()
-            if proc.returncode != 0 and stdout:
-                # Vulnerabilities found
-                return {"success": True, "vulnerabilities": list(filter(None, stdout.decode().strip().split('\n')))}
-            elif proc.returncode != 0:
+            if proc.returncode != 0:
+                if stdout:
+                    # Vulnerabilities found
+                    return {"success": True, "vulnerabilities": list(filter(None, stdout.decode().strip().split('\n')))}
                 # Error running safety
                 return {"success": False, "vulnerabilities": [], "error": stderr.decode()}
             return {"success": True, "vulnerabilities": []}
