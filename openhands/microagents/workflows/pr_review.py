@@ -28,6 +28,7 @@ class PRReviewWorkflow:
         self.executor = WorkflowExecutor("PR Review Workflow")
         self._register_action_handlers()
         self.git_repo = git.Repo('.')
+        self.bot_username = os.environ.get("GOOGLE_BOT_USERNAME", "gemini-code-assist[bot]")
 
     async def run(self) -> Dict[str, Any]:
         """Run complete PR review workflow"""
@@ -66,15 +67,14 @@ class PRReviewWorkflow:
     async def run_autonomous_loop(self, max_cycles: int = 50, interval_seconds: int = 120):
         """Runs the autonomous PR review loop."""
         cycle = 0
-        processed_comments_file = f".processed_comments_{self.pr_number}.json"
+        processed_comments_file = os.path.join(self.git_repo.working_tree_dir, f".processed_comments_{self.pr_number}.json")
         processed_ids = set()
 
-        if os.path.exists(processed_comments_file):
-            try:
-                with open(processed_comments_file, 'r') as f:
-                    processed_ids = set(json.load(f))
-            except (FileNotFoundError, json.JSONDecodeError):
-                pass
+        try:
+            with open(processed_comments_file, 'r') as f:
+                processed_ids = set(json.load(f))
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
 
         print(f"Starting autonomous loop for PR {self.pr_number}...")
 
@@ -102,7 +102,7 @@ class PRReviewWorkflow:
             todo_comments = [
                 c for c in comments
                 if c['id'] not in processed_ids
-                and c['user']['login'] == 'gemini-code-assist[bot]'
+                and c['user']['login'] == self.bot_username
                 and '```diff' in c.get('body', '')
             ]
 
@@ -132,13 +132,13 @@ class PRReviewWorkflow:
         """Determines the status based on Google Code Assist comments."""
         bot_comments = [
             c for c in comments
-            if c['user']['login'] == 'gemini-code-assist[bot]'
+            if c['user']['login'] == self.bot_username
         ]
 
         if not bot_comments:
             return "None"
 
-        bot_comments.sort(key=lambda x: x['created_at'])
+        bot_comments.sort(key=lambda x: datetime.fromisoformat(x['created_at'].replace('Z', '+00:00')))
         last_comment = bot_comments[-1]
         body = last_comment['body']
 
@@ -191,7 +191,7 @@ class PRReviewWorkflow:
 
             self.git_repo.git.apply(patch_file_name)
             return True
-        except Exception as e:
+        except git.exc.GitCommandError as e:
             print(f"Patch failed: {e}")
             return False
         finally:

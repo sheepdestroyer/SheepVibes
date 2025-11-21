@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 import os
 import json
 from datetime import datetime, timedelta
@@ -23,6 +23,7 @@ class TestPRReviewAutonomous(unittest.IsolatedAsyncioTestCase):
         self.git_patcher = patch('openhands.microagents.workflows.pr_review.git.Repo')
         self.MockRepo = self.git_patcher.start()
         self.mock_repo = self.MockRepo.return_value
+        self.mock_repo.working_tree_dir = "."
         self.mock_repo.git.apply = MagicMock()
 
         # Mock WorkflowExecutor
