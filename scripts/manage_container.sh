@@ -9,7 +9,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 IMAGE_NAME="sheepvibes-app"
 CONTAINER_NAME="sheepvibes-instance"
 VOLUME_NAME="sheepvibes-data"
-HOST_PORT="5000"
+HOST_PORT="5001"
 CONTAINER_PORT="5000"
 DATA_PATH="/app/data" # Updated data path inside the container
 RESTART_POLICY="unless-stopped"

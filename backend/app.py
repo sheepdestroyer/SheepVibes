@@ -10,6 +10,7 @@ from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 from sqlalchemy import func, select # Added for optimized query
+from sqlalchemy.orm import selectinload # Added for eager loading
 from flask_caching import Cache # Added for caching
 from flask_cors import CORS # Added for CORS support
 
@@ -327,27 +328,48 @@ def export_opml():
         A Flask Response object containing the OPML file, or a JSON error response.
     """
     try:
-        feeds = Feed.query.all()
-
         opml_element = ET.Element('opml', version='2.0')
         head_element = ET.SubElement(opml_element, 'head')
         title_element = ET.SubElement(head_element, 'title')
         title_element.text = 'SheepVibes Feeds'
         body_element = ET.SubElement(opml_element, 'body')
 
-        for feed in feeds:
-            outline_element = ET.SubElement(body_element, 'outline')
-            outline_element.set('text', feed.name)
-            outline_element.set('xmlUrl', feed.url)
-            outline_element.set('type', 'rss') # Common type for RSS/Atom feeds in OPML
+        # Eager load feeds to avoid N+1 queries
+        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
 
+        for tab in tabs:
+            # Skip tabs with no feeds
+            if not tab.feeds:
+                continue
+
+            # Create a folder outline for the tab
+            folder_outline = ET.SubElement(body_element, 'outline')
+            folder_outline.set('text', tab.name)
+            folder_outline.set('title', tab.name)
+
+            # Sort feeds by name for deterministic output because relation order is not guaranteed
+            sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
+
+            # Add feeds for this tab
+            for feed in sorted_feeds:
+                feed_outline = ET.SubElement(folder_outline, 'outline')
+                feed_outline.set('text', feed.name)
+                feed_outline.set('title', feed.name)
+                feed_outline.set('xmlUrl', feed.url)
+                feed_outline.set('type', 'rss')
+                if feed.site_link:
+                    feed_outline.set('htmlUrl', feed.site_link)
         # Convert the XML tree to a string
         opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
 
         response = Response(opml_string, mimetype='application/xml')
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
 
-        logger.info(f"Successfully generated OPML export for {len(feeds)} feeds.")
+        feed_count = sum(len(tab.feeds) for tab in tabs)
+        # Count only tabs that actually have feeds (since we skip empty ones)
+        exported_tab_count = sum(1 for tab in tabs if tab.feeds)
+        
+        logger.info(f"Successfully generated OPML export for {feed_count} feeds across {exported_tab_count} tabs.")
         return response
 
     except Exception as e:
@@ -1134,6 +1156,6 @@ if __name__ == '__main__':
     # The scheduler is already started in the global scope.
     is_debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
     logger.info(f"Starting Flask app (Debug mode: {is_debug_mode})")
-    app.run(host='0.0.0.0', port=5001, debug=is_debug_mode)
+    app.run(host='0.0.0.0', port=5000, debug=is_debug_mode)
     
     logger.info("SheepVibes application finished.")

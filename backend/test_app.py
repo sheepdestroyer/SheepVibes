@@ -247,7 +247,7 @@ def setup_tabs_and_feeds(client):
         
         feed1 = Feed(tab_id=tab1.id, name="Feed 1", url="url1")
         feed2 = Feed(tab_id=tab1.id, name="Feed 2", url="url2")
-        feed3 = Feed(tab_id=tab2.id, name="Feed 3", url="url3")
+        feed3 = Feed(tab_id=tab2.id, name="Feed 3", url="url3", site_link="http://example.com/feed3")
         db.session.add_all([feed1, feed2, feed3])
         db.session.commit()
         
@@ -1142,25 +1142,48 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
     body = tree.find('body')
     assert body is not None
     outlines = body.findall('outline')
-    assert len(outlines) == 3 # From setup_tabs_and_feeds
+    assert len(outlines) == 2 # 2 Tabs
 
-    # Verify outline content (order might vary, so check presence)
-    expected_feeds_data = [
-        {'text': 'Feed 1', 'xmlUrl': 'url1', 'type': 'rss'},
-        {'text': 'Feed 2', 'xmlUrl': 'url2', 'type': 'rss'},
-        {'text': 'Feed 3', 'xmlUrl': 'url3', 'type': 'rss'},
-    ]
+    # Map tab names to outlines
+    tab_outlines = {o.get('text'): o for o in outlines}
+    assert 'Tab 1' in tab_outlines
+    assert 'Tab 2' in tab_outlines
 
-    actual_feeds_data = []
-    for outline in outlines:
-        actual_feeds_data.append({
-            'text': outline.get('text'),
-            'xmlUrl': outline.get('xmlUrl'),
-            'type': outline.get('type')
-        })
+    # Check content of Tab 1
+    tab1_outline = tab_outlines['Tab 1']
+    assert tab1_outline.get('title') == 'Tab 1' # Check tab title
 
-    for expected in expected_feeds_data:
-        assert expected in actual_feeds_data
+    tab1_feeds = tab1_outline.findall('outline')
+    assert len(tab1_feeds) == 2
+    
+    # The implementation sorts feeds by name, so we can assert the order.
+    feed1 = tab1_feeds[0]
+    assert feed1.get('text') == 'Feed 1'
+    assert feed1.get('title') == 'Feed 1'
+    assert feed1.get('xmlUrl') == 'url1'
+    assert feed1.get('type') == 'rss'
+    assert feed1.get('htmlUrl') is None
+
+    feed2 = tab1_feeds[1]
+    assert feed2.get('text') == 'Feed 2'
+    assert feed2.get('title') == 'Feed 2'
+    assert feed2.get('xmlUrl') == 'url2'
+    assert feed2.get('type') == 'rss'
+    assert feed2.get('htmlUrl') is None
+
+    # Check content of Tab 2
+    tab2_outline = tab_outlines['Tab 2']
+    assert tab2_outline.get('title') == 'Tab 2'
+
+    tab2_feeds = tab2_outline.findall('outline')
+    assert len(tab2_feeds) == 1
+    
+    feed3 = tab2_feeds[0]
+    assert feed3.get('text') == 'Feed 3'
+    assert feed3.get('title') == 'Feed 3'
+    assert feed3.get('xmlUrl') == 'url3'
+    assert feed3.get('type') == 'rss'
+    assert feed3.get('htmlUrl') == 'http://example.com/feed3' # Check htmlUrl export
 
 # --- Tests for OPML Import (/api/opml/import) ---
 
