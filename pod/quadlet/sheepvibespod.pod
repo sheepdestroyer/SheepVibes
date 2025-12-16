@@ -5,7 +5,7 @@ Description=SheepVibes Application Pod
 # Let Quadlet handle network dependencies for user sessions automatically.
 
 [Pod]
-PublishPort=127.0.0.1:5000:5000
+PublishPort=127.0.0.1:5001:5000
 
 [Install]
 WantedBy=default.target
