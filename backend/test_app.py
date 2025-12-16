@@ -1156,20 +1156,20 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
     tab1_feeds = tab1_outline.findall('outline')
     assert len(tab1_feeds) == 2
     
-    feed1 = next((f for f in tab1_feeds if f.get('text') == 'Feed 1'), None)
-    feed2 = next((f for f in tab1_feeds if f.get('text') == 'Feed 2'), None)
-    
-    assert feed1 is not None
-    assert feed1.get('title') == 'Feed 1' # Check feed title
+    # The implementation sorts feeds by name, so we can assert the order.
+    feed1 = tab1_feeds[0]
+    assert feed1.get('text') == 'Feed 1'
+    assert feed1.get('title') == 'Feed 1'
     assert feed1.get('xmlUrl') == 'url1'
-    assert feed1.get('type') == 'rss' # Check feed type
-    assert feed1.get('htmlUrl') is None # No site_link
+    assert feed1.get('type') == 'rss'
+    assert feed1.get('htmlUrl') is None
 
-    assert feed2 is not None
+    feed2 = tab1_feeds[1]
+    assert feed2.get('text') == 'Feed 2'
     assert feed2.get('title') == 'Feed 2'
     assert feed2.get('xmlUrl') == 'url2'
     assert feed2.get('type') == 'rss'
-    assert feed2.get('htmlUrl') is None # No site_link
+    assert feed2.get('htmlUrl') is None
 
     # Check content of Tab 2
     tab2_outline = tab_outlines['Tab 2']

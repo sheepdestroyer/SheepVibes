@@ -359,7 +359,6 @@ def export_opml():
                 feed_outline.set('type', 'rss')
                 if feed.site_link:
                     feed_outline.set('htmlUrl', feed.site_link)
-
         # Convert the XML tree to a string
         opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
 
@@ -367,7 +366,10 @@ def export_opml():
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
 
         feed_count = sum(len(tab.feeds) for tab in tabs)
-        logger.info(f"Successfully generated OPML export for {feed_count} feeds across {len(tabs)} tabs.")
+        # Count only tabs that actually have feeds (since we skip empty ones)
+        exported_tab_count = sum(1 for tab in tabs if tab.feeds)
+        
+        logger.info(f"Successfully generated OPML export for {feed_count} feeds across {exported_tab_count} tabs.")
         return response
 
     except Exception as e:
