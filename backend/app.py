@@ -338,6 +338,10 @@ def export_opml():
         tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
 
         for tab in tabs:
+            # Skip tabs with no feeds
+            if not tab.feeds:
+                continue
+
             # Create a folder outline for the tab
             folder_outline = ET.SubElement(body_element, 'outline')
             folder_outline.set('text', tab.name)
