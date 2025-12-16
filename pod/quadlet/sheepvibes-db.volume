@@ -1,7 +1,0 @@
-# pod/quadlet/sheepvibes-db.volume
-
-[Unit]
-Description=Volume for SheepVibes Database
-
-[Volume]
-# VolumeName=sheepvibes-db # Optional: Default is systemd-sheepvibes-db

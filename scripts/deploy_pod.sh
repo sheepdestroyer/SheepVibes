@@ -8,13 +8,9 @@ SYSTEMD_USER_DIR="${HOME}/.config/containers/systemd"
 # Define the Quadlet files to be downloaded
 QUADLET_FILES=(
     "sheepvibespod.pod"
-    "sheepvibes-app.container"
-    "sheepvibes-redis.container"
-    "sheepvibes-db.volume"
-    "sheepvibes-redis-data.volume"
 )
-# Base URL for the directory containing the Quadlet files in the repository
-QUADLET_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/quadlet"
+# Base URL for the directory containing the pod file in the repository
+QUADLET_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/"
 
 # --- Dependency Checks ---
 echo "Checking for dependencies..."
@@ -59,7 +55,7 @@ fi
 echo ""
 
 # --- Fetch and Download Quadlet Files ---
-echo "Fetching Quadlet files from GitHub (${REPO}, branch: ${BRANCH}, path: pod/quadlet/)..."
+echo "Fetching Quadlet files from GitHub (${REPO}, branch: ${BRANCH}, path: pod/)..."
 DOWNLOAD_SUCCESS=true
 for filename in "${QUADLET_FILES[@]}"; do
     file_url="${QUADLET_BASE_URL}/${filename}"
@@ -74,15 +70,15 @@ done
 
 if [ "${DOWNLOAD_SUCCESS}" = false ]; then
     echo "One or more files failed to download."
-    echo "Please check the repository path, branch name, filenames in pod/quadlet/, and your internet connection."
+    echo "Please check the repository path, branch name, filenames in pod/, and your internet connection."
     exit 1
 fi
 echo ""
 
 # --- User Instructions ---
 POD_SERVICE_NAME="sheepvibespod-pod.service" # Generated from sheepvibespod.pod
-DB_VOLUME_NAME="systemd-sheepvibes-db" # Default generated name from sheepvibes-db.volume
-REDIS_VOLUME_NAME="systemd-sheepvibes-redis-data" # Default generated name from sheepvibes-redis-data.volume
+DB_VOLUME_NAME="sheepvibes-db-volume.service"
+REDIS_VOLUME_NAME="sheepvibes-redis-data-volume.service"
 
 echo "Quadlet files deployed to ${SYSTEMD_USER_DIR}."
 echo "The application will use Podman-managed volumes '${DB_VOLUME_NAME}' and '${REDIS_VOLUME_NAME}' for persistence."
@@ -103,11 +99,6 @@ echo "   systemctl --user start ${POD_SERVICE_NAME}"
 echo ""
 echo "4. Check the status of the pod and its components:"
 echo "   systemctl --user status ${POD_SERVICE_NAME}"
-echo "   systemctl --user status sheepvibes-app.service"
-echo "   systemctl --user status sheepvibes-redis.service"
-echo "   systemctl --user status sheepvibes-db-volume.service"
-echo "   systemctl --user status sheepvibes-redis-data-volume.service"
-echo ""
 echo "5. Inspect the auto-created volumes:"
 echo "   podman volume inspect ${DB_VOLUME_NAME} ${REDIS_VOLUME_NAME}"
 echo ""
