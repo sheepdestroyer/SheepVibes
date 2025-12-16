@@ -327,19 +327,29 @@ def export_opml():
         A Flask Response object containing the OPML file, or a JSON error response.
     """
     try:
-        feeds = Feed.query.all()
-
         opml_element = ET.Element('opml', version='2.0')
         head_element = ET.SubElement(opml_element, 'head')
         title_element = ET.SubElement(head_element, 'title')
         title_element.text = 'SheepVibes Feeds'
         body_element = ET.SubElement(opml_element, 'body')
 
-        for feed in feeds:
-            outline_element = ET.SubElement(body_element, 'outline')
-            outline_element.set('text', feed.name)
-            outline_element.set('xmlUrl', feed.url)
-            outline_element.set('type', 'rss') # Common type for RSS/Atom feeds in OPML
+        tabs = Tab.query.order_by(Tab.order).all()
+
+        for tab in tabs:
+            # Create a folder outline for the tab
+            folder_outline = ET.SubElement(body_element, 'outline')
+            folder_outline.set('text', tab.name)
+            folder_outline.set('title', tab.name)
+
+            # Add feeds for this tab
+            for feed in tab.feeds:
+                feed_outline = ET.SubElement(folder_outline, 'outline')
+                feed_outline.set('text', feed.name)
+                feed_outline.set('title', feed.name)
+                feed_outline.set('xmlUrl', feed.url)
+                feed_outline.set('type', 'rss')
+                if feed.site_link:
+                    feed_outline.set('htmlUrl', feed.site_link)
 
         # Convert the XML tree to a string
         opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
@@ -347,7 +357,8 @@ def export_opml():
         response = Response(opml_string, mimetype='application/xml')
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
 
-        logger.info(f"Successfully generated OPML export for {len(feeds)} feeds.")
+        feed_count = sum(len(tab.feeds) for tab in tabs)
+        logger.info(f"Successfully generated OPML export for {feed_count} feeds across {len(tabs)} tabs.")
         return response
 
     except Exception as e:

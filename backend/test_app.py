@@ -1142,25 +1142,34 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
     body = tree.find('body')
     assert body is not None
     outlines = body.findall('outline')
-    assert len(outlines) == 3 # From setup_tabs_and_feeds
+    assert len(outlines) == 2 # 2 Tabs
 
-    # Verify outline content (order might vary, so check presence)
-    expected_feeds_data = [
-        {'text': 'Feed 1', 'xmlUrl': 'url1', 'type': 'rss'},
-        {'text': 'Feed 2', 'xmlUrl': 'url2', 'type': 'rss'},
-        {'text': 'Feed 3', 'xmlUrl': 'url3', 'type': 'rss'},
-    ]
+    # Map tab names to outlines
+    tab_outlines = {o.get('text'): o for o in outlines}
+    assert 'Tab 1' in tab_outlines
+    assert 'Tab 2' in tab_outlines
 
-    actual_feeds_data = []
-    for outline in outlines:
-        actual_feeds_data.append({
-            'text': outline.get('text'),
-            'xmlUrl': outline.get('xmlUrl'),
-            'type': outline.get('type')
-        })
+    # Check content of Tab 1
+    tab1_outline = tab_outlines['Tab 1']
+    tab1_feeds = tab1_outline.findall('outline')
+    assert len(tab1_feeds) == 2
+    
+    feed1 = next((f for f in tab1_feeds if f.get('text') == 'Feed 1'), None)
+    feed2 = next((f for f in tab1_feeds if f.get('text') == 'Feed 2'), None)
+    
+    assert feed1 is not None
+    assert feed1.get('xmlUrl') == 'url1'
+    assert feed2 is not None
+    assert feed2.get('xmlUrl') == 'url2'
 
-    for expected in expected_feeds_data:
-        assert expected in actual_feeds_data
+    # Check content of Tab 2
+    tab2_outline = tab_outlines['Tab 2']
+    tab2_feeds = tab2_outline.findall('outline')
+    assert len(tab2_feeds) == 1
+    
+    feed3 = tab2_feeds[0]
+    assert feed3.get('text') == 'Feed 3'
+    assert feed3.get('xmlUrl') == 'url3'
 
 # --- Tests for OPML Import (/api/opml/import) ---
 
