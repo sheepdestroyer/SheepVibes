@@ -10,6 +10,7 @@ from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 from sqlalchemy import func, select # Added for optimized query
+from sqlalchemy.orm import selectinload # Added for eager loading
 from flask_caching import Cache # Added for caching
 from flask_cors import CORS # Added for CORS support
 
@@ -333,7 +334,8 @@ def export_opml():
         title_element.text = 'SheepVibes Feeds'
         body_element = ET.SubElement(opml_element, 'body')
 
-        tabs = Tab.query.order_by(Tab.order).all()
+        # Eager load feeds to avoid N+1 queries
+        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
 
         for tab in tabs:
             # Create a folder outline for the tab
@@ -341,8 +343,11 @@ def export_opml():
             folder_outline.set('text', tab.name)
             folder_outline.set('title', tab.name)
 
+            # Sort feeds by name for deterministic output because relation order is not guaranteed
+            sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
+
             # Add feeds for this tab
-            for feed in tab.feeds:
+            for feed in sorted_feeds:
                 feed_outline = ET.SubElement(folder_outline, 'outline')
                 feed_outline.set('text', feed.name)
                 feed_outline.set('title', feed.name)
