@@ -77,8 +77,8 @@ echo ""
 
 # --- User Instructions ---
 POD_SERVICE_NAME="sheepvibespod-pod.service" # Generated from sheepvibespod.pod
-DB_VOLUME_NAME="sheepvibes-db-volume.service"
-REDIS_VOLUME_NAME="sheepvibes-redis-data-volume.service"
+DB_VOLUME_NAME="systemd-sheepvibes-db"
+REDIS_VOLUME_NAME="systemd-sheepvibes-redis-data"
 
 echo "Quadlet files deployed to ${SYSTEMD_USER_DIR}."
 echo "The application will use Podman-managed volumes '${DB_VOLUME_NAME}' and '${REDIS_VOLUME_NAME}' for persistence."
