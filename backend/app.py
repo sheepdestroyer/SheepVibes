@@ -1154,6 +1154,6 @@ if __name__ == '__main__':
     # The scheduler is already started in the global scope.
     is_debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
     logger.info(f"Starting Flask app (Debug mode: {is_debug_mode})")
-    app.run(host='0.0.0.0', port=5001, debug=is_debug_mode)
+    app.run(host='0.0.0.0', port=5000, debug=is_debug_mode)
     
     logger.info("SheepVibes application finished.")
