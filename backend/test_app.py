@@ -1823,13 +1823,26 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
     assert response.json[0]['title'] == "Limit Cap Item 0"  # Most recent item
     assert response.json[-1]['title'] == "Limit Cap Item 99"  # 100th item from the end
 
+@pytest.fixture
+def setup_autosave_test_data(client):
+    """Fixture to setup data used in autosave tests."""
+    with client.application.app_context():
+        tab = Tab(name="Autosave Test Tab")
+        db.session.add(tab)
+        db.session.commit()
+        
+        feed = Feed(tab_id=tab.id, name="Autosave Feed", url="http://example.com/autosave")
+        db.session.add(feed)
+        db.session.commit()
+        return tab, feed
+
 @patch('backend.app.FileLock')
 @patch('backend.app.open', new_callable=MagicMock)
 @patch('backend.app.os.replace')
 @patch('backend.app.os.makedirs')
 @patch('backend.app.os.path.exists')
 @patch('backend.app.os.path.dirname')
-def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_replace, mock_open, mock_lock, client):
+def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_replace, mock_open, mock_lock, client, setup_autosave_test_data):
     """Test autosave_opml with mocked file system."""
     from backend.app import autosave_opml
     
@@ -1846,17 +1859,8 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
     
     # Act
     with app.app_context():
-        # Create some data
-        tab = Tab(name="Autosave Test Tab")
-        db.session.add(tab)
-        db.session.commit()
-        
-        feed = Feed(tab_id=tab.id, name="Autosave Feed", url="http://example.com/autosave")
-        db.session.add(feed)
-        db.session.commit()
-        
+        # The fixture 'setup_autosave_test_data' has already populated the DB and we're inside the context
         autosave_opml()
-        
     # Assert
     mock_makedirs.assert_called_with('/mock/data', exist_ok=True)
     mock_open.assert_called_once()
@@ -1877,25 +1881,18 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
     assert "Autosave Test Tab" in written_data
     assert "http://example.com/autosave" in written_data
 
-def test_autosave_opml_with_temp_fs(tmp_path, client):
+def test_autosave_opml_with_temp_fs(tmp_path, client, setup_autosave_test_data):
     """Test autosave_opml with a temporary file system, verifying file creation."""
     from backend.app import autosave_opml
 
-    # Setup: Use a temporary directory for the database
+    # Setup: Use a temporary directory for the database path logic
+    # Note: data comes from the fixture (likely in-memory or default DB), 
+    # but we override the config so autosave_opml writes to our temp path.
     db_path = tmp_path / "sqlite.db"
     client.application.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 
     # Act
     with client.application.app_context():
-        # Create some data
-        tab = Tab(name="Autosave integration Tab")
-        db.session.add(tab)
-        db.session.commit() # Commit to get tab.id
-
-        feed = Feed(tab_id=tab.id, name="Autosave integration Feed", url="http://example.com/autosave_int")
-        db.session.add(feed)
-        db.session.commit()
-
         autosave_opml()
 
     # Assert
@@ -1903,5 +1900,5 @@ def test_autosave_opml_with_temp_fs(tmp_path, client):
     assert backup_file_path.exists(), "Backup file should have been created in the temp directory."
 
     written_data = backup_file_path.read_text(encoding='utf-8')
-    assert "Autosave integration Tab" in written_data
-    assert "http://example.com/autosave_int" in written_data
+    assert "Autosave Test Tab" in written_data
+    assert "http://example.com/autosave" in written_data

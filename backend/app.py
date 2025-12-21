@@ -390,11 +390,8 @@ def _generate_opml_string(tabs=None):
     
     return opml_string, tab_count, feed_count
 
-def autosave_opml():
-    """Saves the current feeds as an OPML file to the data directory."""
-    opml_string, tab_count, feed_count = _generate_opml_string()
-    
-    # Determine the path for the autosave file using robust parsing
+def _get_autosave_directory():
+    """Determines the autosave directory based on the database URI."""
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
     
     # Default to an absolute 'data' path in the project root to avoid CWD issues
@@ -407,7 +404,7 @@ def autosave_opml():
             # Check for in-memory database variations like 'sqlite://' or 'sqlite:///:memory:'
             if not url.database or url.database == ':memory:':
                 logger.warning("Skipping OPML autosave because database is in-memory.")
-                return
+                return None
             # For file-based sqlite, use its directory
             data_dir = os.path.dirname(os.path.abspath(url.database))
         # For non-sqlite databases, the default data_dir (project_root/data) is used.
@@ -424,9 +421,12 @@ def autosave_opml():
             os.makedirs(data_dir, exist_ok=True)
         except OSError:
             logger.exception("Could not create fallback directory %s. Skipping OPML autosave.", data_dir)
-            return
-    
-    autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
+            return None
+            
+    return data_dir
+
+def _write_atomically_with_lock(autosave_path, opml_string):
+    """Writes content to a file atomically using a lock and temp file."""
     temp_path = f"{autosave_path}.tmp"
     lock_path = f"{autosave_path}.lock"
     lock = FileLock(lock_path, timeout=5)
@@ -438,7 +438,7 @@ def autosave_opml():
             with open(temp_path, 'w', encoding='utf-8') as f:
                 f.write(opml_string)
             os.replace(temp_path, autosave_path)
-            logger.info("OPML autosaved to %s (%d feeds in %d tabs)", autosave_path, feed_count, tab_count)
+            return True
     except Timeout:
         logger.warning("Could not acquire lock for %s, another process is likely writing the backup.", autosave_path)
     except OSError:
@@ -449,6 +449,20 @@ def autosave_opml():
                 os.remove(temp_path)
             except OSError as e:
                 logger.warning("Failed to remove temporary file %s: %s", temp_path, e)
+    return False
+
+def autosave_opml():
+    """Saves the current feeds as an OPML file to the data directory."""
+    opml_string, tab_count, feed_count = _generate_opml_string()
+    
+    data_dir = _get_autosave_directory()
+    if not data_dir:
+        return
+
+    autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
+    
+    if _write_atomically_with_lock(autosave_path, opml_string):
+        logger.info("OPML autosaved to %s (%d feeds in %d tabs)", autosave_path, feed_count, tab_count)
 
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():
