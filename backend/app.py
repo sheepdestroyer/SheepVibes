@@ -18,6 +18,7 @@ from flask_cors import CORS # Added for CORS support
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
 import xml.etree.ElementTree as ET # Added for OPML export
+from filelock import FileLock, Timeout # Added for race condition prevention
 
 # --- OPML Import Configuration ---
 SKIPPED_FOLDER_TYPES = {"UWA", "Webnote", "LinkModule"} # Netvibes specific types to ignore for tab creation
@@ -401,17 +402,14 @@ def autosave_opml():
     
     try:
         url = make_url(db_uri)
-        # Explicit check for in-memory databases (SQLite)
-        if url.drivername == 'sqlite' and (not url.database or url.database == ':memory:'):
-            logger.warning("Skipping OPML autosave because database is in-memory.")
-            return
-
-        if url.drivername == 'sqlite' and url.database:
-            # url.database for sqlite is the file path
+        if url.drivername == 'sqlite':
+            # Check for in-memory database variations like 'sqlite://' or 'sqlite:///:memory:'
+            if not url.database or url.database == ':memory:':
+                logger.warning("Skipping OPML autosave because database is in-memory.")
+                return
+            # For file-based sqlite, use its directory
             data_dir = os.path.dirname(os.path.abspath(url.database))
-        elif not url.database:
-            # Should cover non-sqlite cases without a database name in the URI
-            logger.warning(f"Could not determine path from DB URI: {db_uri}. Using default: {data_dir}")
+        # For non-sqlite databases, the default data_dir (project_root/data) is used.
     except Exception:
         logger.exception("Error parsing database URI for autosave path. Using default: %s", data_dir)
 
@@ -428,21 +426,27 @@ def autosave_opml():
     
     autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
     temp_path = f"{autosave_path}.tmp"
+    lock_path = f"{autosave_path}.lock"
+    lock = FileLock(lock_path, timeout=5)
     
     try:
-        # Use atomic write: write to a temporary file then rename
-        with open(temp_path, 'w', encoding='utf-8') as f:
-            f.write(opml_string)
-        os.replace(temp_path, autosave_path)
-        logger.info("OPML autosaved to %s (%d feeds in %d tabs)", autosave_path, feed_count, tab_count)
+        # Use a file lock to prevent race conditions in multi-process environments
+        with lock:
+            # Use atomic write: write to a temporary file then rename
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                f.write(opml_string)
+            os.replace(temp_path, autosave_path)
+            logger.info("OPML autosaved to %s (%d feeds in %d tabs)", autosave_path, feed_count, tab_count)
+    except Timeout:
+        logger.warning("Could not acquire lock for %s, another process is likely writing the backup.", autosave_path)
     except OSError:
         logger.exception("Failed to write autosave file to %s", autosave_path)
         # Cleanup temp file if it exists
         if os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.warning("Failed to remove temporary file %s: %s", temp_path, e)
 
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():

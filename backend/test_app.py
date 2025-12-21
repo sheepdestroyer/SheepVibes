@@ -1823,12 +1823,13 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
     assert response.json[0]['title'] == "Limit Cap Item 0"  # Most recent item
     assert response.json[-1]['title'] == "Limit Cap Item 99"  # 100th item from the end
 
+@patch('backend.app.FileLock')
 @patch('backend.app.open', new_callable=MagicMock)
 @patch('backend.app.os.replace')
 @patch('backend.app.os.makedirs')
 @patch('backend.app.os.path.exists')
 @patch('backend.app.os.path.dirname')
-def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_replace, mock_open, client):  # noqa: ARG001
+def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_replace, mock_open, mock_lock, client):  # noqa: ARG001
     """Test autosave_opml with mocked file system."""
     from backend.app import autosave_opml
     
@@ -1857,6 +1858,7 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
         autosave_opml()
         
     # Assert
+    mock_makedirs.assert_called_with('/mock/data', exist_ok=True)
     mock_open.assert_called_once()
     args, _ = mock_open.call_args
     assert args[0] == '/mock/data/sheepvibes_backup.opml.tmp'
@@ -1870,3 +1872,32 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
     written_data = mock_file.write.call_args[0][0]
     assert "Autosave Test Tab" in written_data
     assert "http://example.com/autosave" in written_data
+
+def test_autosave_opml_with_temp_fs(tmp_path, client):
+    """Test autosave_opml with a temporary file system, verifying file creation."""
+    from backend.app import autosave_opml, Tab, Feed, db, app
+
+    # Setup: Use a temporary directory for the database
+    db_path = tmp_path / "sqlite.db"
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
+    # Act
+    with app.app_context():
+        # Create some data
+        tab = Tab(name="Autosave integration Tab")
+        db.session.add(tab)
+        db.session.commit() # Commit to get tab.id
+
+        feed = Feed(tab_id=tab.id, name="Autosave integration Feed", url="http://example.com/autosave_int")
+        db.session.add(feed)
+        db.session.commit()
+
+        autosave_opml()
+
+    # Assert
+    backup_file_path = tmp_path / 'sheepvibes_backup.opml'
+    assert backup_file_path.exists(), "Backup file should have been created in the temp directory."
+
+    written_data = backup_file_path.read_text(encoding='utf-8')
+    assert "Autosave integration Tab" in written_data
+    assert "http://example.com/autosave_int" in written_data
