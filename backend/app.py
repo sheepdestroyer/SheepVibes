@@ -11,12 +11,15 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 from sqlalchemy import func, select # Added for optimized query
 from sqlalchemy.orm import selectinload # Added for eager loading
+from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import ArgumentError
 from flask_caching import Cache # Added for caching
 from flask_cors import CORS # Added for CORS support
 
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
 import xml.etree.ElementTree as ET # Added for OPML export
+from filelock import FileLock, Timeout # Added for race condition prevention
 
 # --- OPML Import Configuration ---
 SKIPPED_FOLDER_TYPES = {"UWA", "Webnote", "LinkModule"} # Netvibes specific types to ignore for tab creation
@@ -226,6 +229,11 @@ from .feed_service import update_all_feeds, fetch_and_update_feed, fetch_feed, p
 UPDATE_INTERVAL_MINUTES_DEFAULT = 15
 # Get update interval from environment variable or use default
 UPDATE_INTERVAL_MINUTES = int(os.environ.get('UPDATE_INTERVAL_MINUTES', UPDATE_INTERVAL_MINUTES_DEFAULT))
+
+# Autosave configuration
+OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT = 60
+OPML_AUTOSAVE_INTERVAL_MINUTES = int(os.environ.get('OPML_AUTOSAVE_INTERVAL_MINUTES', OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT))
+
 scheduler = BackgroundScheduler()
 
 # Define the scheduled job function
@@ -249,6 +257,16 @@ def scheduled_feed_update():
             announcer.announce(msg=msg)
         except Exception as e:
             logger.error(f"Error during scheduled feed update: {e}", exc_info=True)
+
+@scheduler.scheduled_job('interval', minutes=OPML_AUTOSAVE_INTERVAL_MINUTES, id='autosave_opml')
+def scheduled_opml_autosave():
+    """Scheduled job to periodically save OPML to disk."""
+    with app.app_context():
+        logger.info("Running scheduled OPML autosave (every %d minutes)", OPML_AUTOSAVE_INTERVAL_MINUTES)
+        try:
+            autosave_opml()
+        except Exception:
+            logger.exception("Error during scheduled OPML autosave")
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
 try:
@@ -290,6 +308,7 @@ def internal_error(error):
 # --- API Routes ---
 
 # Serve Frontend Files
+# Use absolute path relative to this file to resolve frontend directory correctly
 FRONTEND_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
 
 @app.route('/')
@@ -320,6 +339,127 @@ def stream():
 
 # --- OPML Export Endpoint ---
 
+def _generate_opml_string(tabs=None):
+    """Generates the OPML string from the database.
+    
+    Args:
+        tabs (list): Optional list of Tab objects with eager loaded feeds. 
+                     If None, it will be queried.
+
+    Returns:
+        tuple[str, int, int]: A tuple containing the OPML string, tab count, and feed count.
+    """
+    opml_element = ET.Element('opml', version='2.0')
+    head_element = ET.SubElement(opml_element, 'head')
+    title_element = ET.SubElement(head_element, 'title')
+    title_element.text = 'SheepVibes Feeds'
+    body_element = ET.SubElement(opml_element, 'body')
+
+    if tabs is None:
+        # Eager load feeds to avoid N+1 queries
+        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
+
+    for tab in tabs:
+        # Skip tabs with no feeds
+        if not tab.feeds:
+            continue
+
+        # Create a folder outline for the tab
+        folder_outline = ET.SubElement(body_element, 'outline')
+        folder_outline.set('text', tab.name)
+        folder_outline.set('title', tab.name)
+
+        # Sort feeds by name for deterministic output because relation order is not guaranteed
+        sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
+
+        # Add feeds for this tab
+        for feed in sorted_feeds:
+            feed_outline = ET.SubElement(folder_outline, 'outline')
+            feed_outline.set('text', feed.name)
+            feed_outline.set('title', feed.name)
+            feed_outline.set('xmlUrl', feed.url)
+            feed_outline.set('type', 'rss')
+            if feed.site_link:
+                feed_outline.set('htmlUrl', feed.site_link)
+    
+    # Convert the XML tree to a string
+    opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
+    
+    feed_count = sum(len(tab.feeds) for tab in tabs)
+    tab_count = sum(1 for tab in tabs if tab.feeds)
+    
+    return opml_string, tab_count, feed_count
+
+def _get_autosave_directory():
+    """Determines the autosave directory based on the database URI."""
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    
+    # Default to an absolute 'data' path in the project root to avoid CWD issues
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    data_dir = os.path.join(project_root, 'data')
+    
+    try:
+        url = make_url(db_uri)
+        if url.drivername == 'sqlite':
+            # Check for in-memory database variations like 'sqlite://' or 'sqlite:///:memory:'
+            if not url.database or url.database == ':memory:':
+                logger.warning("Skipping OPML autosave because database is in-memory.")
+                return None
+            # For file-based sqlite, use its directory, resolving relative paths against the project root.
+            db_path = url.database if os.path.isabs(url.database) else os.path.join(project_root, url.database)
+            data_dir = os.path.dirname(db_path)
+        # For non-sqlite databases, the default data_dir (project_root/data) is used.
+    except (ArgumentError, ValueError):
+        # We catch specific parsing errors here. make_url can raise ArgumentError.
+        logger.exception("Error parsing database URI for autosave path. Using default: %s", data_dir)
+
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+    except OSError:
+        logger.exception("Could not create or access autosave directory %s. Skipping OPML autosave.", data_dir)
+        return None
+            
+    return data_dir
+
+def _write_atomically_with_lock(autosave_path, opml_string):
+    """Writes content to a file atomically using a lock and temp file."""
+    temp_path = f"{autosave_path}.tmp"
+    lock_path = f"{autosave_path}.lock"
+    lock = FileLock(lock_path, timeout=5)
+    
+    try:
+        # Use a file lock to prevent race conditions in multi-process environments
+        with lock:
+            # Use atomic write: write to a temporary file then rename
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                f.write(opml_string)
+            os.replace(temp_path, autosave_path)
+            return True
+    except Timeout:
+        logger.warning("Could not acquire lock for %s, another process is likely writing the backup.", autosave_path)
+    except OSError:
+        logger.exception("Failed to write autosave file to %s", autosave_path)
+        # Cleanup temp file if it exists
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError as e:
+                logger.warning("Failed to remove temporary file %s: %s", temp_path, e)
+    return False
+
+def autosave_opml():
+    """Saves the current feeds as an OPML file to the data directory."""
+    opml_string, tab_count, feed_count = _generate_opml_string()
+    
+    data_dir = _get_autosave_directory()
+    if not data_dir:
+        return
+
+    autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
+    
+    if _write_atomically_with_lock(autosave_path, opml_string):
+        logger.info("OPML autosaved to %s (%d feeds in %d tabs)", autosave_path, feed_count, tab_count)
+
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():
     """Exports all feeds as an OPML file.
@@ -328,53 +468,17 @@ def export_opml():
         A Flask Response object containing the OPML file, or a JSON error response.
     """
     try:
-        opml_element = ET.Element('opml', version='2.0')
-        head_element = ET.SubElement(opml_element, 'head')
-        title_element = ET.SubElement(head_element, 'title')
-        title_element.text = 'SheepVibes Feeds'
-        body_element = ET.SubElement(opml_element, 'body')
-
-        # Eager load feeds to avoid N+1 queries
-        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
-
-        for tab in tabs:
-            # Skip tabs with no feeds
-            if not tab.feeds:
-                continue
-
-            # Create a folder outline for the tab
-            folder_outline = ET.SubElement(body_element, 'outline')
-            folder_outline.set('text', tab.name)
-            folder_outline.set('title', tab.name)
-
-            # Sort feeds by name for deterministic output because relation order is not guaranteed
-            sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
-
-            # Add feeds for this tab
-            for feed in sorted_feeds:
-                feed_outline = ET.SubElement(folder_outline, 'outline')
-                feed_outline.set('text', feed.name)
-                feed_outline.set('title', feed.name)
-                feed_outline.set('xmlUrl', feed.url)
-                feed_outline.set('type', 'rss')
-                if feed.site_link:
-                    feed_outline.set('htmlUrl', feed.site_link)
-        # Convert the XML tree to a string
-        opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
-
+        opml_string, tab_count, feed_count = _generate_opml_string()
+    except Exception:
+        # Catch unexpected errors during OPML generation
+        logger.exception("Error during OPML generation for export")
+        return jsonify({'error': 'Failed to generate OPML export'}), 500
+    else:
         response = Response(opml_string, mimetype='application/xml')
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
-
-        feed_count = sum(len(tab.feeds) for tab in tabs)
-        # Count only tabs that actually have feeds (since we skip empty ones)
-        exported_tab_count = sum(1 for tab in tabs if tab.feeds)
         
-        logger.info(f"Successfully generated OPML export for {feed_count} feeds across {exported_tab_count} tabs.")
+        logger.info("Successfully generated OPML export for %d feeds across %d tabs.", feed_count, tab_count)
         return response
-
-    except Exception as e:
-        logger.error(f"Error during OPML export: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Failed to generate OPML export'}), 500
 
 # --- OPML Import Endpoint ---
 
@@ -418,7 +522,7 @@ def _process_opml_outlines_recursive(
             feed_name = element_name if element_name else xml_url # Fallback to URL if no title/text
 
             if xml_url in all_existing_feed_urls_set:
-                logger.info(f"OPML import: Feed with URL '{xml_url}' already exists. Skipping.")
+                logger.info("OPML import: Feed with URL '%s' already exists. Skipping.", xml_url)
                 skipped_count_wrapper[0] += 1
                 continue
 
@@ -434,14 +538,14 @@ def _process_opml_outlines_recursive(
                 all_existing_feed_urls_set.add(xml_url) # Track for current import session
                 imported_count_wrapper[0] += 1
                 affected_tab_ids_set.add(current_tab_id)
-                logger.info(f"OPML import: Prepared new feed '{feed_name}' ({xml_url}) for tab ID {current_tab_id} ('{current_tab_name}').")
-            except Exception as e_feed:
+                logger.info("OPML import: Prepared new feed '%s' (%s) for tab ID %s ('%s').", feed_name, xml_url, current_tab_id, current_tab_name)
+            except Exception:
                 # Should be rare if checks are done, but good for safety
-                logger.error(f"OPML import: Error preparing feed '{feed_name}': {e_feed}", exc_info=True)
+                logger.exception("OPML import: Error preparing feed '%s'", feed_name)
                 skipped_count_wrapper[0] += 1
 
         elif not xml_url and element_name and folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
-            logger.info(f"OPML import: Skipping Netvibes-specific folder '{element_name}' due to type: {folder_type_attr}.")
+            logger.info("OPML import: Skipping Netvibes-specific folder '%s' due to type: %s.", element_name, folder_type_attr)
             # Children of these folders are also skipped.
             # If we needed to count skipped items within, we'd need to parse child_outlines here.
             # For now, the folder itself is skipped from becoming a tab, and its contents aren't processed.
@@ -457,7 +561,7 @@ def _process_opml_outlines_recursive(
             if existing_tab:
                 nested_tab_id = existing_tab.id
                 nested_tab_name = existing_tab.name
-                logger.info(f"OPML import: Folder '{folder_name}' matches existing tab '{nested_tab_name}' (ID: {nested_tab_id}). Feeds will be added to it.")
+                logger.info("OPML import: Folder '%s' matches existing tab '%s' (ID: %s). Feeds will be added to it.", folder_name, nested_tab_name, nested_tab_id)
             else:
                 max_order = db.session.query(db.func.max(Tab.order)).scalar()
                 new_order = (max_order or -1) + 1
@@ -465,13 +569,13 @@ def _process_opml_outlines_recursive(
                 db.session.add(new_folder_tab)
                 try:
                     db.session.commit() # Commit new tab immediately to get its ID
-                    logger.info(f"OPML import: Created new tab '{new_folder_tab.name}' (ID: {new_folder_tab.id}) from OPML folder.")
+                    logger.info("OPML import: Created new tab '%s' (ID: %s) from OPML folder.", new_folder_tab.name, new_folder_tab.id)
                     invalidate_tabs_cache() # Crucial: new tab added
                     nested_tab_id = new_folder_tab.id
                     nested_tab_name = new_folder_tab.name
-                except Exception as e_tab_commit:
+                except Exception:
                     db.session.rollback()
-                    logger.error(f"OPML import: Failed to commit new tab '{folder_name}': {e_tab_commit}. Skipping this folder and its contents.", exc_info=True)
+                    logger.exception("OPML import: Failed to commit new tab '%s'. Skipping this folder and its contents.", folder_name)
                     skipped_count_wrapper[0] += len(child_outlines) # Approximate skip count
                     continue # Skip this folder
 
@@ -488,7 +592,7 @@ def _process_opml_outlines_recursive(
                 )
         elif not xml_url and not element_name and child_outlines:
             # Folder without a title, process its children in the current tab
-            logger.info(f"OPML import: Processing children of an untitled folder under current tab '{current_tab_name}'.")
+            logger.info("OPML import: Processing children of an untitled folder under current tab '%s'.", current_tab_name)
             _process_opml_outlines_recursive(
                 child_outlines,
                 current_tab_id, # Use current tab_id
@@ -502,7 +606,7 @@ def _process_opml_outlines_recursive(
         else:
             # An outline element that is neither a feed, a folder with children, nor an untitled folder with children.
             # This includes empty folders (name, no xmlUrl, no children) which will now be skipped.
-            logger.info(f"OPML import: Skipping outline element (Name: '{element_name}', xmlUrl: {xml_url}, Children: {len(child_outlines)}) as it's not a feed or a non-empty folder.")
+            logger.info("OPML import: Skipping outline element (Name: '%s', xmlUrl: %s, Children: %s) as it's not a feed or a non-empty folder.", element_name, xml_url, len(child_outlines))
             if not xml_url: # If it's not a feed (it might be an empty folder or an invalid item)
                  skipped_count_wrapper[0] +=1
 
