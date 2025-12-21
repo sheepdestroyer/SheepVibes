@@ -305,6 +305,8 @@ def internal_error(error):
 # --- API Routes ---
 
 # Serve Frontend Files
+# Serve Frontend Files
+# Use absolute path relative to this file to resolve frontend directory correctly
 FRONTEND_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
 
 @app.route('/')
