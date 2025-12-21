@@ -543,7 +543,7 @@ def _process_opml_outlines_recursive(
                 imported_count_wrapper[0] += 1
                 affected_tab_ids_set.add(current_tab_id)
                 logger.info("OPML import: Prepared new feed '%s' (%s) for tab ID %s ('%s').", feed_name, xml_url, current_tab_id, current_tab_name)
-            except Exception as e_feed:
+            except Exception:
                 # Should be rare if checks are done, but good for safety
                 logger.exception("OPML import: Error preparing feed '%s'", feed_name)
                 skipped_count_wrapper[0] += 1
@@ -577,7 +577,7 @@ def _process_opml_outlines_recursive(
                     invalidate_tabs_cache() # Crucial: new tab added
                     nested_tab_id = new_folder_tab.id
                     nested_tab_name = new_folder_tab.name
-                except Exception as e_tab_commit:
+                except Exception:
                     db.session.rollback()
                     logger.exception("OPML import: Failed to commit new tab '%s'. Skipping this folder and its contents.", folder_name)
                     skipped_count_wrapper[0] += len(child_outlines) # Approximate skip count
