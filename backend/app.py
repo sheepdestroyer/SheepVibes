@@ -405,9 +405,10 @@ def autosave_opml():
             # Should cover cases like pure memory or weird configs
             logger.warning(f"Could not determine file path from DB URI: {db_uri}. Defaulting to current directory.")
         else:
-            # Non-sqlite or non-file based (e.g. postgres), save to ./data if exists, else .
-            if os.path.exists('data'):
-                data_dir = 'data'
+            # Non-sqlite or non-file based (e.g. postgres), save to ./data (relative to app.py) if exists
+            potential_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+            if os.path.exists(potential_data_dir):
+                data_dir = potential_data_dir
     except Exception as e:
         logger.error(f"Error parsing database URI for autosave path: {e}. Defaulting to current directory.")
 
