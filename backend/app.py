@@ -262,8 +262,8 @@ def scheduled_opml_autosave():
         logger.info(f"Running scheduled OPML autosave (every {OPML_AUTOSAVE_INTERVAL_MINUTES} minutes)")
         try:
             autosave_opml()
-        except Exception as e:
-            logger.exception(f"Error during scheduled OPML autosave: {e}")
+        except Exception:
+            logger.exception("Error during scheduled OPML autosave")
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
 try:
@@ -414,8 +414,8 @@ def autosave_opml():
             potential_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
             if os.path.exists(potential_data_dir):
                 data_dir = potential_data_dir
-    except Exception as e:
-        logger.error(f"Error parsing database URI for autosave path: {e}. Defaulting to current directory.")
+    except Exception:
+        logger.exception("Error parsing database URI for autosave path. Defaulting to current directory.")
 
     if data_dir != '.' and not os.path.exists(data_dir):
         try:
@@ -431,8 +431,8 @@ def autosave_opml():
         with open(autosave_path, 'w', encoding='utf-8') as f:
             f.write(opml_string)
         logger.info(f"OPML autosaved to {autosave_path} ({feed_count} feeds in {tab_count} tabs)")
-    except OSError as e:
-        logger.exception(f"Failed to write autosave file to {autosave_path}: {e}")
+    except OSError:
+        logger.exception(f"Failed to write autosave file to {autosave_path}")
 
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():
@@ -450,8 +450,8 @@ def export_opml():
         logger.info(f"Successfully generated OPML export for {feed_count} feeds across {tab_count} tabs.")
         return response
 
-    except Exception as e:
-        logger.exception(f"Error during OPML export: {str(e)}")
+    except Exception:
+        logger.exception("Error during OPML export")
         return jsonify({'error': 'Failed to generate OPML export'}), 500
 
 # --- OPML Import Endpoint ---
