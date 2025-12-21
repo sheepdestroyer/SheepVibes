@@ -421,7 +421,7 @@ def autosave_opml():
         try:
             os.makedirs(data_dir, exist_ok=True)
         except OSError:
-            logger.error(f"Could not create fallback directory {data_dir}. Skipping OPML autosave.")
+            logger.exception("Could not create fallback directory %s. Skipping OPML autosave.", data_dir)
             return
     
     autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
@@ -462,11 +462,10 @@ def export_opml():
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
         
         logger.info("Successfully generated OPML export for %d feeds across %d tabs.", feed_count, tab_count)
+        return response
     except Exception:
         logger.exception("Error during OPML export")
         return jsonify({'error': 'Failed to generate OPML export'}), 500
-    else:
-        return response
 
 # --- OPML Import Endpoint ---
 

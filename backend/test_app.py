@@ -1875,14 +1875,14 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
 
 def test_autosave_opml_with_temp_fs(tmp_path, client):
     """Test autosave_opml with a temporary file system, verifying file creation."""
-    from backend.app import autosave_opml, Tab, Feed, db, app
+    from backend.app import autosave_opml, Tab, Feed, db
 
     # Setup: Use a temporary directory for the database
     db_path = tmp_path / "sqlite.db"
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    client.application.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 
     # Act
-    with app.app_context():
+    with client.application.app_context():
         # Create some data
         tab = Tab(name="Autosave integration Tab")
         db.session.add(tab)
