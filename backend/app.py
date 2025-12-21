@@ -458,16 +458,16 @@ def export_opml():
     """
     try:
         opml_string, tab_count, feed_count = _generate_opml_string()
-
+    except Exception:
+        # Catch unexpected errors during OPML generation
+        logger.exception("Error during OPML generation for export")
+        return jsonify({'error': 'Failed to generate OPML export'}), 500
+    else:
         response = Response(opml_string, mimetype='application/xml')
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
         
         logger.info("Successfully generated OPML export for %d feeds across %d tabs.", feed_count, tab_count)
         return response
-    except Exception:
-        # Catch unexpected errors during OPML generation or response creation
-        logger.exception("Error during OPML export")
-        return jsonify({'error': 'Failed to generate OPML export'}), 500
 
 # --- OPML Import Endpoint ---
 
