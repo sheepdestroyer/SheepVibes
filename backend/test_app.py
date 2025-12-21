@@ -1824,9 +1824,10 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
     assert response.json[-1]['title'] == "Limit Cap Item 99"  # 100th item from the end
 
 @patch('backend.app.open', new_callable=MagicMock)
+@patch('backend.app.os.makedirs')
 @patch('backend.app.os.path.exists')
 @patch('backend.app.os.path.dirname')
-def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_open, client):  # noqa: ARG001
+def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_open, client):  # noqa: ARG001
     """Test autosave_opml with mocked file system."""
     from backend.app import autosave_opml
     

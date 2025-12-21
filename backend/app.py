@@ -417,10 +417,9 @@ def autosave_opml():
     except Exception:
         logger.exception("Error parsing database URI for autosave path. Defaulting to current directory.")
 
-    if data_dir != '.' and not os.path.exists(data_dir):
+    if data_dir != '.':
         try:
             os.makedirs(data_dir, exist_ok=True)
-            logger.info(f"Created autosave directory: {data_dir}")
         except OSError as e:
             logger.warning(f"Could not create autosave directory {data_dir}: {e}. Falling back to current directory.")
             data_dir = '.'
