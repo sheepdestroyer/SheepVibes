@@ -405,8 +405,9 @@ def _get_autosave_directory():
             if not url.database or url.database == ':memory:':
                 logger.warning("Skipping OPML autosave because database is in-memory.")
                 return None
-            # For file-based sqlite, use its directory
-            data_dir = os.path.dirname(os.path.abspath(url.database))
+            # For file-based sqlite, use its directory, resolving relative paths against the project root.
+            db_path = url.database if os.path.isabs(url.database) else os.path.join(project_root, url.database)
+            data_dir = os.path.dirname(db_path)
         # For non-sqlite databases, the default data_dir (project_root/data) is used.
     except (ArgumentError, ValueError):
         # We catch specific parsing errors here. make_url can raise ArgumentError.
