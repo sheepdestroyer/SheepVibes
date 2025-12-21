@@ -305,7 +305,6 @@ def internal_error(error):
 # --- API Routes ---
 
 # Serve Frontend Files
-# Serve Frontend Files
 # Use absolute path relative to this file to resolve frontend directory correctly
 FRONTEND_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
 
@@ -400,21 +399,25 @@ def autosave_opml():
     try:
         url = make_url(db_uri)
         if url.drivername == 'sqlite' and url.database:
-             # url.database for sqlite is the file path
-             data_dir = os.path.dirname(os.path.abspath(url.database))
+            # url.database for sqlite is the file path
+            data_dir = os.path.dirname(os.path.abspath(url.database))
         elif not url.database:
-             # Should cover cases like pure memory or weird configs
-             logger.warning(f"Could not determine file path from DB URI: {db_uri}. Defaulting to current directory.")
+            # Should cover cases like pure memory or weird configs
+            logger.warning(f"Could not determine file path from DB URI: {db_uri}. Defaulting to current directory.")
         else:
-             # Non-sqlite or non-file based (e.g. postgres), save to ./data if exists, else .
-             if os.path.exists('data'):
-                 data_dir = 'data'
+            # Non-sqlite or non-file based (e.g. postgres), save to ./data if exists, else .
+            if os.path.exists('data'):
+                data_dir = 'data'
     except Exception as e:
         logger.error(f"Error parsing database URI for autosave path: {e}. Defaulting to current directory.")
 
-    if not os.path.exists(data_dir):
-        # Fallback 
-        data_dir = '.' 
+    if data_dir != '.' and not os.path.exists(data_dir):
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            logger.info(f"Created autosave directory: {data_dir}")
+        except OSError as e:
+            logger.warning(f"Could not create autosave directory {data_dir}: {e}. Falling back to current directory.")
+            data_dir = '.'
 
     autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
     
