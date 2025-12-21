@@ -1824,10 +1824,11 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
     assert response.json[-1]['title'] == "Limit Cap Item 99"  # 100th item from the end
 
 @patch('backend.app.open', new_callable=MagicMock)
+@patch('backend.app.os.replace')
 @patch('backend.app.os.makedirs')
 @patch('backend.app.os.path.exists')
 @patch('backend.app.os.path.dirname')
-def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_open, client):  # noqa: ARG001
+def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_replace, mock_open, client):  # noqa: ARG001
     """Test autosave_opml with mocked file system."""
     from backend.app import autosave_opml
     
@@ -1858,8 +1859,11 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_ope
     # Assert
     mock_open.assert_called_once()
     args, _ = mock_open.call_args
-    assert args[0] == '/mock/data/sheepvibes_backup.opml'
+    assert args[0] == '/mock/data/sheepvibes_backup.opml.tmp'
     assert args[1] == 'w'
+    
+    # Check replacement
+    mock_replace.assert_called_once_with('/mock/data/sheepvibes_backup.opml.tmp', '/mock/data/sheepvibes_backup.opml')
     
     # Check data written
     mock_file.write.assert_called_once()

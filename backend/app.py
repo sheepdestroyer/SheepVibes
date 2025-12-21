@@ -11,6 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 from sqlalchemy import func, select # Added for optimized query
 from sqlalchemy.orm import selectinload # Added for eager loading
+from sqlalchemy.engine.url import make_url
 from flask_caching import Cache # Added for caching
 from flask_cors import CORS # Added for CORS support
 
@@ -336,8 +337,6 @@ def stream():
 
 # --- OPML Export Endpoint ---
 
-from sqlalchemy.engine.url import make_url
-
 def _generate_opml_string(tabs=None):
     """Generates the OPML string from the database.
     
@@ -428,13 +427,22 @@ def autosave_opml():
             return
     
     autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
+    temp_path = f"{autosave_path}.tmp"
     
     try:
-        with open(autosave_path, 'w', encoding='utf-8') as f:
+        # Use atomic write: write to a temporary file then rename
+        with open(temp_path, 'w', encoding='utf-8') as f:
             f.write(opml_string)
+        os.replace(temp_path, autosave_path)
         logger.info(f"OPML autosaved to {autosave_path} ({feed_count} feeds in {tab_count} tabs)")
     except OSError:
         logger.exception(f"Failed to write autosave file to {autosave_path}")
+        # Cleanup temp file if it exists
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():
