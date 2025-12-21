@@ -226,6 +226,11 @@ from .feed_service import update_all_feeds, fetch_and_update_feed, fetch_feed, p
 UPDATE_INTERVAL_MINUTES_DEFAULT = 15
 # Get update interval from environment variable or use default
 UPDATE_INTERVAL_MINUTES = int(os.environ.get('UPDATE_INTERVAL_MINUTES', UPDATE_INTERVAL_MINUTES_DEFAULT))
+
+# Autosave configuration
+OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT = 60
+OPML_AUTOSAVE_INTERVAL_MINUTES = int(os.environ.get('OPML_AUTOSAVE_INTERVAL_MINUTES', OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT))
+
 scheduler = BackgroundScheduler()
 
 # Define the scheduled job function
@@ -249,6 +254,16 @@ def scheduled_feed_update():
             announcer.announce(msg=msg)
         except Exception as e:
             logger.error(f"Error during scheduled feed update: {e}", exc_info=True)
+
+@scheduler.scheduled_job('interval', minutes=OPML_AUTOSAVE_INTERVAL_MINUTES, id='autosave_opml')
+def scheduled_opml_autosave():
+    """Scheduled job to periodically save OPML to disk."""
+    with app.app_context():
+        logger.info(f"Running scheduled OPML autosave (every {OPML_AUTOSAVE_INTERVAL_MINUTES} minutes)")
+        try:
+             autosave_opml()
+        except Exception as e:
+             logger.error(f"Error during scheduled OPML autosave: {e}", exc_info=True)
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
 try:
@@ -320,6 +335,70 @@ def stream():
 
 # --- OPML Export Endpoint ---
 
+def _generate_opml_string():
+    """Generates the OPML string from the database.
+
+    Returns:
+        str: The OPML XML string.
+    """
+    opml_element = ET.Element('opml', version='2.0')
+    head_element = ET.SubElement(opml_element, 'head')
+    title_element = ET.SubElement(head_element, 'title')
+    title_element.text = 'SheepVibes Feeds'
+    body_element = ET.SubElement(opml_element, 'body')
+
+    # Eager load feeds to avoid N+1 queries
+    tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
+
+    for tab in tabs:
+        # Skip tabs with no feeds
+        if not tab.feeds:
+            continue
+
+        # Create a folder outline for the tab
+        folder_outline = ET.SubElement(body_element, 'outline')
+        folder_outline.set('text', tab.name)
+        folder_outline.set('title', tab.name)
+
+        # Sort feeds by name for deterministic output because relation order is not guaranteed
+        sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
+
+        # Add feeds for this tab
+        for feed in sorted_feeds:
+            feed_outline = ET.SubElement(folder_outline, 'outline')
+            feed_outline.set('text', feed.name)
+            feed_outline.set('title', feed.name)
+            feed_outline.set('xmlUrl', feed.url)
+            feed_outline.set('type', 'rss')
+            if feed.site_link:
+                feed_outline.set('htmlUrl', feed.site_link)
+    
+    # Convert the XML tree to a string
+    return ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
+
+def autosave_opml():
+    """Saves the current feeds as an OPML file to the data directory."""
+    opml_string = _generate_opml_string()
+    
+    # Determine the path for the autosave file
+    # We use the same directory logic as the database path
+    db_path = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
+    if db_path == ':memory:': # Should not happen in prod but good for robust code
+         logger.warning("Skipping OPML autosave because database is in-memory.")
+         return
+
+    data_dir = os.path.dirname(db_path)
+    if not os.path.exists(data_dir):
+        # Fallback if db path is just a filename (cwd)
+        data_dir = '.' 
+
+    autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
+    
+    with open(autosave_path, 'w', encoding='utf-8') as f:
+        f.write(opml_string)
+    
+    logger.info(f"OPML autosaved to {autosave_path}")
+
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():
     """Exports all feeds as an OPML file.
@@ -328,45 +407,14 @@ def export_opml():
         A Flask Response object containing the OPML file, or a JSON error response.
     """
     try:
-        opml_element = ET.Element('opml', version='2.0')
-        head_element = ET.SubElement(opml_element, 'head')
-        title_element = ET.SubElement(head_element, 'title')
-        title_element.text = 'SheepVibes Feeds'
-        body_element = ET.SubElement(opml_element, 'body')
-
-        # Eager load feeds to avoid N+1 queries
-        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
-
-        for tab in tabs:
-            # Skip tabs with no feeds
-            if not tab.feeds:
-                continue
-
-            # Create a folder outline for the tab
-            folder_outline = ET.SubElement(body_element, 'outline')
-            folder_outline.set('text', tab.name)
-            folder_outline.set('title', tab.name)
-
-            # Sort feeds by name for deterministic output because relation order is not guaranteed
-            sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
-
-            # Add feeds for this tab
-            for feed in sorted_feeds:
-                feed_outline = ET.SubElement(folder_outline, 'outline')
-                feed_outline.set('text', feed.name)
-                feed_outline.set('title', feed.name)
-                feed_outline.set('xmlUrl', feed.url)
-                feed_outline.set('type', 'rss')
-                if feed.site_link:
-                    feed_outline.set('htmlUrl', feed.site_link)
-        # Convert the XML tree to a string
-        opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
+        opml_string = _generate_opml_string()
 
         response = Response(opml_string, mimetype='application/xml')
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
-
+        
+        # Calculate counts just for logging (could be optimized out if strictly necessary, but helpful)
+        tabs = Tab.query.options(selectinload(Tab.feeds)).all()
         feed_count = sum(len(tab.feeds) for tab in tabs)
-        # Count only tabs that actually have feeds (since we skip empty ones)
         exported_tab_count = sum(1 for tab in tabs if tab.feeds)
         
         logger.info(f"Successfully generated OPML export for {feed_count} feeds across {exported_tab_count} tabs.")

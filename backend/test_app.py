@@ -1822,3 +1822,46 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
     # Since we added items with decreasing timestamps, the first item should be the most recent (i=0)
     assert response.json[0]['title'] == "Limit Cap Item 0"  # Most recent item
     assert response.json[-1]['title'] == "Limit Cap Item 99"  # 100th item from the end
+
+@patch('backend.app.open', new_callable=MagicMock)
+@patch('backend.app.os.path.exists')
+@patch('backend.app.os.path.dirname')
+def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_open, client):
+    \"\"\"Test autosave_opml with mocked file system.\"\"\"
+    from backend.app import autosave_opml
+    
+    # Setup mocks
+    mock_exists.return_value = True
+    mock_dirname.return_value = '/mock/data'
+    
+    # Setup file handle mock
+    mock_file = MagicMock()
+    mock_open.return_value.__enter__.return_value = mock_file
+    
+    # Config app
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////mock/data/sheepvibes.db'
+    
+    # Act
+    with app.app_context():
+        # Create some data
+        tab = Tab(name="Autosave Test Tab")
+        db.session.add(tab)
+        db.session.commit()
+        
+        feed = Feed(tab_id=tab.id, name="Autosave Feed", url="http://example.com/autosave")
+        db.session.add(feed)
+        db.session.commit()
+        
+        autosave_opml()
+        
+    # Assert
+    mock_open.assert_called_once()
+    args, _ = mock_open.call_args
+    assert args[0] == '/mock/data/sheepvibes_backup.opml'
+    assert args[1] == 'w'
+    
+    # Check data written
+    mock_file.write.assert_called_once()
+    written_data = mock_file.write.call_args[0][0]
+    assert "Autosave Test Tab" in written_data
+    assert "http://example.com/autosave" in written_data
