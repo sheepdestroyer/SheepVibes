@@ -12,6 +12,7 @@ import datetime
 from sqlalchemy import func, select # Added for optimized query
 from sqlalchemy.orm import selectinload # Added for eager loading
 from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import ArgumentError
 from flask_caching import Cache # Added for caching
 from flask_cors import CORS # Added for CORS support
 
@@ -410,8 +411,8 @@ def autosave_opml():
             # For file-based sqlite, use its directory
             data_dir = os.path.dirname(os.path.abspath(url.database))
         # For non-sqlite databases, the default data_dir (project_root/data) is used.
-    except Exception:
-        # We catch Exception here because make_url can raise various parsing errors depending on the URI
+    except (ArgumentError, ValueError):
+        # We catch specific parsing errors here. make_url can raise ArgumentError.
         logger.exception("Error parsing database URI for autosave path. Using default: %s", data_dir)
 
     try:
