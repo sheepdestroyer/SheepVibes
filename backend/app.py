@@ -346,7 +346,7 @@ def _generate_opml_string(tabs=None):
                      If None, it will be queried.
 
     Returns:
-        tuple: A tuple containing (opml_string, tab_count, feed_count).
+        tuple[str, int, int]: A tuple containing the OPML string, tab count, and feed count.
     """
     opml_element = ET.Element('opml', version='2.0')
     head_element = ET.SubElement(opml_element, 'head')
@@ -400,21 +400,19 @@ def autosave_opml():
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     data_dir = os.path.join(project_root, 'data')
     
-    if db_uri == 'sqlite:///:memory:':
-        logger.warning("Skipping OPML autosave because database is in-memory.")
-        return
-        
     try:
         url = make_url(db_uri)
+        # Explicit check for in-memory databases (SQLite)
+        if url.drivername == 'sqlite' and (not url.database or url.database == ':memory:'):
+            logger.warning("Skipping OPML autosave because database is in-memory.")
+            return
+
         if url.drivername == 'sqlite' and url.database:
             # url.database for sqlite is the file path
             data_dir = os.path.dirname(os.path.abspath(url.database))
         elif not url.database:
-            # Should cover cases like pure memory or weird configs
-            logger.warning(f"Could not determine file path from DB URI: {db_uri}. Using default: {data_dir}")
-        else:
-            # Non-sqlite, already defaulted to project root / data
-            pass
+            # Should cover non-sqlite cases without a database name in the URI
+            logger.warning(f"Could not determine path from DB URI: {db_uri}. Using default: {data_dir}")
     except Exception:
         logger.exception(f"Error parsing database URI for autosave path. Using default: {data_dir}")
 
@@ -426,7 +424,8 @@ def autosave_opml():
         try:
             os.makedirs(data_dir, exist_ok=True)
         except OSError:
-            pass # Last resort
+            logger.error(f"Could not create fallback directory {data_dir}. Skipping OPML autosave.")
+            return
     
     autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
     
@@ -451,11 +450,11 @@ def export_opml():
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
         
         logger.info(f"Successfully generated OPML export for {feed_count} feeds across {tab_count} tabs.")
-        return response
-
     except Exception:
         logger.exception("Error during OPML export")
         return jsonify({'error': 'Failed to generate OPML export'}), 500
+    else:
+        return response
 
 # --- OPML Import Endpoint ---
 
