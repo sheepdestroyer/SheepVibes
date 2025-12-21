@@ -511,7 +511,7 @@ def _process_opml_outlines_recursive(
             feed_name = element_name if element_name else xml_url # Fallback to URL if no title/text
 
             if xml_url in all_existing_feed_urls_set:
-                logger.info(f"OPML import: Feed with URL '{xml_url}' already exists. Skipping.")
+                logger.info("OPML import: Feed with URL '%s' already exists. Skipping.", xml_url)
                 skipped_count_wrapper[0] += 1
                 continue
 
@@ -527,14 +527,14 @@ def _process_opml_outlines_recursive(
                 all_existing_feed_urls_set.add(xml_url) # Track for current import session
                 imported_count_wrapper[0] += 1
                 affected_tab_ids_set.add(current_tab_id)
-                logger.info(f"OPML import: Prepared new feed '{feed_name}' ({xml_url}) for tab ID {current_tab_id} ('{current_tab_name}').")
+                logger.info("OPML import: Prepared new feed '%s' (%s) for tab ID %s ('%s').", feed_name, xml_url, current_tab_id, current_tab_name)
             except Exception as e_feed:
                 # Should be rare if checks are done, but good for safety
-                logger.error(f"OPML import: Error preparing feed '{feed_name}': {e_feed}", exc_info=True)
+                logger.error("OPML import: Error preparing feed '%s': %s", feed_name, e_feed, exc_info=True)
                 skipped_count_wrapper[0] += 1
 
         elif not xml_url and element_name and folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
-            logger.info(f"OPML import: Skipping Netvibes-specific folder '{element_name}' due to type: {folder_type_attr}.")
+            logger.info("OPML import: Skipping Netvibes-specific folder '%s' due to type: %s.", element_name, folder_type_attr)
             # Children of these folders are also skipped.
             # If we needed to count skipped items within, we'd need to parse child_outlines here.
             # For now, the folder itself is skipped from becoming a tab, and its contents aren't processed.
@@ -550,7 +550,7 @@ def _process_opml_outlines_recursive(
             if existing_tab:
                 nested_tab_id = existing_tab.id
                 nested_tab_name = existing_tab.name
-                logger.info(f"OPML import: Folder '{folder_name}' matches existing tab '{nested_tab_name}' (ID: {nested_tab_id}). Feeds will be added to it.")
+                logger.info("OPML import: Folder '%s' matches existing tab '%s' (ID: %s). Feeds will be added to it.", folder_name, nested_tab_name, nested_tab_id)
             else:
                 max_order = db.session.query(db.func.max(Tab.order)).scalar()
                 new_order = (max_order or -1) + 1
@@ -558,13 +558,13 @@ def _process_opml_outlines_recursive(
                 db.session.add(new_folder_tab)
                 try:
                     db.session.commit() # Commit new tab immediately to get its ID
-                    logger.info(f"OPML import: Created new tab '{new_folder_tab.name}' (ID: {new_folder_tab.id}) from OPML folder.")
+                    logger.info("OPML import: Created new tab '%s' (ID: %s) from OPML folder.", new_folder_tab.name, new_folder_tab.id)
                     invalidate_tabs_cache() # Crucial: new tab added
                     nested_tab_id = new_folder_tab.id
                     nested_tab_name = new_folder_tab.name
                 except Exception as e_tab_commit:
                     db.session.rollback()
-                    logger.error(f"OPML import: Failed to commit new tab '{folder_name}': {e_tab_commit}. Skipping this folder and its contents.", exc_info=True)
+                    logger.error("OPML import: Failed to commit new tab '%s': %s. Skipping this folder and its contents.", folder_name, e_tab_commit, exc_info=True)
                     skipped_count_wrapper[0] += len(child_outlines) # Approximate skip count
                     continue # Skip this folder
 
@@ -581,7 +581,7 @@ def _process_opml_outlines_recursive(
                 )
         elif not xml_url and not element_name and child_outlines:
             # Folder without a title, process its children in the current tab
-            logger.info(f"OPML import: Processing children of an untitled folder under current tab '{current_tab_name}'.")
+            logger.info("OPML import: Processing children of an untitled folder under current tab '%s'.", current_tab_name)
             _process_opml_outlines_recursive(
                 child_outlines,
                 current_tab_id, # Use current tab_id
@@ -595,7 +595,7 @@ def _process_opml_outlines_recursive(
         else:
             # An outline element that is neither a feed, a folder with children, nor an untitled folder with children.
             # This includes empty folders (name, no xmlUrl, no children) which will now be skipped.
-            logger.info(f"OPML import: Skipping outline element (Name: '{element_name}', xmlUrl: {xml_url}, Children: {len(child_outlines)}) as it's not a feed or a non-empty folder.")
+            logger.info("OPML import: Skipping outline element (Name: '%s', xmlUrl: %s, Children: %s) as it's not a feed or a non-empty folder.", element_name, xml_url, len(child_outlines))
             if not xml_url: # If it's not a feed (it might be an empty folder or an invalid item)
                  skipped_count_wrapper[0] +=1
 
