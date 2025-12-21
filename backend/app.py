@@ -395,7 +395,10 @@ def autosave_opml():
     
     # Determine the path for the autosave file using robust parsing
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-    data_dir = '.'
+    
+    # Default to an absolute 'data' path in the project root to avoid CWD issues
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    data_dir = os.path.join(project_root, 'data')
     
     if db_uri == 'sqlite:///:memory:':
         logger.warning("Skipping OPML autosave because database is in-memory.")
@@ -408,22 +411,23 @@ def autosave_opml():
             data_dir = os.path.dirname(os.path.abspath(url.database))
         elif not url.database:
             # Should cover cases like pure memory or weird configs
-            logger.warning(f"Could not determine file path from DB URI: {db_uri}. Defaulting to current directory.")
+            logger.warning(f"Could not determine file path from DB URI: {db_uri}. Using default: {data_dir}")
         else:
-            # Non-sqlite or non-file based (e.g. postgres), save to ./data (relative to app.py) if exists
-            potential_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
-            if os.path.exists(potential_data_dir):
-                data_dir = potential_data_dir
+            # Non-sqlite, already defaulted to project root / data
+            pass
     except Exception:
-        logger.exception("Error parsing database URI for autosave path. Defaulting to current directory.")
+        logger.exception(f"Error parsing database URI for autosave path. Using default: {data_dir}")
 
-    if data_dir != '.':
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+    except OSError as e:
+        logger.warning(f"Could not create autosave directory {data_dir}: {e}. Falling back to script directory.")
+        data_dir = os.path.dirname(os.path.abspath(__file__))
         try:
             os.makedirs(data_dir, exist_ok=True)
-        except OSError as e:
-            logger.warning(f"Could not create autosave directory {data_dir}: {e}. Falling back to current directory.")
-            data_dir = '.'
-
+        except OSError:
+            pass # Last resort
+    
     autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
     
     try:
