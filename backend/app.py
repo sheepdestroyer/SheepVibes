@@ -411,12 +411,13 @@ def autosave_opml():
             data_dir = os.path.dirname(os.path.abspath(url.database))
         # For non-sqlite databases, the default data_dir (project_root/data) is used.
     except Exception:
+        # We catch Exception here because make_url can raise various parsing errors depending on the URI
         logger.exception("Error parsing database URI for autosave path. Using default: %s", data_dir)
 
     try:
         os.makedirs(data_dir, exist_ok=True)
     except OSError as e:
-        logger.warning(f"Could not create autosave directory {data_dir}: {e}. Falling back to script directory.")
+        logger.warning("Could not create autosave directory %s: %s. Falling back to script directory.", data_dir, e)
         data_dir = os.path.dirname(os.path.abspath(__file__))
         try:
             os.makedirs(data_dir, exist_ok=True)
@@ -464,6 +465,7 @@ def export_opml():
         logger.info("Successfully generated OPML export for %d feeds across %d tabs.", feed_count, tab_count)
         return response
     except Exception:
+        # Catch unexpected errors during OPML generation or response creation
         logger.exception("Error during OPML export")
         return jsonify({'error': 'Failed to generate OPML export'}), 500
 

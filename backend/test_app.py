@@ -1864,6 +1864,10 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
     assert args[0] == '/mock/data/sheepvibes_backup.opml.tmp'
     assert args[1] == 'w'
     
+    # Check lock
+    mock_lock.assert_called_once_with('/mock/data/sheepvibes_backup.opml.lock', timeout=5)
+    mock_lock.return_value.__enter__.assert_called_once()
+    
     # Check replacement
     mock_replace.assert_called_once_with('/mock/data/sheepvibes_backup.opml.tmp', '/mock/data/sheepvibes_backup.opml')
     
