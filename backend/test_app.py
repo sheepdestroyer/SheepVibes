@@ -1855,7 +1855,6 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
     mock_open.return_value.__enter__.return_value = mock_file
     
     # Config app
-    # Config app
     client.application.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////mock/data/sheepvibes.db'
     
     # Act
