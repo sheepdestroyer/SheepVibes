@@ -414,14 +414,9 @@ def _get_autosave_directory():
 
     try:
         os.makedirs(data_dir, exist_ok=True)
-    except OSError as e:
-        logger.warning("Could not create autosave directory %s: %s. Falling back to script directory.", data_dir, e)
-        data_dir = os.path.dirname(os.path.abspath(__file__))
-        try:
-            os.makedirs(data_dir, exist_ok=True)
-        except OSError:
-            logger.exception("Could not create fallback directory %s. Skipping OPML autosave.", data_dir)
-            return None
+    except OSError:
+        logger.exception("Could not create or access autosave directory %s. Skipping OPML autosave.", data_dir)
+        return None
             
     return data_dir
 
