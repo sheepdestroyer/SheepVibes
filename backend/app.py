@@ -385,7 +385,7 @@ def _generate_opml_string(tabs=None):
     opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
     
     feed_count = sum(len(tab.feeds) for tab in tabs)
-    tab_count = len(tabs)
+    tab_count = sum(1 for tab in tabs if tab.feeds)
     
     return opml_string, tab_count, feed_count
 
