@@ -263,7 +263,7 @@ def scheduled_opml_autosave():
         try:
             autosave_opml()
         except Exception as e:
-            logger.error(f"Error during scheduled OPML autosave: {e}", exc_info=True)
+            logger.exception(f"Error during scheduled OPML autosave: {e}")
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
 try:
@@ -425,8 +425,8 @@ def autosave_opml():
         with open(autosave_path, 'w', encoding='utf-8') as f:
             f.write(opml_string)
         logger.info(f"OPML autosaved to {autosave_path}")
-    except Exception as e:
-        logger.error(f"Failed to write autosave file to {autosave_path}: {e}")
+    except OSError as e:
+        logger.exception(f"Failed to write autosave file to {autosave_path}: {e}")
 
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():
@@ -452,7 +452,7 @@ def export_opml():
         return response
 
     except Exception as e:
-        logger.error(f"Error during OPML export: {str(e)}", exc_info=True)
+        logger.exception(f"Error during OPML export: {str(e)}")
         return jsonify({'error': 'Failed to generate OPML export'}), 500
 
 # --- OPML Import Endpoint ---
