@@ -1829,7 +1829,7 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
 @patch('backend.app.os.makedirs')
 @patch('backend.app.os.path.exists')
 @patch('backend.app.os.path.dirname')
-def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_replace, mock_open, mock_lock, client):  # noqa: ARG001
+def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_replace, mock_open, mock_lock, client):
     """Test autosave_opml with mocked file system."""
     from backend.app import autosave_opml
     
@@ -1879,7 +1879,7 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
 
 def test_autosave_opml_with_temp_fs(tmp_path, client):
     """Test autosave_opml with a temporary file system, verifying file creation."""
-    from backend.app import autosave_opml, Tab, Feed, db
+    from backend.app import autosave_opml
 
     # Setup: Use a temporary directory for the database
     db_path = tmp_path / "sqlite.db"
