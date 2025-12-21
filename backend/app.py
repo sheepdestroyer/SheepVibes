@@ -261,9 +261,9 @@ def scheduled_opml_autosave():
     with app.app_context():
         logger.info(f"Running scheduled OPML autosave (every {OPML_AUTOSAVE_INTERVAL_MINUTES} minutes)")
         try:
-             autosave_opml()
+            autosave_opml()
         except Exception as e:
-             logger.error(f"Error during scheduled OPML autosave: {e}", exc_info=True)
+            logger.error(f"Error during scheduled OPML autosave: {e}", exc_info=True)
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
 try:
@@ -337,8 +337,14 @@ def stream():
 
 # --- OPML Export Endpoint ---
 
-def _generate_opml_string():
+from sqlalchemy.engine.url import make_url
+
+def _generate_opml_string(tabs=None):
     """Generates the OPML string from the database.
+    
+    Args:
+        tabs (list): Optional list of Tab objects with eager loaded feeds. 
+                     If None, it will be queried.
 
     Returns:
         str: The OPML XML string.
@@ -349,8 +355,9 @@ def _generate_opml_string():
     title_element.text = 'SheepVibes Feeds'
     body_element = ET.SubElement(opml_element, 'body')
 
-    # Eager load feeds to avoid N+1 queries
-    tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
+    if tabs is None:
+        # Eager load feeds to avoid N+1 queries
+        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
 
     for tab in tabs:
         # Skip tabs with no feeds
@@ -382,24 +389,41 @@ def autosave_opml():
     """Saves the current feeds as an OPML file to the data directory."""
     opml_string = _generate_opml_string()
     
-    # Determine the path for the autosave file
-    # We use the same directory logic as the database path
-    db_path = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
-    if db_path == ':memory:': # Should not happen in prod but good for robust code
-         logger.warning("Skipping OPML autosave because database is in-memory.")
-         return
+    # Determine the path for the autosave file using robust parsing
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    data_dir = '.'
+    
+    if db_uri == 'sqlite:///:memory:':
+        logger.warning("Skipping OPML autosave because database is in-memory.")
+        return
+        
+    try:
+        url = make_url(db_uri)
+        if url.drivername == 'sqlite' and url.database:
+             # url.database for sqlite is the file path
+             data_dir = os.path.dirname(os.path.abspath(url.database))
+        elif not url.database:
+             # Should cover cases like pure memory or weird configs
+             logger.warning(f"Could not determine file path from DB URI: {db_uri}. Defaulting to current directory.")
+        else:
+             # Non-sqlite or non-file based (e.g. postgres), save to ./data if exists, else .
+             if os.path.exists('data'):
+                 data_dir = 'data'
+    except Exception as e:
+        logger.error(f"Error parsing database URI for autosave path: {e}. Defaulting to current directory.")
 
-    data_dir = os.path.dirname(db_path)
     if not os.path.exists(data_dir):
-        # Fallback if db path is just a filename (cwd)
+        # Fallback 
         data_dir = '.' 
 
     autosave_path = os.path.join(data_dir, 'sheepvibes_backup.opml')
     
-    with open(autosave_path, 'w', encoding='utf-8') as f:
-        f.write(opml_string)
-    
-    logger.info(f"OPML autosaved to {autosave_path}")
+    try:
+        with open(autosave_path, 'w', encoding='utf-8') as f:
+            f.write(opml_string)
+        logger.info(f"OPML autosaved to {autosave_path}")
+    except Exception as e:
+        logger.error(f"Failed to write autosave file to {autosave_path}: {e}")
 
 @app.route('/api/opml/export', methods=['GET'])
 def export_opml():
@@ -409,13 +433,15 @@ def export_opml():
         A Flask Response object containing the OPML file, or a JSON error response.
     """
     try:
-        opml_string = _generate_opml_string()
+        # Fetch tabs once for both generation and logging
+        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
+        
+        opml_string = _generate_opml_string(tabs=tabs)
 
         response = Response(opml_string, mimetype='application/xml')
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
         
-        # Calculate counts just for logging (could be optimized out if strictly necessary, but helpful)
-        tabs = Tab.query.options(selectinload(Tab.feeds)).all()
+        # Calculate counts using the already fetched tabs
         feed_count = sum(len(tab.feeds) for tab in tabs)
         exported_tab_count = sum(1 for tab in tabs if tab.feeds)
         
