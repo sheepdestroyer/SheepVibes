@@ -262,7 +262,7 @@ def scheduled_feed_update():
 def scheduled_opml_autosave():
     """Scheduled job to periodically save OPML to disk."""
     with app.app_context():
-        logger.info(f"Running scheduled OPML autosave (every {OPML_AUTOSAVE_INTERVAL_MINUTES} minutes)")
+        logger.info("Running scheduled OPML autosave (every %d minutes)", OPML_AUTOSAVE_INTERVAL_MINUTES)
         try:
             autosave_opml()
         except Exception:
@@ -531,7 +531,7 @@ def _process_opml_outlines_recursive(
                 logger.info("OPML import: Prepared new feed '%s' (%s) for tab ID %s ('%s').", feed_name, xml_url, current_tab_id, current_tab_name)
             except Exception as e_feed:
                 # Should be rare if checks are done, but good for safety
-                logger.error("OPML import: Error preparing feed '%s': %s", feed_name, e_feed, exc_info=True)
+                logger.exception("OPML import: Error preparing feed '%s'", feed_name)
                 skipped_count_wrapper[0] += 1
 
         elif not xml_url and element_name and folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
@@ -565,7 +565,7 @@ def _process_opml_outlines_recursive(
                     nested_tab_name = new_folder_tab.name
                 except Exception as e_tab_commit:
                     db.session.rollback()
-                    logger.error("OPML import: Failed to commit new tab '%s': %s. Skipping this folder and its contents.", folder_name, e_tab_commit, exc_info=True)
+                    logger.exception("OPML import: Failed to commit new tab '%s'. Skipping this folder and its contents.", folder_name)
                     skipped_count_wrapper[0] += len(child_outlines) # Approximate skip count
                     continue # Skip this folder
 
