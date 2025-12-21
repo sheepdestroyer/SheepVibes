@@ -346,7 +346,7 @@ def _generate_opml_string(tabs=None):
                      If None, it will be queried.
 
     Returns:
-        str: The OPML XML string.
+        tuple: A tuple containing (opml_string, tab_count, feed_count).
     """
     opml_element = ET.Element('opml', version='2.0')
     head_element = ET.SubElement(opml_element, 'head')
