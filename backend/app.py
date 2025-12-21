@@ -413,7 +413,7 @@ def autosave_opml():
             # Should cover non-sqlite cases without a database name in the URI
             logger.warning(f"Could not determine path from DB URI: {db_uri}. Using default: {data_dir}")
     except Exception:
-        logger.exception(f"Error parsing database URI for autosave path. Using default: {data_dir}")
+        logger.exception("Error parsing database URI for autosave path. Using default: %s", data_dir)
 
     try:
         os.makedirs(data_dir, exist_ok=True)
@@ -434,9 +434,9 @@ def autosave_opml():
         with open(temp_path, 'w', encoding='utf-8') as f:
             f.write(opml_string)
         os.replace(temp_path, autosave_path)
-        logger.info(f"OPML autosaved to {autosave_path} ({feed_count} feeds in {tab_count} tabs)")
+        logger.info("OPML autosaved to %s (%d feeds in %d tabs)", autosave_path, feed_count, tab_count)
     except OSError:
-        logger.exception(f"Failed to write autosave file to {autosave_path}")
+        logger.exception("Failed to write autosave file to %s", autosave_path)
         # Cleanup temp file if it exists
         if os.path.exists(temp_path):
             try:
@@ -457,7 +457,7 @@ def export_opml():
         response = Response(opml_string, mimetype='application/xml')
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
         
-        logger.info(f"Successfully generated OPML export for {feed_count} feeds across {tab_count} tabs.")
+        logger.info("Successfully generated OPML export for %d feeds across %d tabs.", feed_count, tab_count)
     except Exception:
         logger.exception("Error during OPML export")
         return jsonify({'error': 'Failed to generate OPML export'}), 500
