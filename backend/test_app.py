@@ -1855,10 +1855,11 @@ def test_autosave_opml_mocked(mock_dirname, mock_exists, mock_makedirs, mock_rep
     mock_open.return_value.__enter__.return_value = mock_file
     
     # Config app
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////mock/data/sheepvibes.db'
+    # Config app
+    client.application.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////mock/data/sheepvibes.db'
     
     # Act
-    with app.app_context():
+    with client.application.app_context():
         # The fixture 'setup_autosave_test_data' has already populated the DB and we're inside the context
         autosave_opml()
     # Assert
