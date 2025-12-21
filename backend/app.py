@@ -382,11 +382,16 @@ def _generate_opml_string(tabs=None):
                 feed_outline.set('htmlUrl', feed.site_link)
     
     # Convert the XML tree to a string
-    return ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
+    opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
+    
+    feed_count = sum(len(tab.feeds) for tab in tabs)
+    tab_count = len(tabs)
+    
+    return opml_string, tab_count, feed_count
 
 def autosave_opml():
     """Saves the current feeds as an OPML file to the data directory."""
-    opml_string = _generate_opml_string()
+    opml_string, tab_count, feed_count = _generate_opml_string()
     
     # Determine the path for the autosave file using robust parsing
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
@@ -425,7 +430,7 @@ def autosave_opml():
     try:
         with open(autosave_path, 'w', encoding='utf-8') as f:
             f.write(opml_string)
-        logger.info(f"OPML autosaved to {autosave_path}")
+        logger.info(f"OPML autosaved to {autosave_path} ({feed_count} feeds in {tab_count} tabs)")
     except OSError as e:
         logger.exception(f"Failed to write autosave file to {autosave_path}: {e}")
 
@@ -437,19 +442,12 @@ def export_opml():
         A Flask Response object containing the OPML file, or a JSON error response.
     """
     try:
-        # Fetch tabs once for both generation and logging
-        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
-        
-        opml_string = _generate_opml_string(tabs=tabs)
+        opml_string, tab_count, feed_count = _generate_opml_string()
 
         response = Response(opml_string, mimetype='application/xml')
         response.headers['Content-Disposition'] = 'attachment; filename="sheepvibes_feeds.opml"'
         
-        # Calculate counts using the already fetched tabs
-        feed_count = sum(len(tab.feeds) for tab in tabs)
-        exported_tab_count = sum(1 for tab in tabs if tab.feeds)
-        
-        logger.info(f"Successfully generated OPML export for {feed_count} feeds across {exported_tab_count} tabs.")
+        logger.info(f"Successfully generated OPML export for {feed_count} feeds across {tab_count} tabs.")
         return response
 
     except Exception as e:
