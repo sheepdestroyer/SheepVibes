@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.API_BASE_URL ||
         // Fallback: relative path (same origin)
         '';
-    
+
     // Get references to key DOM elements
     const tabsContainer = document.getElementById('tabs-container');
     const feedGrid = document.getElementById('feed-grid');
@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportOpmlButton = document.getElementById('export-opml-button');
     const importOpmlButton = document.getElementById('import-opml-button');
     const opmlFileInput = document.getElementById('opml-file-input');
-    
+
     // State variables
     let activeTabId = null; // ID of the currently selected tab
     let allTabs = []; // Cache of tab data fetched from the API
@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function throttle(callback, delay) {
         let isThrottled = false;
-        return function(...args) {
+        return function (...args) {
             if (!isThrottled) {
                 callback.apply(this, args);
                 isThrottled = true;
@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (diffMinutes < 60) return `${diffMinutes} min ago`;
             if (diffHours < 24) return `${diffHours} hr ago`;
             if (diffDays <= 7) return `${diffDays} day(s) ago`;
-            
+
             return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
         } catch (e) {
             console.error('Error formatting date:', isoString, e);
@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         eventSource.onmessage = async (event) => {
             if (!event.data) return;
-            
+
             try {
                 const data = JSON.parse(event.data);
                 console.log('SSE message received (feeds updated):', data);
@@ -277,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const errorData = await response.text(); // Use text() for potential non-JSON error
                     errorMsg += `, message: ${errorData || response.statusText}`;
                 } catch (e) {
-                     errorMsg += `, message: ${response.statusText}`;
+                    errorMsg += `, message: ${response.statusText}`;
                 }
                 throw new Error(errorMsg);
             }
@@ -356,9 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else { // Fallback if tab_id wasn't in response for some reason, refresh active tab
                     if (activeTabId) {
-                         document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
-                         loadedTabs.delete(activeTabId);
-                         await setActiveTab(activeTabId);
+                        document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+                        loadedTabs.delete(activeTabId);
+                        await setActiveTab(activeTabId);
                     }
                 }
             }
@@ -449,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Create button container for edit and delete buttons
         const buttonContainer = document.createElement('div');
         buttonContainer.classList.add('feed-widget-buttons');
-        
+
         const editButton = document.createElement('button');
         editButton.classList.add('edit-feed-button');
         editButton.textContent = '✎';
@@ -616,10 +616,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleAddFeed() {
         const url = feedUrlInput.value.trim();
         const errorElement = document.getElementById('add-feed-error');
-        
+
         // Clear previous errors
         errorElement.style.display = 'none';
-        
+
         if (!url) {
             errorElement.textContent = 'Please enter a feed URL.';
             errorElement.style.display = 'block';
@@ -702,17 +702,17 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function handleEditFeed(feedId, currentUrl, currentName) {
         console.log(`Editing feed: ${feedId}`);
-        
+
         const modal = document.getElementById('edit-feed-modal');
         const feedIdInput = document.getElementById('edit-feed-id');
         const feedUrlInput = document.getElementById('edit-feed-url');
         const feedNameInput = document.getElementById('edit-feed-name');
-        
+
         // Populate the form with current values
         feedIdInput.value = feedId;
         feedUrlInput.value = currentUrl;
         feedNameInput.value = currentName;
-        
+
         // Show the modal
         modal.classList.add('is-active');
     }
@@ -723,16 +723,16 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function handleEditFeedSubmit(event) {
         event.preventDefault();
-        
+
         const modal = document.getElementById('edit-feed-modal');
         const feedIdInput = document.getElementById('edit-feed-id');
         const feedUrlInput = document.getElementById('edit-feed-url');
         const saveButton = document.getElementById('save-feed-button');
-        
+
         const feedId = parseInt(feedIdInput.value, 10);
         const newUrl = feedUrlInput.value.trim();
         const errorElement = document.getElementById('edit-feed-error');
-        
+
         // Clear previous errors
         errorElement.style.display = 'none';
 
@@ -741,20 +741,20 @@ document.addEventListener('DOMContentLoaded', () => {
             errorElement.style.display = 'block';
             return;
         }
-        
+
         if (!newUrl) {
             errorElement.textContent = 'Please enter a feed URL.';
             errorElement.style.display = 'block';
             return;
         }
-        
+
         // Disable the save button and show loading state
         const originalButtonText = saveButton.textContent;
         const cancelButton = document.getElementById('cancel-edit-button');
         saveButton.disabled = true;
         cancelButton.disabled = true;
         saveButton.textContent = 'Saving...';
-        
+
         try {
             const result = await fetchData(`/api/feeds/${feedId}`, {
                 method: 'PUT',
@@ -763,11 +763,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ url: newUrl })
             });
-            
+
             console.log('Feed updated successfully:', result);
             // Close the modal
             modal.classList.remove('is-active');
-            
+
             // Update just the edited widget instead of reloading entire tab
             const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
             if (widget) {
@@ -1094,11 +1094,11 @@ document.addEventListener('DOMContentLoaded', () => {
         exportOpmlButton.addEventListener('click', handleExportOpml);
         importOpmlButton.addEventListener('click', () => opmlFileInput.click());
         opmlFileInput.addEventListener('change', handleImportOpmlFileSelect);
-        
+
         // Add event listeners for edit feed modal
         document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
         document.getElementById('cancel-edit-button').addEventListener('click', handleEditFeedCancel);
-        
+
         // Close modal when clicking outside the content
         document.getElementById('edit-feed-modal').addEventListener('click', (event) => {
             if (event.target.id === 'edit-feed-modal') {
@@ -1108,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Fetch initial tabs to start the application
         await initializeTabs();
-        
+
         // Start listening for real-time updates from the server
         initializeSSE();
     }

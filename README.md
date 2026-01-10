@@ -24,8 +24,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, d
     *   `index.html`: The main HTML file.
     *   `script.js`: The main JavaScript file, containing all frontend logic.
     *   `style.css`: The stylesheet for the application.
-*   `pod/`: Contains files for deploying the application with Podman.
-    *   `quadlet/`: Contains Quadlet files for managing the application with systemd.
+*   `pod/`: Contains pod file for deploying the application with systemd and Podman.
 *   `scripts/`: Contains helper scripts for deployment and development.
 
 ## Production Deployment (Podman Pod with systemd using Quadlet)
@@ -72,7 +71,7 @@ This section describes how to deploy SheepVibes using a Podman Pod managed by sy
         ```
 
 4.  **Enable Auto-start (Optional)**:
-    The `pod/quadlet/sheepvibespod.pod` file includes an `[Install]` section that enables the service to start automatically with your user session. For the service to start at boot (without requiring a login), you may need to enable lingering for your user:
+    The `pod/sheepvibespod.pod` file includes an `[Install]` section that enables the service to start automatically with your user session. For the service to start at boot (without requiring a login), you may need to enable lingering for your user:
     ```bash
     sudo loginctl enable-linger $(whoami)
     ```

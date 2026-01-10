@@ -29,7 +29,7 @@ jobs:
           fi
 
       - name: Checkout repository at specified tag
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.get_tag.outputs.TAG }} # Checkout the specific tag
 

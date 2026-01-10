@@ -1,5 +1,6 @@
 [Unit]
 Description=SheepVibes Application Pod
+Wants=network-online.target
 After=network-online.target
 
 [Pod]
