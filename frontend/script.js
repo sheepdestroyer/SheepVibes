@@ -1,8 +1,16 @@
 // Wait for the DOM to be fully loaded before executing script
 document.addEventListener('DOMContentLoaded', () => {
     // API configuration
-    // Use relative paths to avoid CORS issues when frontend is served by the same origin
-    const API_BASE_URL = '';
+    // Derive base URL from current location, with optional configurable override.
+    // This avoids CORS issues when frontend and API share an origin, but still supports
+    // non-standard deployments (different host/port/path) via configuration.
+    const API_BASE_URL =
+        // Highest priority: explicit config object if provided
+        (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) ||
+        // Next: global override (e.g. set in HTML before this script)
+        window.API_BASE_URL ||
+        // Fallback: relative path (same origin)
+        '';
     
     // Get references to key DOM elements
     const tabsContainer = document.getElementById('tabs-container');

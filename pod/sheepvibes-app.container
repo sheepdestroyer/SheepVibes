@@ -1,6 +1,7 @@
 [Unit]
 Description=SheepVibes App Container
 After=sheepvibes-redis.container
+Requires=sheepvibes-redis.container
 
 [Container]
 ContainerName=sheepvibes-app
@@ -13,3 +14,5 @@ Environment=FLASK_APP=backend.app
 Environment=PYTHONPATH=/app
 Environment=UPDATE_INTERVAL_MINUTES=15
 Environment=FLASK_RUN_HOST=0.0.0.0
+Restart=on-failure
+TimeoutStartSec=180
