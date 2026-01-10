@@ -65,29 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper Functions ---
 
-    // Constants for infinite scrolling
-    const SCROLL_BUFFER = 20; // pixels from bottom to trigger loading
-    const ITEMS_PER_PAGE = 10; // number of items to load per scroll
-    const SCROLL_THROTTLE_DELAY = 200; // milliseconds to throttle scroll events
-
-    /**
-     * A simple throttle utility function to limit function execution frequency.
-     * @param {function} callback - The function to throttle.
-     * @param {number} delay - The delay in milliseconds between executions.
-     * @returns {function} The throttled function.
-     */
-    function throttle(callback, delay) {
-        let isThrottled = false;
-        return function (...args) {
-            if (!isThrottled) {
-                callback.apply(this, args);
-                isThrottled = true;
-                setTimeout(() => {
-                    isThrottled = false;
-                }, delay);
-            }
-        };
-    }
+    // Constants for fetching more items
+    const ITEMS_PER_PAGE = 10; // number of items to load per request
 
     /**
      * Creates a list item element for a feed item.
@@ -505,10 +484,9 @@ document.addEventListener('DOMContentLoaded', () => {
         itemList.dataset.tabId = feed.tab_id; // Store tabId to avoid DOM traversal
         // Flags to prevent multiple loads and to know when all items have been loaded
         itemList.dataset.loading = 'false';
-        itemList.dataset.allItemsLoaded = 'false';
-
-        // Add the scroll event listener
-        itemList.addEventListener('scroll', throttle(handleScrollLoadMore, SCROLL_THROTTLE_DELAY));
+        // Check if all items might have been loaded initially
+        const allItemsPotentiallyLoaded = feed.items.length < ITEMS_PER_PAGE;
+        itemList.dataset.allItemsLoaded = allItemsPotentiallyLoaded.toString();
 
         // Render items
         if (feed.items && feed.items.length > 0) {
@@ -522,6 +500,18 @@ document.addEventListener('DOMContentLoaded', () => {
             itemList.appendChild(fragment);
         } else {
             itemList.innerHTML = '<li>No items found for this feed.</li>';
+        }
+
+        // Add "Load More" button if needed
+        if (!allItemsPotentiallyLoaded) {
+            const loadMoreContainer = document.createElement('div');
+            loadMoreContainer.classList.add('load-more-container');
+            const loadMoreButton = document.createElement('button');
+            loadMoreButton.classList.add('load-more-button');
+            loadMoreButton.textContent = 'Load More';
+            loadMoreButton.addEventListener('click', () => handleLoadMoreClick(loadMoreButton, itemList, feed.id, feed.tab_id));
+            loadMoreContainer.appendChild(loadMoreButton);
+            widget.appendChild(loadMoreContainer);
         }
 
         // Return the widget without appending it to the DOM
@@ -813,27 +803,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Mark Item as Read Logic ---
 
     /**
-     * Handles scrolling to load more items when reaching the bottom of a feed's item list.
-     * @param {Event} event - The scroll event.
+     * Handles clicking the "Load More" button to fetch and display more feed items.
+     * @param {HTMLButtonElement} button - The "Load More" button element.
+     * @param {HTMLUListElement} itemList - The list element containing the feed items.
+     * @param {number} feedId - The ID of the feed to load more items for.
+     * @param {number} tabId - The ID of the tab the feed belongs to.
      */
-    async function handleScrollLoadMore(event) {
-        const itemList = event.target;
-
-        // Check if we are near the bottom of the list
-        const isAtBottom = (itemList.scrollTop + itemList.clientHeight) >= itemList.scrollHeight - SCROLL_BUFFER;
-        const isLoading = itemList.dataset.loading === 'true';
-        const allItemsLoaded = itemList.dataset.allItemsLoaded === 'true';
-
-        if (!isAtBottom || isLoading || allItemsLoaded) {
-            return; // Exit if not at the bottom, or if we're already loading or all items are loaded
+    async function handleLoadMoreClick(button, itemList, feedId, tabId) {
+        if (itemList.dataset.loading === 'true') {
+            return; // Prevent multiple simultaneous loads
         }
 
-        itemList.dataset.loading = 'true'; // Set loading flag
+        itemList.dataset.loading = 'true';
+        const originalButtonText = button.textContent;
+        button.textContent = 'Loading...';
+        button.disabled = true;
 
-        const feedId = itemList.dataset.feedId;
-        const tabId = itemList.dataset.tabId; // Use stored tabId instead of DOM traversal
         let offset = parseInt(itemList.dataset.offset, 10);
-        const limit = ITEMS_PER_PAGE; // Number of items to fetch per scroll
+        const limit = ITEMS_PER_PAGE;
 
         try {
             const newItems = await fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`);
@@ -850,19 +837,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Update the offset for the next fetch
                 itemList.dataset.offset = offset + newItems.length;
+
+                // If fewer items than the limit were loaded, assume no more are available
+                if (newItems.length < limit) {
+                    itemList.dataset.allItemsLoaded = 'true';
+                    button.parentElement.remove(); // Remove the button's container
+                }
             } else {
-                // No more items to load
+                // No more items to load, remove the button
                 itemList.dataset.allItemsLoaded = 'true';
-                const noMoreItemsMsg = document.createElement('li');
-                noMoreItemsMsg.textContent = 'No more items';
-                noMoreItemsMsg.classList.add('no-more-items-message');
-                itemList.appendChild(noMoreItemsMsg);
+                button.parentElement.remove(); // Remove the button's container
             }
         } catch (error) {
             console.error('Error loading more items:', error);
             showToast('Error loading more items. Please try again later.', 'error');
         } finally {
             itemList.dataset.loading = 'false'; // Reset loading flag
+            button.textContent = originalButtonText;
+            button.disabled = false;
         }
     }
 
