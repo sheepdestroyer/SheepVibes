@@ -10,8 +10,6 @@ def test_import():
         print(f"Response: {response.json()}")
     except requests.RequestException as e:
         print(f"Request Error: {e}")
-    except Exception as e:
-        print(f"Unexpected Error: {e}")
 
 if __name__ == "__main__":
     test_import()
