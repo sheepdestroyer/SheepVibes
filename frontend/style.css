@@ -176,8 +176,6 @@ header h1 {
     padding: 10px 15px; /* Padding for the list items */
     margin: 0;
     flex-grow: 1; /* Allow list to take available space */
-    overflow-y: auto; /* Add scroll if content overflows (optional) */
-    max-height: 400px; /* Limit height (optional) */
 }
 
 .feed-widget li {

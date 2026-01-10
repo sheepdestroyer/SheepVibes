@@ -508,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
         itemList.dataset.allItemsLoaded = 'false';
 
         // Add the scroll event listener
-        itemList.addEventListener('scroll', throttle(handleScrollLoadMore, SCROLL_THROTTLE_DELAY));
+        window.addEventListener('scroll', throttle(handleScrollLoadMore, SCROLL_THROTTLE_DELAY));
 
         // Render items
         if (feed.items && feed.items.length > 0) {
@@ -813,27 +813,38 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Mark Item as Read Logic ---
 
     /**
-     * Handles scrolling to load more items when reaching the bottom of a feed's item list.
-     * @param {Event} event - The scroll event.
+     * Handles scrolling to load more items when reaching the bottom of the page.
      */
-    async function handleScrollLoadMore(event) {
-        const itemList = event.target;
+    async function handleScrollLoadMore() {
+        // Determine if the user has scrolled to the bottom of the page
+        const isAtBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - SCROLL_BUFFER;
 
-        // Check if we are near the bottom of the list
-        const isAtBottom = (itemList.scrollTop + itemList.clientHeight) >= itemList.scrollHeight - SCROLL_BUFFER;
+        if (!isAtBottom) {
+            return;
+        }
+
+        // Find the last visible feed widget to load more items for
+        const visibleWidgets = Array.from(document.querySelectorAll('.feed-widget')).filter(widget => widget.offsetParent !== null);
+        if (visibleWidgets.length === 0) {
+            return;
+        }
+
+        const lastWidget = visibleWidgets[visibleWidgets.length - 1];
+        const itemList = lastWidget.querySelector('ul');
+
         const isLoading = itemList.dataset.loading === 'true';
         const allItemsLoaded = itemList.dataset.allItemsLoaded === 'true';
 
-        if (!isAtBottom || isLoading || allItemsLoaded) {
-            return; // Exit if not at the bottom, or if we're already loading or all items are loaded
+        if (isLoading || allItemsLoaded) {
+            return;
         }
 
-        itemList.dataset.loading = 'true'; // Set loading flag
+        itemList.dataset.loading = 'true';
 
         const feedId = itemList.dataset.feedId;
-        const tabId = itemList.dataset.tabId; // Use stored tabId instead of DOM traversal
+        const tabId = itemList.dataset.tabId;
         let offset = parseInt(itemList.dataset.offset, 10);
-        const limit = ITEMS_PER_PAGE; // Number of items to fetch per scroll
+        const limit = ITEMS_PER_PAGE;
 
         try {
             const newItems = await fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`);
@@ -847,11 +858,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     fragment.appendChild(listItem);
                 });
                 itemList.appendChild(fragment);
-
-                // Update the offset for the next fetch
                 itemList.dataset.offset = offset + newItems.length;
             } else {
-                // No more items to load
                 itemList.dataset.allItemsLoaded = 'true';
                 const noMoreItemsMsg = document.createElement('li');
                 noMoreItemsMsg.textContent = 'No more items';
@@ -862,7 +870,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error loading more items:', error);
             showToast('Error loading more items. Please try again later.', 'error');
         } finally {
-            itemList.dataset.loading = 'false'; // Reset loading flag
+            itemList.dataset.loading = 'false';
         }
     }
 
