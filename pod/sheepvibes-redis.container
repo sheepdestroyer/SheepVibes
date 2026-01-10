@@ -3,7 +3,7 @@ Description=SheepVibes Redis Container
 
 [Container]
 ContainerName=sheepvibes-redis
-Image=docker.io/redis:7.2-alpine
+Image=docker.io/redis:latest
 Pod=sheepvibespod.pod
 Volume=sheepvibes-redis.volume:/data
 Restart=on-failure
