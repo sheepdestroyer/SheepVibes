@@ -1106,6 +1106,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // Night Mode Logic
+        const nightModeToggle = document.getElementById('night-mode-toggle');
+
+        // Function to apply the theme
+        const applyTheme = (isNight) => {
+            if (isNight) {
+                document.body.classList.add('night-mode');
+                nightModeToggle.checked = true;
+            } else {
+                document.body.classList.remove('night-mode');
+                nightModeToggle.checked = false;
+            }
+        };
+
+        // Check localStorage for saved theme
+        const savedTheme = localStorage.getItem('nightMode');
+        applyTheme(savedTheme === 'true');
+
+        // Add event listener for the toggle switch
+        nightModeToggle.addEventListener('change', () => {
+            const isNight = nightModeToggle.checked;
+            localStorage.setItem('nightMode', isNight);
+            applyTheme(isNight);
+        });
+
+
         // Fetch initial tabs to start the application
         await initializeTabs();
 

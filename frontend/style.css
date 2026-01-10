@@ -461,3 +461,144 @@ header h1 {
     font-style: italic;
 }
 
+/* Settings Section */
+#settings-section {
+    display: flex;
+    align-items: center;
+    margin-left: 15px;
+}
+
+/* Toggle Switch Styles */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px; /* smaller width */
+    height: 24px; /* smaller height */
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px; /* smaller handle */
+    width: 18px;  /* smaller handle */
+    left: 3px;    /* adjusted position */
+    bottom: 3px;  /* adjusted position */
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .slider {
+    background-color: #2196F3;
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+.slider.round {
+    border-radius: 24px; /* adjusted for new height */
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+
+/* Night Mode Styles */
+body.night-mode {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+}
+
+body.night-mode a {
+    color: #4da6ff;
+}
+
+body.night-mode header {
+    background-color: #2c2c2c;
+    color: #e0e0e0;
+    border-bottom: 1px solid #444;
+}
+
+body.night-mode header h1 {
+    color: #4da6ff;
+}
+
+body.night-mode #tabs-container button {
+    color: #b0b0b0;
+}
+
+body.night-mode #tabs-container button:hover {
+    color: #4da6ff;
+    border-bottom-color: #555;
+}
+
+body.night-mode #tabs-container button.active {
+    color: #4da6ff;
+    border-bottom-color: #4da6ff;
+}
+
+body.night-mode #add-feed-section input[type="text"] {
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #555;
+}
+
+body.night-mode .feed-widget {
+    background-color: #2c2c2c;
+    border: 1px solid #444;
+}
+
+body.night-mode .feed-widget h2 {
+    background-color: #333;
+    border-bottom: 1px solid #444;
+}
+
+body.night-mode .feed-widget li.unread a {
+    color: #e0e0e0;
+}
+
+body.night-mode .feed-widget li.read a {
+    color: #888;
+}
+
+body.night-mode .feed-widget li span {
+    color: #888;
+}
+
+body.night-mode .modal-content {
+    background-color: #2c2c2c;
+    color: #e0e0e0;
+}
+
+body.night-mode .form-group input {
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #555;
+}
+
+body.night-mode .form-group input[readonly] {
+    background-color: #444;
+    color: #aaa;
+}
