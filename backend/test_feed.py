@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError # <--- Added import for IntegrityError
 from .app import app # Import app for context
 from .models import db, Feed, Tab, FeedItem # <--- Added FeedItem import
 from . import feed_service # Import feed_service relatively
+import socket # Added for SSRF test
 
 # Set up logging to console
 logging.basicConfig(
@@ -589,3 +590,30 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
     deleted_item_titles = {f"Old Item {i}" for i in range(15)}
     remaining_titles = {item.title for item in db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).all()}
     assert not deleted_item_titles.intersection(remaining_titles), "The oldest 15 items should have been deleted"
+
+def test_fetch_feed_ssrf_prevention(db_setup, mocker):
+    """Test that fetch_feed blocks URLs resolving to private IPs."""
+    # Ensure TESTING is not causing bypass for this test specifically
+    # but we need to mock socket.getaddrinfo which happens before the env check in my implementation.
+    # Wait, my implementation checks env var inside the exception block for gaierror.
+    # If getaddrinfo returns a private IP, it should block regardless of env var.
+
+    # Mock socket.getaddrinfo to return a private IP
+    mock_getaddrinfo = mocker.patch('socket.getaddrinfo')
+    # structure: list of (family, type, proto, canonname, sockaddr)
+    mock_getaddrinfo.return_value = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('192.168.1.1', 80))
+    ]
+
+    # Attempt to fetch a URL that would resolve to this IP
+    url = "http://internal-service.local/feed"
+    result = feed_service.fetch_feed(url)
+
+    assert result is None
+
+    # Test loopback
+    mock_getaddrinfo.return_value = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 80))
+    ]
+    result = feed_service.fetch_feed("http://localhost/feed")
+    assert result is None
