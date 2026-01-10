@@ -8,6 +8,10 @@ SYSTEMD_USER_DIR="${HOME}/.config/containers/systemd"
 # Define the Quadlet files to be downloaded
 QUADLET_FILES=(
     "sheepvibespod.pod"
+    "sheepvibes-app.container"
+    "sheepvibes-redis.container"
+    "sheepvibes-db.volume"
+    "sheepvibes-redis.volume"
 )
 # Base URL for the directory containing the pod file in the repository
 QUADLET_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/"
@@ -39,14 +43,22 @@ echo ""
 echo "--- Cleaning up old SheepVibes systemd files ---"
 if [ -d "${SYSTEMD_USER_DIR}" ]; then
     echo "Found systemd user directory at ${SYSTEMD_USER_DIR}."
+    
+    # Build cleanup predicates from QUADLET_FILES
+    cleanup_opts=()
+    for file in "${QUADLET_FILES[@]}"; do
+        if [ ${#cleanup_opts[@]} -eq 0 ]; then
+            cleanup_opts+=( -name "$file" )
+        else
+            cleanup_opts+=( -o -name "$file" )
+        fi
+    done
+    # Add network wildcard and legacy volume name
+    cleanup_opts+=( -o -name 'sheepvibes-*.network' -o -name 'sheepvibes-redis-data.volume' )
+
     # Remove old monolithic pod file and any files matching the new names
     find "${SYSTEMD_USER_DIR}" -maxdepth 1 \
-        \( -name 'sheepvibespod.pod' \
-           -o -name 'sheepvibes-app.container' \
-           -o -name 'sheepvibes-redis.container' \
-           -o -name 'sheepvibes-db.volume' \
-           -o -name 'sheepvibes-redis-data.volume' \
-           -o -name 'sheepvibes-*.network' \) \
+        \( "${cleanup_opts[@]}" \) \
         -print -delete
     echo "Cleanup complete."
 else
@@ -78,7 +90,7 @@ echo ""
 # --- User Instructions ---
 POD_SERVICE_NAME="sheepvibespod-pod.service" # Generated from sheepvibespod.pod
 DB_VOLUME_NAME="systemd-sheepvibes-db"
-REDIS_VOLUME_NAME="systemd-sheepvibes-redis-data"
+REDIS_VOLUME_NAME="systemd-sheepvibes-redis"
 
 echo "Quadlet files deployed to ${SYSTEMD_USER_DIR}."
 echo "The application will use Podman-managed volumes '${DB_VOLUME_NAME}' and '${REDIS_VOLUME_NAME}' for persistence."
