@@ -351,6 +351,7 @@ header h1 {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     width: 90%;
     max-width: 500px;
+    position: relative; /* For positioning the close button */
 }
 
 .modal h2 {
@@ -420,6 +421,17 @@ header h1 {
 
 #cancel-edit-button:hover {
     background-color: #5a6268;
+}
+
+.modal-close-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #333;
 }
 /* Toast (Notification) Styles */
 #toast-container {

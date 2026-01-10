@@ -1,5 +1,10 @@
 // Wait for the DOM to be fully loaded before executing script
 document.addEventListener('DOMContentLoaded', () => {
+    const modalRoot = document.getElementById('modal-root');
+    const modal = document.getElementById('edit-feed-modal');
+    if (modalRoot && modal) {
+        modalRoot.appendChild(modal);
+    }
     // API configuration
     // Derive base URL from current location, with optional configurable override.
     // This avoids CORS issues when frontend and API share an origin, but still supports
@@ -1098,6 +1103,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add event listeners for edit feed modal
         document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
         document.getElementById('cancel-edit-button').addEventListener('click', handleEditFeedCancel);
+        document.querySelector('#edit-feed-modal .modal-close-button').addEventListener('click', handleEditFeedCancel);
 
         // Close modal when clicking outside the content
         document.getElementById('edit-feed-modal').addEventListener('click', (event) => {
