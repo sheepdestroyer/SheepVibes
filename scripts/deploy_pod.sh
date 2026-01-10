@@ -53,8 +53,8 @@ if [ -d "${SYSTEMD_USER_DIR}" ]; then
             cleanup_opts+=( -o -name "$file" )
         fi
     done
-    # Add network wildcard
-    cleanup_opts+=( -o -name 'sheepvibes-*.network' )
+    # Add network wildcard and legacy volume name
+    cleanup_opts+=( -o -name 'sheepvibes-*.network' -o -name 'sheepvibes-redis-data.volume' )
 
     # Remove old monolithic pod file and any files matching the new names
     find "${SYSTEMD_USER_DIR}" -maxdepth 1 \
