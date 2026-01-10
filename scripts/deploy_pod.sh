@@ -8,6 +8,10 @@ SYSTEMD_USER_DIR="${HOME}/.config/containers/systemd"
 # Define the Quadlet files to be downloaded
 QUADLET_FILES=(
     "sheepvibespod.pod"
+    "sheepvibes-app.container"
+    "sheepvibes-redis.container"
+    "sheepvibes-db.volume"
+    "sheepvibes-redis.volume"
 )
 # Base URL for the directory containing the pod file in the repository
 QUADLET_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/"
@@ -45,7 +49,7 @@ if [ -d "${SYSTEMD_USER_DIR}" ]; then
            -o -name 'sheepvibes-app.container' \
            -o -name 'sheepvibes-redis.container' \
            -o -name 'sheepvibes-db.volume' \
-           -o -name 'sheepvibes-redis-data.volume' \
+           -o -name 'sheepvibes-redis.volume' \
            -o -name 'sheepvibes-*.network' \) \
         -print -delete
     echo "Cleanup complete."
@@ -78,7 +82,7 @@ echo ""
 # --- User Instructions ---
 POD_SERVICE_NAME="sheepvibespod-pod.service" # Generated from sheepvibespod.pod
 DB_VOLUME_NAME="systemd-sheepvibes-db"
-REDIS_VOLUME_NAME="systemd-sheepvibes-redis-data"
+REDIS_VOLUME_NAME="systemd-sheepvibes-redis"
 
 echo "Quadlet files deployed to ${SYSTEMD_USER_DIR}."
 echo "The application will use Podman-managed volumes '${DB_VOLUME_NAME}' and '${REDIS_VOLUME_NAME}' for persistence."

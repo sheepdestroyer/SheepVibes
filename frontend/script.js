@@ -1,9 +1,8 @@
 // Wait for the DOM to be fully loaded before executing script
 document.addEventListener('DOMContentLoaded', () => {
     // API configuration
-    const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? 'http://localhost:5001' 
-        : ''; // Use relative paths for production
+    // Use relative paths to avoid CORS issues when frontend is served by the same origin
+    const API_BASE_URL = '';
     
     // Get references to key DOM elements
     const tabsContainer = document.getElementById('tabs-container');
