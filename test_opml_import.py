@@ -8,15 +8,17 @@ def test_import():
     print(f"Testing OPML import at: {url}")
 
     try:
-        with open('test_feeds.opml', 'rb') as f:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(script_dir, 'test_feeds.opml'), 'rb') as f:
             files = {'file': f}
             response = requests.post(url, files=files, timeout=10)
         
         print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.json()}")
+        response.raise_for_status()
+        response_data = response.json()
+        print(f"Response: {response_data}")
 
-        assert response.status_code == 200, f"Expected 200 OK, got {response.status_code}"
-        assert response.json().get('imported_count', 0) > 0, "Expected imported_count > 0"
+        assert response_data.get('imported_count', 0) > 0, "Expected imported_count > 0"
         print("Test PASSED")
 
     except requests.RequestException as e:
