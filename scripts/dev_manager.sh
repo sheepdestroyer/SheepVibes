@@ -62,12 +62,25 @@ remove_containers() {
 }
 
 do_up() {
-    local HOST_PORT="${1:-$DEFAULT_HOST_PORT}"
+    local HOST_PORT="${DEFAULT_HOST_PORT}"
+    local REBUILD=false
     
-    if (( $# > 1 )); then
-        echo "Error: 'up' command accepts at most one argument (port)." >&2
-        usage
-    fi
+    while (( $# )); do
+        case "$1" in
+            --rebuild)
+                REBUILD=true
+                shift
+                ;;
+            [0-9]*)
+                HOST_PORT="$1"
+                shift
+                ;;
+            *)
+                echo "Error: Unknown argument '$1' for up command." >&2
+                usage
+                ;;
+        esac
+    done
 
     # Validate port format/range
     if ! [[ "${HOST_PORT}" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )); then
@@ -84,6 +97,11 @@ do_up() {
     echo "--- SheepVibes Dev Environment Setup (Runtime: $CMD) ---"
 
     # 1. Check/Build Image
+    if [[ "$REBUILD" == true ]]; then
+        echo "Force rebuild requested. Removing old image if exists..."
+        "$CMD" rmi -f "$APP_IMAGE_NAME" 2>/dev/null || true
+    fi
+
     echo "Checking for image $APP_IMAGE_NAME..."
     if ! "$CMD" image exists "$APP_IMAGE_NAME"; then
         echo "Image not found. Building..."
@@ -92,7 +110,7 @@ do_up() {
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
         (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else
-        echo "Image exists. Skipping build. (Delete image or use --rebuild to force)"
+        echo "Image exists. Skipping build. (Use --rebuild to force rebuild)"
     fi
 
     # 2. Clean up existing dev pod and leftover containers
@@ -167,9 +185,10 @@ do_down() {
 }
 
 usage() {
-    echo "Usage: \"$0\" {up [port]|down [--clean]}" >&2
-    echo "  up [port]    : Start dev environment (default port: ${DEFAULT_HOST_PORT})" >&2
-    echo "  down [--clean]: Stop dev environment. Use --clean to delete data volume." >&2
+    echo "Usage: \"$0\" {up [port] [--rebuild]|down [--clean]}" >&2
+    echo "  up [port] [--rebuild]: Start dev environment (default port: ${DEFAULT_HOST_PORT})" >&2
+    echo "                         Use --rebuild to force image rebuild." >&2
+    echo "  down [--clean]       : Stop dev environment. Use --clean to delete data volume." >&2
     exit 1
 }
 
