@@ -591,29 +591,36 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
     remaining_titles = {item.title for item in db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).all()}
     assert not deleted_item_titles.intersection(remaining_titles), "The oldest 15 items should have been deleted"
 
-def test_fetch_feed_ssrf_prevention(db_setup, mocker):
+@pytest.mark.parametrize(
+    "addr",
+    [
+        ("192.168.1.1", 80),
+        ("127.0.0.1", 80),
+        ("::1", 80, 0, 0), # IPv6 loopback
+    ],
+)
+def test_fetch_feed_ssrf_prevention(mocker, addr):
     """Test that fetch_feed blocks URLs resolving to private IPs."""
-    # Ensure TESTING is not causing bypass for this test specifically
-    # but we need to mock socket.getaddrinfo which happens before the env check in my implementation.
-    # Wait, my implementation checks env var inside the exception block for gaierror.
-    # If getaddrinfo returns a private IP, it should block regardless of env var.
-
     # Mock socket.getaddrinfo to return a private IP
-    mock_getaddrinfo = mocker.patch('socket.getaddrinfo')
+    # Patch backend.feed_service.socket.getaddrinfo instead of global
+    mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
+
     # structure: list of (family, type, proto, canonname, sockaddr)
+    # Adapting return value based on address family (IPv4 vs IPv6)
+    family = socket.AF_INET6 if len(addr) > 2 else socket.AF_INET
+
     mock_getaddrinfo.return_value = [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('192.168.1.1', 80))
+        (family, socket.SOCK_STREAM, 6, '', addr)
     ]
 
-    # Attempt to fetch a URL that would resolve to this IP
+    # Attempt to fetch a URL
     url = "http://internal-service.local/feed"
     result = feed_service.fetch_feed(url)
 
     assert result is None
 
-    # Test loopback
-    mock_getaddrinfo.return_value = [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 80))
-    ]
-    result = feed_service.fetch_feed("http://localhost/feed")
-    assert result is None
+def test_fetch_feed_invalid_scheme():
+    """Test that fetch_feed blocks invalid schemes."""
+    assert feed_service.fetch_feed("file:///etc/passwd") is None
+    assert feed_service.fetch_feed("ftp://example.com/feed") is None
+    assert feed_service.fetch_feed("javascript:alert(1)") is None

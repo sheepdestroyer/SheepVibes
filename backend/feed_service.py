@@ -4,11 +4,12 @@ import datetime # Import the full module
 from datetime import timezone # Specifically import timezone
 import logging # Standard logging
 import ssl # Added for specific SSL error catching
-from dateutil import parser as date_parser # Use dateutil for robust date parsing
-from sqlalchemy.exc import IntegrityError
 import socket
 import ipaddress
+import os
 from urllib.parse import urlparse
+from dateutil import parser as date_parser # Use dateutil for robust date parsing
+from sqlalchemy.exc import IntegrityError
 
 # Import database models from the new models.py
 from .models import db, Feed, FeedItem
@@ -81,13 +82,14 @@ def is_safe_url(url):
     Returns:
         bool: True if safe, False if unsafe (private IP, loopback, etc).
     """
-    # Allow test URLs if TESTING environment variable is set or app config
-    # Since we don't have easy access to app.config here without import cycles or context,
-    # we can check environment variable or just relax checks for unresolvable hosts in tests.
-    # However, proper mocking in tests is better.
-
     try:
         parsed = urlparse(url)
+
+        # Enforce HTTP/HTTPS schemes
+        if parsed.scheme not in ('http', 'https'):
+            logger.warning(f"Blocked unsupported URL scheme: {parsed.scheme}")
+            return False
+
         hostname = parsed.hostname
         if not hostname:
             return False
@@ -99,8 +101,6 @@ def is_safe_url(url):
         except socket.gaierror:
             # In production, inability to resolve means we can't fetch it anyway.
             # But in tests using mocks, we might use dummy URLs that don't resolve.
-            # We check if we are in testing mode via os.environ which is standard in this app.
-            import os
             if os.environ.get('TESTING') == 'true':
                  # Allow unresolvable hostnames in tests, but log it
                  logger.info(f"Allowing unresolvable hostname {hostname} in TESTING mode.")
@@ -111,17 +111,23 @@ def is_safe_url(url):
 
         for res in addr_info:
             ip_str = res[4][0]
+            # Strip IPv6 zone identifier if present
+            clean_ip_str = ip_str.split('%')[0]
             try:
-                ip = ipaddress.ip_address(ip_str)
-                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                    logger.warning(f"Blocked SSRF attempt: {url} resolved to restricted IP {ip}")
+                ip = ipaddress.ip_address(clean_ip_str)
+                # Check for private, loopback, link-local, reserved, multicast, and unspecified
+                if (ip.is_private or ip.is_loopback or ip.is_link_local or
+                    ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+                    # Sanitize URL for logging to avoid leaking potential credentials
+                    safe_url = f"{parsed.scheme}://{hostname}"
+                    logger.warning(f"Blocked SSRF attempt: {safe_url} resolved to restricted IP {ip}")
                     return False
             except ValueError:
                 continue
 
         return True
-    except Exception as e:
-        logger.error(f"Error validating URL {url}: {e}")
+    except Exception:
+        logger.exception("Error validating URL safety")
         return False
 
 def fetch_feed(feed_url):
@@ -135,7 +141,13 @@ def fetch_feed(feed_url):
                                    fetching/parsing fails.
     """
     if not is_safe_url(feed_url):
-        logger.error(f"Blocked unsafe URL fetch: {feed_url}")
+        # Sanitize URL for logging
+        try:
+            parsed = urlparse(feed_url)
+            safe_url = f"{parsed.scheme}://{parsed.hostname}"
+        except Exception:
+            safe_url = "INVALID_URL"
+        logger.error(f"Blocked unsafe URL fetch: {safe_url}")
         return None
 
     logger.info(f"Fetching feed: {feed_url}")
