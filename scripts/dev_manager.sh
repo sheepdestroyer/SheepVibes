@@ -7,6 +7,7 @@ readonly APP_CONTAINER_NAME="${DEV_APP_CONTAINER:-sheepvibes-dev-app}"
 readonly REDIS_CONTAINER_NAME="${DEV_REDIS_CONTAINER:-sheepvibes-dev-redis}"
 readonly APP_IMAGE_NAME="${DEV_APP_IMAGE:-localhost/sheepvibes-app}"
 readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:7-alpine}"
+readonly REDIS_URL_INTERNAL="${DEV_REDIS_URL_INTERNAL:-redis://localhost:6379/0}"
 readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
 readonly CONTAINER_PORT="${DEV_CONTAINER_PORT:-5000}"
 readonly DEFAULT_HOST_PORT="${DEV_DEFAULT_HOST_PORT:-5002}"
@@ -75,6 +76,7 @@ remove_containers() {
 do_up() {
     local HOST_PORT="${DEFAULT_HOST_PORT}"
     local REBUILD=false
+    local PORT_SET=false
     
     while (( $# )); do
         case "$1" in
@@ -83,7 +85,12 @@ do_up() {
                 shift
                 ;;
             [0-9]*)
+                if [[ "$PORT_SET" == true ]]; then
+                    echo "Error: Port argument provided multiple times." >&2
+                    usage
+                fi
                 HOST_PORT="$1"
+                PORT_SET=true
                 shift
                 ;;
             *)
@@ -108,18 +115,24 @@ do_up() {
     echo "--- SheepVibes Dev Environment Setup (Runtime: $CMD_BASE) ---"
 
     # 1. Check/Build Image
+    local BUILD_FLAGS=""
     if [[ "$REBUILD" == true ]]; then
-        echo "Force rebuild requested. Removing old image if exists..."
-        "$CMD" rmi -f "$APP_IMAGE_NAME" 2>/dev/null || true
+        echo "Force rebuild requested."
+        BUILD_FLAGS="--no-cache"
     fi
 
     echo "Checking for image $APP_IMAGE_NAME..."
-    if ! "$CMD" image exists "$APP_IMAGE_NAME"; then
-        echo "Image not found. Building..."
+    if [[ "$REBUILD" == true ]] || ! "$CMD" image exists "$APP_IMAGE_NAME"; then
+        if [[ "$REBUILD" != true ]]; then
+             echo "Image not found. Building..."
+        else
+             echo "Rebuilding image..."
+        fi
+        
         local PROJECT_ROOT
         PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
-        (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
+        (cd "$PROJECT_ROOT" && "$CMD" build $BUILD_FLAGS -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else
         echo "Image exists. Skipping build. (Use --rebuild to force rebuild)"
     fi
@@ -141,7 +154,7 @@ do_up() {
 
     echo "Starting App..."
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
-        -e CACHE_REDIS_URL="redis://localhost:6379/0" \
+        -e CACHE_REDIS_URL="$REDIS_URL_INTERNAL" \
         -v "${VOLUME_NAME}:/app/data:Z" \
         "$APP_IMAGE_NAME"
 
