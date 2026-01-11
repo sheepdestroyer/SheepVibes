@@ -1,21 +1,23 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- Configuration ---
-readonly POD_NAME="sheepvibes-dev-pod"
-readonly APP_CONTAINER_NAME="sheepvibes-dev-app"
-readonly REDIS_CONTAINER_NAME="sheepvibes-dev-redis"
-readonly APP_IMAGE_NAME="localhost/sheepvibes-app"
-readonly REDIS_IMAGE="redis:alpine"
-readonly VOLUME_NAME="sheepvibes-dev-data"
+# --- Configuration (Overridable via environment variables) ---
+readonly POD_NAME="${DEV_POD_NAME:-sheepvibes-dev-pod}"
+readonly APP_CONTAINER_NAME="${DEV_APP_CONTAINER:-sheepvibes-dev-app}"
+readonly REDIS_CONTAINER_NAME="${DEV_REDIS_CONTAINER:-sheepvibes-dev-redis}"
+readonly APP_IMAGE_NAME="${DEV_APP_IMAGE:-localhost/sheepvibes-app}"
+readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:alpine}"
+readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
 readonly CONTAINER_PORT="5000"
 readonly CMD="podman"
-readonly SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+readonly SCRIPT_DIR
 
 # --- Functions ---
 check_requirements() {
     if ! command -v "$CMD" >/dev/null 2>&1; then
-        echo "Error: 'podman' is required but not found." >&2
+        echo "Error: '$CMD' is required but not found." >&2
         exit 1
     fi
 }
@@ -53,8 +55,8 @@ do_up() {
         "$CMD" pod rm -f "$POD_NAME"
     fi
     
-    # Ensure containers are also gone (in case they were detached from pod)
-    if "$CMD" ps -a --format '{{.Names}}' | grep -E "^(${APP_CONTAINER_NAME}|${REDIS_CONTAINER_NAME})$" >/dev/null; then
+    # Ensure containers are also gone (robust cleanup)
+    if "$CMD" container exists "$APP_CONTAINER_NAME" || "$CMD" container exists "$REDIS_CONTAINER_NAME"; then
         echo "Removing leftover containers..."
         "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
     fi
@@ -80,8 +82,15 @@ do_up() {
 
 do_down() {
     local CLEAN_VOL=false
-    if [[ "${1:-}" == "--clean" ]]; then
-        CLEAN_VOL=true
+    local FLAG="${1:-}"
+    
+    if [[ -n "$FLAG" ]]; then
+        if [[ "$FLAG" == "--clean" ]]; then
+            CLEAN_VOL=true
+        else
+            echo "Error: Unknown flag '$FLAG'. Usage: $0 down [--clean]" >&2
+            exit 1
+        fi
     fi
 
     echo "--- SheepVibes Dev Environment Teardown (Runtime: $CMD) ---"
