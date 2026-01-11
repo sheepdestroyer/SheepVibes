@@ -11,6 +11,8 @@ from sqlalchemy.exc import IntegrityError # <--- Added import for IntegrityError
 from .app import app # Import app for context
 from .models import db, Feed, Tab, FeedItem # <--- Added FeedItem import
 from . import feed_service # Import feed_service relatively
+import socket # Added for SSRF test
+from unittest.mock import MagicMock
 
 # Set up logging to console
 logging.basicConfig(
@@ -199,6 +201,9 @@ def test_kernel_org_scenario(db_setup, mocker):
     # Mock feedparser.parse to return our mock feed data directly since we are mocking requests
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
 
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', return_value=("127.0.0.1", "dummy.kernel.org"))
+
     # Add a feed to the DB
     tab = Tab(name="Tech", order=1)
     db.session.add(tab)
@@ -241,6 +246,9 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
 
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
 
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', return_value=("127.0.0.1", "dummy.hn.org"))
+
     tab = Tab(name="News", order=1)
     db.session.add(tab)
     db.session.commit()
@@ -281,6 +289,9 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
 
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', return_value=("127.0.0.1", "dummy.duplinks.org"))
 
     tab = Tab(name="General", order=1)
     db.session.add(tab)
@@ -333,6 +344,9 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
 
     m_parse = mocker.patch('backend.feed_service.feedparser.parse')
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', side_effect=lambda url: ("127.0.0.1", "dummy.host"))
 
     tab = Tab(name="Mixed", order=1)
     db.session.add(tab)
@@ -409,6 +423,9 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     mock_response.raise_for_status = mocker.Mock()
     mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
 
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', return_value=("127.0.0.1", "dummy.timestamp"))
+
     # Scenario 1: Fetch successful, but no entries in the feed
     mock_empty_feed = MockParsedFeed(feed_title="Empty Feed", entries=[])
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_empty_feed)
@@ -456,6 +473,12 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     mock_response.content = b""
     mock_response.raise_for_status = mocker.Mock()
     mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', side_effect=[
+        ("127.0.0.1", "feeda.url"),
+        ("127.0.0.1", "feedb.url")
+    ])
 
     m_parse = mocker.patch('backend.feed_service.feedparser.parse')
 
@@ -629,3 +652,62 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
     deleted_item_titles = {f"Old Item {i}" for i in range(15)}
     remaining_titles = {item.title for item in db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).all()}
     assert not deleted_item_titles.intersection(remaining_titles), "The oldest 15 items should have been deleted"
+
+@pytest.mark.parametrize(
+    "addr",
+    [
+        ("192.168.1.1", 80),
+        ("127.0.0.1", 80),
+        ("::1", 80, 0, 0), # IPv6 loopback
+    ],
+)
+def test_fetch_feed_ssrf_prevention(mocker, addr):
+    """Test that fetch_feed blocks URLs resolving to private IPs."""
+    mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
+
+    family = socket.AF_INET6 if len(addr) > 2 else socket.AF_INET
+    mock_getaddrinfo.return_value = [
+        (family, socket.SOCK_STREAM, 6, '', addr)
+    ]
+
+    url = "http://internal-service.local/feed"
+    result = feed_service.fetch_feed(url)
+
+    assert result is None
+
+def test_fetch_feed_invalid_scheme():
+    """Test that fetch_feed blocks invalid schemes."""
+    assert feed_service.fetch_feed("file:///etc/passwd") is None
+    assert feed_service.fetch_feed("ftp://example.com/feed") is None
+    assert feed_service.fetch_feed("javascript:alert(1)") is None
+
+def test_fetch_feed_toctou_prevention_http(mocker):
+    """Test that fetch_feed uses the resolved IP for HTTP requests (TOCTOU fix)."""
+    # 1. Mock DNS resolution to return a safe IP
+    mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
+    safe_ip = "93.184.216.34" # example.com
+    mock_getaddrinfo.return_value = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, '', (safe_ip, 80))
+    ]
+
+    # 2. Mock requests.get instead of urllib.request.urlopen
+    mock_requests_get = mocker.patch('backend.feed_service.requests.get')
+    mock_response = MagicMock()
+    mock_response.content = b'<rss><channel><title>Test</title></channel></rss>'
+    mock_response.raise_for_status = MagicMock()
+    mock_requests_get.return_value = mock_response
+
+    # 3. Call fetch_feed with HTTP URL
+    url = "http://example.com/feed"
+    result = feed_service.fetch_feed(url)
+
+    # 4. Verify requests.get was called with the IP-based URL and correct Host header
+    assert result is not None
+
+    args, kwargs = mock_requests_get.call_args
+    target_url = args[0]
+    headers = kwargs.get('headers', {})
+
+    # For HTTP, we expect the URL to be rewritten to the IP
+    assert f"http://{safe_ip}/feed" == target_url
+    assert headers.get('Host') == "example.com"
