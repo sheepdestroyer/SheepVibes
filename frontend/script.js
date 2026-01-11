@@ -1080,8 +1080,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function handleEditFeedCancel() {
+        const saveButton = document.getElementById('save-feed-button');
+        // Prevent closing the modal if a save operation is in progress.
+        if (saveButton.disabled) {
+            return;
+        }
+        const modal = document.getElementById('edit-feed-modal');
+        modal.classList.remove('is-active');
+    }
+
     /** Main initialization function called on DOMContentLoaded. */
     async function initialize() {
+        // Move modal to its root container for proper stacking context
+        const modalRoot = document.getElementById('modal-root');
+        const modal = document.getElementById('edit-feed-modal');
+        if (modalRoot && modal) {
+            modalRoot.appendChild(modal);
+        }
+
         // Add event listeners for all interactive elements
         addTabButton.addEventListener('click', handleAddTab);
         renameTabButton.addEventListener('click', handleRenameTab);
@@ -1100,6 +1117,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add event listeners for edit feed modal
         document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
         document.getElementById('cancel-edit-button').addEventListener('click', handleEditFeedCancel);
+        const closeBtn = document.getElementById('edit-feed-modal-close-button');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', handleEditFeedCancel);
+        }
 
         // Close modal when clicking outside the content
         document.getElementById('edit-feed-modal').addEventListener('click', (event) => {
