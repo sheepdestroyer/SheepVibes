@@ -49,3 +49,10 @@ backend/venv/
 .DS_Store
 Thumbs.db
 .aider*
+
+# Agent/Tool temporary files
+agent-tools
+branches.txt
+last_commit.txt
+ls.txt
+status_output.txt

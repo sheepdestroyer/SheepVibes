@@ -1,5 +1,12 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-01-11
+
+- **Feat: Add `dev_manager.sh` for Podman-based local development**
+  - Created `scripts/dev_manager.sh` to automate building, running, and cleaning the dev environment (App + Redis).
+  - Updated `README.md` with usage instructions for the new script.
+  - Updated `AGENTS.md` to recommend the tool for future agents.
+
 ## 2025-10-08
 
 - **Documentation: Added code review cycle guidelines**
