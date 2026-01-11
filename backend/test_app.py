@@ -8,12 +8,12 @@ import xml.etree.ElementTree as ET
 # Import the Flask app instance and db object
 # Need to configure the app for testing
 from .app import app, cache # Import the app and cache instance
-from .models import db, Tab, Feed, FeedItem # Import models directly
+from .models import db, Tab, Feed, FeedItem, User # Import models directly
 from .feed_service import process_feed_entries, parse_published_time # For new tests
 import time # For new tests
 import datetime # For new tests, specifically for timezone object
 from datetime import timezone # For new tests
-
+from flask_login import login_user
 
 @pytest.fixture
 def client():
@@ -26,6 +26,7 @@ def client():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['CACHE_TYPE'] = 'SimpleCache'  # Ensure SimpleCache for all test runs
     app.config['CACHE_DEFAULT_TIMEOUT'] = 5   # Use a short timeout for testing
+    app.config['SECRET_KEY'] = 'test-secret-key'
     
     # Reset Flask app's internal state for consistent behavior across tests
     app._got_first_request = False
@@ -72,19 +73,32 @@ def client():
         db.session.remove() # Ensure session is clean before dropping
         db.drop_all()       # Drop all tables
 
+@pytest.fixture
+def setup_user(client):
+    with app.app_context():
+        user = User(username='testuser', email='test@example.com')
+        user.set_password('password')
+        db.session.add(user)
+        db.session.commit()
+        with client.session_transaction() as sess:
+            sess['user_id'] = user.id
+            sess['_fresh'] = True
+    return user
+
+
 # --- Tests for /api/tabs --- 
 
-def test_get_tabs_empty(client):
+def test_get_tabs_empty(client, setup_user):
     """Test GET /api/tabs when no tabs exist."""
     response = client.get('/api/tabs')
     assert response.status_code == 200
     assert response.json == []
 
-def test_get_tabs_with_data(client):
+def test_get_tabs_with_data(client, setup_user):
     """Test GET /api/tabs with existing tabs."""
     # Arrange: Add some tabs to the in-memory DB
-    tab1 = Tab(name="Tech", order=1)
-    tab2 = Tab(name="News", order=0)
+    tab1 = Tab(name="Tech", order=1, user_id=setup_user.id)
+    tab2 = Tab(name="News", order=0, user_id=setup_user.id)
     with app.app_context():
         db.session.add_all([tab1, tab2])
         db.session.commit()
@@ -103,7 +117,7 @@ def test_get_tabs_with_data(client):
     assert response.json[1]['order'] == 1
     assert response.json[1]['unread_count'] == 0
 
-def test_create_tab_success(client):
+def test_create_tab_success(client, setup_user):
     """Test POST /api/tabs successfully creating a new tab."""
     # Act
     response = client.post('/api/tabs', json={'name': '  New Tab  '})
@@ -119,22 +133,23 @@ def test_create_tab_success(client):
         tab = db.session.get(Tab, response.json['id'])
         assert tab is not None
         assert tab.name == 'New Tab'
+        assert tab.user_id == setup_user.id
 
-def test_create_tab_missing_name(client):
+def test_create_tab_missing_name(client, setup_user):
     """Test POST /api/tabs with missing name data."""
     response = client.post('/api/tabs', json={})
     assert response.status_code == 400
     assert 'error' in response.json
     assert 'Missing or empty tab name' in response.json['error']
 
-def test_create_tab_empty_name(client):
+def test_create_tab_empty_name(client, setup_user):
     """Test POST /api/tabs with empty name string."""
     response = client.post('/api/tabs', json={'name': '   '})
     assert response.status_code == 400
     assert 'error' in response.json
     assert 'Missing or empty tab name' in response.json['error']
 
-def test_create_tab_duplicate_name(client):
+def test_create_tab_duplicate_name(client, setup_user):
     """Test POST /api/tabs with a duplicate name."""
     # Arrange: Create initial tab
     client.post('/api/tabs', json={'name': 'Existing Tab'})
@@ -147,7 +162,7 @@ def test_create_tab_duplicate_name(client):
     assert 'error' in response.json
     assert 'already exists' in response.json['error']
 
-def test_rename_tab_success(client):
+def test_rename_tab_success(client, setup_user):
     """Test PUT /api/tabs/<id> successfully renaming a tab."""
     # Arrange: Create a tab first
     post_resp = client.post('/api/tabs', json={'name': 'Old Name'})
@@ -166,14 +181,14 @@ def test_rename_tab_success(client):
         tab = db.session.get(Tab, tab_id)
         assert tab.name == 'New Name'
 
-def test_rename_tab_not_found(client):
+def test_rename_tab_not_found(client, setup_user):
     """Test PUT /api/tabs/<id> for a non-existent tab."""
     response = client.put('/api/tabs/999', json={'name': 'New Name'})
     assert response.status_code == 404
     assert 'error' in response.json
     assert 'not found' in response.json['error']
 
-def test_rename_tab_duplicate_name(client):
+def test_rename_tab_duplicate_name(client, setup_user):
     """Test PUT /api/tabs/<id> trying to rename to an existing name."""
     # Arrange: Create two tabs
     post_resp1 = client.post('/api/tabs', json={'name': 'Tab One'})
@@ -188,7 +203,7 @@ def test_rename_tab_duplicate_name(client):
     assert 'error' in response.json
     assert 'already in use' in response.json['error']
 
-def test_delete_tab_success(client):
+def test_delete_tab_success(client, setup_user):
     """Test DELETE /api/tabs/<id> successfully deleting a tab."""
     # Arrange: Create two tabs
     post_resp1 = client.post('/api/tabs', json={'name': 'To Delete'})
@@ -209,14 +224,14 @@ def test_delete_tab_success(client):
         assert tab is None
         assert Tab.query.count() == 1
 
-def test_delete_tab_not_found(client):
+def test_delete_tab_not_found(client, setup_user):
     """Test DELETE /api/tabs/<id> for a non-existent tab."""
     response = client.delete('/api/tabs/999')
     assert response.status_code == 404
     assert 'error' in response.json
     assert 'not found' in response.json['error']
 
-def test_delete_last_tab(client):
+def test_delete_last_tab(client, setup_user):
     """Test DELETE /api/tabs/<id> preventing deletion of the last tab."""
     # Arrange: Create only one tab
     post_resp = client.post('/api/tabs', json={'name': 'The Only Tab'})
@@ -237,11 +252,11 @@ def test_delete_last_tab(client):
 # --- Tests for Feed/Item endpoints ---
 
 @pytest.fixture
-def setup_tabs_and_feeds(client):
+def setup_tabs_and_feeds(client, setup_user):
     """Fixture to pre-populate the DB with tabs and feeds for testing."""
     with app.app_context():
-        tab1 = Tab(name="Tab 1", order=0)
-        tab2 = Tab(name="Tab 2", order=1)
+        tab1 = Tab(name="Tab 1", order=0, user_id=setup_user.id)
+        tab2 = Tab(name="Tab 2", order=1, user_id=setup_user.id)
         db.session.add_all([tab1, tab2])
         db.session.commit() # Commit to get IDs
         
@@ -329,11 +344,11 @@ def test_get_feeds_for_tab_with_feed_having_no_items(client, setup_tabs_and_feed
     assert 'items' in feed3_data
     assert len(feed3_data['items']) == 0 # Feed 3 has no items
 
-def test_get_feeds_for_tab_with_no_feeds(client):
+def test_get_feeds_for_tab_with_no_feeds(client, setup_user):
     """Test GET /api/tabs/<tab_id>/feeds for a tab that has no feeds."""
     # Arrange: Create a new tab with no feeds
     with app.app_context():
-        new_tab = Tab(name="Empty Tab", order=0)
+        new_tab = Tab(name="Empty Tab", order=0, user_id=setup_user.id)
         db.session.add(new_tab)
         db.session.commit()
         tab_id = new_tab.id
@@ -345,7 +360,7 @@ def test_get_feeds_for_tab_with_no_feeds(client):
     assert response.status_code == 200
     assert response.json == []
 
-def test_get_feeds_for_tab_not_found(client):
+def test_get_feeds_for_tab_not_found(client, setup_user):
     """Test GET /api/tabs/<tab_id>/feeds for non-existent tab."""
     response = client.get('/api/tabs/999/feeds')
     assert response.status_code == 404
@@ -413,7 +428,7 @@ def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     mock_fetch.assert_not_called() # Should check DB before fetching
 
 @patch('backend.app.fetch_feed') # Also needs patch if fetch_feed is involved in error path
-def test_add_feed_invalid_tab(mock_fetch_unused, client): # mock_fetch_unused if not directly used but to be consistent
+def test_add_feed_invalid_tab(mock_fetch_unused, client, setup_user): # mock_fetch_unused if not directly used but to be consistent
     """Test POST /api/feeds with a non-existent tab_id."""
     response = client.post('/api/feeds', json={'url': 'some_url', 'tab_id': 999})
     assert response.status_code == 404
@@ -440,7 +455,7 @@ def test_delete_feed_success(client, setup_tabs_and_feeds):
         assert db.session.get(FeedItem, item1_id) is None
         assert db.session.get(FeedItem, item2_id) is None
 
-def test_delete_feed_not_found(client):
+def test_delete_feed_not_found(client, setup_user):
     """Test DELETE /api/feeds/<id> for non-existent feed."""
     response = client.delete('/api/feeds/999')
     assert response.status_code == 404
@@ -481,7 +496,7 @@ def test_mark_item_read_already_read(client, setup_tabs_and_feeds):
     with app.app_context():
         assert db.session.get(FeedItem, item2_id).is_read == True
 
-def test_mark_item_read_not_found(client):
+def test_mark_item_read_not_found(client, setup_user):
     """Test POST /api/items/<item_id>/read for non-existent item."""
     response = client.post('/api/items/999/read')
     assert response.status_code == 404
@@ -502,7 +517,7 @@ def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 @patch('backend.app.fetch_and_update_feed')
-def test_update_feed_not_found(mock_fetch_and_update, client):
+def test_update_feed_not_found(mock_fetch_and_update, client, setup_user):
     """Test POST /api/feeds/<feed_id>/update when feed is not found."""
     feed_id = 999
     response = client.post(f'/api/feeds/{feed_id}/update')
@@ -591,7 +606,7 @@ def test_update_feed_url_duplicate_url(client, setup_tabs_and_feeds):
     assert 'error' in response.json
     assert 'already exists' in response.json['error']
 
-def test_update_feed_url_not_found(client):
+def test_update_feed_url_not_found(client, setup_user):
     """Test PUT /api/feeds/<feed_id> when feed is not found."""
     response = client.put('/api/feeds/999', json={'url': 'https://example.com/new-feed.xml'})
     
@@ -636,7 +651,7 @@ def test_get_non_existent_static_file(client):
 
 @patch('backend.app.announcer.announce')
 @patch('backend.app.update_all_feeds')
-def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
+def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client, setup_user):
     """Test POST /api/feeds/update-all successfully and announces SSE."""
     # Arrange
     mock_update_all_feeds.return_value = (5, 10)  # 5 feeds processed, 10 new items
@@ -661,7 +676,7 @@ def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
 
 @patch('backend.app.announcer.announce')
 @patch('backend.app.update_all_feeds')
-def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce, client):
+def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce, client, setup_user):
     """Test POST /api/feeds/update-all when update_all_feeds raises an exception."""
     # Arrange
     mock_update_all_feeds.side_effect = Exception("Test update error")
@@ -749,7 +764,7 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
 
 # --- Tests for Model Methods ---
 
-def test_feed_item_to_dict_serialization(client): # client fixture ensures app_context and db setup
+def test_feed_item_to_dict_serialization(client, setup_user): # client fixture ensures app_context and db setup
     """
     Tests the to_dict() method of the FeedItem model, focusing on datetime serialization.
     """
@@ -760,7 +775,7 @@ def test_feed_item_to_dict_serialization(client): # client fixture ensures app_c
         # Minimal setup, not using setup_tabs_and_feeds to keep test focused
         test_tab = Tab.query.first()
         if not test_tab:
-            test_tab = Tab(name="Test Tab for Serialization")
+            test_tab = Tab(name="Test Tab for Serialization", user_id=setup_user.id)
             db.session.add(test_tab)
             db.session.commit()
 
@@ -967,14 +982,14 @@ def test_parse_published_time_variations(): # No client fixture needed as it's a
     assert dt7.hour == 10
     assert dt7.tzinfo == timezone.utc
 
-def test_process_feed_with_in_batch_duplicate_guids(client): # Using client fixture for app_context
+def test_process_feed_with_in_batch_duplicate_guids(client, setup_user): # Using client fixture for app_context
     """
     Tests that process_feed_entries correctly handles entries with duplicate GUIDs
     within the same fetched batch, only adding the first instance.
     """
     with client.application.app_context(): # Use app_context from client
         # 1. Setup: Create a Tab and Feed object in the DB
-        tab = Tab(name="Test Tab GUIDs", order=0)
+        tab = Tab(name="Test Tab GUIDs", order=0, user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit()
 
@@ -1036,14 +1051,14 @@ def test_process_feed_with_in_batch_duplicate_guids(client): # Using client fixt
         assert item1_db.title == 'Title 1'
         assert item1_db.link == 'http://link1.com'
 
-def test_process_feed_with_missing_link(client): # Using client fixture for app_context
+def test_process_feed_with_missing_link(client, setup_user): # Using client fixture for app_context
     """
     Tests that process_feed_entries skips entries that are missing a link,
     as 'link' is a NOT NULL field in the FeedItem model.
     """
     with client.application.app_context():
         # 1. Setup Feed object
-        tab = Tab(name="Test Tab Links", order=0)
+        tab = Tab(name="Test Tab Links", order=0, user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit()
 
@@ -1099,7 +1114,7 @@ def test_process_feed_with_missing_link(client): # Using client fixture for app_
 
 # --- Tests for OPML Export (/api/opml/export) ---
 
-def test_export_opml_empty(client):
+def test_export_opml_empty(client, setup_user):
     """Test GET /api/opml/export when no feeds exist."""
     response = client.get('/api/opml/export')
     assert response.status_code == 200
@@ -1188,12 +1203,12 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
 # --- Tests for OPML Import (/api/opml/import) ---
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_success(mock_fetch_update, client):
+def test_import_opml_success(mock_fetch_update, client, setup_user):
     """Test POST /api/opml/import with a valid OPML file and item fetching."""
     mock_fetch_update.return_value = (True, 1) # Simulate successful fetch with 1 new item
     # Arrange: Add a tab to import into
     with app.app_context():
-        tab = Tab(name="Import Tab", order=0)
+        tab = Tab(name="Import Tab", order=0, user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit()
         tab_id = tab.id
@@ -1243,11 +1258,11 @@ def test_import_opml_success(mock_fetch_update, client):
 
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_with_duplicates(mock_fetch_update, client):
+def test_import_opml_with_duplicates(mock_fetch_update, client, setup_user):
     """Test POST /api/opml/import with some feeds already existing."""
     mock_fetch_update.return_value = (True, 1)
     with app.app_context():
-        tab = Tab(name="Import Tab Dups", order=0)
+        tab = Tab(name="Import Tab Dups", order=0, user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit() # Commit tab first to get its ID
         tab_id = tab.id
@@ -1279,23 +1294,23 @@ def test_import_opml_with_duplicates(mock_fetch_update, client):
         assert feeds[0].url == "http://feed1.opml.com/rss" # Existing
         assert feeds[1].url == "http://newfeed.opml.com/rss" # New one
 
-def test_import_opml_no_file(client):
+def test_import_opml_no_file(client, setup_user):
     """Test POST /api/opml/import without a file."""
     response = client.post('/api/opml/import', content_type='multipart/form-data')
     assert response.status_code == 400
     assert 'No file part' in response.json['error']
 
-def test_import_opml_empty_filename(client):
+def test_import_opml_empty_filename(client, setup_user):
     """Test POST /api/opml/import with an empty filename (simulates no file selected)."""
     opml_file = (io.BytesIO(b"content"), '') # Empty filename
     response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
     assert response.status_code == 400
     assert 'No file selected' in response.json['error']
 
-def test_import_opml_malformed_xml(client):
+def test_import_opml_malformed_xml(client, setup_user):
     """Test POST /api/opml/import with malformed XML."""
     with app.app_context(): # Ensure a tab exists
-        tab = Tab(name="Malformed Tab", order=0)
+        tab = Tab(name="Malformed Tab", order=0, user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit()
 
@@ -1306,7 +1321,7 @@ def test_import_opml_malformed_xml(client):
     assert 'Malformed OPML file' in response.json['error']
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, client):
+def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, client, setup_user):
     """Test import creates a default tab if none exist and imports feeds."""
     mock_fetch_update.return_value = (True, 1)
     # Ensure no tabs exist (client fixture already drops tables)
@@ -1358,12 +1373,12 @@ def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, clie
         mock_fetch_update.assert_any_call(feed_beta_obj.id)
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_specific_tab(mock_fetch_update, client):
+def test_import_opml_specific_tab(mock_fetch_update, client, setup_user):
     """Test POST /api/opml/import into a specific tab when multiple tabs exist."""
     mock_fetch_update.return_value = (True, 1)
     with app.app_context():
-        tab1 = Tab(name="Tab One", order=0)
-        tab2 = Tab(name="Tab Two", order=1)
+        tab1 = Tab(name="Tab One", order=0, user_id=setup_user.id)
+        tab2 = Tab(name="Tab Two", order=1, user_id=setup_user.id)
         db.session.add_all([tab1, tab2])
         db.session.commit()
         tab1_id = tab1.id
@@ -1391,12 +1406,12 @@ def test_import_opml_specific_tab(mock_fetch_update, client):
         assert feed_in_tab2.url == "http://tab2feed.com"
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_default_tab_if_tab_id_not_provided(mock_fetch_update, client): # Added mock_fetch_update
+def test_import_opml_default_tab_if_tab_id_not_provided(mock_fetch_update, client, setup_user): # Added mock_fetch_update
     """Test POST /api/opml/import defaults to the first tab if tab_id is not provided."""
     mock_fetch_update.return_value = (True, 1) # Simulate successful fetch
     with app.app_context():
-        tab1 = Tab(name="Default Tab", order=0) # Should be default
-        tab2 = Tab(name="Other Tab", order=1)
+        tab1 = Tab(name="Default Tab", order=0, user_id=setup_user.id) # Should be default
+        tab2 = Tab(name="Other Tab", order=1, user_id=setup_user.id)
         db.session.add_all([tab1, tab2])
         db.session.commit()
         default_tab_id = tab1.id
@@ -1424,11 +1439,11 @@ def test_import_opml_default_tab_if_tab_id_not_provided(mock_fetch_update, clien
         mock_fetch_update.assert_any_call(feed_in_default_tab.id)
 
 @patch('backend.app.fetch_and_update_feed') # Even though no feeds are imported, the setup could change.
-def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client):
+def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client, setup_user):
     """Test that an <outline> missing xmlUrl is skipped during import."""
     mock_fetch_update_unused.return_value = (True, 0) # Should not be called if only valid feeds are fetched
     with app.app_context():
-        tab = Tab(name="Test Tab", order=0)
+        tab = Tab(name="Test Tab", order=0, user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit()
         tab_id = tab.id
@@ -1465,10 +1480,10 @@ def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client)
 
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_no_body_tag(mock_fetch_update_unused, client):
+def test_import_opml_no_body_tag(mock_fetch_update_unused, client, setup_user):
     """Test OPML import with a file that has no <body> tag."""
     with app.app_context(): # Ensure a tab exists
-        tab = Tab(name="No Body Tab", order=0)
+        tab = Tab(name="No Body Tab", order=0, user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit()
 
@@ -1484,10 +1499,10 @@ def test_import_opml_no_body_tag(mock_fetch_update_unused, client):
     mock_fetch_update_unused.assert_not_called()
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
+def test_import_opml_empty_body_tag(mock_fetch_update_unused, client, setup_user):
     """Test OPML import with a file that has an empty <body> tag."""
     with app.app_context(): # Ensure a tab exists
-        tab = Tab(name="Empty Body Tab", order=0)
+        tab = Tab(name="Empty Body Tab", order=0, user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit()
 
@@ -1504,7 +1519,7 @@ def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
 
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, client):
+def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, client, setup_user):
     """Tests that nested OPML outlines create new tabs and feeds are correctly assigned."""
     mock_fetch_update.return_value = (True, 1) # Simulate successful fetch
     opml_content = """
@@ -1568,11 +1583,11 @@ def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, 
 
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, client):
+def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, client, setup_user):
     """Tests that feeds in a folder are added to an existing tab if names match."""
     mock_fetch_update.return_value = (True, 1)
     with app.app_context():
-        existing_tab = Tab(name="Existing News", order=0)
+        existing_tab = Tab(name="Existing News", order=0, user_id=setup_user.id)
         db.session.add(existing_tab)
         db.session.commit()
         existing_tab_id = existing_tab.id
@@ -1604,7 +1619,7 @@ def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, 
         mock_fetch_update.assert_called_once_with(feeds_in_tab[0].id)
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_empty_folder(mock_fetch_update_unused, client):
+def test_import_opml_empty_folder(mock_fetch_update_unused, client, setup_user):
     """Tests import of an OPML with an empty folder."""
     mock_fetch_update_unused.return_value = (True, 0)
     opml_content = """
@@ -1646,11 +1661,11 @@ def test_import_opml_empty_folder(mock_fetch_update_unused, client):
 
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(mock_fetch_update, client):
+def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(mock_fetch_update, client, setup_user):
     """Tests that a folder <outline> without a title is skipped, and its children go to the current default tab."""
     mock_fetch_update.return_value = (True, 1)
     with app.app_context(): # Ensure a default tab exists or will be created
-        tab1 = Tab(name="Initial Tab", order=0)
+        tab1 = Tab(name="Initial Tab", order=0, user_id=setup_user.id)
         db.session.add(tab1)
         db.session.commit()
         initial_tab_id = tab1.id
@@ -1690,7 +1705,7 @@ def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(mock
 
 
 @patch('backend.app.fetch_and_update_feed')
-def test_import_opml_deletes_empty_default_imported_feeds_tab(mock_fetch_update, client): # Use client fixture for app context
+def test_import_opml_deletes_empty_default_imported_feeds_tab(mock_fetch_update, client, setup_user): # Use client fixture for app context
     """
     Tests that if 'Imported Feeds' is created because no tabs exist,
     but all OPML items go into folders (new tabs), the empty 'Imported Feeds' tab is deleted.
@@ -1824,10 +1839,10 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
     assert response.json[-1]['title'] == "Limit Cap Item 99"  # 100th item from the end
 
 @pytest.fixture
-def setup_autosave_test_data(client):
+def setup_autosave_test_data(client, setup_user):
     """Fixture to setup data used in autosave tests."""
     with client.application.app_context():
-        tab = Tab(name="Autosave Test Tab")
+        tab = Tab(name="Autosave Test Tab", user_id=setup_user.id)
         db.session.add(tab)
         db.session.commit()
         
