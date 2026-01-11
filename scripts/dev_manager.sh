@@ -9,6 +9,7 @@ readonly APP_IMAGE_NAME="${DEV_APP_IMAGE:-localhost/sheepvibes-app}"
 readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:alpine}"
 readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
 readonly CONTAINER_PORT="${DEV_CONTAINER_PORT:-5000}"
+readonly DEFAULT_HOST_PORT="${DEV_DEFAULT_HOST_PORT:-5002}"
 readonly CMD="${DEV_CMD:-podman}"
 readonly BUILD_CONTEXT="${DEV_BUILD_CONTEXT:-.}"
 readonly CONTAINERFILE="${DEV_CONTAINERFILE:-Containerfile}"
@@ -32,13 +33,18 @@ check_requirements() {
 check_port() {
     local PORT="$1"
     if command -v ss >/dev/null 2>&1; then
-        if ss -ltn "sport = :$PORT" 2>/dev/null | tail -n +2 | grep -q .; then
+        # ss output check: -H (no header), -l (listening), -t (tcp), -n (numeric)
+        if ss -Hltn "sport = :$PORT" 2>/dev/null | grep -q "."; then
             return 1
         fi
     elif command -v lsof >/dev/null 2>&1; then
         if lsof -i :"$PORT" -sTCP:LISTEN -Fp 2>/dev/null | grep -q '^p'; then
             return 1
         fi
+    else
+        echo "Error: cannot check port ${PORT}; neither 'ss' nor 'lsof' is available." >&2
+        echo "Please install iproute2 (for ss) or lsof." >&2
+        exit 1
     fi
     return 0
 }
@@ -46,7 +52,7 @@ check_port() {
 remove_containers() {
     echo "Ensuring containers are removed..."
     # Attempt using --ignore if supported (Podman 4.0+)
-    if "$CMD" rm --help | grep -q "\-\-ignore"; then
+    if "$CMD" rm --help 2>&1 | grep -q -w "\-\-ignore"; then
         "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME"
     else
         "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
@@ -54,7 +60,7 @@ remove_containers() {
 }
 
 do_up() {
-    local HOST_PORT="${1:-5002}"
+    local HOST_PORT="${1:-$DEFAULT_HOST_PORT}"
     
     if (( $# > 1 )); then
         echo "Error: 'up' command accepts at most one argument (port)." >&2
@@ -62,14 +68,14 @@ do_up() {
     fi
 
     # Validate port format/range
-    if ! [[ "$HOST_PORT" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )); then
-        echo "Error: Invalid port '$HOST_PORT'. Must be an integer between 1 and 65535." >&2
+    if ! [[ "${HOST_PORT}" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )); then
+        echo "Error: Invalid port '${HOST_PORT}'. Must be an integer between 1 and 65535." >&2
         exit 1
     fi
 
     # Proactive port check
-    if ! check_port "$HOST_PORT"; then
-        echo "Error: Port $HOST_PORT is already in use." >&2
+    if ! check_port "${HOST_PORT}"; then
+        echo "Error: Port ${HOST_PORT} is already in use." >&2
         exit 1
     fi
 
@@ -96,7 +102,7 @@ do_up() {
     remove_containers
 
     # 3. Create Pod and Containers
-    echo "Creating pod '$POD_NAME' on port $HOST_PORT..."
+    echo "Creating pod '$POD_NAME' on port ${HOST_PORT}..."
     "$CMD" pod create --name "$POD_NAME" -p "${HOST_PORT}:${CONTAINER_PORT}"
 
     echo "Starting Redis..."
@@ -109,7 +115,7 @@ do_up() {
         "$APP_IMAGE_NAME"
 
     echo "--- Dev Environment Started ---"
-    echo "App URL: http://localhost:$HOST_PORT"
+    echo "App URL: http://localhost:${HOST_PORT}"
     echo "To stop: \"$0\" down"
     echo "Logs: $CMD logs $APP_CONTAINER_NAME"
 }
@@ -160,7 +166,7 @@ do_down() {
 
 usage() {
     echo "Usage: \"$0\" {up [port]|down [--clean]}" >&2
-    echo "  up [port]    : Start dev environment (default port: 5002)" >&2
+    echo "  up [port]    : Start dev environment (default port: ${DEFAULT_HOST_PORT})" >&2
     echo "  down [--clean]: Stop dev environment. Use --clean to delete data volume." >&2
     exit 1
 }
