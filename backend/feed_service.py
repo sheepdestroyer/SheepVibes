@@ -101,6 +101,8 @@ def parse_published_time(entry):
     logger.warning(f"Could not parse published time for entry: {entry.get('link', '[no link]')}. Using current time as fallback.")
     return datetime.datetime.now(timezone.utc)
 
+# --- Core Feed Processing Functions ---
+
 def validate_and_resolve_url(url):
     """Validates URL and resolves IP to prevent SSRF (returns safe IP or None)."""
     try:
@@ -141,8 +143,6 @@ def validate_and_resolve_url(url):
     except Exception:
         logger.exception("Error validating URL safety")
         return None, None
-
-# --- Core Feed Processing Functions ---
 
 def fetch_feed(feed_url):
     """Fetches and parses a feed using requests and feedparser, preventing SSRF."""
@@ -221,6 +221,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         return 0
 
     # These sets track items *within the current batch being processed*
+    batch_processed_guids = set()
     batch_processed_links = set()
 
     # Get existing GUIDs and links *for this specific feed* from the DB
@@ -260,19 +261,38 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             continue
 
         # Determine the GUID to be stored in the database (db_guid).
+        # The GUID is essential for uniquely identifying feed items over time.
+        # The new strategy is to always use the entry's link as the primary GUID. This ensures
+        # that every item has a reliable, unique identifier.
         db_guid = entry_link
 
         # --- Deduplication Logic ---
         # 1. Check against items already in the DB *for this specific feed*
-        if (db_guid and db_guid in existing_feed_guids) or (entry_link in existing_feed_links):
+        if db_guid and db_guid in existing_feed_guids:
+            continue
+        # Check link for this feed, critical for items that will have db_guid=None or if link is the primary identifier
+        if entry_link in existing_feed_links:
             continue
 
         # 2. Check against items already processed *in this current batch*
-        if entry_link in batch_processed_links:
-            logger.warning(f"Skipping duplicate item in current batch (link: {entry_link}) for feed '{feed_db_obj.name}'.")
+        is_batch_duplicate = False
+        if db_guid: # If this item has a "true" GUID
+            if db_guid in batch_processed_guids:
+                logger.warning(f"Skipping item (true GUID: {db_guid}, link: {entry_link}) for feed '{feed_db_obj.name}', duplicate true GUID in current fetch batch.")
+                is_batch_duplicate = True
+        else: # No "true" GUID (db_guid is None), so batch uniqueness relies on the link
+            if entry_link in batch_processed_links:
+                logger.warning(f"Skipping item (link: {entry_link}) for feed '{feed_db_obj.name}', it has no true GUID and its link is a duplicate in current fetch batch.")
+                is_batch_duplicate = True
+
+        if is_batch_duplicate:
             continue
 
         # If we reach here, the item is considered new.
+        # Add its identifiers to the batch processed sets for subsequent checks within this batch.
+        if db_guid:
+            batch_processed_guids.add(db_guid)
+        
         batch_processed_links.add(entry_link)
 
         published_time = parse_published_time(entry) # Already falls back to now()
@@ -306,6 +326,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         db.session.rollback() # Rollback the failed batch
         logger.warning(f"Batch insert failed for feed '{feed_db_obj.name}' due to IntegrityError: {e}. Attempting individual inserts.")
 
+        # Ensure last_updated_time is set even if all individual inserts fail
         try:
             feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
             db.session.add(feed_db_obj) # Re-add if it became detached after rollback
@@ -338,11 +359,13 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         return 0 # Return 0 as no items were successfully committed in this case
 
     # --- Cache Eviction Logic ---
+    # After adding new items, check if the total number of items exceeds the limit.
     current_item_count = db.session.query(FeedItem).filter_by(feed_id=feed_db_obj.id).count()
 
     if current_item_count > MAX_ITEMS_PER_FEED:
         num_to_delete = current_item_count - MAX_ITEMS_PER_FEED
         
+        # Use a subquery to find and delete the oldest items in a single operation.
         oldest_item_ids_q = (
             db.session.query(FeedItem.id)
             .filter_by(feed_id=feed_db_obj.id)
