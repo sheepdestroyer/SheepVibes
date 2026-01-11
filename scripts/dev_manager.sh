@@ -6,7 +6,7 @@ readonly POD_NAME="${DEV_POD_NAME:-sheepvibes-dev-pod}"
 readonly APP_CONTAINER_NAME="${DEV_APP_CONTAINER:-sheepvibes-dev-app}"
 readonly REDIS_CONTAINER_NAME="${DEV_REDIS_CONTAINER:-sheepvibes-dev-redis}"
 readonly APP_IMAGE_NAME="${DEV_APP_IMAGE:-localhost/sheepvibes-app}"
-readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:alpine}"
+readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:7-alpine}"
 readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
 readonly CONTAINER_PORT="${DEV_CONTAINER_PORT:-5000}"
 readonly DEFAULT_HOST_PORT="${DEV_DEFAULT_HOST_PORT:-5002}"
@@ -14,7 +14,8 @@ readonly CMD="${DEV_CMD:-podman}"
 readonly BUILD_CONTEXT="${DEV_BUILD_CONTEXT:-.}"
 readonly CONTAINERFILE="${DEV_CONTAINERFILE:-Containerfile}"
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+# Robust script directory detection
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 readonly SCRIPT_DIR
 
 # --- Functions ---
@@ -24,7 +25,8 @@ check_requirements() {
         exit 1
     fi
     
-    if [[ "$CMD" != "podman" ]]; then
+    # Check if the resolved command basename is podman
+    if [[ "$(basename -- "$CMD")" != "podman" ]]; then
         echo "Error: This script is Podman-only. Found: $CMD" >&2
         exit 1
     fi
@@ -43,7 +45,7 @@ check_port() {
         fi
     else
         echo "Error: cannot check port ${PORT}; neither 'ss' nor 'lsof' is available." >&2
-        echo "Please install iproute2 (for ss) or lsof." >&2
+        echo "Please install iproute2 (for ss) or lsof and re-run this script." >&2
         exit 1
     fi
     return 0
@@ -90,7 +92,7 @@ do_up() {
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
         (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else
-        echo "Image exists. Skipping build. (Run scripts/rebuild_container.sh explicitly to rebuild)"
+        echo "Image exists. Skipping build. (Delete image or use --rebuild to force)"
     fi
 
     # 2. Clean up existing dev pod and leftover containers
@@ -105,7 +107,7 @@ do_up() {
     echo "Creating pod '$POD_NAME' on port ${HOST_PORT}..."
     "$CMD" pod create --name "$POD_NAME" -p "${HOST_PORT}:${CONTAINER_PORT}"
 
-    echo "Starting Redis..."
+    echo "Starting Redis ($REDIS_IMAGE)..."
     "$CMD" run -d --pod "$POD_NAME" --name "$REDIS_CONTAINER_NAME" "$REDIS_IMAGE"
 
     echo "Starting App..."
@@ -123,7 +125,7 @@ do_up() {
 do_down() {
     local CLEAN_VOL=false
     
-    while (( "$#" )); do
+    while (( $# )); do
         case "$1" in
             --clean)
                 CLEAN_VOL=true
