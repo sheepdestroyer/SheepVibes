@@ -1105,7 +1105,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add event listeners for edit feed modal
         document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
         document.getElementById('cancel-edit-button').addEventListener('click', handleEditFeedCancel);
-        const closeBtn = document.querySelector('#edit-feed-modal .modal-close-button');
+        const closeBtn = document.getElementById('edit-feed-modal-close-button');
         if (closeBtn) {
             closeBtn.addEventListener('click', handleEditFeedCancel);
         }
