@@ -37,14 +37,13 @@ do_up() {
     echo "Checking for image $APP_IMAGE_NAME..."
     if ! "$CMD" image exists "$APP_IMAGE_NAME"; then
         echo "Image not found. Building..."
-        local REBUILD_SCRIPT="$SCRIPT_DIR/rebuild_container.sh"
-        
-        if [[ ! -x "$REBUILD_SCRIPT" ]]; then
-            echo "Error: Rebuild script not found or not executable at $REBUILD_SCRIPT" >&2
+        local PROJECT_ROOT
+        PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+        echo "Building image $APP_IMAGE_NAME from Containerfile in $PROJECT_ROOT..."
+        if ! (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f Containerfile .); then
+            echo "Error: Image build failed." >&2
             exit 1
         fi
-        
-        "$REBUILD_SCRIPT"
     else
         echo "Image exists. Skipping build. (Run scripts/rebuild_container.sh explicitly to rebuild)"
     fi
@@ -56,10 +55,8 @@ do_up() {
     fi
     
     # Ensure containers are also gone (robust cleanup)
-    if "$CMD" container exists "$APP_CONTAINER_NAME" || "$CMD" container exists "$REDIS_CONTAINER_NAME"; then
-        echo "Removing leftover containers..."
-        "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
-    fi
+    echo "Ensuring no stale containers exist..."
+    "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
 
     # 3. Create Pod and Containers
     echo "Creating pod '$POD_NAME' on port $HOST_PORT..."
@@ -71,7 +68,7 @@ do_up() {
     echo "Starting App..."
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
         -e CACHE_REDIS_URL="redis://localhost:6379/0" \
-        -v "${VOLUME_NAME}:/app/data" \
+        -v "${VOLUME_NAME}:/app/data:Z" \
         "$APP_IMAGE_NAME"
 
     echo "--- Dev Environment Started ---"
