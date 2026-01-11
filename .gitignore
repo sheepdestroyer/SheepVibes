@@ -52,3 +52,4 @@ Thumbs.db
 
 # Agent/Tool temporary files
 # (None for this PR to keep it focused)
+tools/

@@ -816,8 +816,15 @@ document.addEventListener('DOMContentLoaded', () => {
      * Handles scrolling to load more items when reaching the bottom of the page.
      */
     async function handleScrollLoadMore() {
-        // Determine if the user has scrolled to the bottom of the page
-        const isAtBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - SCROLL_BUFFER;
+        // Determine if the user has scrolled to the bottom of the page.
+        // using document.documentElement.scrollHeight is safer for detecting the full document height across browsers.
+        // We use Math.max to be robust against different layout modes.
+        const scrollHeight = Math.max(
+            document.body.scrollHeight, document.documentElement.scrollHeight,
+            document.body.offsetHeight, document.documentElement.offsetHeight,
+            document.body.clientHeight, document.documentElement.clientHeight
+        );
+        const isAtBottom = (window.innerHeight + window.scrollY) >= scrollHeight - SCROLL_BUFFER;
 
         if (!isAtBottom) {
             return;
