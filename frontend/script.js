@@ -507,8 +507,6 @@ document.addEventListener('DOMContentLoaded', () => {
         itemList.dataset.loading = 'false';
         itemList.dataset.allItemsLoaded = 'false';
 
-        // Add the scroll event listener
-        window.addEventListener('scroll', throttle(handleScrollLoadMore, SCROLL_THROTTLE_DELAY));
 
         // Render items
         if (feed.items && feed.items.length > 0) {
@@ -832,6 +830,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const lastWidget = visibleWidgets[visibleWidgets.length - 1];
         const itemList = lastWidget.querySelector('ul');
 
+        if (!itemList) {
+            return;
+        }
+
         const isLoading = itemList.dataset.loading === 'true';
         const allItemsLoaded = itemList.dataset.allItemsLoaded === 'true';
 
@@ -1119,6 +1121,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Start listening for real-time updates from the server
         initializeSSE();
+
+        // Add a single scroll event listener for infinite scrolling
+        window.addEventListener('scroll', throttle(handleScrollLoadMore, SCROLL_THROTTLE_DELAY));
     }
 
     // Start the application initialization process
