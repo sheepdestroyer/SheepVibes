@@ -26,7 +26,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 readonly SCRIPT_DIR
 
 # Get base command name for display
-readonly CMD_BASE="$(basename -- "$CMD")"
+CMD_BASE="$(basename -- "$CMD")"
+readonly CMD_BASE
 
 # --- Functions ---
 check_requirements() {
@@ -35,9 +36,9 @@ check_requirements() {
         exit 1
     fi
     
-    # Check if the resolved command basename is podman
-    if [[ "$CMD_BASE" != "podman" ]]; then
-        echo "Error: This script is Podman-only. Found: $CMD" >&2
+    # Check if the command indicates it is Podman (allows for wrappers/absolute paths)
+    if ! "$CMD" --version 2>/dev/null | grep -qi "podman"; then
+        echo "Error: This script is Podman-only. '$CMD' does not appear to be Podman." >&2
         exit 1
     fi
 }
