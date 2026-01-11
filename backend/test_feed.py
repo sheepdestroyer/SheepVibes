@@ -191,7 +191,18 @@ def test_kernel_org_scenario(db_setup, mocker):
     entry2 = MockFeedEntry(title="Kernel 2", link="https://www.kernel.org/", guid="kernel.guid.2", published="2024-01-02T10:00:00Z")
     entry3 = MockFeedEntry(title="Kernel 3", link="https://www.kernel.org/", guid="kernel.guid.3", published="2024-01-03T10:00:00Z")
     mock_feed_data = MockParsedFeed(feed_title="Kernel Updates", entries=[entry1, entry2, entry3])
+
+    # Mock requests.get to return a dummy response
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
+    # Mock feedparser.parse to return our mock feed data directly since we are mocking requests
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', return_value=("127.0.0.1", "dummy.kernel.org"))
 
     # Add a feed to the DB
     tab = Tab(name="Tech", order=1)
@@ -226,7 +237,17 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
     entry3 = MockFeedEntry(title="HN Story 3 TrueGUID", link="http://news.example.com/item3", guid="true.guid.story3", published="2024-01-03T10:00:00Z")
 
     mock_feed_data = MockParsedFeed(feed_title="HN Mock Feed", entries=[entry1, entry2, entry3])
+
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', return_value=("127.0.0.1", "dummy.hn.org"))
 
     tab = Tab(name="News", order=1)
     db.session.add(tab)
@@ -260,7 +281,17 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     entry2 = MockFeedEntry(title="Story A Duplicate", link="http://example.com/story", guid="http://example.com/story", published="2024-01-01T10:05:00Z") # Link-as-ID, same link
 
     mock_feed_data = MockParsedFeed(feed_title="Duplicate Link Feed", entries=[entry1, entry2])
+
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', return_value=("127.0.0.1", "dummy.duplinks.org"))
 
     tab = Tab(name="General", order=1)
     db.session.add(tab)
@@ -306,7 +337,16 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
                                                                                                                                           # but different feed.
     mock_feed2_data = MockParsedFeed(feed_title="Feed 2", entries=[entry_f2_1, entry_f2_2, entry_f2_3])
 
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
     m_parse = mocker.patch('backend.feed_service.feedparser.parse')
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', side_effect=lambda url: ("127.0.0.1", "dummy.host"))
 
     tab = Tab(name="Mixed", order=1)
     db.session.add(tab)
@@ -377,12 +417,14 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     db.session.refresh(feed_obj)
     assert feed_obj.last_updated_time == initial_time_naive, "Initial time setup check"
 
-    # Mock urllib.request.urlopen to return dummy content
-    mock_urlopen = mocker.patch('backend.feed_service.urllib.request.urlopen')
-    mock_response = MagicMock()
-    mock_response.read.return_value = b'<rss></rss>'
-    mock_response.__enter__.return_value = mock_response
-    mock_urlopen.return_value = mock_response
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', return_value=("127.0.0.1", "dummy.timestamp"))
 
     # Scenario 1: Fetch successful, but no entries in the feed
     mock_empty_feed = MockParsedFeed(feed_title="Empty Feed", entries=[])
@@ -410,9 +452,6 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     mock_duplicate_feed = MockParsedFeed(feed_title="Duplicate Feed", entries=[entry_old])
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_duplicate_feed)
 
-    # Re-mock urlopen for the second call (not strictly needed if same mock used, but good practice)
-    mock_response.read.return_value = b'<rss>content</rss>'
-
     success, new_items = feed_service.fetch_and_update_feed(feed_obj.id)
     assert success is True
     assert new_items == 0
@@ -425,16 +464,21 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     logger.info("Testing update_all_feeds() basic run")
     app = db_setup
 
-    # Mock urllib.request.urlopen
-    mock_urlopen = mocker.patch('backend.feed_service.urllib.request.urlopen')
-    mock_response = MagicMock()
-    mock_response.read.return_value = b'<rss></rss>'
-    mock_response.__enter__.return_value = mock_response
-    mock_urlopen.return_value = mock_response
-
     # Mock feedparser.parse to return some basic feeds
     mock_feed_data1 = MockParsedFeed("Feed A", [MockFeedEntry("A1","http://a.com/1","gA1")])
     mock_feed_data2 = MockParsedFeed("Feed B", [MockFeedEntry("B1","http://b.com/1","gB1"), MockFeedEntry("B2","http://b.com/2","gB2")])
+
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
+    # Mock validate_and_resolve_url to bypass SSRF check
+    mocker.patch('backend.feed_service.validate_and_resolve_url', side_effect=[
+        ("127.0.0.1", "feeda.url"),
+        ("127.0.0.1", "feedb.url")
+    ])
 
     m_parse = mocker.patch('backend.feed_service.feedparser.parse')
 
@@ -646,27 +690,24 @@ def test_fetch_feed_toctou_prevention_http(mocker):
         (socket.AF_INET, socket.SOCK_STREAM, 6, '', (safe_ip, 80))
     ]
 
-    # 2. Mock urllib.request.urlopen
-    mock_urlopen = mocker.patch('backend.feed_service.urllib.request.urlopen')
+    # 2. Mock requests.get instead of urllib.request.urlopen
+    mock_requests_get = mocker.patch('backend.feed_service.requests.get')
     mock_response = MagicMock()
-    mock_response.read.return_value = b'<rss><channel><title>Test</title></channel></rss>'
-    mock_response.__enter__.return_value = mock_response # Context manager support
-    mock_urlopen.return_value = mock_response
+    mock_response.content = b'<rss><channel><title>Test</title></channel></rss>'
+    mock_response.raise_for_status = MagicMock()
+    mock_requests_get.return_value = mock_response
 
     # 3. Call fetch_feed with HTTP URL
     url = "http://example.com/feed"
     result = feed_service.fetch_feed(url)
 
-    # 4. Verify urllib was called with the IP-based URL and correct Host header
+    # 4. Verify requests.get was called with the IP-based URL and correct Host header
     assert result is not None
 
-    # Check that Request was initialized with the IP address
-    # We need to spy on urllib.request.Request or inspect the arguments passed to urlopen
-    # urlopen arg can be a Request object.
-
-    args, kwargs = mock_urlopen.call_args
-    req_obj = args[0]
+    args, kwargs = mock_requests_get.call_args
+    target_url = args[0]
+    headers = kwargs.get('headers', {})
 
     # For HTTP, we expect the URL to be rewritten to the IP
-    assert f"http://{safe_ip}/feed" in req_obj.full_url
-    assert req_obj.get_header('Host') == "example.com"
+    assert f"http://{safe_ip}/feed" == target_url
+    assert headers.get('Host') == "example.com"

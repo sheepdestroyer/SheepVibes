@@ -4,13 +4,15 @@ import datetime # Import the full module
 from datetime import timezone # Specifically import timezone
 import logging # Standard logging
 import ssl # Added for specific SSL error catching
+import concurrent.futures # Added for parallel execution
+import os # Added for environment variables
+from collections import defaultdict # Added for grouping feeds by URL
 import socket
 import ipaddress
-import os
 from urllib.parse import urlparse
-import urllib.request
 from dateutil import parser as date_parser # Use dateutil for robust date parsing
 from sqlalchemy.exc import IntegrityError
+import requests # Added for robust fetching with timeouts
 
 # Import database models from the new models.py
 from .models import db, Feed, FeedItem
@@ -22,6 +24,33 @@ logger = logging.getLogger(__name__)
 MAX_ITEMS_PER_FEED = 100
 
 # --- Helper Functions ---
+
+def _get_env_int(var_name, default_value):
+    """
+    Retrieves an environment variable as an integer, falling back to a default
+    if the variable is not set or is not a valid integer.
+    Also ensures the value is positive.
+
+    Args:
+        var_name (str): The name of the environment variable.
+        default_value (int): The default value to return.
+
+    Returns:
+        int: The parsed integer value or the default.
+    """
+    try:
+        value = int(os.environ.get(var_name, default_value))
+        if value <= 0:
+            logger.warning(f"Invalid non-positive value for {var_name}. Defaulting to {default_value}.")
+            return default_value
+        return value
+    except ValueError:
+        logger.warning(f"Invalid value for {var_name}. Defaulting to {default_value}.")
+        return default_value
+
+# Configuration constants
+FEED_FETCH_MAX_WORKERS = _get_env_int("FEED_FETCH_MAX_WORKERS", 10)
+FEED_FETCH_TIMEOUT = _get_env_int("FEED_FETCH_TIMEOUT", 30)
 
 def parse_published_time(entry):
     """Attempts to parse the published time from a feed entry.
@@ -116,7 +145,7 @@ def validate_and_resolve_url(url):
         return None, None
 
 def fetch_feed(feed_url):
-    """Fetches and parses a feed, preventing SSRF via IP pinning."""
+    """Fetches and parses a feed using requests and feedparser, preventing SSRF."""
     safe_ip, hostname = validate_and_resolve_url(feed_url)
     if not safe_ip:
         return None
@@ -125,26 +154,55 @@ def fetch_feed(feed_url):
     try:
         # Prevent TOCTOU: Fetch using the validated IP
         parsed = urlparse(feed_url)
+
         # Only rewrite URL for HTTP to avoid SSL hostname mismatch
+        # For HTTPS, we accept the risk of DNS rebinding between check and fetch for now
+        # to ensure SSL validation passes without complex custom adapters.
         if parsed.scheme == 'http':
+            # Reconstruct URL using safe_ip as the netloc (host)
+            # This ensures we connect to the IP we validated
             target_url = parsed._replace(netloc=safe_ip).geturl()
+            headers = {'Host': hostname, 'User-Agent': 'SheepVibes/1.0'}
         else:
-            target_url = feed_url # For HTTPS, rely on initial validation (risk accepted)
+            target_url = feed_url
+            headers = {'User-Agent': 'SheepVibes/1.0'}
 
-        req = urllib.request.Request(target_url, headers={'Host': hostname, 'User-Agent': 'SheepVibes/1.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            content = response.read()
+        # Use requests to fetch content with a timeout, avoiding thread-blocking issues
+        response = requests.get(target_url, headers=headers, timeout=FEED_FETCH_TIMEOUT)
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx, 5xx)
 
-        parsed_feed = feedparser.parse(content)
-        # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
+        # Parse the content directly
+        parsed_feed = feedparser.parse(response.content)
         
         if parsed_feed.bozo:
-             logger.warning(f"Feed parsing warning: {parsed_feed.get('bozo_exception')}")
+            bozo_exc = parsed_feed.get('bozo_exception', Exception('Unknown parsing error (bozo=1)'))
+            error_message = str(bozo_exc)
 
+            if "SSL" in error_message.upper() or \
+               "CERTIFICATE" in error_message.upper() or \
+               isinstance(bozo_exc, ssl.SSLError):
+                logger.error(
+                    f"Failed to fetch feed {feed_url} due to SSL/Certificate error (feedparser bozo): {error_message}",
+                    exc_info=False
+                )
+            else:
+                logger.warning(f"Feed is ill-formed: {feed_url} - Error: {error_message}")
+
+        if not parsed_feed.entries and not parsed_feed.bozo:
+             logger.warning(f"No entries found in feed (and not a bozo feed): {feed_url}")
+
+        if not parsed_feed.bozo:
+            logger.info(f"Successfully fetched feed: {feed_url}")
         return parsed_feed
 
+    except requests.exceptions.RequestException as req_e:
+        logger.error(f"Network error fetching feed {feed_url}: {req_e}")
+        return None
+    except ssl.SSLError as ssl_e:
+        logger.error(f"Direct SSL Error during fetch attempt for {feed_url}: {ssl_e}", exc_info=True)
+        return None
     except Exception as e:
-        logger.error(f"Error fetching feed {feed_url}: {e}", exc_info=True)
+        logger.error(f"Generic error fetching or parsing feed {feed_url}: {e}", exc_info=True)
         return None
 
 def process_feed_entries(feed_db_obj, parsed_feed):
@@ -204,27 +262,16 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
         # Determine the GUID to be stored in the database (db_guid).
         # The GUID is essential for uniquely identifying feed items over time.
-        # While feedparser provides an 'id' field, it can be unreliable or non-unique in some feeds.
-        # The item's link, however, is almost always unique.
-        #
-        # Previously, the logic tried to create a "true" GUID only if the feedparser 'id' was
-        # different from the link, otherwise leaving it as None. This led to issues when
-        # a feed used the same non-link 'id' for multiple, different items, causing a UNIQUE
-        # constraint violation on (feed_id, guid).
-        #
         # The new strategy is to always use the entry's link as the primary GUID. This ensures
-        # that every item has a reliable, unique identifier, preventing database errors and
-        # ensuring that updates are processed correctly.
+        # that every item has a reliable, unique identifier.
         db_guid = entry_link
 
         # --- Deduplication Logic ---
         # 1. Check against items already in the DB *for this specific feed*
         if db_guid and db_guid in existing_feed_guids:
-            # logger.debug(f"Item with db_guid '{db_guid}' already exists in DB for feed '{feed_db_obj.name}'. Skipping.")
             continue
         # Check link for this feed, critical for items that will have db_guid=None or if link is the primary identifier
         if entry_link in existing_feed_links:
-            # logger.debug(f"Item with link '{entry_link}' already exists in DB for feed '{feed_db_obj.name}'. Skipping. (db_guid was: {db_guid})")
             continue
 
         # 2. Check against items already processed *in this current batch*
@@ -245,9 +292,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         # Add its identifiers to the batch processed sets for subsequent checks within this batch.
         if db_guid:
             batch_processed_guids.add(db_guid)
-        # Always add the link to batch_processed_links. For items with true GUIDs, this helps
-        # catch subsequent items in the same batch that *lack* a true GUID but share the same link.
-        # For items without true GUIDs, this is their primary batch duplicate check.
+        
         batch_processed_links.add(entry_link)
 
         published_time = parse_published_time(entry) # Already falls back to now()
@@ -257,7 +302,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             title=entry_title,
             link=entry_link,
             published_time=published_time,
-            guid=db_guid # This will be None if feedparser_id was missing or same as link
+            guid=db_guid
         )
         items_to_add.append(new_item)
 
@@ -281,9 +326,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         db.session.rollback() # Rollback the failed batch
         logger.warning(f"Batch insert failed for feed '{feed_db_obj.name}' due to IntegrityError: {e}. Attempting individual inserts.")
 
-        # Ensure last_updated_time is set even if all individual inserts fail,
-        # as the feed itself was successfully fetched and processed up to this point.
-        # This needs to be part of a new transaction if the previous one was rolled back.
+        # Ensure last_updated_time is set even if all individual inserts fail
         try:
             feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
             db.session.add(feed_db_obj) # Re-add if it became detached after rollback
@@ -294,9 +337,6 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
         for item_to_add in items_to_add:
             try:
-                # Each item needs to be added to a fresh session or re-added if the session was rolled back.
-                # If items were expunged by rollback, they might need to be re-created or merged.
-                # Simplest is to re-add to current session if it's still active for individual commits.
                 db.session.add(item_to_add) # Re-add the item to the session
                 db.session.commit()
                 committed_items_count += 1
@@ -320,14 +360,12 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
     # --- Cache Eviction Logic ---
     # After adding new items, check if the total number of items exceeds the limit.
-    # If so, delete the oldest items to keep the total at the limit.
     current_item_count = db.session.query(FeedItem).filter_by(feed_id=feed_db_obj.id).count()
 
     if current_item_count > MAX_ITEMS_PER_FEED:
         num_to_delete = current_item_count - MAX_ITEMS_PER_FEED
         
         # Use a subquery to find and delete the oldest items in a single operation.
-        # This is more efficient than fetching IDs into application memory.
         oldest_item_ids_q = (
             db.session.query(FeedItem.id)
             .filter_by(feed_id=feed_db_obj.id)
@@ -335,7 +373,6 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             .limit(num_to_delete)
         )
 
-        # The `delete()` method returns the number of rows deleted.
         deleted_count = db.session.query(FeedItem).filter(FeedItem.id.in_(oldest_item_ids_q)).delete(synchronize_session=False)
 
         if deleted_count > 0:
@@ -347,6 +384,41 @@ def process_feed_entries(feed_db_obj, parsed_feed):
                 logger.error(f"Error committing eviction of old items for feed '{feed_db_obj.name}': {e}", exc_info=True)
 
     return committed_items_count
+
+def _apply_feed_update(feed, parsed_feed):
+    """
+    Applies updates to a feed from a parsed feed object.
+    Helper used by both single and batch update operations.
+
+    Args:
+        feed: The Feed database object.
+        parsed_feed: The result from feedparser.parse().
+
+    Returns:
+        tuple (success, new_items_count):
+        - success (bool): True if processing completed (even with 0 items), False on critical failure.
+        - new_items_count (int): Number of new items added.
+    """
+    if not parsed_feed:
+        logger.error(f"Fetching content for feed '{feed.name}' (ID: {feed.id}) failed because fetch_feed returned None.")
+        return False, 0
+
+    if not parsed_feed.entries:
+        logger.info(f"Feed '{feed.name}' (ID: {feed.id}) fetched successfully but contained no entries.")
+        feed.last_updated_time = datetime.datetime.now(timezone.utc)
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error committing feed update (no entries) for {feed.name}: {e}", exc_info=True)
+        return True, 0
+
+    try:
+        new_items = process_feed_entries(feed, parsed_feed)
+        return True, new_items
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during entry processing for feed '{feed.name}' (ID: {feed.id}): {e}", exc_info=True)
+        return False, 0
 
 def fetch_and_update_feed(feed_id):
     """Fetches a single feed by ID, processes its entries, and updates the database.
@@ -365,64 +437,68 @@ def fetch_and_update_feed(feed_id):
         return False, 0
 
     parsed_feed = fetch_feed(feed.url)
-    if not parsed_feed:
-        logger.error(f"Fetching content for feed '{feed.name}' (ID: {feed_id}) failed because fetch_feed returned None.")
-        # Optionally update last_updated_time to now with a failure status
-        # feed.last_updated_time = datetime.datetime.now(timezone.utc)
-        # db.session.commit() # Be careful with commits in error paths
-        return False, 0
-
-    # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
-    if not parsed_feed.entries:
-        logger.info(f"Feed '{feed.name}' (ID: {feed_id}) fetched successfully but contained no entries.")
-        feed.last_updated_time = datetime.datetime.now(timezone.utc)
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error committing feed update (no entries) for {feed.name}: {e}", exc_info=True)
-            # Still, the fetch itself might be considered a "success" in terms of reachability
-        return True, 0
-
-    try:
-        new_items = process_feed_entries(feed, parsed_feed)
-        # process_feed_entries handles its own logging and commits for items and last_updated_time.
-        # Success here means process_feed_entries completed without raising an exception to this level.
-        return True, new_items
-    except Exception as e: # Catch any unexpected error from process_feed_entries not caught internally
-        logger.error(f"An unexpected error occurred during entry processing for feed '{feed.name}' (ID: {feed_id}): {e}", exc_info=True)
-        return False, 0
+    return _apply_feed_update(feed, parsed_feed)
 
 def update_all_feeds():
-    """Iterates through all feeds in the database, fetches updates, and processes entries.
+    """Iterates through all feeds in the database, fetches updates in PARALLEL, and processes entries.
 
     Returns:
         A tuple (total_feeds_processed_successfully, total_new_items):
         - total_feeds_processed_successfully (int): Number of feeds where fetch and process stages completed without critical failure.
         - total_new_items (int): Total new items added across all feeds.
     """
-    all_feeds = Feed.query.all()
-    total_new_items = 0
-    attempted_count = 0
-    processed_successfully_count = 0 # Feeds that completed fetch & process_feed_entries call
-    
-    logger.info(f"Starting update process for {len(all_feeds)} feeds.")
+    # Query for IDs and URLs only to avoid holding session-attached objects
+    # that might get detached or stale during the long parallel fetch phase
+    all_feeds_data = db.session.query(Feed.id, Feed.url).all()
 
-    for feed_obj in all_feeds: # Renamed to avoid conflict
-        attempted_count += 1
-        logger.info(f"Updating feed: {feed_obj.name} ({feed_obj.id}) - URL: {feed_obj.url}")
-        try:
-            success, new_items = fetch_and_update_feed(feed_obj.id)
-            if success: # True if fetch_and_update_feed completed its course
-                total_new_items += new_items
-                processed_successfully_count +=1
-            # Failures within fetch_and_update_feed are logged there.
-        except Exception as e:
-            # This catches unexpected errors during the loop for a specific feed,
-            # e.g., if fetch_and_update_feed itself has an unhandled exception before returning.
-            logger.error(f"Unexpected critical error in update_all_feeds loop for feed {feed_obj.name} ({feed_obj.id}): {e}", exc_info=True)
-            # Continue to the next feed
-            continue 
+    total_new_items = 0
+    attempted_count = len(all_feeds_data)
+    processed_successfully_count = 0
+
+    logger.info(f"Starting parallel update process for {attempted_count} feeds with {FEED_FETCH_MAX_WORKERS} workers.")
+
+    # Group feeds by URL to avoid redundant fetches
+    feeds_by_url = defaultdict(list)
+    for feed_id, url in all_feeds_data:
+        feeds_by_url[url].append(feed_id)
+
+    # Map future to URL for result handling
+    with concurrent.futures.ThreadPoolExecutor(max_workers=FEED_FETCH_MAX_WORKERS) as executor:
+        # Submit unique fetch tasks
+        future_to_url = {
+            executor.submit(fetch_feed, url): url
+            for url in feeds_by_url.keys()
+        }
+
+        for future in concurrent.futures.as_completed(future_to_url):
+            url = future_to_url[future]
+            feed_ids_for_url = feeds_by_url[url]
+            try:
+                # Add timeout to prevent indefinite blocking from a stuck worker/fetch
+                # Even though fetch_feed has an internal timeout now, this is a safety net
+                parsed_feed = future.result(timeout=FEED_FETCH_TIMEOUT + 5)
+
+                # Apply the single fetch result to all feeds sharing this URL
+                for feed_id in feed_ids_for_url:
+                    # Get a fresh feed object from the DB session for each update.
+                    # This ensures we are attached to the current session.
+                    feed_obj = db.session.get(Feed, feed_id)
+                    if not feed_obj:
+                        logger.warning(f"Feed ID {feed_id} not found in database during update processing for URL {url}.")
+                        continue
+
+                    logger.info(f"Processing fetched data for feed: {feed_obj.name} ({feed_id})")
+                    # We reuse the same parsed_feed object, which is efficient
+                    success, new_items = _apply_feed_update(feed_obj, parsed_feed)
+
+                    if success:
+                        total_new_items += new_items
+                        processed_successfully_count += 1
+
+            except concurrent.futures.TimeoutError:
+                logger.error(f"Timeout waiting for feed fetch to complete for URL {url} (affecting feed IDs: {feed_ids_for_url}).")
+            except Exception as e:
+                logger.exception(f"Error updating feeds for URL {url} (affecting feed IDs: {feed_ids_for_url}): {e}")
             
-    logger.info(f"Finished updating feeds. Attempted: {attempted_count}, Successfully Processed (fetch & process stages): {processed_successfully_count}, Total New Items Added: {total_new_items}")
+    logger.info(f"Finished updating feeds. Attempted: {attempted_count}, Successfully Processed: {processed_successfully_count}, Total New Items Added: {total_new_items}")
     return processed_successfully_count, total_new_items
