@@ -10,6 +10,7 @@ readonly REDIS_IMAGE="redis:alpine"
 readonly VOLUME_NAME="sheepvibes-dev-data"
 readonly CONTAINER_PORT="5000"
 readonly CMD="podman"
+readonly SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
 # --- Functions ---
 check_requirements() {
@@ -34,8 +35,6 @@ do_up() {
     echo "Checking for image $APP_IMAGE_NAME..."
     if ! "$CMD" image exists "$APP_IMAGE_NAME"; then
         echo "Image not found. Building..."
-        local SCRIPT_DIR
-        SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
         local REBUILD_SCRIPT="$SCRIPT_DIR/rebuild_container.sh"
         
         if [[ ! -x "$REBUILD_SCRIPT" ]]; then
@@ -48,10 +47,16 @@ do_up() {
         echo "Image exists. Skipping build. (Run scripts/rebuild_container.sh explicitly to rebuild)"
     fi
 
-    # 2. Clean up existing dev pod
+    # 2. Clean up existing dev pod and leftover containers
     if "$CMD" pod exists "$POD_NAME" 2>/dev/null; then
         echo "Existing pod named $POD_NAME found. Removing..."
         "$CMD" pod rm -f "$POD_NAME"
+    fi
+    
+    # Ensure containers are also gone (in case they were detached from pod)
+    if "$CMD" ps -a --format '{{.Names}}' | grep -E "^(${APP_CONTAINER_NAME}|${REDIS_CONTAINER_NAME})$" >/dev/null; then
+        echo "Removing leftover containers..."
+        "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
     fi
 
     # 3. Create Pod and Containers

@@ -88,14 +88,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] **Styling:** Refine CSS to better match the Netvibes look and feel. Make it reasonably responsive.
 *   [x] **Empty States:** Handle cases where a feed has no items or a tab has no feeds. Display informative messages.
 *   [x] **Optimization:**
-    *   [x] Optimize database queries.
-    *   [x] Implement backend caching (Redis) with granular invalidation.
-    *   [x] Minimize frontend re-renders.
+  *   [x] Optimize database queries.
+  *   [x] Implement backend caching (Redis) with granular invalidation.
+  *   [x] Minimize frontend re-renders.
 *   [x] **Developer Experience:**
-    *   [x] Implement `scripts/dev_manager.sh` for simplified local environment management.
+  *   [x] Implement `scripts/dev_manager.sh` for simplified local environment management.
 *   [x] **Documentation:**
-    *   [x] Write `README.md` covering setup instructions (building/running with Podman), configuration, and basic usage.
-    *   [x] Add comments to the code (JSDoc for frontend, Google Style for backend).
+  *   [x] Write `README.md` covering setup instructions (building/running with Podman), configuration, and basic usage.
+  *   [x] Add comments to the code (JSDoc for frontend, Google Style for backend).
 *   [x] **Testing:**
     *   [x] Add basic unit tests for backend logic (feed parsing, database interactions).
     *   [x] Add basic unit tests for backend logic (API endpoints).
