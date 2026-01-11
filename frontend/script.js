@@ -1078,6 +1078,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function handleEditFeedCancel() {
+        const saveButton = document.getElementById('save-feed-button');
+        // Prevent closing the modal if a save operation is in progress.
+        if (saveButton.disabled) {
+            return;
+        }
+        const modal = document.getElementById('edit-feed-modal');
+        modal.classList.remove('is-active');
+    }
+
     /** Main initialization function called on DOMContentLoaded. */
     async function initialize() {
         // Move modal to its root container for proper stacking context
