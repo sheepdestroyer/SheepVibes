@@ -14,9 +14,19 @@ readonly CMD="${DEV_CMD:-podman}"
 readonly BUILD_CONTEXT="${DEV_BUILD_CONTEXT:-.}"
 readonly CONTAINERFILE="${DEV_CONTAINERFILE:-Containerfile}"
 
+# Enforce that CMD is a bare executable path without embedded arguments
+if [[ "$CMD" =~ [[:space:]] ]]; then
+    echo "Error: DEV_CMD must be an executable path without arguments (no whitespace): '$CMD'" >&2
+    echo "If you need to pass arguments, wrap them in a wrapper script and set DEV_CMD to that script." >&2
+    exit 1
+fi
+
 # Robust script directory detection
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 readonly SCRIPT_DIR
+
+# Get base command name for display
+readonly CMD_BASE="$(basename -- "$CMD")"
 
 # --- Functions ---
 check_requirements() {
@@ -26,7 +36,7 @@ check_requirements() {
     fi
     
     # Check if the resolved command basename is podman
-    if [[ "$(basename -- "$CMD")" != "podman" ]]; then
+    if [[ "$CMD_BASE" != "podman" ]]; then
         echo "Error: This script is Podman-only. Found: $CMD" >&2
         exit 1
     fi
@@ -94,7 +104,7 @@ do_up() {
         exit 1
     fi
 
-    echo "--- SheepVibes Dev Environment Setup (Runtime: $CMD) ---"
+    echo "--- SheepVibes Dev Environment Setup (Runtime: $CMD_BASE) ---"
 
     # 1. Check/Build Image
     if [[ "$REBUILD" == true ]]; then
@@ -156,7 +166,7 @@ do_down() {
         esac
     done
 
-    echo "--- SheepVibes Dev Environment Teardown (Runtime: $CMD) ---"
+    echo "--- SheepVibes Dev Environment Teardown (Runtime: $CMD_BASE) ---"
 
     if "$CMD" pod exists "$POD_NAME" 2>/dev/null; then
         echo "Removing pod $POD_NAME..."
@@ -185,7 +195,9 @@ do_down() {
 }
 
 usage() {
-    echo "Usage: \"$0\" {up [port] [--rebuild]|down [--clean]}" >&2
+    local SCRIPT_NAME
+    SCRIPT_NAME="$(basename -- "$0")"
+    echo "Usage: \"$SCRIPT_NAME\" {up [port] [--rebuild]|down [--clean]}" >&2
     echo "  up [port] [--rebuild]: Start dev environment (default port: ${DEFAULT_HOST_PORT})" >&2
     echo "                         Use --rebuild to force image rebuild." >&2
     echo "  down [--clean]       : Stop dev environment. Use --clean to delete data volume." >&2
@@ -195,8 +207,12 @@ usage() {
 # --- Main Dispatch ---
 check_requirements
 
-COMMAND="${1:-}"
-shift || usage
+if (( $# < 1 )); then
+    usage
+fi
+
+COMMAND="$1"
+shift
 
 case "$COMMAND" in
     up)
