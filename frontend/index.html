@@ -18,14 +18,19 @@
             <button id="rename-tab-button" title="Rename Active Tab">Rename</button>
             <button id="delete-tab-button" title="Delete Active Tab">-</button>
         </div>
-        <div id="add-feed-section">
-            <input type="text" id="feed-url-input" placeholder="Enter feed URL">
-            <small id="add-feed-error" style="color: red; display: none;"></small>
-            <button id="add-feed-button">Add Feed</button>
-            <button id="refresh-all-feeds-button">Refresh All Feeds</button>
-            <button id="export-opml-button">Export OPML</button>
-            <input type="file" id="opml-file-input" accept=".opml, .xml" style="display: none;">
-            <button id="import-opml-button">Import OPML</button>
+        <div id="settings-menu-container">
+            <button id="settings-button">⚙️</button>
+            <div id="settings-menu" class="hidden">
+                <div id="add-feed-section">
+                    <input type="text" id="feed-url-input" placeholder="Enter feed URL">
+                    <small id="add-feed-error" style="color: red; display: none;"></small>
+                    <button id="add-feed-button">Add Feed</button>
+                </div>
+                <button id="refresh-all-feeds-button">Refresh All Feeds</button>
+                <button id="export-opml-button">Export OPML</button>
+                <input type="file" id="opml-file-input" accept=".opml, .xml" style="display: none;">
+                <button id="import-opml-button">Import OPML</button>
+            </div>
         </div>
     </header>
     <main id="feed-grid">
@@ -35,7 +40,7 @@
     <!-- Edit Feed Modal -->
     <div id="edit-feed-modal" class="modal">
         <div class="modal-content">
-            <button class="modal-close-button">&times;</button>
+            <button id="edit-feed-modal-close-button" class="modal-close-button">&times;</button>
             <h2>Edit Feed</h2>
             <form id="edit-feed-form">
                 <input type="hidden" id="edit-feed-id">

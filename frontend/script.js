@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportOpmlButton = document.getElementById('export-opml-button');
     const importOpmlButton = document.getElementById('import-opml-button');
     const opmlFileInput = document.getElementById('opml-file-input');
+    // MERGE: Keep Main's settings buttons
+    const settingsButton = document.getElementById('settings-button');
+    const settingsMenu = document.getElementById('settings-menu');
 
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -330,7 +333,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/opml/import', {
                 method: 'POST',
-                body: formData, // fetch automatically sets Content-Type for FormData
+                headers: {}, // fetch automatically sets Content-Type for FormData
+                body: formData
             });
 
             const data = await response.json();
@@ -797,287 +801,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /**
-     * Handles the cancellation of the edit feed form.
-     */
-    function handleEditFeedCancel() {
-        const saveButton = document.getElementById('save-feed-button');
-        // Prevent closing the modal if a save operation is in progress.
-        if (saveButton.disabled) {
-            return;
-        }
-        const modal = document.getElementById('edit-feed-modal');
-        modal.classList.remove('is-active');
-    }
-
-    // --- Mark Item as Read Logic ---
-
-    /**
-     * Handles scrolling to load more items when reaching the bottom of a feed's item list.
-     * @param {Event} event - The scroll event.
-     */
-    async function handleScrollLoadMore(event) {
-        const itemList = event.target;
-
-        // Check if we are near the bottom of the list
-        const isAtBottom = (itemList.scrollTop + itemList.clientHeight) >= itemList.scrollHeight - SCROLL_BUFFER;
-        const isLoading = itemList.dataset.loading === 'true';
-        const allItemsLoaded = itemList.dataset.allItemsLoaded === 'true';
-
-        if (!isAtBottom || isLoading || allItemsLoaded) {
-            return; // Exit if not at the bottom, or if we're already loading or all items are loaded
-        }
-
-        itemList.dataset.loading = 'true'; // Set loading flag
-
-        const feedId = itemList.dataset.feedId;
-        const tabId = itemList.dataset.tabId; // Use stored tabId instead of DOM traversal
-        let offset = parseInt(itemList.dataset.offset, 10);
-        const limit = ITEMS_PER_PAGE; // Number of items to fetch per scroll
-
-        try {
-            const newItems = await fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`);
-
-            if (newItems && newItems.length > 0) {
-                const fragment = document.createDocumentFragment();
-                newItems.forEach(item => {
-                    const listItem = createFeedItemElement(item, (li) => {
-                        handleMarkItemRead(item.id, li, feedId, tabId);
-                    });
-                    fragment.appendChild(listItem);
-                });
-                itemList.appendChild(fragment);
-
-                // Update the offset for the next fetch
-                itemList.dataset.offset = offset + newItems.length;
-            } else {
-                // No more items to load
-                itemList.dataset.allItemsLoaded = 'true';
-                const noMoreItemsMsg = document.createElement('li');
-                noMoreItemsMsg.textContent = 'No more items';
-                noMoreItemsMsg.classList.add('no-more-items-message');
-                itemList.appendChild(noMoreItemsMsg);
-            }
-        } catch (error) {
-            console.error('Error loading more items:', error);
-            showToast('Error loading more items. Please try again later.', 'error');
-        } finally {
-            itemList.dataset.loading = 'false'; // Reset loading flag
-        }
-    }
-
-    /**
-     * Handles the click event on a feed item link to mark it as read.
-     * @param {number} itemId - The ID of the item to mark as read.
-     * @param {HTMLElement} listItemElement - The <li> element of the item.
-     * @param {number} feedId - The ID of the parent feed.
-     * @param {number} tabId - The ID of the parent tab.
-     */
-    async function handleMarkItemRead(itemId, listItemElement, feedId, tabId) {
-        if (listItemElement.classList.contains('unread')) {
-            console.log(`Marking item ${itemId} as read`);
-            try {
-                await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
-
-                // If fetchData completes without throwing, the operation was successful.
-                console.log(`Successfully marked item ${itemId} as read.`);
-                listItemElement.classList.remove('unread');
-                listItemElement.classList.add('read');
-                updateUnreadCount(feedId, -1);
-                updateUnreadCount(tabId, -1, true);
-            } catch (error) {
-                console.error('Error marking item as read:', error);
-                // Don't show alert for this as it's a frequent operation
-            }
-        }
-    }
-
-    /**
-     * Updates the unread count badge for a given feed or tab.
-     * @param {number} id - The ID of the feed or tab.
-     * @param {number} change - The amount to change the count by (e.g., -1).
-     * @param {boolean} [isTab=false] - Whether the ID refers to a tab.
-     */
-    function updateUnreadCount(id, change, isTab = false) {
-        const badgeSelector = '.unread-count-badge';
-        let element;
-        let prepend = false;
-
-        if (isTab) {
-            // For tabs, the badge is appended to the button
-            element = document.querySelector(`#tabs-container button[data-tab-id="${id}"]`);
-        } else {
-            // For feed widgets, the badge is prepended to the button container
-            element = document.querySelector(`.feed-widget[data-feed-id="${id}"] .feed-widget-buttons`);
-            prepend = true;
-        }
-
-        if (!element) return;
-
-        let badge = element.querySelector(badgeSelector);
-
-        let currentCount = 0;
-        if (badge) {
-            currentCount = parseInt(badge.textContent) || 0;
-        }
-
-        const newCount = Math.max(0, currentCount + change);
-
-        if (newCount > 0) {
-            if (badge) {
-                badge.textContent = newCount;
-            } else {
-                badge = createBadge(newCount);
-                if (prepend) {
-                    element.prepend(badge);
-                } else {
-                    element.appendChild(badge);
-                }
-            }
-        } else {
-            if (badge) {
-                badge.remove();
-            }
-        }
-    }
-
-    // --- Tab Management Logic ---
-
-    /** Handles the click event for the "Add Tab" button. */
-    async function handleAddTab() {
-        const newTabName = prompt('Enter the name for the new tab:');
-        if (!newTabName || !newTabName.trim()) {
-            return;
-        }
-
-        console.log(`Adding tab: ${newTabName}`);
-        addTabButton.disabled = true;
-        addTabButton.textContent = 'Adding...';
-
-        try {
-            const newTabData = await fetchData('/api/tabs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newTabName.trim() }),
-            });
-
-            console.log('Tab added:', newTabData);
-            await initializeTabs();
-            await setActiveTab(newTabData.id);
-        } catch (error) {
-            console.error('Error adding tab:', error);
-            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while adding the tab.';
-            showToast(`Failed to add tab: ${displayMessage}`, 'error');
-        } finally {
-            addTabButton.disabled = false;
-            addTabButton.textContent = 'Add Tab';
-        }
-    }
-
-    /** Handles the click event for the "Rename Tab" button. */
-    async function handleRenameTab() {
-        if (!activeTabId) {
-            showToast('Please select a tab to rename.', 'info');
-            return;
-        }
-
-        const currentTab = allTabs.find(t => t.id === activeTabId);
-        const newTabName = prompt('Enter the new name for the tab:', currentTab ? currentTab.name : '');
-        if (!newTabName || !newTabName.trim()) {
-            return;
-        }
-        if (currentTab && newTabName.trim() === currentTab.name) {
-            return;
-        }
-
-        console.log(`Renaming tab ${activeTabId} to: ${newTabName}`);
-        try {
-            const updatedTabData = await fetchData(`/api/tabs/${activeTabId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newTabName.trim() }),
-            });
-
-            console.log('Tab renamed:', updatedTabData);
-            await initializeTabs(true);
-        } catch (error) {
-            console.error('Error renaming tab:', error);
-            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while renaming the tab.';
-            showToast(`Failed to rename tab: ${displayMessage}`, 'error');
-        }
-    }
-
-    /** Handles the click event for the "Delete Tab" button. */
-    async function handleDeleteTab() {
-        if (!activeTabId) {
-            showToast('Please select a tab to delete.', 'info');
-            return;
-        }
-        // Removed: if (allTabs.length <= 1) check to allow deleting the last tab.
-
-        const currentTab = allTabs.find(t => t.id === activeTabId);
-        if (!confirm(`Are you sure you want to delete the tab "${currentTab ? currentTab.name : activeTabId}" and all its feeds?`)) {
-            return;
-        }
-
-        console.log(`Deleting tab: ${activeTabId}`);
-        try {
-            await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
-
-            console.log(`Tab ${activeTabId} deleted successfully.`);
-            // If the deleted tab was the active one, clear activeTabId before re-initializing
-            const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
-            if (activeTabId === deletedTabId) {
-                activeTabId = null;
-                localStorage.removeItem('activeTabId'); // Explicitly clear from storage
-            }
-
-            // Remove the deleted tab's widgets from the DOM
-            document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
-            loadedTabs.delete(deletedTabId);
-            // activeTabId is already set to null if it was the one deleted.
-            // initializeTabs will handle selecting a new active tab or setting to null if no tabs remain.
-            await initializeTabs();
-        } catch (error) {
-            console.error('Error deleting tab:', error);
-            const displayMessage = error.backendMessage || error.message || 'An unexpected error occurred while deleting the tab.';
-            showToast(`Failed to delete tab: ${displayMessage}`, 'error');
-        }
-    }
-
-    // --- Initial Load ---
-
-    /** 
-     * Fetches the list of tabs from the API and renders them.
-     * @param {boolean} [isUpdate=false] - If true, keeps the current active tab.
-     */
-    async function initializeTabs(isUpdate = false) {
-        const currentActiveId = isUpdate ? activeTabId : localStorage.getItem('activeTabId');
-        try {
-            const tabs = await fetchData('/api/tabs');
-            if (tabs) {
-                // Attempt to restore activeTabId from localStorage if not doing a specific update that preserves it
-                let storedActiveTabId = localStorage.getItem('activeTabId');
-                if (storedActiveTabId && tabs.some(t => t.id == storedActiveTabId)) {
-                    activeTabId = parseInt(storedActiveTabId);
-                } else if (currentActiveId && tabs.some(t => t.id == currentActiveId)) {
-                    activeTabId = parseInt(currentActiveId); // Use current if valid and stored is not
-                } else {
-                    activeTabId = null; // Fallback if stored/current is invalid
-                    localStorage.removeItem('activeTabId'); // Clean up invalid stored ID
-                }
-                renderTabs(tabs);
-            } else {
-                renderTabs([]);
-                localStorage.removeItem('activeTabId'); // No tabs, so no active tab
-            }
-        } catch (error) {
-            console.error('Error initializing tabs:', error);
-            renderTabs([]);
-            localStorage.removeItem('activeTabId'); // Clear invalid stored ID on error
-        }
-    }
-
     function handleEditFeedCancel() {
         const saveButton = document.getElementById('save-feed-button');
         // Prevent closing the modal if a save operation is in progress.
@@ -1126,6 +849,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 handleEditFeedCancel();
             }
         });
+
+        // Settings menu toggle
+        if (settingsButton && settingsMenu) {
+            settingsButton.addEventListener('click', (event) => {
+                event.stopPropagation(); // Prevent the document click listener from immediately closing the menu
+                settingsMenu.classList.toggle('hidden');
+            });
+
+            // Close settings menu when clicking outside
+            document.addEventListener('click', (event) => {
+                // If the menu is visible AND the click was not inside the menu AND the click was not the settings button
+                if (!settingsMenu.classList.contains('hidden') && !settingsMenu.contains(event.target) && event.target !== settingsButton) {
+                    settingsMenu.classList.add('hidden');
+                }
+            });
+        }
 
         // Fetch initial tabs to start the application
         await initializeTabs();
