@@ -6,6 +6,7 @@ import logging # Standard logging
 import ssl # Added for specific SSL error catching
 import concurrent.futures # Added for parallel execution
 import os # Added for environment variables
+from collections import defaultdict # Added for grouping feeds by URL
 from dateutil import parser as date_parser # Use dateutil for robust date parsing
 from sqlalchemy.exc import IntegrityError
 
@@ -19,7 +20,18 @@ logger = logging.getLogger(__name__)
 MAX_ITEMS_PER_FEED = 100
 
 # Default to 10 workers, but allow override via environment variable
-FEED_FETCH_MAX_WORKERS = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 10))
+try:
+    FEED_FETCH_MAX_WORKERS = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 10))
+except ValueError:
+    logger.warning("Invalid value for FEED_FETCH_MAX_WORKERS. Defaulting to 10.")
+    FEED_FETCH_MAX_WORKERS = 10
+
+# Default fetch timeout (seconds)
+try:
+    FEED_FETCH_TIMEOUT = int(os.environ.get("FEED_FETCH_TIMEOUT", 30))
+except ValueError:
+    logger.warning("Invalid value for FEED_FETCH_TIMEOUT. Defaulting to 30.")
+    FEED_FETCH_TIMEOUT = 30
 
 # --- Helper Functions ---
 
@@ -345,38 +357,47 @@ def update_all_feeds():
     
     logger.info(f"Starting parallel update process for {attempted_count} feeds with {FEED_FETCH_MAX_WORKERS} workers.")
 
-    # Map future to feed ID for result handling
+    # Group feeds by URL to avoid redundant fetches
+    feeds_by_url = defaultdict(list)
+    for feed_id, url in all_feeds_data:
+        feeds_by_url[url].append(feed_id)
+
+    # Map future to URL for result handling
     with concurrent.futures.ThreadPoolExecutor(max_workers=FEED_FETCH_MAX_WORKERS) as executor:
-        # Submit all fetch tasks
-        future_to_feed_id = {
-            executor.submit(fetch_feed, url): feed_id
-            for feed_id, url in all_feeds_data
+        # Submit unique fetch tasks
+        future_to_url = {
+            executor.submit(fetch_feed, url): url
+            for url in feeds_by_url.keys()
         }
 
-        for future in concurrent.futures.as_completed(future_to_feed_id):
-            feed_id = future_to_feed_id[future]
+        for future in concurrent.futures.as_completed(future_to_url):
+            url = future_to_url[future]
+            feed_ids_for_url = feeds_by_url[url]
             try:
                 # Add timeout to prevent indefinite blocking from a stuck worker/fetch
-                parsed_feed = future.result(timeout=30)
+                parsed_feed = future.result(timeout=FEED_FETCH_TIMEOUT)
 
-                # Get a fresh feed object from the DB session for each update.
-                # This ensures we are attached to the current session.
-                feed_obj = db.session.get(Feed, feed_id)
-                if not feed_obj:
-                    logger.warning(f"Feed ID {feed_id} not found in database during update processing.")
-                    continue
+                # Apply the single fetch result to all feeds sharing this URL
+                for feed_id in feed_ids_for_url:
+                    # Get a fresh feed object from the DB session for each update.
+                    # This ensures we are attached to the current session.
+                    feed_obj = db.session.get(Feed, feed_id)
+                    if not feed_obj:
+                        logger.warning(f"Feed ID {feed_id} not found in database during update processing for URL {url}.")
+                        continue
 
-                logger.info(f"Processing fetched data for feed: {feed_obj.name} ({feed_id})")
-                success, new_items = _apply_feed_update(feed_obj, parsed_feed)
+                    logger.info(f"Processing fetched data for feed: {feed_obj.name} ({feed_id})")
+                    # We reuse the same parsed_feed object, which is efficient
+                    success, new_items = _apply_feed_update(feed_obj, parsed_feed)
 
-                if success:
-                    total_new_items += new_items
-                    processed_successfully_count += 1
+                    if success:
+                        total_new_items += new_items
+                        processed_successfully_count += 1
 
             except concurrent.futures.TimeoutError:
-                logger.error(f"Timeout waiting for feed fetch to complete for feed ID {feed_id}.")
+                logger.error(f"Timeout waiting for feed fetch to complete for URL {url} (affecting feed IDs: {feed_ids_for_url}).")
             except Exception as e:
-                logger.error(f"Error updating feed ID {feed_id}: {e}", exc_info=True)
+                logger.error(f"Error updating feeds for URL {url} (affecting feed IDs: {feed_ids_for_url}): {e}", exc_info=True)
             
     logger.info(f"Finished updating feeds. Attempted: {attempted_count}, Successfully Processed: {processed_successfully_count}, Total New Items Added: {total_new_items}")
     return processed_successfully_count, total_new_items
