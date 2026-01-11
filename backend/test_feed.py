@@ -189,6 +189,14 @@ def test_kernel_org_scenario(db_setup, mocker):
     entry2 = MockFeedEntry(title="Kernel 2", link="https://www.kernel.org/", guid="kernel.guid.2", published="2024-01-02T10:00:00Z")
     entry3 = MockFeedEntry(title="Kernel 3", link="https://www.kernel.org/", guid="kernel.guid.3", published="2024-01-03T10:00:00Z")
     mock_feed_data = MockParsedFeed(feed_title="Kernel Updates", entries=[entry1, entry2, entry3])
+
+    # Mock requests.get to return a dummy response
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
+    # Mock feedparser.parse to return our mock feed data directly since we are mocking requests
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
 
     # Add a feed to the DB
@@ -224,6 +232,13 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
     entry3 = MockFeedEntry(title="HN Story 3 TrueGUID", link="http://news.example.com/item3", guid="true.guid.story3", published="2024-01-03T10:00:00Z")
 
     mock_feed_data = MockParsedFeed(feed_title="HN Mock Feed", entries=[entry1, entry2, entry3])
+
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
 
     tab = Tab(name="News", order=1)
@@ -258,6 +273,13 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     entry2 = MockFeedEntry(title="Story A Duplicate", link="http://example.com/story", guid="http://example.com/story", published="2024-01-01T10:05:00Z") # Link-as-ID, same link
 
     mock_feed_data = MockParsedFeed(feed_title="Duplicate Link Feed", entries=[entry1, entry2])
+
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
 
     tab = Tab(name="General", order=1)
@@ -303,6 +325,12 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     entry_f2_3 = MockFeedEntry(title="F2 Story 3", link="http://feed1.com/item2", guid="http://feed1.com/item2", published="2024-01-02T12:00:00Z") # Link-as-ID, same link as F1S2
                                                                                                                                           # but different feed.
     mock_feed2_data = MockParsedFeed(feed_title="Feed 2", entries=[entry_f2_1, entry_f2_2, entry_f2_3])
+
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
 
     m_parse = mocker.patch('backend.feed_service.feedparser.parse')
 
@@ -375,6 +403,12 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     db.session.refresh(feed_obj)
     assert feed_obj.last_updated_time == initial_time_naive, "Initial time setup check"
 
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
+
     # Scenario 1: Fetch successful, but no entries in the feed
     mock_empty_feed = MockParsedFeed(feed_title="Empty Feed", entries=[])
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_empty_feed)
@@ -416,6 +450,12 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     # Mock feedparser.parse to return some basic feeds
     mock_feed_data1 = MockParsedFeed("Feed A", [MockFeedEntry("A1","http://a.com/1","gA1")])
     mock_feed_data2 = MockParsedFeed("Feed B", [MockFeedEntry("B1","http://b.com/1","gB1"), MockFeedEntry("B2","http://b.com/2","gB2")])
+
+    # Mock requests.get
+    mock_response = mocker.Mock()
+    mock_response.content = b""
+    mock_response.raise_for_status = mocker.Mock()
+    mocker.patch('backend.feed_service.requests.get', return_value=mock_response)
 
     m_parse = mocker.patch('backend.feed_service.feedparser.parse')
 

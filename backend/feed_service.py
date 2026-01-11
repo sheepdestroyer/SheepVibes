@@ -9,6 +9,7 @@ import os # Added for environment variables
 from collections import defaultdict # Added for grouping feeds by URL
 from dateutil import parser as date_parser # Use dateutil for robust date parsing
 from sqlalchemy.exc import IntegrityError
+import requests # Added for robust fetching with timeouts
 
 # Import database models from the new models.py
 from .models import db, Feed, FeedItem
@@ -25,6 +26,7 @@ def _get_env_int(var_name, default_value):
     """
     Retrieves an environment variable as an integer, falling back to a default
     if the variable is not set or is not a valid integer.
+    Also ensures the value is positive.
 
     Args:
         var_name (str): The name of the environment variable.
@@ -34,7 +36,11 @@ def _get_env_int(var_name, default_value):
         int: The parsed integer value or the default.
     """
     try:
-        return int(os.environ.get(var_name, default_value))
+        value = int(os.environ.get(var_name, default_value))
+        if value <= 0:
+            logger.warning(f"Invalid non-positive value for {var_name}. Defaulting to {default_value}.")
+            return default_value
+        return value
     except ValueError:
         logger.warning(f"Invalid value for {var_name}. Defaulting to {default_value}.")
         return default_value
@@ -95,7 +101,7 @@ def parse_published_time(entry):
 # --- Core Feed Processing Functions ---
 
 def fetch_feed(feed_url):
-    """Fetches and parses a feed using feedparser.
+    """Fetches and parses a feed using requests and feedparser.
 
     Args:
         feed_url (str): The URL of the RSS/Atom feed.
@@ -106,7 +112,12 @@ def fetch_feed(feed_url):
     """
     logger.info(f"Fetching feed: {feed_url}")
     try:
-        parsed_feed = feedparser.parse(feed_url)
+        # Use requests to fetch content with a timeout, avoiding thread-blocking issues
+        response = requests.get(feed_url, timeout=FEED_FETCH_TIMEOUT)
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx, 5xx)
+
+        # Parse the content directly
+        parsed_feed = feedparser.parse(response.content)
         
         if parsed_feed.bozo:
             bozo_exc = parsed_feed.get('bozo_exception', Exception('Unknown parsing error (bozo=1)'))
@@ -129,6 +140,9 @@ def fetch_feed(feed_url):
             logger.info(f"Successfully fetched feed: {feed_url}")
         return parsed_feed
 
+    except requests.exceptions.RequestException as req_e:
+        logger.error(f"Network error fetching feed {feed_url}: {req_e}")
+        return None
     except ssl.SSLError as ssl_e:
         logger.error(f"Direct SSL Error during fetch attempt for {feed_url}: {ssl_e}", exc_info=True)
         return None
@@ -383,7 +397,8 @@ def update_all_feeds():
             feed_ids_for_url = feeds_by_url[url]
             try:
                 # Add timeout to prevent indefinite blocking from a stuck worker/fetch
-                parsed_feed = future.result(timeout=FEED_FETCH_TIMEOUT)
+                # Even though fetch_feed has an internal timeout now, this is a safety net
+                parsed_feed = future.result(timeout=FEED_FETCH_TIMEOUT + 5)
 
                 # Apply the single fetch result to all feeds sharing this URL
                 for feed_id in feed_ids_for_url:
@@ -405,7 +420,7 @@ def update_all_feeds():
             except concurrent.futures.TimeoutError:
                 logger.error(f"Timeout waiting for feed fetch to complete for URL {url} (affecting feed IDs: {feed_ids_for_url}).")
             except Exception as e:
-                logger.error(f"Error updating feeds for URL {url} (affecting feed IDs: {feed_ids_for_url}): {e}", exc_info=True)
+                logger.exception(f"Error updating feeds for URL {url} (affecting feed IDs: {feed_ids_for_url}): {e}")
             
     logger.info(f"Finished updating feeds. Attempted: {attempted_count}, Successfully Processed: {processed_successfully_count}, Total New Items Added: {total_new_items}")
     return processed_successfully_count, total_new_items
