@@ -10,6 +10,8 @@ readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:alpine}"
 readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
 readonly CONTAINER_PORT="${DEV_CONTAINER_PORT:-5000}"
 readonly CMD="${DEV_CMD:-podman}"
+readonly BUILD_CONTEXT="${DEV_BUILD_CONTEXT:-.}"
+readonly CONTAINERFILE="${DEV_CONTAINERFILE:-Containerfile}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 readonly SCRIPT_DIR
@@ -20,14 +22,39 @@ check_requirements() {
         echo "Error: '$CMD' is required but not found." >&2
         exit 1
     fi
+    
+    if [[ "$CMD" != "podman" ]]; then
+        echo "Error: This script is Podman-only. Found: $CMD" >&2
+        exit 1
+    fi
+}
+
+check_port() {
+    local PORT="$1"
+    if command -v ss >/dev/null 2>&1; then
+        if ss -ltn "sport = :$PORT" 2>/dev/null | tail -n +2 | grep -q .; then
+            return 1
+        fi
+    elif command -v lsof >/dev/null 2>&1; then
+        if lsof -i :"$PORT" -sTCP:LISTEN -Fp 2>/dev/null | grep -q '^p'; then
+            return 1
+        fi
+    fi
+    return 0
 }
 
 do_up() {
     local HOST_PORT="${1:-5002}"
     
-    # Validate port
+    # Validate port format/range
     if ! [[ "$HOST_PORT" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )); then
         echo "Error: Invalid port '$HOST_PORT'. Must be an integer between 1 and 65535." >&2
+        exit 1
+    fi
+
+    # Proactive port check
+    if ! check_port "$HOST_PORT"; then
+        echo "Error: Port $HOST_PORT is already in use." >&2
         exit 1
     fi
 
@@ -39,8 +66,8 @@ do_up() {
         echo "Image not found. Building..."
         local PROJECT_ROOT
         PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
-        echo "Building image $APP_IMAGE_NAME from Containerfile in $PROJECT_ROOT..."
-        if ! (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f Containerfile .); then
+        echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
+        if ! (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT"); then
             echo "Error: Image build failed." >&2
             exit 1
         fi
@@ -56,7 +83,12 @@ do_up() {
     
     # Ensure containers are also gone (robust cleanup)
     echo "Ensuring no stale containers exist..."
-    "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
+    # Attempt using --ignore if supported (Podman 4.0+)
+    if "$CMD" rm --help | grep -q "\-\-ignore"; then
+        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME"
+    else
+        "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
+    fi
 
     # 3. Create Pod and Containers
     echo "Creating pod '$POD_NAME' on port $HOST_PORT..."
@@ -102,7 +134,11 @@ do_down() {
     
     # Mirror robust cleanup from do_up
     echo "Ensuring all containers are removed..."
-    "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
+    if "$CMD" rm --help | grep -q "\-\-ignore"; then
+        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME"
+    else
+        "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
+    fi
 
     # Cleanup Volume
     if [[ "$CLEAN_VOL" == true ]]; then
