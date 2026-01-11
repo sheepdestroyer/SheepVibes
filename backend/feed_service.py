@@ -5,6 +5,7 @@ from datetime import timezone # Specifically import timezone
 import logging # Standard logging
 import ssl # Added for specific SSL error catching
 import concurrent.futures # Added for parallel execution
+import os # Added for environment variables
 from dateutil import parser as date_parser # Use dateutil for robust date parsing
 from sqlalchemy.exc import IntegrityError
 
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Maximum number of items to keep per feed for cache eviction
 MAX_ITEMS_PER_FEED = 100
+
+# Default to 10 workers, but allow override via environment variable
+FEED_FETCH_MAX_WORKERS = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 10))
 
 # --- Helper Functions ---
 
@@ -128,7 +132,6 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         return 0
 
     # These sets track items *within the current batch being processed*
-    batch_processed_guids = set()
     batch_processed_links = set()
 
     # Get existing GUIDs and links *for this specific feed* from the DB
@@ -172,29 +175,15 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
         # --- Deduplication Logic ---
         # 1. Check against items already in the DB *for this specific feed*
-        if db_guid and db_guid in existing_feed_guids:
-            continue
-        # Check link for this feed
-        if entry_link in existing_feed_links:
+        if (db_guid and db_guid in existing_feed_guids) or (entry_link in existing_feed_links):
             continue
 
         # 2. Check against items already processed *in this current batch*
-        is_batch_duplicate = False
-        if db_guid: # If this item has a "true" GUID
-            if db_guid in batch_processed_guids:
-                logger.warning(f"Skipping item (true GUID: {db_guid}, link: {entry_link}) for feed '{feed_db_obj.name}', duplicate true GUID in current fetch batch.")
-                is_batch_duplicate = True
-        else: # No "true" GUID (db_guid is None), so batch uniqueness relies on the link
-            if entry_link in batch_processed_links:
-                logger.warning(f"Skipping item (link: {entry_link}) for feed '{feed_db_obj.name}', it has no true GUID and its link is a duplicate in current fetch batch.")
-                is_batch_duplicate = True
-
-        if is_batch_duplicate:
+        if entry_link in batch_processed_links:
+            logger.warning(f"Skipping item (link: {entry_link}) for feed '{feed_db_obj.name}', it has no true GUID and its link is a duplicate in current fetch batch.")
             continue
 
         # If we reach here, the item is considered new.
-        if db_guid:
-            batch_processed_guids.add(db_guid)
         batch_processed_links.add(entry_link)
 
         published_time = parse_published_time(entry) # Already falls back to now()
@@ -346,30 +335,32 @@ def update_all_feeds():
         - total_feeds_processed_successfully (int): Number of feeds where fetch and process stages completed without critical failure.
         - total_new_items (int): Total new items added across all feeds.
     """
-    all_feeds = Feed.query.all()
+    # Query for IDs and URLs only to avoid holding session-attached objects
+    # that might get detached or stale during the long parallel fetch phase
+    all_feeds_data = db.session.query(Feed.id, Feed.url).all()
+
     total_new_items = 0
-    attempted_count = len(all_feeds)
+    attempted_count = len(all_feeds_data)
     processed_successfully_count = 0
     
-    logger.info(f"Starting parallel update process for {len(all_feeds)} feeds.")
+    logger.info(f"Starting parallel update process for {attempted_count} feeds with {FEED_FETCH_MAX_WORKERS} workers.")
 
-    # Map feed URL to feed ID for efficient lookup and result handling
-    # Use a dictionary to keep track of which future corresponds to which feed
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    # Map future to feed ID for result handling
+    with concurrent.futures.ThreadPoolExecutor(max_workers=FEED_FETCH_MAX_WORKERS) as executor:
         # Submit all fetch tasks
-        # We pass the URL to fetch_feed.
         future_to_feed_id = {
-            executor.submit(fetch_feed, feed.url): feed.id
-            for feed in all_feeds
+            executor.submit(fetch_feed, url): feed_id
+            for feed_id, url in all_feeds_data
         }
 
         for future in concurrent.futures.as_completed(future_to_feed_id):
             feed_id = future_to_feed_id[future]
             try:
-                parsed_feed = future.result()
+                # Add timeout to prevent indefinite blocking from a stuck worker/fetch
+                parsed_feed = future.result(timeout=30)
 
-                # Get the feed object from the DB session (it's safe as we are in the same thread/session context here)
+                # Get a fresh feed object from the DB session for each update.
+                # This ensures we are attached to the current session.
                 feed_obj = db.session.get(Feed, feed_id)
                 if not feed_obj:
                     logger.warning(f"Feed ID {feed_id} not found in database during update processing.")
@@ -382,6 +373,8 @@ def update_all_feeds():
                     total_new_items += new_items
                     processed_successfully_count += 1
 
+            except concurrent.futures.TimeoutError:
+                logger.error(f"Timeout waiting for feed fetch to complete for feed ID {feed_id}.")
             except Exception as e:
                 logger.error(f"Error updating feed ID {feed_id}: {e}", exc_info=True)
             
