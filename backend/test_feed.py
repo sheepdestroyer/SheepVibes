@@ -12,6 +12,7 @@ from .app import app # Import app for context
 from .models import db, Feed, Tab, FeedItem # <--- Added FeedItem import
 from . import feed_service # Import feed_service relatively
 import socket # Added for SSRF test
+from unittest.mock import MagicMock
 
 # Set up logging to console
 logging.basicConfig(
@@ -376,6 +377,13 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     db.session.refresh(feed_obj)
     assert feed_obj.last_updated_time == initial_time_naive, "Initial time setup check"
 
+    # Mock urllib.request.urlopen to return dummy content
+    mock_urlopen = mocker.patch('backend.feed_service.urllib.request.urlopen')
+    mock_response = MagicMock()
+    mock_response.read.return_value = b'<rss></rss>'
+    mock_response.__enter__.return_value = mock_response
+    mock_urlopen.return_value = mock_response
+
     # Scenario 1: Fetch successful, but no entries in the feed
     mock_empty_feed = MockParsedFeed(feed_title="Empty Feed", entries=[])
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_empty_feed)
@@ -402,6 +410,9 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     mock_duplicate_feed = MockParsedFeed(feed_title="Duplicate Feed", entries=[entry_old])
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_duplicate_feed)
 
+    # Re-mock urlopen for the second call (not strictly needed if same mock used, but good practice)
+    mock_response.read.return_value = b'<rss>content</rss>'
+
     success, new_items = feed_service.fetch_and_update_feed(feed_obj.id)
     assert success is True
     assert new_items == 0
@@ -413,6 +424,13 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
     app = db_setup
+
+    # Mock urllib.request.urlopen
+    mock_urlopen = mocker.patch('backend.feed_service.urllib.request.urlopen')
+    mock_response = MagicMock()
+    mock_response.read.return_value = b'<rss></rss>'
+    mock_response.__enter__.return_value = mock_response
+    mock_urlopen.return_value = mock_response
 
     # Mock feedparser.parse to return some basic feeds
     mock_feed_data1 = MockParsedFeed("Feed A", [MockFeedEntry("A1","http://a.com/1","gA1")])
@@ -601,19 +619,13 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
 )
 def test_fetch_feed_ssrf_prevention(mocker, addr):
     """Test that fetch_feed blocks URLs resolving to private IPs."""
-    # Mock socket.getaddrinfo to return a private IP
-    # Patch backend.feed_service.socket.getaddrinfo instead of global
     mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
 
-    # structure: list of (family, type, proto, canonname, sockaddr)
-    # Adapting return value based on address family (IPv4 vs IPv6)
     family = socket.AF_INET6 if len(addr) > 2 else socket.AF_INET
-
     mock_getaddrinfo.return_value = [
         (family, socket.SOCK_STREAM, 6, '', addr)
     ]
 
-    # Attempt to fetch a URL
     url = "http://internal-service.local/feed"
     result = feed_service.fetch_feed(url)
 
@@ -624,3 +636,37 @@ def test_fetch_feed_invalid_scheme():
     assert feed_service.fetch_feed("file:///etc/passwd") is None
     assert feed_service.fetch_feed("ftp://example.com/feed") is None
     assert feed_service.fetch_feed("javascript:alert(1)") is None
+
+def test_fetch_feed_toctou_prevention_http(mocker):
+    """Test that fetch_feed uses the resolved IP for HTTP requests (TOCTOU fix)."""
+    # 1. Mock DNS resolution to return a safe IP
+    mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
+    safe_ip = "93.184.216.34" # example.com
+    mock_getaddrinfo.return_value = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, '', (safe_ip, 80))
+    ]
+
+    # 2. Mock urllib.request.urlopen
+    mock_urlopen = mocker.patch('backend.feed_service.urllib.request.urlopen')
+    mock_response = MagicMock()
+    mock_response.read.return_value = b'<rss><channel><title>Test</title></channel></rss>'
+    mock_response.__enter__.return_value = mock_response # Context manager support
+    mock_urlopen.return_value = mock_response
+
+    # 3. Call fetch_feed with HTTP URL
+    url = "http://example.com/feed"
+    result = feed_service.fetch_feed(url)
+
+    # 4. Verify urllib was called with the IP-based URL and correct Host header
+    assert result is not None
+
+    # Check that Request was initialized with the IP address
+    # We need to spy on urllib.request.Request or inspect the arguments passed to urlopen
+    # urlopen arg can be a Request object.
+
+    args, kwargs = mock_urlopen.call_args
+    req_obj = args[0]
+
+    # For HTTP, we expect the URL to be rewritten to the IP
+    assert f"http://{safe_ip}/feed" in req_obj.full_url
+    assert req_obj.get_header('Host') == "example.com"

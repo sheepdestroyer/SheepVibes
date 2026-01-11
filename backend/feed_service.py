@@ -8,6 +8,7 @@ import socket
 import ipaddress
 import os
 from urllib.parse import urlparse
+import urllib.request
 from dateutil import parser as date_parser # Use dateutil for robust date parsing
 from sqlalchemy.exc import IntegrityError
 
@@ -73,113 +74,77 @@ def parse_published_time(entry):
 
 # --- Core Feed Processing Functions ---
 
-def is_safe_url(url):
-    """Validates if the URL is safe to fetch (prevents SSRF).
-
-    Args:
-        url (str): The URL to validate.
-
-    Returns:
-        bool: True if safe, False if unsafe (private IP, loopback, etc).
-    """
+def validate_and_resolve_url(url):
+    """Validates URL and resolves IP to prevent SSRF (returns safe IP or None)."""
     try:
         parsed = urlparse(url)
-
-        # Enforce HTTP/HTTPS schemes
         if parsed.scheme not in ('http', 'https'):
             logger.warning(f"Blocked unsupported URL scheme: {parsed.scheme}")
-            return False
+            return None, None
 
         hostname = parsed.hostname
         if not hostname:
-            return False
+            return None, None
 
-        # Resolve hostname to IP(s)
-        # We use getaddrinfo to get all associated IPs
         try:
             addr_info = socket.getaddrinfo(hostname, None)
         except socket.gaierror:
-            # In production, inability to resolve means we can't fetch it anyway.
-            # But in tests using mocks, we might use dummy URLs that don't resolve.
             if os.environ.get('TESTING') == 'true':
-                 # Allow unresolvable hostnames in tests, but log it
-                 logger.info(f"Allowing unresolvable hostname {hostname} in TESTING mode.")
-                 return True
-
+                 return '127.0.0.1', hostname # Fallback for tests
             logger.warning(f"Could not resolve hostname: {hostname}")
-            return False
+            return None, None
 
+        safe_ip = None
         for res in addr_info:
             ip_str = res[4][0]
-            # Strip IPv6 zone identifier if present
             clean_ip_str = ip_str.split('%')[0]
             try:
                 ip = ipaddress.ip_address(clean_ip_str)
-                # Check for private, loopback, link-local, reserved, multicast, and unspecified
                 if (ip.is_private or ip.is_loopback or ip.is_link_local or
                     ip.is_reserved or ip.is_multicast or ip.is_unspecified):
-                    # Sanitize URL for logging to avoid leaking potential credentials
                     safe_url = f"{parsed.scheme}://{hostname}"
-                    logger.warning(f"Blocked SSRF attempt: {safe_url} resolved to restricted IP {ip}")
-                    return False
+                    logger.warning(f"Blocked SSRF attempt: {safe_url} -> {ip}")
+                    return None, None
+                safe_ip = ip_str # Keep valid IP string
+                break # Found a safe IP
             except ValueError:
                 continue
 
-        return True
+        return safe_ip, hostname
     except Exception:
         logger.exception("Error validating URL safety")
-        return False
+        return None, None
 
 def fetch_feed(feed_url):
-    """Fetches and parses a feed using feedparser.
-
-    Args:
-        feed_url (str): The URL of the RSS/Atom feed.
-
-    Returns:
-        feedparser.FeedParserDict: A feedparser dictionary object, or None if
-                                   fetching/parsing fails.
-    """
-    if not is_safe_url(feed_url):
-        # Sanitize URL for logging
-        try:
-            parsed = urlparse(feed_url)
-            safe_url = f"{parsed.scheme}://{parsed.hostname}"
-        except Exception:
-            safe_url = "INVALID_URL"
-        logger.error(f"Blocked unsafe URL fetch: {safe_url}")
+    """Fetches and parses a feed, preventing SSRF via IP pinning."""
+    safe_ip, hostname = validate_and_resolve_url(feed_url)
+    if not safe_ip:
         return None
 
     logger.info(f"Fetching feed: {feed_url}")
     try:
-        parsed_feed = feedparser.parse(feed_url)
+        # Prevent TOCTOU: Fetch using the validated IP
+        parsed = urlparse(feed_url)
+        # Only rewrite URL for HTTP to avoid SSL hostname mismatch
+        if parsed.scheme == 'http':
+            target_url = parsed._replace(netloc=safe_ip).geturl()
+        else:
+            target_url = feed_url # For HTTPS, rely on initial validation (risk accepted)
+
+        req = urllib.request.Request(target_url, headers={'Host': hostname, 'User-Agent': 'SheepVibes/1.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            content = response.read()
+
+        parsed_feed = feedparser.parse(content)
+        # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
         
         if parsed_feed.bozo:
-            bozo_exc = parsed_feed.get('bozo_exception', Exception('Unknown parsing error (bozo=1)'))
-            error_message = str(bozo_exc)
+             logger.warning(f"Feed parsing warning: {parsed_feed.get('bozo_exception')}")
 
-            if "SSL" in error_message.upper() or \
-               "CERTIFICATE" in error_message.upper() or \
-               isinstance(bozo_exc, ssl.SSLError):
-                logger.error(
-                    f"Failed to fetch feed {feed_url} due to SSL/Certificate error (feedparser bozo): {error_message}",
-                    exc_info=False
-                )
-            else:
-                logger.warning(f"Feed is ill-formed: {feed_url} - Error: {error_message}")
-
-        if not parsed_feed.entries and not parsed_feed.bozo:
-             logger.warning(f"No entries found in feed (and not a bozo feed): {feed_url}")
-
-        if not parsed_feed.bozo:
-            logger.info(f"Successfully fetched feed: {feed_url}")
         return parsed_feed
 
-    except ssl.SSLError as ssl_e:
-        logger.error(f"Direct SSL Error during fetch attempt for {feed_url}: {ssl_e}", exc_info=True)
-        return None
     except Exception as e:
-        logger.error(f"Generic error fetching or parsing feed {feed_url}: {e}", exc_info=True)
+        logger.error(f"Error fetching feed {feed_url}: {e}", exc_info=True)
         return None
 
 def process_feed_entries(feed_db_obj, parsed_feed):
