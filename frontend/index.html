@@ -10,6 +10,12 @@
 <body>
     <header>
         <h1>SheepVibes</h1>
+        <div class="settings-container">
+          <label class="switch">
+            <input type="checkbox" id="night-mode-toggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
         <nav id="tabs-container">
             <!-- Tabs will be loaded here -->
         </nav>
@@ -26,12 +32,6 @@
             <button id="export-opml-button">Export OPML</button>
             <input type="file" id="opml-file-input" accept=".opml, .xml" style="display: none;">
             <button id="import-opml-button">Import OPML</button>
-        </div>
-        <div id="settings-section">
-            <label class="switch" title="Toggle Night Mode">
-                <input type="checkbox" id="night-mode-toggle">
-                <span class="slider round"></span>
-            </label>
         </div>
     </header>
     <main id="feed-grid">
@@ -66,5 +66,28 @@
     <div id="toast-container"></div>
 
     <script src="script.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const nightModeToggle = document.getElementById('night-mode-toggle');
+        const body = document.body;
+
+        // Apply the saved theme on page load
+        if (localStorage.getItem('nightMode') === 'enabled') {
+          body.classList.add('night-mode');
+          nightModeToggle.checked = true;
+        }
+
+        // Toggle night mode on switch change
+        nightModeToggle.addEventListener('change', () => {
+          if (nightModeToggle.checked) {
+            body.classList.add('night-mode');
+            localStorage.setItem('nightMode', 'enabled');
+          } else {
+            body.classList.remove('night-mode');
+            localStorage.setItem('nightMode', 'disabled');
+          }
+        });
+      });
+    </script>
 </body>
 </html>

@@ -1,14 +1,70 @@
+:root {
+  /* Light Theme */
+  --bg-color: #e8ebee;
+  --text-color: #333;
+  --link-color: #005a9c;
+  --header-bg-color: #f8f9fa;
+  --header-border-color: #dee2e6;
+  --brand-color: #005a9c;
+  --tab-text-color: #495057;
+  --tab-hover-border-color: #ced4da;
+  --tab-active-border-color: #005a9c;
+  --widget-bg-color: #fff;
+  --widget-border-color: #dee2e6;
+  --widget-header-bg-color: #f8f9fa;
+  --widget-header-border-color: #e9ecef;
+  --unread-link-color: #333;
+  --read-link-color: #6c757d;
+  --modal-content-bg: white;
+  --input-border-color: #ddd;
+  --input-readonly-bg-color: #f5f5f5;
+  --input-readonly-text-color: #666;
+  --toast-bg-color: #333;
+  --toast-error-bg-color: #dc3545;
+  --toast-success-bg-color: #28a745;
+  --button-secondary-bg-color: #6c757d;
+  --button-secondary-hover-bg-color: #5a6268;
+}
+
+body.night-mode {
+  --bg-color: #121212;
+  --text-color: #e0e0e0;
+  --link-color: #bb86fc;
+  --header-bg-color: #1f1f1f;
+  --header-border-color: #333;
+  --brand-color: #bb86fc;
+  --tab-text-color: #a0a0a0;
+  --tab-hover-border-color: #444;
+  --tab-active-border-color: #bb86fc;
+  --widget-bg-color: #1f1f1f;
+  --widget-border-color: #333;
+  --widget-header-bg-color: #2a2a2a;
+  --widget-header-border-color: #333;
+  --unread-link-color: #e0e0e0;
+  --read-link-color: #777;
+  --modal-content-bg: #1f1f1f;
+  --input-border-color: #555;
+  --input-readonly-bg-color: #2a2a2a;
+  --input-readonly-text-color: #aaa;
+  --toast-bg-color: #2a2a2a;
+  --toast-error-bg-color: #c82333;
+  --toast-success-bg-color: #218838;
+  --button-secondary-bg-color: #5a6268;
+  --button-secondary-hover-bg-color: #4a4e52;
+}
+
 /* General Styles */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     margin: 0;
-    background-color: #e8ebee; /* Lighter gray background */
-    color: #333;
+    background-color: var(--bg-color);
+    color: var(--text-color);
     font-size: 14px;
+    transition: background-color 0.3s, color 0.3s;
 }
 
 a {
-    color: #005a9c;
+    color: var(--link-color);
     text-decoration: none;
 }
 
@@ -18,13 +74,12 @@ a:hover {
 
 /* Header Styles */
 header {
-    background-color: #f8f9fa; /* Lighter header background */
-    color: #333;
+    background-color: var(--header-bg-color);
     padding: 8px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--header-border-color);
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
@@ -33,20 +88,15 @@ header h1 {
     margin-right: 20px;
     font-size: 1.5em;
     font-weight: 600;
-    color: #005a9c; /* Brand color */
+    color: var(--brand-color);
 }
 
 /* Tabs Styles */
-#tabs-container {
-    display: flex;
-    flex-wrap: wrap; /* Allow tabs to wrap on smaller screens */
-}
-
 #tabs-container button {
     background-color: transparent;
-    color: #495057;
+    color: var(--tab-text-color);
     border: none;
-    border-bottom: 3px solid transparent; /* Underline effect */
+    border-bottom: 3px solid transparent;
     padding: 10px 15px;
     margin-right: 2px;
     cursor: pointer;
@@ -55,92 +105,66 @@ header h1 {
     font-weight: 500;
     transition: border-color 0.2s ease-in-out, color 0.2s ease-in-out;
     position: relative;
-    padding-right: 25px; /* Space for badge */
+    padding-right: 25px;
 }
 
 #tabs-container button:hover {
-    color: #005a9c;
-    border-bottom-color: #ced4da;
+    color: var(--link-color);
+    border-bottom-color: var(--tab-hover-border-color);
 }
 
 #tabs-container button.active {
-    color: #005a9c;
-    border-bottom-color: #005a9c;
+    color: var(--link-color);
+    border-bottom-color: var(--tab-active-border-color);
     font-weight: 600;
 }
 
-/* Tab Management Buttons */
-#tab-management-buttons {
-    margin-left: 15px;
-    display: flex;
-    align-items: center;
-}
-
-#tab-management-buttons button {
-    background-color: #6c757d;
+/* Tab Management & Add Feed Buttons */
+#tab-management-buttons button, #add-feed-section button, .modal-buttons button {
     color: white;
     border: none;
     padding: 4px 8px;
-    margin-left: 4px;
     cursor: pointer;
     border-radius: 4px;
     font-size: 0.85em;
-    line-height: 1.2;
     transition: background-color 0.2s ease-in-out;
 }
-
+#tab-management-buttons button {
+    background-color: var(--button-secondary-bg-color);
+    margin-left: 4px;
+}
 #tab-management-buttons button:hover {
-    background-color: #5a6268;
+    background-color: var(--button-secondary-hover-bg-color);
 }
+#tab-management-buttons #add-tab-button { background-color: #007bff; }
+#tab-management-buttons #add-tab-button:hover { background-color: #0056b3; }
+#tab-management-buttons #delete-tab-button { background-color: #dc3545; }
+#tab-management-buttons #delete-tab-button:hover { background-color: #c82333; }
 
-#tab-management-buttons #add-tab-button {
-    background-color: #007bff;
-}
-#tab-management-buttons #add-tab-button:hover {
-    background-color: #0056b3;
-}
-
-#tab-management-buttons #delete-tab-button {
-    background-color: #dc3545;
-}
-#tab-management-buttons #delete-tab-button:hover {
-    background-color: #c82333;
-}
-
-/* Add Feed Section */
 #add-feed-section {
     display: flex;
     align-items: center;
-    margin-left: auto; /* Push to the right */
+    margin-left: auto;
 }
-
 #add-feed-section input[type="text"] {
     padding: 6px 10px;
     margin-right: 5px;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border-color);
+    background-color: var(--widget-bg-color);
+    color: var(--text-color);
     border-radius: 4px;
     font-size: 0.9em;
 }
-
 #add-feed-section button {
     padding: 6px 12px;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
     font-size: 0.9em;
-    transition: background-color 0.2s ease-in-out;
+    background-color: #28a745;
 }
-
-#add-feed-section button:hover {
-    background-color: #218838;
-}
+#add-feed-section button:hover { background-color: #218838; }
 
 /* Feed Grid */
 #feed-grid {
     display: grid;
-    /* Responsive grid: min 300px width, max 1fr */
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 15px;
     padding: 20px;
@@ -148,74 +172,61 @@ header h1 {
 
 /* Feed Widget */
 .feed-widget {
-    background-color: #fff;
-    border: 1px solid #dee2e6;
+    background-color: var(--widget-bg-color);
+    border: 1px solid var(--widget-border-color);
     border-radius: 5px;
-    padding: 0; /* Remove padding, handle internally */
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    position: relative;
     display: flex;
-    flex-direction: column; /* Stack header and list */
-    overflow: hidden; /* Ensure content stays within rounded corners */
+    flex-direction: column;
+    overflow: hidden;
 }
-
 .feed-widget h2 {
-    font-size: 1.0em; /* Slightly smaller header */
+    font-size: 1.0em;
     font-weight: 600;
     margin: 0;
     padding: 10px 15px;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--widget-header-border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background-color: #f8f9fa; /* Light header background */
+    background-color: var(--widget-header-bg-color);
 }
-
 .feed-widget ul {
     list-style: none;
-    padding: 10px 15px; /* Padding for the list items */
+    padding: 10px 15px;
     margin: 0;
-    flex-grow: 1; /* Allow list to take available space */
-    overflow-y: auto; /* Add scroll if content overflows (optional) */
-    max-height: 400px; /* Limit height (optional) */
+    flex-grow: 1;
+    overflow-y: auto;
+    max-height: 400px;
 }
-
 .feed-widget li {
     margin-bottom: 12px;
     font-size: 0.9em;
     line-height: 1.4;
-    transition: font-weight 0.3s ease;
 }
-
-.feed-widget li:last-child {
-    margin-bottom: 0;
-}
-
+.feed-widget li:last-child { margin-bottom: 0; }
 .feed-widget li.unread a {
-    font-weight: 600; /* Bolder unread links */
-    color: #333;
+    font-weight: 600;
+    color: var(--unread-link-color);
 }
-
 .feed-widget li.read a {
     font-weight: normal;
-    color: #6c757d; /* Dim read links */
+    color: var(--read-link-color);
 }
-
 .feed-widget li a {
-    display: block; /* Make link take full width */
+    display: block;
     margin-bottom: 3px;
 }
-
 .feed-widget li span {
     display: block;
     font-size: 0.8em;
-    color: #6c757d;
+    color: var(--read-link-color);
 }
 
 /* Badges */
 .unread-count-badge {
     position: absolute;
-    top: 6px; /* Adjust position */
+    top: 6px;
     right: 6px;
     background-color: #007bff;
     color: white;
@@ -227,28 +238,23 @@ header h1 {
     min-width: 16px;
     text-align: center;
 }
-
-#tabs-container button.active .unread-count-badge {
-    background-color: #dc3545;
-}
+#tabs-container button.active .unread-count-badge { background-color: #dc3545; }
 .feed-widget-buttons .unread-count-badge {
     position: static;
-    background-color: #6c757d;
+    background-color: var(--button-secondary-bg-color);
     padding: 2px 6px;
     margin-right: 4px;
 }
 
-/* Feed Widget Buttons Container */
+/* Feed Widget Buttons */
 .feed-widget-buttons {
     display: flex;
     align-items: center;
     gap: 4px;
 }
-
-/* Edit and Delete Buttons */
 .feed-widget .edit-feed-button,
 .feed-widget .delete-feed-button {
-    background: #6c757d;
+    background: var(--button-secondary-bg-color);
     color: white;
     border: none;
     border-radius: 50%;
@@ -257,76 +263,32 @@ header h1 {
     font-size: 11px;
     cursor: pointer;
     opacity: 0.6;
-    transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
+    transition: opacity 0.2s, background-color 0.2s;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
-
 .feed-widget:hover .edit-feed-button,
-.feed-widget:hover .delete-feed-button {
-    opacity: 1;
-}
+.feed-widget:hover .delete-feed-button { opacity: 1; }
+.feed-widget .edit-feed-button:hover { background-color: #007bff; }
+.feed-widget .delete-feed-button:hover { background-color: #dc3545; }
 
-.feed-widget .edit-feed-button:hover {
-    background-color: #007bff; /* Blue on hover */
-}
-
-.feed-widget .delete-feed-button:hover {
-    background-color: #dc3545; /* Red on hover */
-}
-
-/* Responsive Adjustments */
+/* Responsive */
 @media (max-width: 768px) {
-    header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    #add-feed-section {
-        margin-left: 0;
-        margin-top: 10px;
-        width: 100%;
-    }
-
-    #add-feed-section input[type="text"] {
-        flex-grow: 1; /* Allow input to grow */
-    }
-
-    #tabs-container {
-        margin-top: 10px;
-    }
-
-    #tab-management-buttons {
-        margin-left: 0;
-        margin-top: 5px;
-    }
-
-    #feed-grid {
-        padding: 10px;
-        gap: 10px;
-        /* Adjust columns for smaller screens if needed */
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    }
+    header { flex-direction: column; align-items: flex-start; }
+    #add-feed-section { margin-left: 0; margin-top: 10px; width: 100%; }
+    #add-feed-section input[type="text"] { flex-grow: 1; }
+    #tabs-container { margin-top: 10px; }
+    #tab-management-buttons { margin-left: 0; margin-top: 5px; }
+    #feed-grid { padding: 10px; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+}
+@media (max-width: 480px) {
+    header h1 { font-size: 1.3em; }
+    #tabs-container button { padding: 8px 10px; font-size: 0.9em; }
+    #feed-grid { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 480px) {
-    header h1 {
-        font-size: 1.3em;
-    }
-
-    #tabs-container button {
-        padding: 8px 10px;
-        font-size: 0.9em;
-    }
-
-    #feed-grid {
-        /* Single column on very small screens */
-        grid-template-columns: 1fr;
-    }
-
-
-/* Modal Styles */
+/* Modal */
 .modal {
     position: fixed;
     top: 0;
@@ -334,94 +296,45 @@ header h1 {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
-    display: none; /* Hidden by default */
+    display: none;
     justify-content: center;
     align-items: center;
     z-index: 1000;
 }
-
-.modal.is-active {
-    display: flex;
-}
-
+.modal.is-active { display: flex; }
 .modal-content {
-    background-color: white;
+    background-color: var(--modal-content-bg);
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     width: 90%;
     max-width: 500px;
 }
-
-.modal h2 {
-    margin-top: 0;
-    margin-bottom: 20px;
-    color: #333;
-}
-
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 600;
-}
-
+.modal h2 { margin-top: 0; margin-bottom: 20px; }
+.form-group { margin-bottom: 15px; }
+.form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
 .form-group input {
     width: 100%;
     padding: 8px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--input-border-color);
+    background-color: var(--bg-color);
+    color: var(--text-color);
     border-radius: 4px;
     box-sizing: border-box;
 }
-
 .form-group input[readonly] {
-    background-color: #f5f5f5;
-    color: #666;
+    background-color: var(--input-readonly-bg-color);
+    color: var(--input-readonly-text-color);
 }
+.form-group small { display: block; margin-top: 5px; color: #666; font-size: 0.8em; }
+.modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+.modal-buttons button { padding: 8px 16px; font-size: 0.9em; }
+#save-feed-button { background-color: #007bff; }
+#save-feed-button:hover { background-color: #0056b3; }
+#cancel-edit-button { background-color: var(--button-secondary-bg-color); }
+#cancel-edit-button:hover { background-color: var(--button-secondary-hover-bg-color); }
 
-.form-group small {
-    display: block;
-    margin-top: 5px;
-    color: #666;
-    font-size: 0.8em;
-}
-
-.modal-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    margin-top: 20px;
-}
-
-.modal-buttons button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9em;
-}
-
-#save-feed-button {
-    background-color: #007bff;
-    color: white;
-}
-
-#save-feed-button:hover {
-    background-color: #0056b3;
-}
-
-#cancel-edit-button {
-    background-color: #6c757d;
-    color: white;
-}
-
-#cancel-edit-button:hover {
-    background-color: #5a6268;
-}
-/* Toast (Notification) Styles */
+/* Toast */
 #toast-container {
     position: fixed;
     bottom: 20px;
@@ -432,56 +345,33 @@ header h1 {
     align-items: flex-end;
 }
 .toast {
-    background-color: #333;
+    background-color: var(--toast-bg-color);
     color: white;
     padding: 12px 20px;
     border-radius: 6px;
     margin-top: 10px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     opacity: 0;
-    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    transition: opacity 0.3s, transform 0.3s;
     transform: translateY(20px);
 }
-.toast.show {
-    opacity: 1;
-    transform: translateY(0);
-}
-.toast.error {
-    background-color: #dc3545;
-}
-.toast.success {
-    background-color: #28a745;
-}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.error { background-color: var(--toast-error-bg-color); }
+.toast.success { background-color: var(--toast-success-bg-color); }
 
-/* No more items message for infinite scrolling */
-.no-more-items-message {
-    text-align: center;
-    color: #888;
-    padding: 10px 0;
-    font-style: italic;
-}
+.no-more-items-message { text-align: center; color: #888; padding: 10px 0; font-style: italic; }
 
-/* Settings Section */
-#settings-section {
-    display: flex;
-    align-items: center;
-    margin-left: 15px;
+/* Settings Container & Toggle Switch */
+.settings-container {
+    margin-right: 20px;
 }
-
-/* Toggle Switch Styles */
 .switch {
     position: relative;
     display: inline-block;
-    width: 50px; /* smaller width */
-    height: 24px; /* smaller height */
+    width: 60px;
+    height: 34px;
 }
-
-.switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
+.switch input { opacity: 0; width: 0; height: 0; }
 .slider {
     position: absolute;
     cursor: pointer;
@@ -492,113 +382,18 @@ header h1 {
     background-color: #ccc;
     transition: .4s;
 }
-
 .slider:before {
     position: absolute;
     content: "";
-    height: 18px; /* smaller handle */
-    width: 18px;  /* smaller handle */
-    left: 3px;    /* adjusted position */
-    bottom: 3px;  /* adjusted position */
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
     background-color: white;
     transition: .4s;
 }
-
-input:checked + .slider {
-    background-color: #2196F3;
-}
-
-input:focus + .slider {
-    box-shadow: 0 0 1px #2196F3;
-}
-
-input:checked + .slider:before {
-    transform: translateX(26px);
-}
-
-.slider.round {
-    border-radius: 24px; /* adjusted for new height */
-}
-
-.slider.round:before {
-    border-radius: 50%;
-}
-
-
-/* Night Mode Styles */
-body.night-mode {
-    background-color: #1a1a1a;
-    color: #e0e0e0;
-}
-
-body.night-mode a {
-    color: #4da6ff;
-}
-
-body.night-mode header {
-    background-color: #2c2c2c;
-    color: #e0e0e0;
-    border-bottom: 1px solid #444;
-}
-
-body.night-mode header h1 {
-    color: #4da6ff;
-}
-
-body.night-mode #tabs-container button {
-    color: #b0b0b0;
-}
-
-body.night-mode #tabs-container button:hover {
-    color: #4da6ff;
-    border-bottom-color: #555;
-}
-
-body.night-mode #tabs-container button.active {
-    color: #4da6ff;
-    border-bottom-color: #4da6ff;
-}
-
-body.night-mode #add-feed-section input[type="text"] {
-    background-color: #333;
-    color: #e0e0e0;
-    border: 1px solid #555;
-}
-
-body.night-mode .feed-widget {
-    background-color: #2c2c2c;
-    border: 1px solid #444;
-}
-
-body.night-mode .feed-widget h2 {
-    background-color: #333;
-    border-bottom: 1px solid #444;
-}
-
-body.night-mode .feed-widget li.unread a {
-    color: #e0e0e0;
-}
-
-body.night-mode .feed-widget li.read a {
-    color: #888;
-}
-
-body.night-mode .feed-widget li span {
-    color: #888;
-}
-
-body.night-mode .modal-content {
-    background-color: #2c2c2c;
-    color: #e0e0e0;
-}
-
-body.night-mode .form-group input {
-    background-color: #333;
-    color: #e0e0e0;
-    border: 1px solid #555;
-}
-
-body.night-mode .form-group input[readonly] {
-    background-color: #444;
-    color: #aaa;
-}
+input:checked + .slider { background-color: #2196F3; }
+input:focus + .slider { box-shadow: 0 0 1px #2196F3; }
+input:checked + .slider:before { transform: translateX(26px); }
+.slider.round { border-radius: 34px; }
+.slider.round:before { border-radius: 50%; }
