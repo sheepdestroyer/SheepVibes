@@ -19,21 +19,29 @@ logger = logging.getLogger(__name__)
 # Maximum number of items to keep per feed for cache eviction
 MAX_ITEMS_PER_FEED = 100
 
-# Default to 10 workers, but allow override via environment variable
-try:
-    FEED_FETCH_MAX_WORKERS = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 10))
-except ValueError:
-    logger.warning("Invalid value for FEED_FETCH_MAX_WORKERS. Defaulting to 10.")
-    FEED_FETCH_MAX_WORKERS = 10
-
-# Default fetch timeout (seconds)
-try:
-    FEED_FETCH_TIMEOUT = int(os.environ.get("FEED_FETCH_TIMEOUT", 30))
-except ValueError:
-    logger.warning("Invalid value for FEED_FETCH_TIMEOUT. Defaulting to 30.")
-    FEED_FETCH_TIMEOUT = 30
-
 # --- Helper Functions ---
+
+def _get_env_int(var_name, default_value):
+    """
+    Retrieves an environment variable as an integer, falling back to a default
+    if the variable is not set or is not a valid integer.
+
+    Args:
+        var_name (str): The name of the environment variable.
+        default_value (int): The default value to return.
+
+    Returns:
+        int: The parsed integer value or the default.
+    """
+    try:
+        return int(os.environ.get(var_name, default_value))
+    except ValueError:
+        logger.warning(f"Invalid value for {var_name}. Defaulting to {default_value}.")
+        return default_value
+
+# Configuration constants
+FEED_FETCH_MAX_WORKERS = _get_env_int("FEED_FETCH_MAX_WORKERS", 10)
+FEED_FETCH_TIMEOUT = _get_env_int("FEED_FETCH_TIMEOUT", 30)
 
 def parse_published_time(entry):
     """Attempts to parse the published time from a feed entry.
@@ -192,7 +200,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
         # 2. Check against items already processed *in this current batch*
         if entry_link in batch_processed_links:
-            logger.warning(f"Skipping item (link: {entry_link}) for feed '{feed_db_obj.name}', it has no true GUID and its link is a duplicate in current fetch batch.")
+            logger.warning(f"Skipping duplicate item in current batch (link: {entry_link}) for feed '{feed_db_obj.name}'.")
             continue
 
         # If we reach here, the item is considered new.
@@ -354,7 +362,7 @@ def update_all_feeds():
     total_new_items = 0
     attempted_count = len(all_feeds_data)
     processed_successfully_count = 0
-    
+
     logger.info(f"Starting parallel update process for {attempted_count} feeds with {FEED_FETCH_MAX_WORKERS} workers.")
 
     # Group feeds by URL to avoid redundant fetches
