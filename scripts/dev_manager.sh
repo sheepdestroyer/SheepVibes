@@ -8,8 +8,8 @@ readonly REDIS_CONTAINER_NAME="${DEV_REDIS_CONTAINER:-sheepvibes-dev-redis}"
 readonly APP_IMAGE_NAME="${DEV_APP_IMAGE:-localhost/sheepvibes-app}"
 readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:alpine}"
 readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
-readonly CONTAINER_PORT="5000"
-readonly CMD="podman"
+readonly CONTAINER_PORT="${DEV_CONTAINER_PORT:-5000}"
+readonly CMD="${DEV_CMD:-podman}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 readonly SCRIPT_DIR
@@ -99,6 +99,10 @@ do_down() {
     else
         echo "Pod $POD_NAME not found."
     fi
+    
+    # Mirror robust cleanup from do_up
+    echo "Ensuring all containers are removed..."
+    "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
 
     # Cleanup Volume
     if [[ "$CLEAN_VOL" == true ]]; then
@@ -117,9 +121,9 @@ do_down() {
 }
 
 usage() {
-    echo "Usage: $0 {up [port]|down [--clean]}"
-    echo "  up [port]    : Start dev environment (default port: 5002)"
-    echo "  down [--clean]: Stop dev environment. Use --clean to delete data volume."
+    echo "Usage: $0 {up [port]|down [--clean]}" >&2
+    echo "  up [port]    : Start dev environment (default port: 5002)" >&2
+    echo "  down [--clean]: Stop dev environment. Use --clean to delete data volume." >&2
     exit 1
 }
 
@@ -128,9 +132,11 @@ check_requirements
 
 case "${1:-}" in
     up)
+        if (( $# > 2 )); then usage; fi
         do_up "${2:-}"
         ;;
     down)
+        if (( $# > 2 )); then usage; fi
         do_down "${2:-}"
         ;;
     *)
