@@ -43,9 +43,24 @@ check_port() {
     return 0
 }
 
+remove_containers() {
+    echo "Ensuring containers are removed..."
+    # Attempt using --ignore if supported (Podman 4.0+)
+    if "$CMD" rm --help | grep -q "\-\-ignore"; then
+        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME"
+    else
+        "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
+    fi
+}
+
 do_up() {
     local HOST_PORT="${1:-5002}"
     
+    if (( $# > 1 )); then
+        echo "Error: 'up' command accepts at most one argument (port)." >&2
+        usage
+    fi
+
     # Validate port format/range
     if ! [[ "$HOST_PORT" =~ ^[0-9]+$ ]] || (( HOST_PORT < 1 || HOST_PORT > 65535 )); then
         echo "Error: Invalid port '$HOST_PORT'. Must be an integer between 1 and 65535." >&2
@@ -67,10 +82,7 @@ do_up() {
         local PROJECT_ROOT
         PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
-        if ! (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT"); then
-            echo "Error: Image build failed." >&2
-            exit 1
-        fi
+        (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else
         echo "Image exists. Skipping build. (Run scripts/rebuild_container.sh explicitly to rebuild)"
     fi
@@ -81,14 +93,7 @@ do_up() {
         "$CMD" pod rm -f "$POD_NAME"
     fi
     
-    # Ensure containers are also gone (robust cleanup)
-    echo "Ensuring no stale containers exist..."
-    # Attempt using --ignore if supported (Podman 4.0+)
-    if "$CMD" rm --help | grep -q "\-\-ignore"; then
-        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME"
-    else
-        "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
-    fi
+    remove_containers
 
     # 3. Create Pod and Containers
     echo "Creating pod '$POD_NAME' on port $HOST_PORT..."
@@ -105,22 +110,25 @@ do_up() {
 
     echo "--- Dev Environment Started ---"
     echo "App URL: http://localhost:$HOST_PORT"
-    echo "To stop: $0 down"
+    echo "To stop: \"$0\" down"
     echo "Logs: $CMD logs $APP_CONTAINER_NAME"
 }
 
 do_down() {
     local CLEAN_VOL=false
-    local FLAG="${1:-}"
     
-    if [[ -n "$FLAG" ]]; then
-        if [[ "$FLAG" == "--clean" ]]; then
-            CLEAN_VOL=true
-        else
-            echo "Error: Unknown flag '$FLAG'. Usage: $0 down [--clean]" >&2
-            exit 1
-        fi
-    fi
+    while (( "$#" )); do
+        case "$1" in
+            --clean)
+                CLEAN_VOL=true
+                shift
+                ;;
+            *)
+                echo "Error: Unknown argument '$1' for down command." >&2
+                usage
+                ;;
+        esac
+    done
 
     echo "--- SheepVibes Dev Environment Teardown (Runtime: $CMD) ---"
 
@@ -132,13 +140,7 @@ do_down() {
         echo "Pod $POD_NAME not found."
     fi
     
-    # Mirror robust cleanup from do_up
-    echo "Ensuring all containers are removed..."
-    if "$CMD" rm --help | grep -q "\-\-ignore"; then
-        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME"
-    else
-        "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
-    fi
+    remove_containers
 
     # Cleanup Volume
     if [[ "$CLEAN_VOL" == true ]]; then
@@ -150,14 +152,14 @@ do_down() {
             echo "Volume $VOLUME_NAME not found."
         fi
     else
-        echo "Volume $VOLUME_NAME preserved. Use '$0 down --clean' to remove it."
+        echo "Volume $VOLUME_NAME preserved. Use \"$0\" down --clean to remove it."
     fi
 
     echo "--- Teardown Complete ---"
 }
 
 usage() {
-    echo "Usage: $0 {up [port]|down [--clean]}" >&2
+    echo "Usage: \"$0\" {up [port]|down [--clean]}" >&2
     echo "  up [port]    : Start dev environment (default port: 5002)" >&2
     echo "  down [--clean]: Stop dev environment. Use --clean to delete data volume." >&2
     exit 1
@@ -166,16 +168,18 @@ usage() {
 # --- Main Dispatch ---
 check_requirements
 
-case "${1:-}" in
+COMMAND="${1:-}"
+shift || usage
+
+case "$COMMAND" in
     up)
-        if (( $# > 2 )); then usage; fi
-        do_up "${2:-}"
+        do_up "$@"
         ;;
     down)
-        if (( $# > 2 )); then usage; fi
-        do_down "${2:-}"
+        do_down "$@"
         ;;
     *)
+        echo "Error: Unknown command: '$COMMAND'" >&2
         usage
         ;;
 esac
