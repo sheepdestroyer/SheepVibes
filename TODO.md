@@ -91,6 +91,8 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Optimize database queries.
     *   [x] Implement backend caching (Redis) with granular invalidation.
     *   [x] Minimize frontend re-renders.
+*   [x] **Developer Experience:**
+    *   [x] Implement `scripts/dev_manager.sh` for simplified local environment management.
 *   [x] **Documentation:**
     *   [x] Write `README.md` covering setup instructions (building/running with Podman), configuration, and basic usage.
     *   [x] Add comments to the code (JSDoc for frontend, Google Style for backend).
