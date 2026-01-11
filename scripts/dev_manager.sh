@@ -115,18 +115,24 @@ do_up() {
     echo "--- SheepVibes Dev Environment Setup (Runtime: $CMD_BASE) ---"
 
     # 1. Check/Build Image
+    local BUILD_FLAGS=""
     if [[ "$REBUILD" == true ]]; then
-        echo "Force rebuild requested. Removing old image if exists..."
-        "$CMD" rmi -f "$APP_IMAGE_NAME" 2>/dev/null || true
+        echo "Force rebuild requested."
+        BUILD_FLAGS="--no-cache"
     fi
 
     echo "Checking for image $APP_IMAGE_NAME..."
-    if ! "$CMD" image exists "$APP_IMAGE_NAME"; then
-        echo "Image not found. Building..."
+    if [[ "$REBUILD" == true ]] || ! "$CMD" image exists "$APP_IMAGE_NAME"; then
+        if [[ "$REBUILD" != true ]]; then
+             echo "Image not found. Building..."
+        else
+             echo "Rebuilding image..."
+        fi
+        
         local PROJECT_ROOT
         PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
-        (cd "$PROJECT_ROOT" && "$CMD" build -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
+        (cd "$PROJECT_ROOT" && "$CMD" build $BUILD_FLAGS -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else
         echo "Image exists. Skipping build. (Use --rebuild to force rebuild)"
     fi
