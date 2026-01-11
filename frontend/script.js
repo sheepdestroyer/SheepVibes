@@ -1115,4 +1115,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Start the application initialization process
     initialize();
+
+    // --- Night Mode ---
+    const nightModeToggle = document.getElementById('night-mode-toggle');
+    const body = document.body;
+
+    if (localStorage.getItem('nightMode') === 'enabled') {
+        body.classList.add('night-mode');
+        if (nightModeToggle) nightModeToggle.checked = true;
+    }
+
+    if (nightModeToggle) {
+        nightModeToggle.addEventListener('change', () => {
+            if (nightModeToggle.checked) {
+                body.classList.add('night-mode');
+                localStorage.setItem('nightMode', 'enabled');
+            } else {
+                body.classList.remove('night-mode');
+                localStorage.setItem('nightMode', 'disabled');
+            }
+        });
+    }
 });

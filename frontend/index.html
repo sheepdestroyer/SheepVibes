@@ -66,28 +66,5 @@
     <div id="toast-container"></div>
 
     <script src="script.js"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const nightModeToggle = document.getElementById('night-mode-toggle');
-        const body = document.body;
-
-        // Apply the saved theme on page load
-        if (localStorage.getItem('nightMode') === 'enabled') {
-          body.classList.add('night-mode');
-          nightModeToggle.checked = true;
-        }
-
-        // Toggle night mode on switch change
-        nightModeToggle.addEventListener('change', () => {
-          if (nightModeToggle.checked) {
-            body.classList.add('night-mode');
-            localStorage.setItem('nightMode', 'enabled');
-          } else {
-            body.classList.remove('night-mode');
-            localStorage.setItem('nightMode', 'disabled');
-          }
-        });
-      });
-    </script>
 </body>
 </html>
