@@ -275,6 +275,17 @@ try:
 except (KeyboardInterrupt, SystemExit):
     scheduler.shutdown()
 
+# --- Security Headers ---
+
+@app.after_request
+def add_security_headers(response):
+    """Adds security headers to every response."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
+
 # --- Error Handlers ---
 
 @app.errorhandler(404)
