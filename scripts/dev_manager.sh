@@ -7,6 +7,7 @@ readonly APP_CONTAINER_NAME="${DEV_APP_CONTAINER:-sheepvibes-dev-app}"
 readonly REDIS_CONTAINER_NAME="${DEV_REDIS_CONTAINER:-sheepvibes-dev-redis}"
 readonly APP_IMAGE_NAME="${DEV_APP_IMAGE:-localhost/sheepvibes-app}"
 readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:7-alpine}"
+readonly REDIS_URL_INTERNAL="${DEV_REDIS_URL_INTERNAL:-redis://localhost:6379/0}"
 readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
 readonly CONTAINER_PORT="${DEV_CONTAINER_PORT:-5000}"
 readonly DEFAULT_HOST_PORT="${DEV_DEFAULT_HOST_PORT:-5002}"
@@ -75,6 +76,7 @@ remove_containers() {
 do_up() {
     local HOST_PORT="${DEFAULT_HOST_PORT}"
     local REBUILD=false
+    local PORT_SET=false
     
     while (( $# )); do
         case "$1" in
@@ -83,7 +85,12 @@ do_up() {
                 shift
                 ;;
             [0-9]*)
+                if [[ "$PORT_SET" == true ]]; then
+                    echo "Error: Port argument provided multiple times." >&2
+                    usage
+                fi
                 HOST_PORT="$1"
+                PORT_SET=true
                 shift
                 ;;
             *)
@@ -141,7 +148,7 @@ do_up() {
 
     echo "Starting App..."
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
-        -e CACHE_REDIS_URL="redis://localhost:6379/0" \
+        -e CACHE_REDIS_URL="$REDIS_URL_INTERNAL" \
         -v "${VOLUME_NAME}:/app/data:Z" \
         "$APP_IMAGE_NAME"
 

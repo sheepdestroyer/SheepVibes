@@ -51,8 +51,4 @@ Thumbs.db
 .aider*
 
 # Agent/Tool temporary files
-agent-tools
-branches.txt
-last_commit.txt
-ls.txt
-status_output.txt
+# (None for this PR to keep it focused)
