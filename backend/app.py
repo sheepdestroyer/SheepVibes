@@ -9,7 +9,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
-from sqlalchemy import func, select # Added for optimized query
+from sqlalchemy import func, select, case # Added for optimized query
 from sqlalchemy.orm import selectinload # Added for eager loading
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import ArgumentError
@@ -804,8 +804,24 @@ def get_tabs():
     Returns:
         A JSON response containing a list of tab objects.
     """
-    tabs = Tab.query.order_by(Tab.order).all()
-    return jsonify([tab.to_dict() for tab in tabs])
+    # Optimized query to fetch tabs and unread counts in one go
+    # Use outer join to ensure tabs with no feeds/unread items are still returned
+    # Using case for conditional sum to support more SQL dialects (like MySQL) where filter() on agg is limited
+    stmt = (
+        db.session.query(
+            Tab,
+            func.sum(case((FeedItem.is_read == False, 1), else_=0)).label('unread_count')
+        )
+        .outerjoin(Feed, Feed.tab_id == Tab.id)
+        .outerjoin(FeedItem, FeedItem.feed_id == Feed.id)
+        .group_by(Tab.id)
+        .order_by(Tab.order)
+    )
+
+    results = stmt.all()
+
+    # We can now use the updated to_dict to avoid duplication and maintain contract
+    return jsonify([tab.to_dict(unread_count=(int(count) if count is not None else 0)) for tab, count in results])
 
 @app.route('/api/tabs', methods=['POST'])
 def create_tab():

@@ -724,27 +724,42 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
             mock_execute_after_invalidation.assert_called()
 
         # --- Test /api/tabs caching and invalidation ---
-        with patch('backend.app.Tab.query') as mock_tab_query:
-            # Mock the query result
-            mock_tab_query.order_by.return_value.all.return_value = []
+        with patch('backend.app.db.session.query') as mock_session_query:
+            # Configure the mock chain for the new optimized query
+            # stmt = db.session.query(...).outerjoin(...).outerjoin(...).group_by(...).order_by(...)
+            mock_chain = mock_session_query.return_value \
+                .outerjoin.return_value \
+                .outerjoin.return_value \
+                .group_by.return_value \
+                .order_by.return_value
+            mock_chain.all.return_value = []
 
             # 1. Prime cache for /api/tabs
             client.get('/api/tabs')
             # 2. Assert it was called
-            mock_tab_query.order_by.return_value.all.assert_called_once()
+            assert mock_session_query.call_count > 0
+
+            # Reset call count to verify cache hit
+            call_count_after_prime = mock_session_query.call_count
 
             # 3. Assert a second call is a cache hit
             client.get('/api/tabs')
-            mock_tab_query.order_by.return_value.all.assert_called_once()
+            assert mock_session_query.call_count == call_count_after_prime
         
         # 4. Invalidate by creating a new tab
         client.post('/api/tabs', json={'name': 'A New Tab'})
 
         # 5. Assert the next call is a cache miss
-        with patch('backend.app.Tab.query') as mock_tab_query_after_invalidation:
-            mock_tab_query_after_invalidation.order_by.return_value.all.return_value = []
+        with patch('backend.app.db.session.query') as mock_session_query_after:
+            mock_chain = mock_session_query_after.return_value \
+                .outerjoin.return_value \
+                .outerjoin.return_value \
+                .group_by.return_value \
+                .order_by.return_value
+            mock_chain.all.return_value = []
+
             client.get('/api/tabs')
-            mock_tab_query_after_invalidation.order_by.return_value.all.assert_called_once()
+            assert mock_session_query_after.call_count > 0
 
 
 # --- Tests for Model Methods ---
