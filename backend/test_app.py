@@ -13,6 +13,7 @@ from .feed_service import process_feed_entries, parse_published_time # For new t
 import time # For new tests
 import datetime # For new tests, specifically for timezone object
 from datetime import timezone # For new tests
+from sqlalchemy import event
 
 
 @pytest.fixture
@@ -698,53 +699,61 @@ def test_stream_endpoint_content_type(client):
 # --- Tests for Caching ---
 def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
     """Tests the granular cache invalidation by checking its effects."""
+
+    class QueryCounter:
+        def __init__(self, engine):
+            self.engine = engine
+            self.count = 0
+        def __enter__(self):
+            self.count = 0
+            event.listen(self.engine, "before_cursor_execute", self.callback)
+            return self
+        def __exit__(self, *args):
+            event.remove(self.engine, "before_cursor_execute", self.callback)
+        def callback(self, *args, **kwargs):
+            self.count += 1
+
     with app.app_context():
         tab1_id = setup_tabs_and_feeds["tab1_id"]
         item1_id = setup_tabs_and_feeds["item1_id"]
 
         # --- Test /api/tabs/{id}/feeds caching and invalidation ---
-        with patch('backend.app.db.session.execute') as mock_execute:
+        with QueryCounter(db.engine) as qc:
             # 1. Prime the cache (this call will execute the query).
             client.get(f'/api/tabs/{tab1_id}/feeds')
+            assert qc.count > 0
 
-            # 2. Assert query was called once initially.
-            initial_call_count = mock_execute.call_count
-            assert initial_call_count > 0
-
-            # 3. Call again and assert the query was NOT re-executed (cache hit).
+        with QueryCounter(db.engine) as qc:
+            # 2. Call again and assert the query was NOT re-executed (cache hit).
             client.get(f'/api/tabs/{tab1_id}/feeds')
-            assert mock_execute.call_count == initial_call_count
+            assert qc.count == 0
 
         # 4. Invalidate the cache by marking an item as read.
         client.post(f'/api/items/{item1_id}/read')
 
         # 5. Assert the query IS re-executed on the next call (cache miss).
-        with patch('backend.app.db.session.execute') as mock_execute_after_invalidation:
+        with QueryCounter(db.engine) as qc:
             client.get(f'/api/tabs/{tab1_id}/feeds')
-            mock_execute_after_invalidation.assert_called()
+            assert qc.count > 0
 
         # --- Test /api/tabs caching and invalidation ---
-        with patch('backend.app.Tab.query') as mock_tab_query:
-            # Mock the query result
-            mock_tab_query.order_by.return_value.all.return_value = []
-
+        with QueryCounter(db.engine) as qc:
             # 1. Prime cache for /api/tabs
             client.get('/api/tabs')
-            # 2. Assert it was called
-            mock_tab_query.order_by.return_value.all.assert_called_once()
+            assert qc.count > 0
 
-            # 3. Assert a second call is a cache hit
+        with QueryCounter(db.engine) as qc:
+            # 2. Assert a second call is a cache hit
             client.get('/api/tabs')
-            mock_tab_query.order_by.return_value.all.assert_called_once()
+            assert qc.count == 0
         
         # 4. Invalidate by creating a new tab
         client.post('/api/tabs', json={'name': 'A New Tab'})
 
         # 5. Assert the next call is a cache miss
-        with patch('backend.app.Tab.query') as mock_tab_query_after_invalidation:
-            mock_tab_query_after_invalidation.order_by.return_value.all.return_value = []
+        with QueryCounter(db.engine) as qc:
             client.get('/api/tabs')
-            mock_tab_query_after_invalidation.order_by.return_value.all.assert_called_once()
+            assert qc.count > 0
 
 
 # --- Tests for Model Methods ---
