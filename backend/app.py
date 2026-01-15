@@ -15,9 +15,10 @@ from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import ArgumentError
 from flask_caching import Cache # Added for caching
 from flask_cors import CORS # Added for CORS support
+from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 
 # Import db object and models from the new models.py
-from .models import db, Tab, Feed, FeedItem
+from .models import db, Tab, Feed, FeedItem, User
 import xml.etree.ElementTree as ET # Added for OPML export
 from filelock import FileLock, Timeout # Added for race condition prevention
 
@@ -98,6 +99,7 @@ announcer = MessageAnnouncer()
 
 # Initialize Flask application
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'a-super-secret-key') # CHANGE FOR PRODUCTION
 # Configure CORS with specific allowed origins
 allowed_origins_str = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080")
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',') if origin.strip()]
@@ -158,6 +160,14 @@ migrate = Migrate(app, db)
 
 # Initialize the cache with the app config
 cache.init_app(app)
+
+login_manager = LoginManager(app)
+login_manager.login_view = None # We handle 401s manually for API
+
+@login_manager.user_loader
+def load_user(id):
+    return db.session.get(User, int(id))
+
 
 # --- Cache Key Generation and Invalidation ---
 
@@ -793,6 +803,50 @@ def import_opml():
         'tab_id': top_level_target_tab_id,      # This might be the ID of a tab that was just deleted if it was the empty "Imported Feeds"
         'tab_name': top_level_target_tab_name  # Same as above
     }), 200
+
+# --- Authentication Routes ---
+
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'error': 'Username taken'}), 400
+
+    user = User(username=data['username'], email=data['email'])
+    user.set_password(data['password'])
+
+    # Make first user admin automatically
+    if User.query.count() == 0:
+        user.is_admin = True
+
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({'message': 'Registered successfully'}), 201
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    if user and user.check_password(data['password']):
+        login_user(user)
+        return jsonify({'message': 'Logged in', 'is_admin': user.is_admin})
+    return jsonify({'error': 'Invalid credentials'}), 401
+
+@app.route('/api/auth/logout', methods=['POST'])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({'message': 'Logged out successfully'})
+
+@app.route('/api/auth/me', methods=['GET'])
+@login_required
+def get_current_user():
+    return jsonify({
+        'id': current_user.id,
+        'username': current_user.username,
+        'is_admin': current_user.is_admin,
+    })
+
 
 # --- Tabs API Endpoints ---
 

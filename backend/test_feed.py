@@ -9,7 +9,7 @@ import logging
 import datetime # <--- Added import for datetime
 from sqlalchemy.exc import IntegrityError # <--- Added import for IntegrityError
 from .app import app # Import app for context
-from .models import db, Feed, Tab, FeedItem # <--- Added FeedItem import
+from .models import db, Feed, Tab, FeedItem, User # <--- Added FeedItem import
 from . import feed_service # Import feed_service relatively
 import socket # Added for SSRF test
 from unittest.mock import MagicMock
@@ -36,6 +36,16 @@ def db_setup():
         db.session.remove()
         db.drop_all()
 
+@pytest.fixture
+def setup_user(db_setup):
+    with app.app_context():
+        user = User(username='testuser', email='test@example.com')
+        user.set_password('password')
+        db.session.add(user)
+        db.session.commit()
+    return user
+
+
 @pytest.mark.skip(reason="This test is designed for manual execution with a URL parameter, not for automated pytest runs.")
 def test_fetch_feed(url):
     """Test fetching a feed from a given URL"""
@@ -56,14 +66,14 @@ def test_fetch_feed(url):
     assert parsed_feed is not None # Example assertion for pytest
     return True
 
-def add_test_feed(url, tab_name="Home"):
+def add_test_feed(url, tab_name="Home", user_id=1):
     """Add a test feed to the database (helper function, not a test itself)."""
     # This function assumes an app context is active if called from a test using db_setup
     # Find or create tab
-    tab = Tab.query.filter_by(name=tab_name).first()
+    tab = Tab.query.filter_by(name=tab_name, user_id=user_id).first()
     if not tab:
         logger.info(f"Creating new tab: {tab_name}")
-        tab = Tab(name=tab_name, order=0)
+        tab = Tab(name=tab_name, order=0, user_id=user_id)
         db.session.add(tab)
         db.session.commit()
 
@@ -76,7 +86,7 @@ def add_test_feed(url, tab_name="Home"):
     feed_title = parsed_feed.feed.get('title', 'Unknown Feed')
 
     # Check if feed already exists
-    existing_feed = Feed.query.filter_by(url=url).first()
+    existing_feed = Feed.query.filter_by(url=url, tab_id=tab.id).first()
     if existing_feed:
         logger.info(f"Feed already exists: {feed_title}")
         return existing_feed
@@ -181,7 +191,7 @@ def test_parse_published_time(db_setup): # db_setup for app context if any part 
     assert dt7.tzinfo == datetime.timezone.utc
 
 
-def test_kernel_org_scenario(db_setup, mocker):
+def test_kernel_org_scenario(db_setup, mocker, setup_user):
     """Test Kernel.org scenario: multiple items with unique GUIDs but same link in one batch."""
     logger.info("Testing Kernel.org scenario (unique GUIDs, same link)")
     app = db_setup # Get app from fixture
@@ -194,7 +204,7 @@ def test_kernel_org_scenario(db_setup, mocker):
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
 
     # Add a feed to the DB
-    tab = Tab(name="Tech", order=1)
+    tab = Tab(name="Tech", order=1, user_id=setup_user.id)
     db.session.add(tab)
     db.session.commit()
     feed_obj = Feed(name="Kernel Org Feed", url="http://dummy.kernel.org/feed", tab_id=tab.id)
@@ -214,7 +224,7 @@ def test_kernel_org_scenario(db_setup, mocker):
     assert links_in_db == {"https://www.kernel.org/"} # All share the same link
 
 
-def test_hacker_news_scenario_guid_handling(db_setup, mocker):
+def test_hacker_news_scenario_guid_handling(db_setup, mocker, setup_user):
     """Test Hacker News scenario: items with no true GUID (feedparser uses link as id)."""
     logger.info("Testing Hacker News scenario (link-as-ID handling)")
     app = db_setup
@@ -228,7 +238,7 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
     mock_feed_data = MockParsedFeed(feed_title="HN Mock Feed", entries=[entry1, entry2, entry3])
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
 
-    tab = Tab(name="News", order=1)
+    tab = Tab(name="News", order=1, user_id=setup_user.id)
     db.session.add(tab)
     db.session.commit()
     feed_obj = Feed(name="HN Feed", url="http://dummy.hn.org/feed", tab_id=tab.id)
@@ -251,7 +261,7 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
     assert items_in_db[2].guid == "http://news.example.com/item3"
 
 
-def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
+def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker, setup_user):
     """Test items with no true GUID but duplicate links in the SAME feed are deduplicated by link."""
     logger.info("Testing duplicate links (no true GUID) in same feed")
     app = db_setup
@@ -262,7 +272,7 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     mock_feed_data = MockParsedFeed(feed_title="Duplicate Link Feed", entries=[entry1, entry2])
     mocker.patch('backend.feed_service.feedparser.parse', return_value=mock_feed_data)
 
-    tab = Tab(name="General", order=1)
+    tab = Tab(name="General", order=1, user_id=setup_user.id)
     db.session.add(tab)
     db.session.commit()
     feed_obj = Feed(name="Test Feed DupLinks", url="http://dummy.duplinks.org/feed", tab_id=tab.id)
@@ -286,7 +296,7 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 1
 
 
-def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
+def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker, setup_user):
     """
     Tests that GUIDs are unique on a per-feed basis and that NULL GUIDs from
     different feeds do not conflict.
@@ -308,7 +318,7 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
 
     m_parse = mocker.patch('backend.feed_service.feedparser.parse')
 
-    tab = Tab(name="Mixed", order=1)
+    tab = Tab(name="Mixed", order=1, user_id=setup_user.id)
     db.session.add(tab)
     db.session.commit()
 
@@ -353,12 +363,12 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     assert FeedItem.query.count() == (count1 + count2)
 
 
-def test_update_feed_last_updated_time(db_setup, mocker):
+def test_update_feed_last_updated_time(db_setup, mocker, setup_user):
     """Test that feed.last_updated_time is updated even if no new items or no entries."""
     logger.info("Testing feed.last_updated_time updates")
     app = db_setup
 
-    tab = Tab(name="Timestamps", order=1)
+    tab = Tab(name="Timestamps", order=1, user_id=setup_user.id)
     db.session.add(tab)
     db.session.commit()
 
@@ -420,7 +430,7 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     assert feed_obj.last_updated_time > time_before_second_update_naive, "last_updated_time should update even if 0 new items"
 
 
-def test_update_all_feeds_basic_run(db_setup, mocker):
+def test_update_all_feeds_basic_run(db_setup, mocker, setup_user):
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
     app = db_setup
@@ -439,7 +449,7 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     m_parse = mocker.patch('backend.feed_service.feedparser.parse')
 
     # Add feeds
-    tab = Tab(name="TestTab", order=0)
+    tab = Tab(name="TestTab", order=0, user_id=setup_user.id)
     db.session.add(tab)
     db.session.commit()
     feed1 = Feed(name="FeedA_init", url="http://feedA.url", tab_id=tab.id)
@@ -462,7 +472,7 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     assert feed2_db.name == "Feed B"
 
 
-def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
+def test_integrity_error_fallback_to_individual_commits(db_setup, mocker, setup_user):
     """
     Test that if a batch insert fails due to IntegrityError, the system falls back
     to inserting items individually, and valid items are still added.
@@ -470,7 +480,7 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
     logger.info("Testing IntegrityError fallback to individual commits")
     app = db_setup
 
-    tab = Tab(name="Test Tab Fallback", order=0)
+    tab = Tab(name="Test Tab Fallback", order=0, user_id=setup_user.id)
     db.session.add(tab)
     db.session.commit()
 
@@ -548,14 +558,14 @@ def test_original_update_all_feeds_empty_db(db_setup):
 # For automated tests, it's better to set up DB state directly or use mocks as above.
 
 
-def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
+def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker, setup_user):
     """
     Test that when a feed exceeds the MAX_ITEMS_PER_FEED limit, the oldest items are evicted.
     """
     logger.info("Testing feed item eviction logic")
     app = db_setup
 
-    tab = Tab(name="Eviction Test Tab", order=0)
+    tab = Tab(name="Eviction Test Tab", order=0, user_id=setup_user.id)
     db.session.add(tab)
     db.session.commit()
 

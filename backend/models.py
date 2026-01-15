@@ -2,10 +2,30 @@ import datetime
 from datetime import timezone # Import timezone
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import validates
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin
 
 # Initialize SQLAlchemy ORM extension
 # This will be initialized with the app in app.py using db.init_app(app)
 db = SQLAlchemy()
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), index=True, unique=True, nullable=False)
+    email = db.Column(db.String(120), index=True, unique=True, nullable=False)
+    password_hash = db.Column(db.String(128))
+    is_admin = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(timezone.utc))
+
+    # Relationship
+    tabs = db.relationship('Tab', backref='owner', lazy='dynamic', cascade='all, delete-orphan')
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 # --- Database Models ---
 
@@ -23,6 +43,7 @@ class Tab(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False) # Name of the tab
     order = db.Column(db.Integer, default=0) # Display order of the tab
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     # Relationship to Feeds: One-to-Many (one Tab has many Feeds)
     # cascade='all, delete-orphan' means deleting a Tab also deletes its associated Feeds
     feeds = db.relationship('Feed', backref='tab', lazy=True, cascade='all, delete-orphan')
