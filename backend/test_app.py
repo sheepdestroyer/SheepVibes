@@ -1303,7 +1303,7 @@ def test_import_opml_malformed_xml(client):
     opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'malformed.opml')
     response = client.post('/api/opml/import', data={'file': opml_file}, content_type='multipart/form-data')
     assert response.status_code == 400
-    assert 'Malformed OPML file' in response.json['error']
+    assert 'Invalid or Malicious XML' in response.json['error']
 
 @patch('backend.app.fetch_and_update_feed')
 def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, client):

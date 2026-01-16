@@ -1,5 +1,12 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-01-12
+
+- **Security: Fix XXE vulnerability in OPML import**
+  - Replaced `xml.etree.ElementTree` with `defusedxml` for parsing uploaded OPML files.
+  - Added test case to verify protection against XXE and Billion Laughs attacks.
+  - Added `defusedxml` to requirements.
+
 ## 2026-01-11
 
 - **Feat: Add `dev_manager.sh` for Podman-based local development**
