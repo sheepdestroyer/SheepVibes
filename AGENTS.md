@@ -13,7 +13,12 @@
 ### Finishing a task :
 5. Before preparing to end a task it is necessary to run a last full validation of all tests.
 6. Then it is necessary to update all relevant .md files (*especially* `TODO.md` and `CHANGELOG.md`) accordingly.
-7. Only then will the task be completed, and changes be submitted / commited.
+7. Only then will the task be completed, and changes be submitted / committed.
+
+### Tooling for Agents
+- **`scripts/dev_manager.sh`**: Use this script to easily spin up a full development environment (App + Redis) in a pod for integration testing or verification.
+  - `up [port]`: Starts the environment.
+  - `down [--clean]`: Stops it (use `--clean` to wipe data).
 
 ## CI/CD and Automated Agent Execution Guide
 
