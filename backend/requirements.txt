@@ -10,3 +10,4 @@ Flask-Caching>=2.1.0
 redis
 Flask-CORS
 filelock==3.20.3
+defusedxml==0.7.1
