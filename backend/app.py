@@ -19,6 +19,8 @@ from flask_cors import CORS # Added for CORS support
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
 import xml.etree.ElementTree as ET # Added for OPML export
+import defusedxml.ElementTree as SafeET # Added for secure OPML import
+from defusedxml.common import DefusedXmlException # Added for catching security exceptions
 from filelock import FileLock, Timeout # Added for race condition prevention
 
 # --- OPML Import Configuration ---
@@ -629,11 +631,14 @@ def import_opml():
     newly_added_feeds_list = []
 
     try:
-        tree = ET.parse(opml_file.stream)
+        tree = SafeET.parse(opml_file.stream)
         root = tree.getroot()
     except ET.ParseError as e:
         logger.error(f"OPML import failed: Malformed XML. Error: {e}", exc_info=True)
         return jsonify({'error': f'Malformed OPML file: {e}'}), 400
+    except DefusedXmlException as e:
+        logger.error(f"OPML import blocked: Security violation. Error: {e}", exc_info=True)
+        return jsonify({'error': 'Invalid OPML file: Security violation detected.'}), 400
     except Exception as e:
         logger.error(f"OPML import failed: Could not parse file stream. Error: {e}", exc_info=True)
         return jsonify({'error': f'Error processing OPML file: {e}'}), 500

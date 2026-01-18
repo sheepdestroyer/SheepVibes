@@ -1,0 +1,4 @@
+## 2025-02-24 - XML External Entity (XXE) Vulnerability in OPML Import
+**Vulnerability:** The application used `xml.etree.ElementTree` to parse user-uploaded OPML files. While Python's `ElementTree` has some default protections against external entities in newer versions, it still expands internal entities, making it vulnerable to "Billion Laughs" (DoS) attacks.
+**Learning:** Standard XML parsers often default to unsafe configurations. Even if XXE (file reading) is blocked by the runtime, DoS via entity expansion remains a risk.
+**Prevention:** Always use `defusedxml` for parsing untrusted XML data. Specifically, `defusedxml.ElementTree` is a drop-in replacement that disables DTDs and entity expansion by default. Exceptions raised by `defusedxml` (like `EntitiesForbidden`) must be explicitly caught to handle security violations gracefully.
