@@ -27,17 +27,25 @@ class Tab(db.Model):
     # cascade='all, delete-orphan' means deleting a Tab also deletes its associated Feeds
     feeds = db.relationship('Feed', backref='tab', lazy=True, cascade='all, delete-orphan')
 
-    def to_dict(self):
+    def to_dict(self, unread_count=None):
         """Serializes the Tab object to a dictionary.
+
+        Args:
+            unread_count (int, optional): Pre-calculated unread count.
+                                          If None, it triggers a DB query.
 
         Returns:
             dict: A dictionary representation of the tab, including the unread count.
         """
-        # Calculate total unread count for all feeds within this tab
-        total_unread = db.session.query(db.func.count(FeedItem.id)).join(Feed).filter(
-            Feed.tab_id == self.id,
-            FeedItem.is_read == False
-        ).scalar() or 0
+        if unread_count is None:
+            # Calculate total unread count for all feeds within this tab
+            # This triggers a DB query (potential N+1 if called in a loop)
+            total_unread = db.session.query(db.func.count(FeedItem.id)).join(Feed).filter(
+                Feed.tab_id == self.id,
+                FeedItem.is_read == False
+            ).scalar() or 0
+        else:
+            total_unread = unread_count
 
         return {
             'id': self.id,
