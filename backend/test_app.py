@@ -724,27 +724,31 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
             mock_execute_after_invalidation.assert_called()
 
         # --- Test /api/tabs caching and invalidation ---
-        with patch('backend.app.Tab.query') as mock_tab_query:
-            # Mock the query result
-            mock_tab_query.order_by.return_value.all.return_value = []
+        # Note: get_tabs now uses db.session.query instead of Tab.query for optimization
+        with patch('backend.app.db.session.query') as mock_query:
+            # Mock the chained query result
+            mock_query.return_value.outerjoin.return_value.outerjoin.return_value.group_by.return_value.order_by.return_value.all.return_value = []
 
             # 1. Prime cache for /api/tabs
             client.get('/api/tabs')
             # 2. Assert it was called
-            mock_tab_query.order_by.return_value.all.assert_called_once()
+            assert mock_query.called
+
+            # Reset mock to verify cache hit (should not be called again)
+            mock_query.reset_mock()
 
             # 3. Assert a second call is a cache hit
             client.get('/api/tabs')
-            mock_tab_query.order_by.return_value.all.assert_called_once()
+            assert not mock_query.called
         
         # 4. Invalidate by creating a new tab
         client.post('/api/tabs', json={'name': 'A New Tab'})
 
         # 5. Assert the next call is a cache miss
-        with patch('backend.app.Tab.query') as mock_tab_query_after_invalidation:
-            mock_tab_query_after_invalidation.order_by.return_value.all.return_value = []
+        with patch('backend.app.db.session.query') as mock_query_after_invalidation:
+            mock_query_after_invalidation.return_value.outerjoin.return_value.outerjoin.return_value.group_by.return_value.order_by.return_value.all.return_value = []
             client.get('/api/tabs')
-            mock_tab_query_after_invalidation.order_by.return_value.all.assert_called_once()
+            assert mock_query_after_invalidation.called
 
 
 # --- Tests for Model Methods ---

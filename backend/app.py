@@ -9,7 +9,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from flask_migrate import Migrate # Added for database migrations
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
-from sqlalchemy import func, select # Added for optimized query
+from sqlalchemy import select # Added for optimized query
 from sqlalchemy.orm import selectinload # Added for eager loading
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import ArgumentError
@@ -804,8 +804,16 @@ def get_tabs():
     Returns:
         A JSON response containing a list of tab objects.
     """
-    tabs = Tab.query.order_by(Tab.order).all()
-    return jsonify([tab.to_dict() for tab in tabs])
+    # Optimized query to fetch tabs and unread counts in one go
+    # Use outerjoin to include tabs even if they have no feeds/unread items
+    results = db.session.query(Tab, db.func.count(FeedItem.id))\
+        .outerjoin(Feed, Tab.id == Feed.tab_id)\
+        .outerjoin(FeedItem, (Feed.id == FeedItem.feed_id) & (FeedItem.is_read == False))\
+        .group_by(Tab.id)\
+        .order_by(Tab.order)\
+        .all()
+
+    return jsonify([tab.to_dict(unread_count=count) for tab, count in results])
 
 @app.route('/api/tabs', methods=['POST'])
 def create_tab():
@@ -929,7 +937,7 @@ def get_feeds_for_tab(tab_id):
     # Use a window function to rank items within each feed.
     ranked_items_subq = select(
         FeedItem,
-        func.row_number().over(
+        db.func.row_number().over(
             partition_by=FeedItem.feed_id,
             order_by=[FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()]
         ).label('rank')
