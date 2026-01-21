@@ -141,7 +141,7 @@ else:
         app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 
     # --- Cache Configuration for non-testing ---
-    app.config["CACHE_TYPE"] = "RedisCache"
+    app.config["CACHE_TYPE"] = os.environ.get("CACHE_TYPE", "RedisCache")
     app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL", "redis://localhost:6379/0")
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Disable modification tracking
@@ -805,7 +805,18 @@ def get_tabs():
         A JSON response containing a list of tab objects.
     """
     tabs = Tab.query.order_by(Tab.order).all()
-    return jsonify([tab.to_dict() for tab in tabs])
+
+    # Optimize unread count calculation to avoid N+1 queries
+    unread_counts_query = db.session.query(
+        Feed.tab_id,
+        db.func.count(FeedItem.id)
+    ).join(FeedItem).filter(
+        FeedItem.is_read == False
+    ).group_by(Feed.tab_id)
+
+    unread_counts = dict(unread_counts_query.all())
+
+    return jsonify([tab.to_dict(unread_count=unread_counts.get(tab.id, 0)) for tab in tabs])
 
 @app.route('/api/tabs', methods=['POST'])
 def create_tab():
