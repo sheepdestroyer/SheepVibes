@@ -1,0 +1,4 @@
+## 2026-01-23 - XXE Vulnerability in OPML Import
+**Vulnerability:** The OPML import function used the standard `xml.etree.ElementTree` library, which, while blocking external entities in attributes by default in Python 3.12, remains vulnerable to Denial of Service (DoS) via XML Entity Expansion (Billion Laughs attack) and Entity Expansion in text content.
+**Learning:** Even modern Python standard XML libraries are not fully secure against all XML-based attacks. The `defusedxml` library is essential for securely parsing untrusted XML input. The project had `defusedxml` as a mandatory dependency in documentation/memory but it was missing from `requirements.txt`.
+**Prevention:** Always use `defusedxml.ElementTree` (or equivalent) when parsing XML from untrusted sources. Ensure security dependencies are strictly tracked in `requirements.txt`.
