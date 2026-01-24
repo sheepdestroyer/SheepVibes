@@ -1,6 +1,6 @@
 import pytest
 import socket
-from unittest.mock import MagicMock
+
 
 @pytest.fixture
 def mock_dns(mocker):
