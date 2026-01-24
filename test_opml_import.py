@@ -2,12 +2,18 @@ import requests
 import os
 import sys
 import io
+import logging
+import pytest
 from unittest.mock import MagicMock, patch
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def test_import():
     base_url = os.getenv('API_BASE_URL', 'http://127.0.0.1:5001')
     url = f'{base_url}/api/opml/import'
-    print(f"Testing OPML import at: {url}")
+    logger.info(f"Testing OPML import at: {url}")
 
     try:
         # Use an in-memory file object so tests don't touch repository files
@@ -29,20 +35,26 @@ def test_import():
             # Assert that the mocked request was called once with the expected arguments
             mock_post.assert_called_once_with(url, files=files, timeout=10)
 
-        print(f"Status Code: {response.status_code}")
+        logger.info(f"Status Code: {response.status_code}")
         response.raise_for_status()
         response_data = response.json()
-        print(f"Response: {response_data}")
+        logger.info(f"Response: {response_data}")
 
         assert response_data.get('imported_count', 0) > 0, "Expected imported_count > 0"
-        print("Test PASSED")
+        logger.info("Test PASSED")
 
     except requests.RequestException as e:
-        print(f"Request Error: {e}")
-        sys.exit(1)
+        logger.error(f"Request Error: {e}")
+        pytest.fail(f"Request Error: {e}")
     except AssertionError as e:
-        print(f"Assertion Failed: {e}")
-        sys.exit(1)
+        logger.error(f"Assertion Failed: {e}")
+        pytest.fail(f"Assertion Failed: {e}")
 
 if __name__ == "__main__":
-    test_import()
+    # When running directly, we might not have pytest context, but for the purpose of the file being a test file
+    # it is primarily run via pytest. If run directly, pytest.fail will raise Failed exception.
+    try:
+        test_import()
+    except Exception as e:
+        print(f"Test failed: {e}")
+        sys.exit(1)
