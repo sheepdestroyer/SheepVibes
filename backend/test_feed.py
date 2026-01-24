@@ -367,6 +367,13 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     initial_time_aware = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
     initial_time_naive = initial_time_aware.replace(tzinfo=None)
 
+    # Mock socket.getaddrinfo to prevent DNS resolution errors
+    mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
+    # Return a safe IP (e.g., example.com)
+    mock_getaddrinfo.return_value = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 80))
+    ]
+
     # When setting, SQLAlchemy handles the aware datetime for the default
     # but if we set it directly for the test, make it aware so it's stored as UTC.
     # The default lambda in the model makes it aware.
@@ -431,6 +438,12 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     mock_response.read.return_value = b'<rss></rss>'
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
+
+    # Mock socket.getaddrinfo
+    mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
+    mock_getaddrinfo.return_value = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 80))
+    ]
 
     # Mock feedparser.parse to return some basic feeds
     mock_feed_data1 = MockParsedFeed("Feed A", [MockFeedEntry("A1","http://a.com/1","gA1")])
