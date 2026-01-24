@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SheepVibes</title>
-  <link rel="icon" type="image/x-icon" href="sheepdestroyer.ico">
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SheepVibes</title>
+    <link rel="icon" type="image/x-icon" href="sheepdestroyer.ico">
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <header>
         <h1>SheepVibes</h1>
@@ -36,11 +38,11 @@
     <main id="feed-grid">
         <!-- Feed widgets will be loaded here -->
     </main>
-    
+
     <!-- Edit Feed Modal -->
     <div id="edit-feed-modal" class="modal">
         <div class="modal-content">
-            <button id="edit-feed-modal-close-button" class="modal-close-button">&times;</button>
+            <button id="edit-feed-modal-close-button" class="modal-close-button" aria-label="Close">&times;</button>
             <h2>Edit Feed</h2>
             <form id="edit-feed-form">
                 <input type="hidden" id="edit-feed-id">
@@ -61,10 +63,11 @@
             </form>
         </div>
     </div>
-    
 
+    <div id="modal-root"></div>
     <div id="toast-container"></div>
 
     <script src="script.js"></script>
 </body>
+
 </html>

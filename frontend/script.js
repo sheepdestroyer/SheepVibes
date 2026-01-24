@@ -633,7 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        console.log(`Adding feed: ${url} to tab: ${activeTabId}`);
+
         addFeedButton.disabled = true;
         addFeedButton.textContent = 'Adding...';
 
@@ -644,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ url: url, tab_id: activeTabId }),
             });
 
-            console.log('Feed added:', newFeedData);
+
             feedUrlInput.value = '';
             // Invalidate and reload the current tab to show the new feed
             if (loadedTabs.has(activeTabId)) {
@@ -673,14 +673,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        console.log(`Deleting feed: ${feedId}`);
+
         const widget = feedGrid.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
         if (widget) widget.style.opacity = '0.5';
 
         try {
             const result = await fetchData(`/api/feeds/${feedId}`, { method: 'DELETE' });
 
-            console.log(`Feed ${feedId} deleted successfully.`);
+            // console.log(`Feed ${feedId} deleted successfully.`);
             if (widget) widget.remove();
             if (feedGrid.children.length === 0) {
                 feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
@@ -703,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} currentName The current name of the feed.
      */
     function handleEditFeed(feedId, currentUrl, currentName) {
-        console.log(`Editing feed: ${feedId}`);
+
 
         const modal = document.getElementById('edit-feed-modal');
         const feedIdInput = document.getElementById('edit-feed-id');
@@ -766,7 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ url: newUrl })
             });
 
-            console.log('Feed updated successfully:', result);
+
             // Close the modal
             modal.classList.remove('is-active');
 
@@ -874,12 +874,12 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function handleMarkItemRead(itemId, listItemElement, feedId, tabId) {
         if (listItemElement.classList.contains('unread')) {
-            console.log(`Marking item ${itemId} as read`);
+
             try {
                 await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
 
                 // If fetchData completes without throwing, the operation was successful.
-                console.log(`Successfully marked item ${itemId} as read.`);
+
                 listItemElement.classList.remove('unread');
                 listItemElement.classList.add('read');
                 updateUnreadCount(feedId, -1);
@@ -949,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        console.log(`Adding tab: ${newTabName}`);
+
         addTabButton.disabled = true;
         addTabButton.textContent = 'Adding...';
 
@@ -960,7 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ name: newTabName.trim() }),
             });
 
-            console.log('Tab added:', newTabData);
+
             await initializeTabs();
             await setActiveTab(newTabData.id);
         } catch (error) {
@@ -989,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        console.log(`Renaming tab ${activeTabId} to: ${newTabName}`);
+
         try {
             const updatedTabData = await fetchData(`/api/tabs/${activeTabId}`, {
                 method: 'PUT',
@@ -997,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ name: newTabName.trim() }),
             });
 
-            console.log('Tab renamed:', updatedTabData);
+
             await initializeTabs(true);
         } catch (error) {
             console.error('Error renaming tab:', error);
@@ -1019,11 +1019,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        console.log(`Deleting tab: ${activeTabId}`);
+
         try {
             await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
 
-            console.log(`Tab ${activeTabId} deleted successfully.`);
+
             // If the deleted tab was the active one, clear activeTabId before re-initializing
             const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
             if (activeTabId === deletedTabId) {
