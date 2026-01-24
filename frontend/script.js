@@ -24,8 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportOpmlButton = document.getElementById('export-opml-button');
     const importOpmlButton = document.getElementById('import-opml-button');
     const opmlFileInput = document.getElementById('opml-file-input');
-    const settingsButton = document.getElementById('settings-button');
-    const settingsMenu = document.getElementById('settings-menu');
 
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -633,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-
+        console.log(`Adding feed: ${url} to tab: ${activeTabId}`);
         addFeedButton.disabled = true;
         addFeedButton.textContent = 'Adding...';
 
@@ -644,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ url: url, tab_id: activeTabId }),
             });
 
-
+            console.log('Feed added:', newFeedData);
             feedUrlInput.value = '';
             // Invalidate and reload the current tab to show the new feed
             if (loadedTabs.has(activeTabId)) {
@@ -673,14 +671,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-
+        console.log(`Deleting feed: ${feedId}`);
         const widget = feedGrid.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
         if (widget) widget.style.opacity = '0.5';
 
         try {
             const result = await fetchData(`/api/feeds/${feedId}`, { method: 'DELETE' });
 
-            // console.log(`Feed ${feedId} deleted successfully.`);
+            console.log(`Feed ${feedId} deleted successfully.`);
             if (widget) widget.remove();
             if (feedGrid.children.length === 0) {
                 feedGrid.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
@@ -703,7 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} currentName The current name of the feed.
      */
     function handleEditFeed(feedId, currentUrl, currentName) {
-
+        console.log(`Editing feed: ${feedId}`);
 
         const modal = document.getElementById('edit-feed-modal');
         const feedIdInput = document.getElementById('edit-feed-id');
@@ -766,7 +764,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ url: newUrl })
             });
 
-
+            console.log('Feed updated successfully:', result);
             // Close the modal
             modal.classList.remove('is-active');
 
@@ -799,6 +797,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Handles the cancellation of the edit feed form.
+     */
     function handleEditFeedCancel() {
         const saveButton = document.getElementById('save-feed-button');
         // Prevent closing the modal if a save operation is in progress.
@@ -874,12 +875,12 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function handleMarkItemRead(itemId, listItemElement, feedId, tabId) {
         if (listItemElement.classList.contains('unread')) {
-
+            console.log(`Marking item ${itemId} as read`);
             try {
                 await fetchData(`/api/items/${itemId}/read`, { method: 'POST' });
 
                 // If fetchData completes without throwing, the operation was successful.
-
+                console.log(`Successfully marked item ${itemId} as read.`);
                 listItemElement.classList.remove('unread');
                 listItemElement.classList.add('read');
                 updateUnreadCount(feedId, -1);
@@ -949,7 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-
+        console.log(`Adding tab: ${newTabName}`);
         addTabButton.disabled = true;
         addTabButton.textContent = 'Adding...';
 
@@ -960,7 +961,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ name: newTabName.trim() }),
             });
 
-
+            console.log('Tab added:', newTabData);
             await initializeTabs();
             await setActiveTab(newTabData.id);
         } catch (error) {
@@ -989,7 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-
+        console.log(`Renaming tab ${activeTabId} to: ${newTabName}`);
         try {
             const updatedTabData = await fetchData(`/api/tabs/${activeTabId}`, {
                 method: 'PUT',
@@ -997,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ name: newTabName.trim() }),
             });
 
-
+            console.log('Tab renamed:', updatedTabData);
             await initializeTabs(true);
         } catch (error) {
             console.error('Error renaming tab:', error);
@@ -1019,11 +1020,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-
+        console.log(`Deleting tab: ${activeTabId}`);
         try {
             await fetchData(`/api/tabs/${activeTabId}`, { method: 'DELETE' });
 
-
+            console.log(`Tab ${activeTabId} deleted successfully.`);
             // If the deleted tab was the active one, clear activeTabId before re-initializing
             const deletedTabId = currentTab ? currentTab.id : activeTabId; // Get the actual ID being deleted
             if (activeTabId === deletedTabId) {
@@ -1077,6 +1078,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function handleEditFeedCancel() {
+        const saveButton = document.getElementById('save-feed-button');
+        // Prevent closing the modal if a save operation is in progress.
+        if (saveButton.disabled) {
+            return;
+        }
+        const modal = document.getElementById('edit-feed-modal');
+        modal.classList.remove('is-active');
+    }
+
     /** Main initialization function called on DOMContentLoaded. */
     async function initialize() {
         // Move modal to its root container for proper stacking context
@@ -1115,22 +1126,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 handleEditFeedCancel();
             }
         });
-
-        // Settings menu toggle
-        if (settingsButton && settingsMenu) {
-            settingsButton.addEventListener('click', (event) => {
-                event.stopPropagation(); // Prevent the document click listener from immediately closing the menu
-                settingsMenu.classList.toggle('hidden');
-            });
-
-            // Close settings menu when clicking outside
-            document.addEventListener('click', (event) => {
-                // If the menu is visible AND the click was not inside the menu AND the click was not the settings button
-                if (!settingsMenu.classList.contains('hidden') && !settingsMenu.contains(event.target) && event.target !== settingsButton) {
-                    settingsMenu.classList.add('hidden');
-                }
-            });
-        }
 
         // Fetch initial tabs to start the application
         await initializeTabs();

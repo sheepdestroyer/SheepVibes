@@ -49,6 +49,3 @@ backend/venv/
 .DS_Store
 Thumbs.db
 .aider*
-
-# Agent/Tool temporary files
-# (None for this PR to keep it focused)

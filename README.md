@@ -108,30 +108,7 @@ This section describes how to set up SheepVibes for local development.
     ```
     After rebuilding the image, if you are using systemd for production, you must restart the service to use the new image: `systemctl --user restart sheepvibespod-pod.service`.
 
-### Running Locally with Podman (Development Manager)
-
-The `scripts/dev_manager.sh` script simplifies managing the development environment (App + Redis + Persistence).
-
-1.  **Start the Dev Environment**:
-    ```bash
-    ./scripts/dev_manager.sh up [port]
-    # Example: ./scripts/dev_manager.sh up 5003
-    ```
-    This will build the image (if needed), create a pod, start Redis and the App, and expose it on the specified port (default 5002).
-
-2.  **Stop the Dev Environment**:
-    ```bash
-    ./scripts/dev_manager.sh down
-    ```
-    This removes the pod and containers but **preserves** the database volume.
-
-3.  **Stop and Clean Data**:
-    ```bash
-    ./scripts/dev_manager.sh down --clean
-    ```
-    This removes the pod, containers, **and** the data volume.
-
-### Running Locally with Podman (Manual)
+### Running Locally with Podman
 
 1.  **Create a Podman Network**:
     ```bash
