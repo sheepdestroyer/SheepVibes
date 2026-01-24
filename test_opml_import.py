@@ -1,51 +1,55 @@
-import requests
-import os
-import sys
 import io
 import logging
 import pytest
-from unittest.mock import MagicMock, patch
-
+from backend.app import app, db
+from backend.models import Tab, Feed
 
 logger = logging.getLogger(__name__)
 
-def test_import():
-    base_url = os.getenv('API_BASE_URL', 'http://127.0.0.1:5001')
-    url = f'{base_url}/api/opml/import'
+@pytest.fixture
+def client():
+    app.config['TESTING'] = True
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    with app.test_client() as client:
+        with app.app_context():
+            db.create_all()
+            yield client
+            db.session.remove()
+            db.drop_all()
+
+def test_import(client, mocker):
+    """Test the OPML import endpoint using the Flask test client."""
+    url = '/api/opml/import'
     logger.info(f"Testing OPML import at: {url}")
 
-    # Use an in-memory file object so tests don't touch repository files
-    opml_content = b'<opml version="1.0"><body></body></opml>'
+    # Use an in-memory file object
+    opml_content = b'<opml version="1.0"><body><outline text="Test Feed" xmlUrl="http://example.com/feed" /></body></opml>'
     opml_file = io.BytesIO(opml_content)
-    opml_file.name = "test_feeds.opml"  # mimic a real file name for the upload
+    
+    data = {
+        'file': (opml_file, 'test_feeds.opml')
+    }
 
-    files = {'file': opml_file}
+    # Mock the internal fetch_and_update_feed to avoid actual network calls
+    mocker.patch('backend.app.fetch_and_update_feed')
 
-    # Mock the response
-    with patch('requests.post') as mock_post:
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {'imported_count': 5, 'message': 'Success'}
-        mock_post.return_value = mock_response
-
-        response = requests.post(url, files=files, timeout=10)
-        
-        # Assert that the mocked request was called once with the expected arguments
-        mock_post.assert_called_once_with(url, files=files, timeout=10)
-
+    response = client.post(url, data=data, content_type='multipart/form-data')
+    
     logger.info(f"Status Code: {response.status_code}")
-    response.raise_for_status()
-    response_data = response.json()
+    assert response.status_code == 200
+    
+    response_data = response.get_json()
     logger.info(f"Response: {response_data}")
 
-    assert response_data.get('imported_count', 0) > 0, "Expected imported_count > 0"
-    logger.info("Test PASSED")
+    assert response_data.get('imported_count', 0) == 1
+    assert response_data.get('skipped_count', 0) == 0
+    
+    # Verify DB state
+    with app.app_context():
+        feed = Feed.query.filter_by(url="http://example.com/feed").first()
+        assert feed is not None
+        assert feed.name == "Test Feed"
 
-if __name__ == "__main__":
-    # When running directly, we might not have pytest context, but for the purpose of the file being a test file
-    # it is primarily run via pytest. If run directly, pytest.fail will raise Failed exception.
-    try:
-        test_import()
-    except Exception as e:
-        print(f"Test failed: {e}")
-        sys.exit(1)
+    logger.info("Test PASSED")

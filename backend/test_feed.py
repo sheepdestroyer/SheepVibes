@@ -353,7 +353,7 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     assert FeedItem.query.count() == (count1 + count2)
 
 
-def test_update_feed_last_updated_time(db_setup, mocker):
+def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):
     """Test that feed.last_updated_time is updated even if no new items or no entries."""
     logger.info("Testing feed.last_updated_time updates")
     app = db_setup
@@ -367,12 +367,9 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     initial_time_aware = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
     initial_time_naive = initial_time_aware.replace(tzinfo=None)
 
-    # Mock socket.getaddrinfo to prevent DNS resolution errors
-    mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
+    # Mock socket.getaddrinfo is handled by mock_dns fixture
     # Return a safe IP (e.g., example.com)
-    mock_getaddrinfo.return_value = [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 80))
-    ]
+
 
     # When setting, SQLAlchemy handles the aware datetime for the default
     # but if we set it directly for the test, make it aware so it's stored as UTC.
@@ -427,7 +424,7 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     assert feed_obj.last_updated_time > time_before_second_update_naive, "last_updated_time should update even if 0 new items"
 
 
-def test_update_all_feeds_basic_run(db_setup, mocker):
+def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
     app = db_setup
@@ -439,11 +436,7 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
 
-    # Mock socket.getaddrinfo
-    mock_getaddrinfo = mocker.patch('backend.feed_service.socket.getaddrinfo')
-    mock_getaddrinfo.return_value = [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 80))
-    ]
+    # Mock socket.getaddrinfo is handled by mock_dns fixture
 
     # Mock feedparser.parse to return some basic feeds
     mock_feed_data1 = MockParsedFeed("Feed A", [MockFeedEntry("A1","http://a.com/1","gA1")])
