@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportOpmlButton = document.getElementById('export-opml-button');
     const importOpmlButton = document.getElementById('import-opml-button');
     const opmlFileInput = document.getElementById('opml-file-input');
+    const settingsButton = document.getElementById('settings-button');
+    const settingsMenu = document.getElementById('settings-menu');
 
     // State variables
     let activeTabId = null; // ID of the currently selected tab
@@ -1124,6 +1126,20 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('edit-feed-modal').addEventListener('click', (event) => {
             if (event.target.id === 'edit-feed-modal') {
                 handleEditFeedCancel();
+            }
+        });
+
+        // Settings menu toggle
+        settingsButton.addEventListener('click', (event) => {
+            event.stopPropagation(); // Prevent the document click listener from immediately closing the menu
+            settingsMenu.classList.toggle('hidden');
+        });
+
+        // Close settings menu when clicking outside
+        document.addEventListener('click', (event) => {
+            // If the menu is visible AND the click was not inside the menu AND the click was not the settings button
+            if (!settingsMenu.classList.contains('hidden') && !settingsMenu.contains(event.target) && event.target !== settingsButton) {
+                settingsMenu.classList.add('hidden');
             }
         });
 
