@@ -269,7 +269,8 @@ def scheduled_opml_autosave():
             logger.exception("Error during scheduled OPML autosave")
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
-if not os.environ.get('TESTING'):
+import sys
+if not os.environ.get('TESTING') and 'pytest' not in sys.modules:
     try:
         scheduler.start()
         atexit.register(lambda: scheduler.shutdown())
