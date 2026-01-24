@@ -1083,7 +1083,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleEditFeedCancel() {
         const saveButton = document.getElementById('save-feed-button');
         // Prevent closing the modal if a save operation is in progress.
-        if (saveButton.disabled) {
+        if (saveButton && saveButton.disabled) {
             return;
         }
         const modal = document.getElementById('edit-feed-modal');
