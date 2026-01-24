@@ -1,6 +1,7 @@
 import requests
 import os
 import sys
+import io
 from unittest.mock import MagicMock, patch
 
 def test_import():
@@ -9,26 +10,25 @@ def test_import():
     print(f"Testing OPML import at: {url}")
 
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(script_dir, 'test_feeds.opml')
-        
-        # Check if file exists, if not create a dummy one for testing
-        if not os.path.exists(file_path):
-            with open(file_path, 'w') as f:
-                f.write('<opml version="1.0"><body></body></opml>')
+        # Use an in-memory file object so tests don't touch repository files
+        opml_content = b'<opml version="1.0"><body></body></opml>'
+        opml_file = io.BytesIO(opml_content)
+        opml_file.name = "test_feeds.opml"  # mimic a real file name for the upload
 
-        with open(file_path, 'rb') as f:
-            files = {'file': f}
+        files = {'file': opml_file}
+
+        # Mock the response
+        with patch('requests.post') as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {'imported_count': 5, 'message': 'Success'}
+            mock_post.return_value = mock_response
+
+            response = requests.post(url, files=files, timeout=10)
             
-            # Mock the response
-            with patch('requests.post') as mock_post:
-                mock_response = MagicMock()
-                mock_response.status_code = 200
-                mock_response.json.return_value = {'imported_count': 5, 'message': 'Success'}
-                mock_post.return_value = mock_response
+            # Assert that the mocked request was called once with the expected arguments
+            mock_post.assert_called_once_with(url, files=files, timeout=10)
 
-                response = requests.post(url, files=files, timeout=10)
-        
         print(f"Status Code: {response.status_code}")
         response.raise_for_status()
         response_data = response.json()
