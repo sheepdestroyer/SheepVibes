@@ -269,11 +269,12 @@ def scheduled_opml_autosave():
             logger.exception("Error during scheduled OPML autosave")
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
-try:
-    scheduler.start()
-    atexit.register(lambda: scheduler.shutdown())
-except (KeyboardInterrupt, SystemExit):
-    scheduler.shutdown()
+if not os.environ.get('TESTING'):
+    try:
+        scheduler.start()
+        atexit.register(lambda: scheduler.shutdown())
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
 
 # --- Error Handlers ---
 
