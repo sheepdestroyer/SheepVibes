@@ -799,18 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /**
-     * Handles the cancellation of the edit feed form.
-     */
-    function handleEditFeedCancel() {
-        const saveButton = document.getElementById('save-feed-button');
-        // Prevent closing the modal if a save operation is in progress.
-        if (saveButton.disabled) {
-            return;
-        }
-        const modal = document.getElementById('edit-feed-modal');
-        modal.classList.remove('is-active');
-    }
+
 
     // --- Mark Item as Read Logic ---
 
