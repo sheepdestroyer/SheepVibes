@@ -18,7 +18,9 @@ from flask_cors import CORS # Added for CORS support
 
 # Import db object and models from the new models.py
 from .models import db, Tab, Feed, FeedItem
-import xml.etree.ElementTree as ET # Added for OPML export
+import xml.etree.ElementTree as StandardET # Used for generating XML (export)
+import defusedxml.ElementTree as SafeET # Used for parsing untrusted XML (import) to prevent XXE
+from defusedxml.common import DefusedXmlException # For catching security exceptions
 from filelock import FileLock, Timeout # Added for race condition prevention
 
 # --- OPML Import Configuration ---
@@ -349,11 +351,11 @@ def _generate_opml_string(tabs=None):
     Returns:
         tuple[str, int, int]: A tuple containing the OPML string, tab count, and feed count.
     """
-    opml_element = ET.Element('opml', version='2.0')
-    head_element = ET.SubElement(opml_element, 'head')
-    title_element = ET.SubElement(head_element, 'title')
+    opml_element = StandardET.Element('opml', version='2.0')
+    head_element = StandardET.SubElement(opml_element, 'head')
+    title_element = StandardET.SubElement(head_element, 'title')
     title_element.text = 'SheepVibes Feeds'
-    body_element = ET.SubElement(opml_element, 'body')
+    body_element = StandardET.SubElement(opml_element, 'body')
 
     if tabs is None:
         # Eager load feeds to avoid N+1 queries
@@ -365,7 +367,7 @@ def _generate_opml_string(tabs=None):
             continue
 
         # Create a folder outline for the tab
-        folder_outline = ET.SubElement(body_element, 'outline')
+        folder_outline = StandardET.SubElement(body_element, 'outline')
         folder_outline.set('text', tab.name)
         folder_outline.set('title', tab.name)
 
@@ -374,7 +376,7 @@ def _generate_opml_string(tabs=None):
 
         # Add feeds for this tab
         for feed in sorted_feeds:
-            feed_outline = ET.SubElement(folder_outline, 'outline')
+            feed_outline = StandardET.SubElement(folder_outline, 'outline')
             feed_outline.set('text', feed.name)
             feed_outline.set('title', feed.name)
             feed_outline.set('xmlUrl', feed.url)
@@ -383,7 +385,7 @@ def _generate_opml_string(tabs=None):
                 feed_outline.set('htmlUrl', feed.site_link)
     
     # Convert the XML tree to a string
-    opml_string = ET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
+    opml_string = StandardET.tostring(opml_element, encoding='utf-8', method='xml').decode('utf-8')
     
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)
@@ -629,9 +631,12 @@ def import_opml():
     newly_added_feeds_list = []
 
     try:
-        tree = ET.parse(opml_file.stream)
+        tree = SafeET.parse(opml_file.stream)
         root = tree.getroot()
-    except ET.ParseError as e:
+    except DefusedXmlException as e:
+        logger.error(f"OPML import failed: Security violation (XXE attempt?). Error: {e}", exc_info=True)
+        return jsonify({'error': 'Security violation: Invalid XML content'}), 400
+    except StandardET.ParseError as e:
         logger.error(f"OPML import failed: Malformed XML. Error: {e}", exc_info=True)
         return jsonify({'error': f'Malformed OPML file: {e}'}), 400
     except Exception as e:
