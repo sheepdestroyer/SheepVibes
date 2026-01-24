@@ -2,6 +2,9 @@ import pytest
 import socket
 
 
+import os
+os.environ['TESTING'] = 'true'
+
 from backend.app import app, db
 
 EXAMPLE_COM_IP = "93.184.216.34"

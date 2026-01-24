@@ -1075,11 +1075,14 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function handleEditFeedCancel() {
         const saveButton = document.getElementById('save-feed-button');
+        const modal = document.getElementById('edit-feed-modal');
         // Prevent closing the modal if a save operation is in progress.
         if (saveButton && saveButton.disabled) {
+            // Add a class to trigger a shake animation for visual feedback.
+            modal?.classList.add('is-busy-shaking');
+            setTimeout(() => modal?.classList.remove('is-busy-shaking'), 500);
             return;
         }
-        const modal = document.getElementById('edit-feed-modal');
         modal?.classList.remove('is-active');
     }
 
