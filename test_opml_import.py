@@ -6,18 +6,7 @@ from backend.models import Tab, Feed
 
 logger = logging.getLogger(__name__)
 
-@pytest.fixture
-def client():
-    app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
-            yield client
-            db.session.remove()
-            db.drop_all()
+
 
 def test_import(client, mocker):
     """Test the OPML import endpoint using the Flask test client."""
