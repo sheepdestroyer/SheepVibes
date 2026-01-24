@@ -1080,7 +1080,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const modal = document.getElementById('edit-feed-modal');
-        modal.classList.remove('is-active');
+        modal?.classList.remove('is-active');
     }
 
     /** Main initialization function called on DOMContentLoaded. */
