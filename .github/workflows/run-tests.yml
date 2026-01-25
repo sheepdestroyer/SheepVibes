@@ -44,5 +44,4 @@ jobs:
         # Pass the dynamically assigned Redis host port to the tests.
         CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
       run: |
-        cd backend
-        python -m pytest -v
+        python -m pytest backend/ -v
