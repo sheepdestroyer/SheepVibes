@@ -313,7 +313,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             title=entry_title,
             link=entry_link,
             published_time=published_time,
-            guid=db_guid,  # This will be None if feedparser_id was missing or same as link
+            guid=db_guid,  # Always the entry's link per the new GUID strategy
         )
         items_to_add.append(new_item)
 
