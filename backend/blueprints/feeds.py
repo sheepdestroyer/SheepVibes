@@ -116,6 +116,7 @@ def add_feed():
         raise e  # Let 500 handler manage response
 
 
+
 @feeds_bp.route("/<int:feed_id>", methods=["DELETE"])
 def delete_feed(feed_id):
     """Deletes a feed and its associated items.
@@ -142,6 +143,7 @@ def delete_feed(feed_id):
         db.session.rollback()
         logger.error(f"Error deleting feed {feed_id}: {str(e)}", exc_info=True)
         raise e  # Let 500 handler manage response
+
 
 
 @feeds_bp.route("/<int:feed_id>", methods=["PUT"])
@@ -238,7 +240,8 @@ def update_feed_url(feed_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error updating feed {feed_id}: {str(e)}", exc_info=True)
-        return jsonify({"error": "Failed to update feed URL"}), 500
+        raise e
+
 
 
 @feeds_bp.route("/update-all", methods=["POST"])
@@ -277,7 +280,8 @@ def api_update_all_feeds():
         logger.error(
             f"Error during /api/feeds/update-all: {str(e)}", exc_info=True)
         # Consistent error response with other parts of the API
-        return jsonify({"error": "An error occurred while updating all feeds."}), 500
+        raise e
+
 
 
 @feeds_bp.route("/<int:feed_id>/update", methods=["POST"])
@@ -297,14 +301,7 @@ def update_feed(feed_id):
         logger.error(
             f"Error during manual update for feed {feed.id}: {e}", exc_info=True
         )
-        return (
-            jsonify(
-                {
-                    "error": f"Failed to update feed {feed.id}. An unexpected error occurred."
-                }
-            ),
-            500,
-        )
+        raise e
 
 
 @feeds_bp.route("/<int:feed_id>/items", methods=["GET"])
@@ -378,4 +375,5 @@ def mark_item_read(item_id):
         logger.error(
             f"Error marking item {item_id} as read: {str(e)}", exc_info=True)
         # Let 500 handler manage response (or return specific error)
-        return jsonify({"error": "Failed to mark item as read"}), 500
+        raise e
+

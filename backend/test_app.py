@@ -21,6 +21,7 @@ def client():
     """Configures the Flask app for testing and provides a test client."""
     # Base test config
     app.config["TESTING"] = True
+    app.config["PROPAGATE_EXCEPTIONS"] = False
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     # Use an in-memory SQLite database for testing
@@ -600,7 +601,7 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
 
     assert response.status_code == 500
     assert "error" in response.json
-    assert "Failed to update feed" in response.json["error"]
+    assert "An internal server error occurred" in response.json["error"]
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 
@@ -771,7 +772,7 @@ def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce, client
     assert response.status_code == 500
     data = response.get_json()
     assert "error" in data
-    assert data["error"] == "An error occurred while updating all feeds."
+    assert data["error"] == "An internal server error occurred"
 
     # Assert Mocks
     mock_update_all_feeds.assert_called_once()

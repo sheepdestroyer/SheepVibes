@@ -45,7 +45,10 @@ def make_tab_feeds_cache_key(tab_id):
     """
     tabs_version = get_version("tabs_version")  # For unread counts
     tab_version = get_version(f"tab_{tab_id}_version")
-    query_string = request.query_string.decode().replace("&", "_")  # Sanitize for key
+    # Sort query params to ensure consistent cache keys regardless of param order
+    args = request.args.to_dict(flat=True)
+    sorted_query = sorted(args.items())
+    query_string = "_".join([f"{k}={v}" for k, v in sorted_query])
     return f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/?{query_string}"
 
 
