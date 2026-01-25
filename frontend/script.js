@@ -1082,7 +1082,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Guard prevents re-triggering if animation is already playing.
             if (modal && !modal.classList.contains('is-busy-shaking')) {
                 modal.classList.add('is-busy-shaking');
-                setTimeout(() => modal.classList.remove('is-busy-shaking'), 820); // Match animation duration from CSS
+                modal.addEventListener('animationend', () => {
+                    modal.classList.remove('is-busy-shaking');
+                }, { once: true });
             }
             return;
         }
