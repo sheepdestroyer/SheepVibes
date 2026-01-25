@@ -77,12 +77,14 @@ else:
             os.makedirs(local_data_dir, exist_ok=True)
             db_path = os.path.join(local_data_dir, "sheepvibes.db")
             logger.info(
-                "DATABASE_PATH not set, assuming local run. Using file path: %s", db_path
+                "DATABASE_PATH not set, assuming local run. Using file path: %s",
+                db_path,
             )
         else:  # Assume container run
             db_path = default_db_path_in_container
             logger.info(
-                "DATABASE_PATH not set, assuming container run. Using default file path: %s", db_path
+                "DATABASE_PATH not set, assuming container run. Using default file path: %s",
+                db_path,
             )
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 
@@ -145,8 +147,8 @@ def scheduled_feed_update():
             msg = f"data: {json.dumps(event_data)}\n\n"
             announcer.announce(msg=msg)
         except Exception as e:
-            logger.error(
-                "Error during scheduled feed update: %s", e, exc_info=True)
+            logger.error("Error during scheduled feed update: %s",
+                         e, exc_info=True)
 
 
 @scheduler.scheduled_job(
