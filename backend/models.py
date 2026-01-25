@@ -32,20 +32,29 @@ class Tab(db.Model):
         "Feed", backref="tab", lazy=True, cascade="all, delete-orphan"
     )
 
-    def to_dict(self):
+    def to_dict(self, unread_count=None):
         """Serializes the Tab object to a dictionary.
+
+        Args:
+            unread_count (int, optional): The pre-calculated unread count.
+                                          If None, it's calculated via a query.
 
         Returns:
             dict: A dictionary representation of the tab, including the unread count.
         """
         # Calculate total unread count for all feeds within this tab
-        total_unread = (
-            db.session.query(db.func.count(FeedItem.id))
-            .join(Feed)
-            .filter(Feed.tab_id == self.id, FeedItem.is_read == False)
-            .scalar()
-            or 0
-        )
+        # If unread_count is provided (e.g., from bulk query), use it.
+        # Otherwise, fall back to individual query (N+1 risk in loops).
+        if unread_count is None:
+            total_unread = (
+                db.session.query(db.func.count(FeedItem.id))
+                .join(Feed)
+                .filter(Feed.tab_id == self.id, FeedItem.is_read == False)
+                .scalar()
+                or 0
+            )
+        else:
+            total_unread = unread_count
 
         return {
             "id": self.id,
