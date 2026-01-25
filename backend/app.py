@@ -2,7 +2,6 @@ import atexit
 import json
 import logging
 import os
-import sys
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS

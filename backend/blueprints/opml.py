@@ -4,7 +4,6 @@ import xml.etree.ElementTree as ET
 
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
-from sqlalchemy import func
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import selectinload
@@ -12,9 +11,8 @@ from sqlalchemy.orm import selectinload
 from ..cache_utils import (
     invalidate_tab_feeds_cache,
     invalidate_tabs_cache,
-    make_tabs_cache_key,
 )
-from ..extensions import cache, db
+from ..extensions import db
 from ..feed_service import fetch_and_update_feed
 from ..models import Feed, Tab
 
@@ -238,7 +236,7 @@ def _process_opml_outlines_recursive(
             )
         else:
             logger.info(
-                "OPML import: Skipping outline element (Name: '%s', xmlUrl: %s, Children: %s) as it's not a feed or a non-empty folder.",
+                "OPML import: Skipping outline (Name: '%s', xmlUrl: %s, Children: %s) as it's not a feed or folder.",
                 element_name,
                 xml_url,
                 len(child_outlines),
@@ -325,7 +323,8 @@ def import_opml():
                 try:
                     db.session.commit()
                     logger.info(
-                        f"OPML import: Created new default tab '{newly_created_default_tab.name}' (ID: {newly_created_default_tab.id})."
+                        f"OPML import: Created default tab '{newly_created_default_tab.name}' "
+                        f"(ID: {newly_created_default_tab.id})."
                     )
                     invalidate_tabs_cache()
                     top_level_target_tab_id = newly_created_default_tab.id
@@ -398,7 +397,8 @@ def import_opml():
                         fetch_and_update_feed(feed_obj.id)
                     except Exception as fetch_e:
                         logger.error(
-                            f"OPML import: Error fetching items for new feed {feed_obj.name} (ID: {feed_obj.id}): {fetch_e}",
+                            f"OPML import: Error fetching items for new feed {feed_obj.name} "
+                            f"(ID: {feed_obj.id}): {fetch_e}",
                             exc_info=True,
                         )
                 else:
@@ -406,7 +406,7 @@ def import_opml():
                         f"OPML import: Feed '{feed_obj.name}' missing ID after batch commit, cannot fetch items."
                     )
             logger.info(
-                f"OPML import: Finished attempting to fetch initial items for new feeds."
+                "OPML import: Finished attempting to fetch initial items for new feeds."
             )
         except Exception as e_commit_feeds:
             db.session.rollback()
@@ -454,7 +454,8 @@ def import_opml():
         ).count()
         if feeds_in_default_tab == 0:
             logger.info(
-                f"OPML import: The default 'Imported Feeds' tab (ID: {top_level_target_tab_id}) created during this import is empty. Deleting it."
+                f"OPML import: The default 'Imported Feeds' tab (ID: {top_level_target_tab_id}) "
+                "created during import is empty. Deleting it."
             )
             try:
                 tab_to_delete = db.session.get(Tab, top_level_target_tab_id)
@@ -463,27 +464,32 @@ def import_opml():
                     db.session.commit()
                     invalidate_tabs_cache()
                     logger.info(
-                        f"OPML import: Successfully deleted empty 'Imported Feeds' tab (ID: {top_level_target_tab_id})."
+                        f"OPML import: Successfully deleted empty 'Imported Feeds' tab "
+                        f"(ID: {top_level_target_tab_id})."
                     )
                 else:
                     logger.warning(
-                        f"OPML import: Tried to delete empty 'Imported Feeds' tab (ID: {top_level_target_tab_id}), but it was not found in session."
+                        f"OPML import: Tried to delete empty 'Imported Feeds' (ID: {top_level_target_tab_id}), "
+                        "but it was not found."
                     )
             except Exception as e_del_tab:
                 db.session.rollback()
                 logger.error(
-                    f"OPML import: Failed to delete empty 'Imported Feeds' tab (ID: {top_level_target_tab_id}): {e_del_tab}",
+                    f"OPML import: Failed to delete empty 'Imported Feeds' tab "
+                    f"(ID: {top_level_target_tab_id}): {e_del_tab}",
                     exc_info=True,
                 )
         else:
             logger.info(
-                f"OPML import: The default 'Imported Feeds' tab (ID: {top_level_target_tab_id}) was created but contains {feeds_in_default_tab} feeds. It will not be deleted."
+                f"OPML import: Default tab 'Imported Feeds' (ID: {top_level_target_tab_id}) "
+                f"has {feeds_in_default_tab} feeds. Keeping it."
             )
 
     return (
         jsonify(
             {
-                "message": f'{imported_final_count} feeds imported. {skipped_final_count} feeds skipped. Feeds were imported into relevant tabs or default tab "{top_level_target_tab_name}".',
+                "message": f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
+                f"Tab: {top_level_target_tab_name}.",
                 "imported_count": imported_final_count,
                 "skipped_count": skipped_final_count,
                 "tab_id": top_level_target_tab_id,
