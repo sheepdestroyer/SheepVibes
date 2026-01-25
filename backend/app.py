@@ -789,7 +789,9 @@ def import_opml():
     skipped_count_wrapper = [0]
     affected_tab_ids_set = set()
     newly_added_feeds_list = []
-    was_default_tab_created_for_this_import = False  # Initialize early for cleaner control flow
+    was_default_tab_created_for_this_import = (
+        False  # Initialize early for cleaner control flow
+    )
 
     try:
         tree = ET.parse(opml_file.stream)
