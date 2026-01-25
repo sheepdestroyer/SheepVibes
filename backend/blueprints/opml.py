@@ -276,7 +276,7 @@ def import_opml():
             f"OPML import failed: Could not parse file stream. Error: {e}",
             exc_info=True,
         )
-        raise
+        return jsonify({"error": f"OPML import failed: {e}"}), 500
 
     top_level_target_tab_id = None
     top_level_target_tab_name = None
@@ -503,7 +503,7 @@ def export_opml():
     except Exception:
         # Catch unexpected errors during OPML generation
         logger.exception("Error during OPML generation for export")
-        raise
+        return jsonify({"error": "Failed to generate OPML export"}), 500
 
     else:
         response = Response(opml_string, mimetype="application/xml")
