@@ -1,8 +1,8 @@
 import logging
 import os
 import xml.etree.ElementTree as ET
-import defusedxml.ElementTree as SafeET
 
+import defusedxml.ElementTree as SafeET
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.engine.url import make_url
