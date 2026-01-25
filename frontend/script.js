@@ -1080,7 +1080,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saveButton && saveButton.disabled) {
             // Add a class to trigger a shake animation for visual feedback.
             modal?.classList.add('is-busy-shaking');
-            setTimeout(() => modal?.classList.remove('is-busy-shaking'), 500);
+            setTimeout(() => modal?.classList.remove('is-busy-shaking'), 820); // Match CSS animation duration
             return;
         }
         modal?.classList.remove('is-active');
