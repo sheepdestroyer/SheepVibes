@@ -1,10 +1,8 @@
 import io
 import logging
 
-import pytest
-
-from backend.app import app, db
-from backend.models import Feed, Tab
+from backend.app import app
+from backend.models import Feed
 
 logger = logging.getLogger(__name__)
 

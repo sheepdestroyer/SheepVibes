@@ -528,7 +528,7 @@ def test_mark_item_read_success(client, setup_tabs_and_feeds):
 
     # Verify initial state
     with app.app_context():
-        assert db.session.get(FeedItem, item1_id).is_read == False
+        assert db.session.get(FeedItem, item1_id).is_read is False
 
     response = client.post(f"/api/items/{item1_id}/read")
 
@@ -538,7 +538,7 @@ def test_mark_item_read_success(client, setup_tabs_and_feeds):
 
     # Verify state change in DB
     with app.app_context():
-        assert db.session.get(FeedItem, item1_id).is_read == True
+        assert db.session.get(FeedItem, item1_id).is_read is True
 
 
 def test_mark_item_read_already_read(client, setup_tabs_and_feeds):
@@ -547,7 +547,7 @@ def test_mark_item_read_already_read(client, setup_tabs_and_feeds):
 
     # Verify initial state
     with app.app_context():
-        assert db.session.get(FeedItem, item2_id).is_read == True
+        assert db.session.get(FeedItem, item2_id).is_read is True
 
     response = client.post(f"/api/items/{item2_id}/read")
 
@@ -557,7 +557,7 @@ def test_mark_item_read_already_read(client, setup_tabs_and_feeds):
 
     # Verify state didn't change
     with app.app_context():
-        assert db.session.get(FeedItem, item2_id).is_read == True
+        assert db.session.get(FeedItem, item2_id).is_read is True
 
 
 def test_mark_item_read_not_found(client):
@@ -1562,7 +1562,7 @@ def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, clie
         default_tab = Tab.query.filter_by(name="Imported Feeds").first()
         assert default_tab is not None
         new_tab_id = default_tab.id
-        # default_tab = db.session.get(Tab, new_tab_id) # This line is not needed if we fetch by name
+        # This line is not needed if we fetch by name
         assert default_tab is not None
         assert default_tab.name == "Imported Feeds"
         assert default_tab.order == 0
@@ -2104,7 +2104,7 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
         FeedItem.query.filter_by(feed_id=feed_id).delete()
 
         # Add 110 items with sequential published times to ensure proper ordering
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         base_time = datetime.now(timezone.utc)
 
