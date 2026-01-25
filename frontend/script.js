@@ -1079,10 +1079,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Prevent closing the modal if a save operation is in progress.
         if (saveButton && saveButton.disabled) {
             // Add a class to trigger a shake animation for visual feedback.
-            modal?.classList.add('is-busy-shaking');
-            modal?.addEventListener('animationend', () => {
-                modal.classList.remove('is-busy-shaking');
-            }, { once: true });
+            // Guard prevents re-triggering if animation is already playing.
+            if (modal && !modal.classList.contains('is-busy-shaking')) {
+                modal.classList.add('is-busy-shaking');
+                setTimeout(() => modal.classList.remove('is-busy-shaking'), 820); // Match animation duration from CSS
+            }
             return;
         }
         modal?.classList.remove('is-active');
