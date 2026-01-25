@@ -1,6 +1,14 @@
 ## Backend Testing
 The backend of SheepVibes is written in Python and uses the `pytest` framework for testing.
 
+## Linting
+
+We use `flake8` for Python linting.
+
+```bash
+flake8 backend/ --max-line-length=120
+```
+
 ### I. Setup for Local Testing
 1.  Navigate to the backend directory. Install the necessary development dependencies within a Python virtual environment, including `pytest`:
     ```bash

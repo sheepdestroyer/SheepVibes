@@ -1614,10 +1614,8 @@ def test_import_opml_specific_tab(mock_fetch_update, client):
     assert json_data["imported_count"] == 1
     # Removed: assert json_data['tab_id'] == tab2_id
     # Removed: assert json_data['tab_name'] == "Tab Two"
-    assert (
-        f'default tab "{tab2.name}"' in json_data["message"]
-        or f'tab "{tab2.name}"' in json_data["message"]
-    )
+    # Updated assertion to match the new message format in opml.py
+    assert f"Tab: {tab2.name}" in json_data["message"]
 
     with app.app_context():
         assert Feed.query.filter_by(tab_id=tab1_id).count() == 0
@@ -1655,7 +1653,8 @@ def test_import_opml_default_tab_if_tab_id_not_provided(
     assert json_data["imported_count"] == 1
     # Removed: assert json_data['tab_id'] == default_tab_id
     # Removed: assert json_data['tab_name'] == "Default Tab"
-    assert f'default tab "{tab1.name}"' in json_data["message"]
+    # Updated assertion to match the new message format in opml.py
+    assert f"Tab: {tab1.name}" in json_data["message"]
 
     with app.app_context():
         assert Feed.query.filter_by(tab_id=default_tab_id).count() == 1
