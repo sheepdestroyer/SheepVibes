@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import queue
+import sys
 import xml.etree.ElementTree as ET  # Added for OPML export
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -330,11 +331,13 @@ def scheduled_opml_autosave():
 
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
-try:
-    scheduler.start()
-    atexit.register(lambda: scheduler.shutdown())
-except (KeyboardInterrupt, SystemExit):
-    scheduler.shutdown()
+
+if not app.config.get("TESTING"):
+    try:
+        scheduler.start()
+        atexit.register(lambda: scheduler.shutdown())
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
 
 # --- Error Handlers ---
 
@@ -786,6 +789,9 @@ def import_opml():
     skipped_count_wrapper = [0]
     affected_tab_ids_set = set()
     newly_added_feeds_list = []
+    was_default_tab_created_for_this_import = (
+        False  # Initialize early for cleaner control flow
+    )
 
     try:
         tree = ET.parse(opml_file.stream)
@@ -832,7 +838,6 @@ def import_opml():
                 "OPML import: No tabs exist. Creating a default tab for top-level feeds."
             )
             default_tab_name_for_creation = "Imported Feeds"
-            was_default_tab_created_for_this_import = False  # Flag
             # Check if "Imported Feeds" tab was somehow created by a concurrent request (unlikely)
             temp_tab_check = Tab.query.filter_by(
                 name=default_tab_name_for_creation
@@ -984,8 +989,7 @@ def import_opml():
     # 2. This "Imported Feeds" tab is also the `top_level_target_tab_id` (meaning it was the default for loose feeds).
     # 3. No feeds were actually added to it (all feeds went into folders/other tabs).
     if (
-        "was_default_tab_created_for_this_import" in locals()
-        and was_default_tab_created_for_this_import
+        was_default_tab_created_for_this_import
         and top_level_target_tab_name == "Imported Feeds"
         and top_level_target_tab_id not in affected_tab_ids_set
     ):

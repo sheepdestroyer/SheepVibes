@@ -505,7 +505,7 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     assert FeedItem.query.count() == (count1 + count2)
 
 
-def test_update_feed_last_updated_time(db_setup, mocker):
+def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):
     """Test that feed.last_updated_time is updated even if no new items or no entries."""
     logger.info("Testing feed.last_updated_time updates")
     app = db_setup
@@ -522,6 +522,9 @@ def test_update_feed_last_updated_time(db_setup, mocker):
         datetime.timezone.utc
     ) - datetime.timedelta(days=1)
     initial_time_naive = initial_time_aware.replace(tzinfo=None)
+
+    # Mock socket.getaddrinfo is handled by mock_dns fixture
+    # Return a safe IP (e.g., example.com)
 
     # When setting, SQLAlchemy handles the aware datetime for the default
     # but if we set it directly for the test, make it aware so it's stored as UTC.
@@ -603,7 +606,7 @@ def test_update_feed_last_updated_time(db_setup, mocker):
     )
 
 
-def test_update_all_feeds_basic_run(db_setup, mocker):
+def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
     app = db_setup
@@ -614,6 +617,8 @@ def test_update_all_feeds_basic_run(db_setup, mocker):
     mock_response.read.return_value = b"<rss></rss>"
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
+
+    # Mock socket.getaddrinfo is handled by mock_dns fixture
 
     # Mock feedparser.parse to return some basic feeds
     mock_feed_data1 = MockParsedFeed(

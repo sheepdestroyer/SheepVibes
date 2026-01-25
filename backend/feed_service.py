@@ -166,7 +166,6 @@ def fetch_feed(feed_url):
 
         parsed_feed = feedparser.parse(content)
         # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
-
         if parsed_feed.bozo:
             logger.warning(
                 f"Feed parsing warning: {parsed_feed.get('bozo_exception')}")
@@ -314,7 +313,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             title=entry_title,
             link=entry_link,
             published_time=published_time,
-            guid=db_guid,  # This will be None if feedparser_id was missing or same as link
+            guid=db_guid,  # Always the entry's link per the new GUID strategy
         )
         items_to_add.append(new_item)
 

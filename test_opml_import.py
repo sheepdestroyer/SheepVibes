@@ -1,36 +1,43 @@
-import os
-import sys
+import io
+import logging
 
-import requests
+import pytest
 
+from backend.app import app, db
+from backend.models import Feed, Tab
 
-def test_import():
-    base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:5001")
-    url = f"{base_url}/api/opml/import"
-    print(f"Testing OPML import at: {url}")
-
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(script_dir, "test_feeds.opml"), "rb") as f:
-            files = {"file": f}
-            response = requests.post(url, files=files, timeout=10)
-
-        print(f"Status Code: {response.status_code}")
-        response.raise_for_status()
-        response_data = response.json()
-        print(f"Response: {response_data}")
-
-        assert response_data.get(
-            "imported_count", 0) > 0, "Expected imported_count > 0"
-        print("Test PASSED")
-
-    except requests.RequestException as e:
-        print(f"Request Error: {e}")
-        sys.exit(1)
-    except AssertionError as e:
-        print(f"Assertion Failed: {e}")
-        sys.exit(1)
+logger = logging.getLogger(__name__)
 
 
-if __name__ == "__main__":
-    test_import()
+def test_import(client, mocker):
+    """Test the OPML import endpoint using the Flask test client."""
+    url = "/api/opml/import"
+    logger.info(f"Testing OPML import at: {url}")
+
+    # Use an in-memory file object
+    opml_content = b'<opml version="1.0"><body><outline text="Test Feed" xmlUrl="http://example.com/feed" /></body></opml>'
+    opml_file = io.BytesIO(opml_content)
+
+    data = {"file": (opml_file, "test_feeds.opml")}
+
+    # Mock the internal fetch_and_update_feed to avoid actual network calls
+    mocker.patch("backend.app.fetch_and_update_feed")
+
+    response = client.post(url, data=data, content_type="multipart/form-data")
+
+    logger.info(f"Status Code: {response.status_code}")
+    assert response.status_code == 200
+
+    response_data = response.get_json()
+    logger.info(f"Response: {response_data}")
+
+    assert response_data.get("imported_count", 0) == 1
+    assert response_data.get("skipped_count", 0) == 0
+
+    # Verify DB state
+    with app.app_context():
+        feed = Feed.query.filter_by(url="http://example.com/feed").first()
+        assert feed is not None
+        assert feed.name == "Test Feed"
+
+    logger.info("Test PASSED")
