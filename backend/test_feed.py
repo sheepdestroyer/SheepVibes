@@ -733,11 +733,16 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
     assert "Fallback Item 2" in item_titles
 
     # Check for the batch failure warning
-    warning_found = any(
-        "Batch insert failed" in call.args[0]
-        and f"feed '{feed_obj.name}'" in call.args[0]
-        for call in warning_spy.call_args_list
-    )
+    # With lazy logging, args[0] is the message format, args[1] is the first arg, etc.
+    warning_found = False
+    for call in warning_spy.call_args_list:
+        msg_format = call.args[0]
+        if "Batch insert failed" in msg_format and "%s" in msg_format:
+            # Check if the feed name was passed as an argument
+            if len(call.args) > 1 and feed_obj.name in call.args:
+                warning_found = True
+                break
+    
     assert warning_found, "Should log a warning about batch insert failure"
 
     # Check that there are NO "Failed to individually add item" errors for these valid items
