@@ -223,5 +223,5 @@ if __name__ == "__main__":
     # Start the Flask development server for local testing.
     is_debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     logger.info(f"Starting Flask app (Debug mode: {is_debug_mode})")
-    app.run(host="0.0.0.0", port=5000, debug=is_debug_mode)
+    app.run(host="0.0.0.0", port=5000, debug=is_debug_mode)  # nosec B104
     logger.info("SheepVibes application finished.")

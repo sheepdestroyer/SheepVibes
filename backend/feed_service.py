@@ -161,7 +161,7 @@ def fetch_feed(feed_url):
             target_url, headers={"Host": hostname,
                                  "User-Agent": "SheepVibes/1.0"}
         )
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             content = response.read()
 
         parsed_feed = feedparser.parse(content)

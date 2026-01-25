@@ -1,6 +1,6 @@
 import logging
 import os
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
