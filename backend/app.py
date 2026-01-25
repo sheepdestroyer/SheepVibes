@@ -59,13 +59,13 @@ else:
         if db_path_env.startswith("sqlite:///"):
             app.config["SQLALCHEMY_DATABASE_URI"] = db_path_env
             logger.info(
-                f"Using DATABASE_PATH environment variable directly: {db_path_env}"
+                "Using DATABASE_PATH environment variable directly: %s", db_path_env
             )
         else:
             db_path = db_path_env
             app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
             logger.info(
-                f"Using DATABASE_PATH environment variable for file path: {db_path}"
+                "Using DATABASE_PATH environment variable for file path: %s", db_path
             )
     else:
         # Default path logic
@@ -77,12 +77,12 @@ else:
             os.makedirs(local_data_dir, exist_ok=True)
             db_path = os.path.join(local_data_dir, "sheepvibes.db")
             logger.info(
-                f"DATABASE_PATH not set, assuming local run. Using file path: {db_path}"
+                "DATABASE_PATH not set, assuming local run. Using file path: %s", db_path
             )
         else:  # Assume container run
             db_path = default_db_path_in_container
             logger.info(
-                f"DATABASE_PATH not set, assuming container run. Using default file path: {db_path}"
+                "DATABASE_PATH not set, assuming container run. Using default file path: %s", db_path
             )
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 
@@ -124,12 +124,14 @@ def scheduled_feed_update():
     # Need app context to access database within the scheduled job
     with app.app_context():
         logger.info(
-            f"Running scheduled feed update (every {UPDATE_INTERVAL_MINUTES} minutes)"
+            "Running scheduled feed update (every %s minutes)", UPDATE_INTERVAL_MINUTES
         )
         try:
             feeds_updated, new_items = update_all_feeds()
             logger.info(
-                f"Scheduled update completed: {feeds_updated} feeds updated, {new_items} new items"
+                "Scheduled update completed: %s feeds updated, %s new items",
+                feeds_updated,
+                new_items,
             )
             # Invalidate the cache after updates
             if new_items > 0:
@@ -144,7 +146,7 @@ def scheduled_feed_update():
             announcer.announce(msg=msg)
         except Exception as e:
             logger.error(
-                f"Error during scheduled feed update: {e}", exc_info=True)
+                "Error during scheduled feed update: %s", e, exc_info=True)
 
 
 @scheduler.scheduled_job(
@@ -178,14 +180,14 @@ if not app.config.get("TESTING"):
 @app.errorhandler(404)
 def not_found_error(error):
     """Handles 404 Not Found errors with a JSON response."""
-    logger.warning(f"404 Not Found: {request.path}")
+    logger.warning("404 Not Found: %s", request.path)
     return jsonify({"error": "Resource not found"}), 404
 
 
 @app.errorhandler(500)
 def internal_error(error):
     """Handles 500 Internal Server Errors with a JSON response and logs the error."""
-    logger.error(f"500 Internal Server Error: {error}", exc_info=True)
+    logger.error("500 Internal Server Error: %s", error, exc_info=True)
     # Rollback the session in case the error was database-related
     db.session.rollback()
     return jsonify({"error": "An internal server error occurred"}), 500
