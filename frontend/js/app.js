@@ -373,10 +373,19 @@ function initializeSSE() {
             const data = JSON.parse(event.data);
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
-                // Reload all knowledge
-                loadedTabs.clear();
-                document.getElementById('feed-grid').innerHTML = '';
-                await initializeTabs();
+
+                // Re-fetch tab data to update unread counts on all tab buttons
+                try {
+                    allTabs = await api.getTabs();
+                    renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
+
+                    // If the active tab's content is currently displayed, reload it in place
+                    if (activeTabId && loadedTabs.has(activeTabId)) {
+                        await reloadTab(activeTabId);
+                    }
+                } catch (err) {
+                    console.error('Error updating UI after SSE:', err);
+                }
             }
         } catch (e) { console.error(e); }
     };

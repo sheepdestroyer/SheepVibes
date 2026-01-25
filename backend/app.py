@@ -162,11 +162,13 @@ def scheduled_opml_autosave():
 
 
 if not app.config.get("TESTING"):
-    try:
-        scheduler.start()
-        atexit.register(lambda: scheduler.shutdown())
-    except (KeyboardInterrupt, SystemExit):
-        scheduler.shutdown()
+    # Ensure scheduler only runs once in debug mode (only in the child reloader process)
+    if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        try:
+            scheduler.start()
+            atexit.register(lambda: scheduler.shutdown())
+        except (KeyboardInterrupt, SystemExit):
+            scheduler.shutdown()
 
 # --- Error Handlers ---
 

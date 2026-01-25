@@ -524,10 +524,9 @@ def _get_autosave_directory():
     db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
 
     # Default to an absolute 'data' path in the project root to avoid CWD issues
-    # Note: __file__ here refers to opml.py, which is in backend/blueprints
-    # So we need to go up 3 levels to reach root (blueprints -> backend -> root)
-    project_root = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), "..", ".."))
+    # Default to an absolute 'data' path relative to the app root
+    # current_app.root_path points to the folder containing the app instantiation (backend/)
+    project_root = os.path.abspath(os.path.join(current_app.root_path, ".."))
     data_dir = os.path.join(project_root, "data")
 
     try:
