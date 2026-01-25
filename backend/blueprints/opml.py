@@ -535,7 +535,7 @@ def _get_autosave_directory():
     # or fallback to project structure if not explicitly set (though feedback suggested strict config)
     # Ideally, app.py should set DATA_DIR logic one time.
     # For now, let's implement the suggestion:
-    
+
     project_root = current_app.config["PROJECT_ROOT"]
     data_dir = os.path.join(project_root, "data")
 
