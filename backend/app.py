@@ -29,7 +29,9 @@ logger = logging.getLogger("sheepvibes")
 
 # Initialize Flask application
 app = Flask(__name__)
-app.config['PROJECT_ROOT'] = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+app.config["PROJECT_ROOT"] = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..")
+)
 
 # Configure CORS with specific allowed origins
 allowed_origins_str = os.environ.get(

@@ -525,7 +525,7 @@ def _get_autosave_directory():
 
     # Default to an absolute 'data' path in the project root to avoid CWD issues
     # Default to an absolute 'data' path using the configured PROJECT_ROOT
-    project_root = current_app.config['PROJECT_ROOT']
+    project_root = current_app.config["PROJECT_ROOT"]
     data_dir = os.path.join(project_root, "data")
 
     try:
