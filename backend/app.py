@@ -473,9 +473,9 @@ def _get_autosave_directory():
     db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
 
     # Default to an absolute 'data' path in the project root to avoid CWD issues
-    project_root = os.path.abspath(
+    project_base_dir = os.path.abspath(
         os.path.join(os.path.dirname(__file__), ".."))
-    data_dir = os.path.join(project_root, "data")
+    data_dir = os.path.join(project_base_dir, "data")
 
     try:
         url = make_url(db_uri)
@@ -486,13 +486,13 @@ def _get_autosave_directory():
                     "Skipping OPML autosave because database is in-memory.")
                 return None
             # For file-based sqlite, use its directory, resolving relative paths against the project root.
-            db_path = (
+            sqlite_db_path = (
                 url.database
                 if os.path.isabs(url.database)
-                else os.path.join(project_root, url.database)
+                else os.path.join(project_base_dir, url.database)
             )
-            data_dir = os.path.dirname(db_path)
-        # For non-sqlite databases, the default data_dir (project_root/data) is used.
+            data_dir = os.path.dirname(sqlite_db_path)
+        # For non-sqlite databases, the default data_dir (project_base_dir/data) is used.
     except (ArgumentError, ValueError):
         # We catch specific parsing errors here. make_url can raise ArgumentError.
         logger.exception(
