@@ -20,7 +20,7 @@ jobs:
         image: redis:alpine
         # Expose port 6379 on the service container to be mapped to the host
         ports:
-          - 6379/tcp
+          - 6379:6379
         # Health check for a passwordless Redis service.
         options: >-
           --health-cmd "redis-cli ping"
@@ -45,7 +45,7 @@ jobs:
 
     - name: Run Pytest
       env:
-        # Pass the dynamically assigned Redis host port to the tests.
-        CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+        # Pass the static Redis host port to the tests.
+        CACHE_REDIS_PORT: 6379
       run: |
         python -m pytest backend/ -v

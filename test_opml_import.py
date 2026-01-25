@@ -21,7 +21,7 @@ def test_import(client, mocker):
     data = {"file": (opml_file, "test_feeds.opml")}
 
     # Mock the internal fetch_and_update_feed to avoid actual network calls
-    mocker.patch("backend.app.fetch_and_update_feed")
+    mocker.patch("backend.blueprints.opml.fetch_and_update_feed")
 
     response = client.post(url, data=data, content_type="multipart/form-data")
 
