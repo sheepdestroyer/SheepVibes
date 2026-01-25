@@ -799,18 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /**
-     * Handles the cancellation of the edit feed form.
-     */
-    function handleEditFeedCancel() {
-        const saveButton = document.getElementById('save-feed-button');
-        // Prevent closing the modal if a save operation is in progress.
-        if (saveButton.disabled) {
-            return;
-        }
-        const modal = document.getElementById('edit-feed-modal');
-        modal.classList.remove('is-active');
-    }
+
 
     // --- Mark Item as Read Logic ---
 
@@ -1049,7 +1038,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initial Load ---
 
-    /** 
+    /**
      * Fetches the list of tabs from the API and renders them.
      * @param {boolean} [isUpdate=false] - If true, keeps the current active tab.
      */
@@ -1080,6 +1069,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Handles the cancellation of the edit feed form.
+     * Prevents closing the modal if a save operation is in progress.
+     */
+    function handleEditFeedCancel() {
+        const saveButton = document.getElementById('save-feed-button');
+        const modal = document.getElementById('edit-feed-modal');
+        // Prevent closing the modal if a save operation is in progress.
+        if (saveButton && saveButton.disabled) {
+            // Add a class to trigger a shake animation for visual feedback.
+            // Guard prevents re-triggering if animation is already playing.
+            if (modal && !modal.classList.contains('is-busy-shaking')) {
+                modal.classList.add('is-busy-shaking');
+                modal.addEventListener('animationend', () => {
+                    modal.classList.remove('is-busy-shaking');
+                }, { once: true });
+            }
+            return;
+        }
+        modal?.classList.remove('is-active');
+    }
+
     /** Main initialization function called on DOMContentLoaded. */
     async function initialize() {
         // Add event listeners for all interactive elements
@@ -1100,6 +1111,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add event listeners for edit feed modal
         document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
         document.getElementById('cancel-edit-button').addEventListener('click', handleEditFeedCancel);
+        const closeBtn = document.getElementById('edit-feed-modal-close-button');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', handleEditFeedCancel);
+        }
 
         // Close modal when clicking outside the content
         document.getElementById('edit-feed-modal').addEventListener('click', (event) => {

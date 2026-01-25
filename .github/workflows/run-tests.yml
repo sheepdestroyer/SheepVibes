@@ -2,9 +2,13 @@ name: Run Backend Tests
 
 on:
   push:
-    branches: [ '**' ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -44,5 +48,4 @@ jobs:
         # Pass the dynamically assigned Redis host port to the tests.
         CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
       run: |
-        cd backend
-        python -m pytest -v
+        python -m pytest backend/ -v
