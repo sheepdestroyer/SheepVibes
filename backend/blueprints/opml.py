@@ -292,14 +292,6 @@ def import_opml():
     # They were likely part of an `except` block that got partially deleted.
     # Given the context, the `_parse_opml_file` function already handles errors
     # and returns an error_response. If `error_response` is None, it means parsing was successful.
-    # If it's not None, the function returns it.
-    # So, this block should be removed as it's syntactically incorrect and redundant.
-    # exc_info=True,
-    # )
-    # return (
-    #     jsonify({"error": "An error occurred while importing the OPML file"}),
-    #     500,
-    # )
 
     top_level_target_tab_id = None
     top_level_target_tab_name = None

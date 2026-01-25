@@ -325,8 +325,23 @@ async function handleMarkItemRead(itemId, liElement, feedId, tabId) {
     try {
         await api.markItemRead(itemId);
         liElement.classList.replace('unread', 'read');
+        updateUnreadCount(liElement.closest('.feed-widget'));
+        updateUnreadCount(document.querySelector(`button[data-tab-id="${tabId}"]`));
     } catch (e) {
         console.error('Failed to mark read', e);
+    }
+}
+
+function updateUnreadCount(element) {
+    if (!element) return;
+    const badge = element.querySelector('.unread-count-badge');
+    if (badge) {
+        const newCount = parseInt(badge.textContent) - 1;
+        if (newCount > 0) {
+            badge.textContent = newCount;
+        } else {
+            badge.remove();
+        }
     }
 }
 
