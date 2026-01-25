@@ -231,7 +231,6 @@ def test_parse_published_time(
 def test_kernel_org_scenario(db_setup, mocker):
     """Test Kernel.org scenario: multiple items with unique GUIDs but same link in one batch."""
     logger.info("Testing Kernel.org scenario (unique GUIDs, same link)")
-    app = db_setup  # Get app from fixture
 
     # Mock feedparser.parse
     entry1 = MockFeedEntry(
@@ -288,7 +287,6 @@ def test_kernel_org_scenario(db_setup, mocker):
 def test_hacker_news_scenario_guid_handling(db_setup, mocker):
     """Test Hacker News scenario: items with no true GUID (feedparser uses link as id)."""
     logger.info("Testing Hacker News scenario (link-as-ID handling)")
-    app = db_setup
 
     # feedparser might set entry.id = entry.link if no <guid> is present
     entry1 = MockFeedEntry(
@@ -348,7 +346,6 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
 def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     """Test items with no true GUID but duplicate links in the SAME feed are deduplicated by link."""
     logger.info("Testing duplicate links (no true GUID) in same feed")
-    app = db_setup
 
     entry1 = MockFeedEntry(
         title="Story A",
@@ -410,7 +407,6 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     """
     logger.info(
         "Testing global GUID uniqueness and NULL GUIDs from different feeds")
-    app = db_setup
 
     # Feed 1
     entry_f1_1 = MockFeedEntry(
@@ -509,7 +505,6 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
 def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):
     """Test that feed.last_updated_time is updated even if no new items or no entries."""
     logger.info("Testing feed.last_updated_time updates")
-    # app = db_setup  # Unused variable 'app'
 
     tab = Tab(name="Timestamps", order=1)
     db.session.add(tab)
@@ -610,7 +605,6 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):
 def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
-    # app = db_setup  # Unused variable 'app'
 
     # Mock urllib.request.urlopen
     mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
@@ -665,7 +659,6 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
     to inserting items individually, and valid items are still added.
     """
     logger.info("Testing IntegrityError fallback to individual commits")
-    # app = db_setup  # Unused variable 'app'
 
     tab = Tab(name="Test Tab Fallback", order=0)
     db.session.add(tab)
@@ -759,7 +752,6 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
 def test_original_update_all_feeds_empty_db(db_setup):
     """Test updating all feeds in an empty database"""
     logger.info("Testing update_all_feeds() on an empty DB")
-    # app = db_setup  # Ensures app context (via fixture)
 
     feeds_updated, new_items = feed_service.update_all_feeds()
     logger.info("Updated %s feeds, added %s new items",
@@ -779,7 +771,6 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
     Test that when a feed exceeds the MAX_ITEMS_PER_FEED limit, the oldest items are evicted.
     """
     logger.info("Testing feed item eviction logic")
-    # app = db_setup  # Unused variable 'app'
 
     tab = Tab(name="Eviction Test Tab", order=0)
     db.session.add(tab)
