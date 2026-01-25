@@ -278,7 +278,6 @@ def import_opml():
         )
         raise e
 
-
     top_level_target_tab_id = None
     top_level_target_tab_name = None
     requested_tab_id_str = request.form.get("tab_id")

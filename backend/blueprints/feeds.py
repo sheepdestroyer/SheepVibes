@@ -116,7 +116,6 @@ def add_feed():
         raise e  # Let 500 handler manage response
 
 
-
 @feeds_bp.route("/<int:feed_id>", methods=["DELETE"])
 def delete_feed(feed_id):
     """Deletes a feed and its associated items.
@@ -143,7 +142,6 @@ def delete_feed(feed_id):
         db.session.rollback()
         logger.error(f"Error deleting feed {feed_id}: {str(e)}", exc_info=True)
         raise e  # Let 500 handler manage response
-
 
 
 @feeds_bp.route("/<int:feed_id>", methods=["PUT"])
@@ -243,7 +241,6 @@ def update_feed_url(feed_id):
         raise e
 
 
-
 @feeds_bp.route("/update-all", methods=["POST"])
 def api_update_all_feeds():
     """Triggers an update for all feeds in the system.
@@ -281,7 +278,6 @@ def api_update_all_feeds():
             f"Error during /api/feeds/update-all: {str(e)}", exc_info=True)
         # Consistent error response with other parts of the API
         raise e
-
 
 
 @feeds_bp.route("/<int:feed_id>/update", methods=["POST"])
@@ -376,4 +372,3 @@ def mark_item_read(item_id):
             f"Error marking item {item_id} as read: {str(e)}", exc_info=True)
         # Let 500 handler manage response (or return specific error)
         raise e
-

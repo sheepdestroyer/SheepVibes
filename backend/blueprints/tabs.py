@@ -70,7 +70,6 @@ def create_tab():
         raise e
 
 
-
 @tabs_bp.route("/<int:tab_id>", methods=["PUT"])
 def rename_tab(tab_id):
     """Renames an existing tab.
@@ -116,8 +115,6 @@ def rename_tab(tab_id):
         raise e
 
 
-
-
 @tabs_bp.route("/<int:tab_id>", methods=["DELETE"])
 def delete_tab(tab_id):
     """Deletes a tab and its associated feeds/items."""
@@ -137,8 +134,6 @@ def delete_tab(tab_id):
         db.session.rollback()
         logger.error(f"Error deleting tab {tab_id}: {str(e)}", exc_info=True)
         raise e
-
-
 
 
 @tabs_bp.route("/<int:tab_id>/feeds", methods=["GET"])
