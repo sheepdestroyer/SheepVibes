@@ -742,7 +742,7 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
             if len(call.args) > 1 and feed_obj.name in call.args:
                 warning_found = True
                 break
-    
+
     assert warning_found, "Should log a warning about batch insert failure"
 
     # Check that there are NO "Failed to individually add item" errors for these valid items
