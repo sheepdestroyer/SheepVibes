@@ -120,7 +120,7 @@ async function loadFeedsForTab(tabId) {
         const feeds = await api.getFeedsForTab(tabId);
 
         // Remove ANY existing "no feeds" messages to be clean
-        const placeholders = feedGrid.querySelectorAll('p');
+        const placeholders = feedGrid.querySelectorAll('.empty-tab-message');
         placeholders.forEach(p => p.remove());
 
         if (feeds && feeds.length > 0) {
@@ -146,7 +146,7 @@ async function loadFeedsForTab(tabId) {
             // For MVP refactor, assume toggle handles widgets, but p needs care.
             // Let's create a message container for this tab.
             const msg = document.createElement('div');
-            msg.className = 'feed-widget'; // Reuse class for toggle logic? Or add specific class
+            msg.className = 'feed-widget empty-tab-message'; // Reuse class but add distinct marker
             msg.dataset.tabId = tabId;
             msg.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
             feedGrid.appendChild(msg);
@@ -338,9 +338,9 @@ async function handleLoadMoreItems(listElement) {
     const offset = parseInt(listElement.dataset.offset) || 0;
 
     try {
-        const data = await api.getFeedItems(feedId, offset, ITEMS_PER_PAGE);
-        if (data && data.items && data.items.length > 0) {
-            appendItemsToFeedWidget(listElement, data.items, {
+        const items = await api.getFeedItems(feedId, offset, ITEMS_PER_PAGE);
+        if (items && items.length > 0) {
+            appendItemsToFeedWidget(listElement, items, {
                 onMarkItemRead: handleMarkItemRead
             });
         } else {
@@ -373,12 +373,15 @@ function initializeSSE() {
             const data = JSON.parse(event.data);
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
-                // Reload all knowledge
-                loadedTabs.clear();
-                // If active tab exists, refresh it
+                // Reload tab counts but don't clear everything violently
+                loadedTabs.clear(); // Mark all stale
                 if (activeTabId) {
-                    document.getElementById('feed-grid').innerHTML = ''; // Start clean? Or just reloadTab
-                    await initializeTabs(); // Reloads tabs and active tab content
+                    // Just reload the active tab's feeds in place (which usually replaces widgets)
+                    // The toggle/reload function handles clearing old ones first.
+                    await loadFeedsForTab(activeTabId);
+                    // Also refresh tab list to update unread counts
+                    allTabs = await api.getTabs();
+                    renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
                 } else {
                     await initializeTabs();
                 }
