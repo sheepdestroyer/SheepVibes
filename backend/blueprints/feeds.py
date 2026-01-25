@@ -113,7 +113,7 @@ def add_feed():
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error adding feed {feed_url}: {str(e)}", exc_info=True)
-        return jsonify({"error": f"Error adding feed {feed_url}: {str(e)}"}), 500
+        return jsonify({"error": "An internal error occurred while adding the feed."}), 500
 
 
 @feeds_bp.route("/<int:feed_id>", methods=["DELETE"])
