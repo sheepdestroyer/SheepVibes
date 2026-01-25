@@ -1,5 +1,6 @@
 import logging
 import os
+import xml.etree.ElementTree as ET
 from defusedxml.ElementTree import parse
 
 import defusedxml.ElementTree as SafeET
@@ -29,7 +30,7 @@ SKIPPED_FOLDER_TYPES = {
 def _generate_opml_string(tabs=None):
     """Generates the OPML string from the database.
 
-    Args:"""
+    Args:
         tabs (list): Optional list of Tab objects with eager loaded feeds.
                      If None, it will be queried.
 
@@ -219,8 +220,28 @@ def _process_opml_outlines_recursive(
         elif not xml_url and not element_name and child_outlines:
             # Folder without a title, process its children in the current tab
             logger.info(
-                if not xml_url:
-                    skipped_count_wrapper[0] += 1
+                "OPML import: Processing children of an untitled folder under current tab '%s'.",
+                current_tab_name,
+            )
+            _process_opml_outlines_recursive(
+                child_outlines,
+                current_tab_id,  # Use current tab_id
+                current_tab_name,
+                all_existing_feed_urls_set,
+                newly_added_feeds_list,
+                imported_count_wrapper,
+                skipped_count_wrapper,
+                affected_tab_ids_set,
+            )
+        else:
+            logger.info(
+                "OPML import: Skipping outline (Name: '%s', xmlUrl: %s, Children: %s) as it's not a feed or folder.",
+                element_name,
+                xml_url,
+                len(child_outlines),
+            )
+            if not xml_url:
+                skipped_count_wrapper[0] += 1
 
 
 @opml_bp.route("/import", methods=["POST"])
@@ -260,12 +281,18 @@ def import_opml():
     root, error_response = _parse_opml_file(opml_file)
     if error_response:
         return error_response
-            exc_info=True,
-        )
-        return (
-            jsonify({"error": "An error occurred while importing the OPML file"}),
-            500,
-        )
+    # This `exc_info=True` and the following `return` statement seem misplaced.
+    # They were likely part of an `except` block that got partially deleted.
+    # Given the context, the `_parse_opml_file` function already handles errors
+    # and returns an error_response. If `error_response` is None, it means parsing was successful.
+    # If it's not None, the function returns it.
+    # So, this block should be removed as it's syntactically incorrect and redundant.
+    # exc_info=True,
+    # )
+    # return (
+    #     jsonify({"error": "An error occurred while importing the OPML file"}),
+    #     500,
+    # )
 
     top_level_target_tab_id = None
     top_level_target_tab_name = None
@@ -328,6 +355,12 @@ def import_opml():
                         default_tab_name_for_creation,
                         e_tab_commit,
                         exc_info=True,
+                    )
+                    return (
+                        jsonify(
+                            {"error": "Failed to create a default tab for import."}
+                        ),
+                        500,
                     )
 
     if not top_level_target_tab_id:
@@ -490,6 +523,7 @@ def import_opml():
                 "skipped_count": skipped_final_count,
                 "tab_id": top_level_target_tab_id,
                 "tab_name": top_level_target_tab_name,
+                "affected_tab_ids": list(affected_tab_ids_set),
             }
         ),
         200,
@@ -502,7 +536,6 @@ def export_opml():
 
     Returns:
         A Flask Response object containing the OPML file, or a JSON error response.
-    """
     """
     try:
         opml_string, tab_count, feed_count = _generate_opml_string()
