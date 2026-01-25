@@ -601,7 +601,7 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
 
     assert response.status_code == 500
     assert "error" in response.json
-    assert "Error during manual update" in response.json["error"]
+    assert "An internal error occurred while manually updating the feed." in response.json["error"]
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 
@@ -772,7 +772,7 @@ def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce, client
     assert response.status_code == 500
     data = response.get_json()
     assert "error" in data
-    assert "Error during /api/feeds/update-all" in data["error"]
+    assert "An internal error occurred while updating all feeds." in data["error"]
 
     # Assert Mocks
     mock_update_all_feeds.assert_called_once()

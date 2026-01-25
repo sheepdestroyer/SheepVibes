@@ -67,7 +67,7 @@ def create_tab():
         logger.error(
             f"Error creating tab '{tab_name}': {str(e)}", exc_info=True)
         # Let the 500 handler manage the response
-        return jsonify({"error": f"Error creating tab '{tab_name}': {str(e)}"}), 500
+        return jsonify({"error": "An internal error occurred while creating the tab."}), 500
 
 
 @tabs_bp.route("/<int:tab_id>", methods=["PUT"])
@@ -112,12 +112,7 @@ def rename_tab(tab_id):
         logger.error(
             f"Error renaming tab {tab_id} to '{new_name}': {str(e)}", exc_info=True
         )
-        return (
-            jsonify(
-                {"error": f"Error renaming tab {tab_id} to '{new_name}': {str(e)}"}
-            ),
-            500,
-        )
+        return jsonify({"error": "An internal error occurred while renaming the tab."}), 500
 
 
 @tabs_bp.route("/<int:tab_id>", methods=["DELETE"])
@@ -138,7 +133,7 @@ def delete_tab(tab_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting tab {tab_id}: {str(e)}", exc_info=True)
-        return jsonify({"error": f"Error deleting tab {tab_id}: {str(e)}"}), 500
+        return jsonify({"error": "An internal error occurred while deleting the tab."}), 500
 
 
 @tabs_bp.route("/<int:tab_id>/feeds", methods=["GET"])
