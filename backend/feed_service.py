@@ -46,7 +46,9 @@ def parse_published_time(entry):
             )
         except (TypeError, ValueError) as e:
             logger.debug(
-                "Failed to parse 'published_parsed' for entry %s: %s", entry.get('link', '[no link]'), e
+                "Failed to parse 'published_parsed' for entry %s: %s",
+                entry.get("link", "[no link]"),
+                e,
             )
             parsed_dt = None
 
@@ -66,7 +68,7 @@ def parse_published_time(entry):
                         logger.debug(
                             "Specific parsing error for date field '%s' for entry %s (%s): %s",
                             field,
-                            entry.get('link', '[no link]'),
+                            entry.get("link", "[no link]"),
                             type(e).__name__,
                             e,
                         )
@@ -75,7 +77,7 @@ def parse_published_time(entry):
                         logger.warning(
                             "Generic parsing error for date field '%s' for entry %s (%s): %s",
                             field,
-                            entry.get('link', '[no link]'),
+                            entry.get("link", "[no link]"),
                             type(e).__name__,
                             e,
                         )
@@ -91,7 +93,7 @@ def parse_published_time(entry):
 
     logger.warning(
         "Could not parse published time for entry: %s. Using current time as fallback.",
-        entry.get('link', '[no link]'),
+        entry.get("link", "[no link]"),
     )
     return datetime.datetime.now(timezone.utc)
 
@@ -134,7 +136,8 @@ def validate_and_resolve_url(url):
                     or ip.is_unspecified
                 ):
                     safe_url = f"{parsed.scheme}://{hostname}"
-                    logger.warning("Blocked SSRF attempt: %s -> %s", safe_url, ip)
+                    logger.warning(
+                        "Blocked SSRF attempt: %s -> %s", safe_url, ip)
                     return None, None
                 safe_ip = ip_str  # Keep valid IP string
                 break  # Found a safe IP
@@ -177,7 +180,8 @@ def fetch_feed(feed_url):
         # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
         if parsed_feed.bozo:
             logger.warning(
-                "Feed parsing warning: %s", parsed_feed.get('bozo_exception'))
+                "Feed parsing warning: %s", parsed_feed.get("bozo_exception")
+            )
 
         return parsed_feed
 
@@ -200,7 +204,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     if not parsed_feed:
         logger.error(
             "process_feed_entries called with a null parsed_feed for feed ID %s",
-            feed_db_obj.id if feed_db_obj else 'Unknown',
+            feed_db_obj.id if feed_db_obj else "Unknown",
         )
         return 0
 
@@ -221,8 +225,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
     new_title = parsed_feed.feed.get("title")
     if new_title and new_title.strip() and new_title != feed_db_obj.name:
-        logger.info(
-            "Updating feed title for '%s' to '%s'", feed_db_obj.name, new_title)
+        logger.info("Updating feed title for '%s' to '%s'",
+                    feed_db_obj.name, new_title)
         feed_db_obj.name = new_title
 
     # Update site_link if available and different
@@ -270,7 +274,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
                 "Skipping entry titled '%s' for feed '%s' due to missing link. (feedparser ID: %s)",
                 entry_title[:100],
                 feed_db_obj.name,
-                feedparser_id if feedparser_id else 'N/A',
+                feedparser_id if feedparser_id else "N/A",
             )
             continue
 

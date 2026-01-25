@@ -54,7 +54,8 @@ def test_fetch_feed(url):
         return False  # Or raise an assertion error for pytest
 
     logger.info(
-        "Successfully fetched feed: %s", parsed_feed.feed.get('title', 'Unknown')
+        "Successfully fetched feed: %s", parsed_feed.feed.get(
+            "title", "Unknown")
     )
     logger.info("Found %s entries", len(parsed_feed.entries))
 
@@ -756,7 +757,8 @@ def test_original_update_all_feeds_empty_db(db_setup):
     app = db_setup  # Ensures app context
 
     feeds_updated, new_items = feed_service.update_all_feeds()
-    logger.info("Updated %s feeds, added %s new items", feeds_updated, new_items)
+    logger.info("Updated %s feeds, added %s new items",
+                feeds_updated, new_items)
 
     assert feeds_updated == 0
     assert new_items == 0
