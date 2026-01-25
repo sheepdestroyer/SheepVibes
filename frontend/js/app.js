@@ -383,6 +383,13 @@ function initializeSSE() {
                     if (activeTabId && loadedTabs.has(activeTabId)) {
                         await reloadTab(activeTabId);
                     }
+
+                    // Mark all other tabs as unloaded so they fetch fresh data when selected
+                    const previouslyLoaded = Array.from(loadedTabs);
+                    loadedTabs.clear();
+                    if (activeTabId && previouslyLoaded.includes(activeTabId)) {
+                        loadedTabs.add(activeTabId);
+                    }
                 } catch (err) {
                     console.error('Error updating UI after SSE:', err);
                 }

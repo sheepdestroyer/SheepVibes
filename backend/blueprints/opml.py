@@ -524,9 +524,8 @@ def _get_autosave_directory():
     db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
 
     # Default to an absolute 'data' path in the project root to avoid CWD issues
-    # Default to an absolute 'data' path relative to the app root
-    # current_app.root_path points to the folder containing the app instantiation (backend/)
-    project_root = os.path.abspath(os.path.join(current_app.root_path, ".."))
+    # Default to an absolute 'data' path using the configured PROJECT_ROOT
+    project_root = current_app.config['PROJECT_ROOT']
     data_dir = os.path.join(project_root, "data")
 
     try:
