@@ -309,9 +309,21 @@ async function handleImportOpmlFileSelect(e) {
         const data = await api.importOpml(formData);
         showToast(data.message, 'success');
         if (data.imported_count > 0) {
-            loadedTabs.clear();
-            document.getElementById('feed-grid').innerHTML = '';
+            // Re-fetch tab data to update names and unread counts on all tab buttons.
             await initializeTabs();
+
+            // Use the `affected_tab_ids` from the backend to perform a more targeted refresh.
+            const tabsToReload = new Set(data.affected_tab_ids || []);
+            if (data.tab_id) { // The default tab for loose feeds might also be affected.
+                tabsToReload.add(data.tab_id);
+            }
+
+            for (const tabId of tabsToReload) {
+                // If the tab is currently cached/loaded, refresh it.
+                if (loadedTabs.has(tabId)) {
+                    await reloadTab(tabId);
+                }
+            }
         }
     } catch (err) {
         showToast(err.message, 'error');
