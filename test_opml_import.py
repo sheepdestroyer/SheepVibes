@@ -1,24 +1,27 @@
-import requests
 import os
 import sys
 
+import requests
+
+
 def test_import():
-    base_url = os.getenv('API_BASE_URL', 'http://127.0.0.1:5001')
-    url = f'{base_url}/api/opml/import'
+    base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:5001")
+    url = f"{base_url}/api/opml/import"
     print(f"Testing OPML import at: {url}")
 
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(script_dir, 'test_feeds.opml'), 'rb') as f:
-            files = {'file': f}
+        with open(os.path.join(script_dir, "test_feeds.opml"), "rb") as f:
+            files = {"file": f}
             response = requests.post(url, files=files, timeout=10)
-        
+
         print(f"Status Code: {response.status_code}")
         response.raise_for_status()
         response_data = response.json()
         print(f"Response: {response_data}")
 
-        assert response_data.get('imported_count', 0) > 0, "Expected imported_count > 0"
+        assert response_data.get(
+            "imported_count", 0) > 0, "Expected imported_count > 0"
         print("Test PASSED")
 
     except requests.RequestException as e:
@@ -27,6 +30,7 @@ def test_import():
     except AssertionError as e:
         print(f"Assertion Failed: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     test_import()
