@@ -8,7 +8,9 @@ import queue
 import sys
 import xml.etree.ElementTree as ET  # Added for OPML export
 
+import defusedxml.ElementTree as SafeET
 from apscheduler.schedulers.background import BackgroundScheduler
+from defusedxml.common import DefusedXmlException
 from filelock import FileLock, Timeout  # Added for race condition prevention
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_caching import Cache  # Added for caching
@@ -794,12 +796,14 @@ def import_opml():
     )
 
     try:
-        tree = ET.parse(opml_file.stream)
+        # Use SafeET for secure parsing
+        tree = SafeET.parse(opml_file.stream)
         root = tree.getroot()
-    except ET.ParseError as e:
+    except (ET.ParseError, DefusedXmlException) as e:
         logger.error(
-            f"OPML import failed: Malformed XML. Error: {e}", exc_info=True)
-        return jsonify({"error": f"Malformed OPML file: {e}"}), 400
+            f"OPML import failed: Malformed or unsafe XML. Error: {e}", exc_info=True
+        )
+        return jsonify({"error": f"Malformed or unsafe OPML file: {e}"}), 400
     except Exception as e:
         logger.error(
             f"OPML import failed: Could not parse file stream. Error: {e}",

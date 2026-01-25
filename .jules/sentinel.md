@@ -1,0 +1,4 @@
+## 2026-01-25 - Fix XXE and XML DoS in OPML Import
+**Vulnerability:** The application used the standard `xml.etree.ElementTree` parser for importing OPML files. While the environment's Python version blocked external entity expansion in attributes by default, it remained vulnerable to internal entity expansion (Billion Laughs attack), potentially leading to Denial of Service.
+**Learning:** Standard XML parsers in Python (`xml.etree`) are often insecure by default against entity expansion. Even if external entities are blocked, internal entity expansion can still cause DoS.
+**Prevention:** Always use the `defusedxml` library when parsing untrusted XML data. It provides secure defaults that forbid DTDs and limit entity expansion. Ensure security dependencies are explicitly listed in `requirements.txt`.
