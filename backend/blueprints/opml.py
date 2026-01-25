@@ -1,6 +1,6 @@
 import logging
 import os
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405
 
 import defusedxml.ElementTree as SafeET
 from defusedxml.ElementTree import parse
