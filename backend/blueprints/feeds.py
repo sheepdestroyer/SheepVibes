@@ -215,8 +215,7 @@ def update_feed_url(feed_id):
             new_name = new_url
             new_site_link = None
             logger.warning(
-                "Could not fetch title for %s, using URL as name.", new_url
-            )
+                "Could not fetch title for %s, using URL as name.", new_url)
         else:
             new_name = parsed_feed.feed.get(
                 "title", new_url
@@ -276,13 +275,10 @@ def update_feed_url(feed_id):
 
     except Exception as e:
         db.session.rollback()
-        logger.error(
-            "Error updating feed %s: %s", feed_id, e, exc_info=True
-        )
+        logger.error("Error updating feed %s: %s", feed_id, e, exc_info=True)
         return (
             jsonify(
-                {"error": "An internal error occurred while updating the feed."}
-            ),
+                {"error": "An internal error occurred while updating the feed."}),
             500,
         )
 
@@ -305,8 +301,7 @@ def api_update_all_feeds():
         if new_items_count > 0:
             cache.clear()
             logger.info(
-                "Cache cleared after manual 'update-all' found new items."
-            )
+                "Cache cleared after manual 'update-all' found new items.")
         # Announce the update to listening clients
         event_data = {"feeds_processed": processed_count,
                       "new_items": new_items_count}
@@ -323,14 +318,12 @@ def api_update_all_feeds():
             200,
         )
     except Exception as e:
-        logger.error(
-            "Error during /api/feeds/update-all: %s", e, exc_info=True
-        )
+        logger.error("Error during /api/feeds/update-all: %s",
+                     e, exc_info=True)
         # Consistent error response with other parts of the API
         return (
             jsonify(
-                {"error": "An internal error occurred while updating all feeds."}
-            ),
+                {"error": "An internal error occurred while updating all feeds."}),
             500,
         )
 
@@ -436,7 +429,8 @@ def mark_item_read(item_id):
     except Exception as e:
         db.session.rollback()
         logger.error(
-            "Error marking item %s as read: %s", item_id, str(e), exc_info=True)
+            "Error marking item %s as read: %s", item_id, str(e), exc_info=True
+        )
         # Let 500 handler manage response (or return specific error)
         return (
             jsonify(

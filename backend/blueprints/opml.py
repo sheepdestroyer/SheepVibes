@@ -1,9 +1,9 @@
 import logging
 import os
 import xml.etree.ElementTree as ET
-from defusedxml.ElementTree import parse
 
 import defusedxml.ElementTree as SafeET
+from defusedxml.ElementTree import parse
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.orm import selectinload
@@ -247,6 +247,7 @@ def _process_opml_outlines_recursive(
 @opml_bp.route("/import", methods=["POST"])
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
+
     def _validate_request_file():
         if "file" not in request.files:
             return jsonify({"error": "No file part in the request"}), 400
@@ -262,10 +263,16 @@ def import_opml():
             tree = SafeET.parse(file.stream)
             return tree.getroot(), None
         except ET.ParseError as e:
-            logger.error("OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
+            logger.error(
+                "OPML import failed: Malformed XML. Error: %s", e, exc_info=True
+            )
             return None, (jsonify({"error": f"Malformed OPML file: {e}"}), 400)
         except Exception as e:
-            logger.error("OPML import failed: Could not parse file stream. Error: %s", e, exc_info=True)
+            logger.error(
+                "OPML import failed: Could not parse file stream. Error: %s",
+                e,
+                exc_info=True,
+            )
             return None, (jsonify({"error": f"Could not parse OPML file: {e}"}), 400)
 
     opml_file = _validate_request_file()

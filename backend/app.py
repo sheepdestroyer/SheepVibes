@@ -190,6 +190,7 @@ def internal_error(error):
     db.session.rollback()
     return jsonify({"error": "An internal server error occurred"}), 500
 
+
 # --- Static and Stream Routes ---
 
 FRONTEND_FOLDER = os.path.abspath(

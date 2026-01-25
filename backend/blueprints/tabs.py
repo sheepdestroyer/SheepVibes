@@ -60,7 +60,8 @@ def create_tab():
         db.session.add(new_tab)
         db.session.commit()
         invalidate_tabs_cache()
-        logger.info("Created new tab '%s' with id %s.", new_tab.name, new_tab.id)
+        logger.info("Created new tab '%s' with id %s.",
+                    new_tab.name, new_tab.id)
         return jsonify(new_tab.to_dict()), 201  # Created
     except Exception as e:
         db.session.rollback()
