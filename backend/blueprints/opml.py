@@ -530,44 +530,14 @@ def export_opml():
 
 
 def _get_autosave_directory():
-    """Determines the autosave directory based on the database URI."""
-    # Use current_app to access config
-    db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
-
-    # Default to an absolute 'data' path in the project root to avoid CWD issues
-    # Default to an absolute 'data' path using the configured PROJECT_ROOT
+    """Determines the autosave directory from the app config."""
+    # Simplified logic based on review feedback to use configured DATA_DIR
+    # or fallback to project structure if not explicitly set (though feedback suggested strict config)
+    # Ideally, app.py should set DATA_DIR logic one time.
+    # For now, let's implement the suggestion:
+    
     project_root = current_app.config["PROJECT_ROOT"]
     data_dir = os.path.join(project_root, "data")
-
-    try:
-        url = make_url(db_uri)
-        if url.drivername == "sqlite":
-            # Check for in-memory database variations like 'sqlite://' or 'sqlite:///:memory:'
-            if not url.database or url.database == ":memory:":
-                logger.warning(
-                    "Skipping OPML autosave because database is in-memory.")
-                return None
-            # For file-based sqlite, use its directory, resolving relative paths against the project root.
-            # However, if it's absolute, use it directly.
-            # Note: url.database string might be relative.
-            if os.path.isabs(url.database):
-                db_path = url.database
-            else:
-                # If relative, it's relative to where app was run? Or config setup?
-                # In app.py logic, it resolved relative to project root.
-                # Just trusting url.database as resolved by make_url might tricky if it's relative.
-                # But generally if app.config used absolute path, make_url reflects it.
-                # If app.config used "sqlite:///sheepvibes.db", url.database is "sheepvibes.db".
-                # We prefer the standard data dir if we can't be sure, but let's try to match logic.
-                db_path = os.path.join(project_root, url.database)
-
-            data_dir = os.path.dirname(db_path)
-        # For non-sqlite databases, the default data_dir (project_root/data) is used.
-    except (ArgumentError, ValueError):
-        # We catch specific parsing errors here. make_url can raise ArgumentError.
-        logger.exception(
-            "Error parsing database URI for autosave path. Using default: %s", data_dir
-        )
 
     try:
         os.makedirs(data_dir, exist_ok=True)
