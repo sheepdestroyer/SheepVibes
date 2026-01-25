@@ -2180,6 +2180,7 @@ def test_autosave_opml_mocked(
     client.application.config["SQLALCHEMY_DATABASE_URI"] = (
         "sqlite:////mock/data/sheepvibes.db"
     )
+    client.application.config["PROJECT_ROOT"] = "/mock"
 
     # Act
     with client.application.app_context():
@@ -2219,13 +2220,14 @@ def test_autosave_opml_with_temp_fs(tmp_path, client, setup_autosave_test_data):
     # but we override the config so autosave_opml writes to our temp path.
     db_path = tmp_path / "sqlite.db"
     client.application.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    client.application.config["PROJECT_ROOT"] = str(tmp_path)
 
     # Act
     with client.application.app_context():
         autosave_opml()
 
     # Assert
-    backup_file_path = tmp_path / "sheepvibes_backup.opml"
+    backup_file_path = tmp_path / "data" / "sheepvibes_backup.opml"
     assert backup_file_path.exists(), (
         "Backup file should have been created in the temp directory."
     )
