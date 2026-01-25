@@ -373,18 +373,10 @@ function initializeSSE() {
             const data = JSON.parse(event.data);
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
-                // Reload tab counts but don't clear everything violently
-                loadedTabs.clear(); // Mark all stale
-                if (activeTabId) {
-                    // Just reload the active tab's feeds in place (which usually replaces widgets)
-                    // The toggle/reload function handles clearing old ones first.
-                    await loadFeedsForTab(activeTabId);
-                    // Also refresh tab list to update unread counts
-                    allTabs = await api.getTabs();
-                    renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
-                } else {
-                    await initializeTabs();
-                }
+                // Reload all knowledge
+                loadedTabs.clear();
+                document.getElementById('feed-grid').innerHTML = '';
+                await initializeTabs();
             }
         } catch (e) { console.error(e); }
     };
