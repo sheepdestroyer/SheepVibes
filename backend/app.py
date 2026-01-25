@@ -178,7 +178,7 @@ if not app.config.get("TESTING"):
 
 
 @app.errorhandler(404)
-def not_found_error(error):
+def not_found_error(_):
     """Handles 404 Not Found errors with a JSON response."""
     logger.warning("404 Not Found: %s", request.path)
     return jsonify({"error": "Resource not found"}), 404

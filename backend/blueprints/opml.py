@@ -3,7 +3,6 @@ import os
 import xml.etree.ElementTree as ET  # nosec B405
 
 import defusedxml.ElementTree as SafeET
-from defusedxml.ElementTree import parse
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.orm import selectinload
