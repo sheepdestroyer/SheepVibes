@@ -297,7 +297,11 @@ def update_feed(feed_id):
         logger.error(
             f"Error during manual update for feed {feed.id}: {e}", exc_info=True
         )
-        return jsonify({"error": f"Error during manual update for feed {feed.id}: {e}"}), 500
+        return (
+            jsonify(
+                {"error": f"Error during manual update for feed {feed.id}: {e}"}),
+            500,
+        )
 
 
 @feeds_bp.route("/<int:feed_id>/items", methods=["GET"])
