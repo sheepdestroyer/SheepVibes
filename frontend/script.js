@@ -1080,7 +1080,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saveButton && saveButton.disabled) {
             // Add a class to trigger a shake animation for visual feedback.
             modal?.classList.add('is-busy-shaking');
-            setTimeout(() => modal?.classList.remove('is-busy-shaking'), 820); // Match CSS animation duration
+            modal?.addEventListener('animationend', () => {
+                modal.classList.remove('is-busy-shaking');
+            }, { once: true });
             return;
         }
         modal?.classList.remove('is-active');
@@ -1088,13 +1090,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** Main initialization function called on DOMContentLoaded. */
     async function initialize() {
-        // Move modal to its root container for proper stacking context
-        const modalRoot = document.getElementById('modal-root');
-        const modal = document.getElementById('edit-feed-modal');
-        if (modalRoot && modal) {
-            modalRoot.appendChild(modal);
-        }
-
         // Add event listeners for all interactive elements
         addTabButton.addEventListener('click', handleAddTab);
         renameTabButton.addEventListener('click', handleRenameTab);
