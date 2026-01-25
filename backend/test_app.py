@@ -2,7 +2,6 @@ import datetime  # For new tests, specifically for timezone object
 import io
 import json
 import os
-import time  # For new tests
 import xml.etree.ElementTree as ET
 from datetime import timezone  # For new tests
 from unittest.mock import MagicMock, patch
@@ -863,7 +862,6 @@ def test_feed_item_to_dict_serialization(
     """
     Tests the to_dict() method of the FeedItem model, focusing on datetime serialization.
     """
-    from datetime import datetime, timedelta, timezone
 
     with app.app_context():
         # Setup: Create a Tab and a Feed to associate with FeedItems
@@ -966,10 +964,9 @@ def test_feed_item_to_dict_serialization(
 
 def test_to_iso_z_string_static_method():
     """Tests the FeedItem.to_iso_z_string static method directly."""
-    from datetime import datetime, timedelta, timezone
 
     # 1. Test with a naive datetime (assumed to be UTC)
-    naive_dt = datetime(2023, 1, 1, 12, 0, 0)
+    naive_dt = datetime.datetime(2023, 1, 1, 12, 0, 0)
     assert FeedItem.to_iso_z_string(naive_dt) == "2023-01-01T12:00:00Z"
 
     # 2. Test with a timezone-aware datetime (not UTC)

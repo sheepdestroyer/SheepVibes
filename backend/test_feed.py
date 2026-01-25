@@ -7,7 +7,6 @@ This script can be used to test feed fetching and processing without running the
 import datetime  # <--- Added import for datetime
 import logging
 import socket  # Added for SSRF test
-import sys
 from unittest.mock import MagicMock
 
 import pytest

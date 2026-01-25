@@ -4,7 +4,6 @@ import ipaddress
 import logging  # Standard logging
 import os
 import socket
-import ssl  # Added for specific SSL error catching
 import urllib.request
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
@@ -296,11 +295,9 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         # --- Deduplication Logic ---
         # 1. Check against items already in the DB *for this specific feed*
         if db_guid and db_guid in existing_feed_guids:
-            # logger.debug(f"Item with db_guid '{db_guid}' already exists in DB for feed '{feed_db_obj.name}'. Skipping.")
             continue
         # Check link for this feed, critical for items that will have db_guid=None or if link is the primary identifier
         if entry_link in existing_feed_links:
-            # logger.debug(f"Item with link '{entry_link}' already exists in DB for feed '{feed_db_obj.name}'. Skipping. (db_guid was: {db_guid})")
             continue
 
         # 2. Check against items already processed *in this current batch*
@@ -354,7 +351,9 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         except Exception as e:  # Catch potential errors during this commit
             db.session.rollback()
             logger.error(
-                f"Error committing feed update (no new items) for {feed_db_obj.name}: {e}",
+                "Error committing feed update (no new items) for %s: %s",
+                feed_db_obj.name,
+                e,
                 exc_info=True,
             )
         return 0
