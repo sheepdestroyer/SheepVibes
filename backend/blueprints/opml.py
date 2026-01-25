@@ -503,7 +503,7 @@ def export_opml():
     except Exception:
         # Catch unexpected errors during OPML generation
         logger.exception("Error during OPML generation for export")
-        raise e
+        raise
 
     else:
         response = Response(opml_string, mimetype="application/xml")
