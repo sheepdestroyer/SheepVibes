@@ -276,7 +276,10 @@ def import_opml():
             f"OPML import failed: Could not parse file stream. Error: {e}",
             exc_info=True,
         )
-        return jsonify({"error": "An error occurred while importing the OPML file"}), 500
+        return (
+            jsonify({"error": "An error occurred while importing the OPML file"}),
+            500,
+        )
 
     top_level_target_tab_id = None
     top_level_target_tab_name = None

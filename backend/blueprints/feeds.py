@@ -144,7 +144,11 @@ def delete_feed(feed_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting feed {feed_id}: {str(e)}", exc_info=True)
-        return jsonify({"error": "An internal error occurred while deleting the feed."}), 500
+        return (
+            jsonify(
+                {"error": "An internal error occurred while deleting the feed."}),
+            500,
+        )
 
 
 @feeds_bp.route("/<int:feed_id>", methods=["PUT"])
@@ -241,7 +245,11 @@ def update_feed_url(feed_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error updating feed {feed_id}: {str(e)}", exc_info=True)
-        return jsonify({"error": "An internal error occurred while updating the feed."}), 500
+        return (
+            jsonify(
+                {"error": "An internal error occurred while updating the feed."}),
+            500,
+        )
 
 
 @feeds_bp.route("/update-all", methods=["POST"])
@@ -280,7 +288,11 @@ def api_update_all_feeds():
         logger.error(
             f"Error during /api/feeds/update-all: {str(e)}", exc_info=True)
         # Consistent error response with other parts of the API
-        return jsonify({"error": "An internal error occurred while updating all feeds."}), 500
+        return (
+            jsonify(
+                {"error": "An internal error occurred while updating all feeds."}),
+            500,
+        )
 
 
 @feeds_bp.route("/<int:feed_id>/update", methods=["POST"])
@@ -300,7 +312,14 @@ def update_feed(feed_id):
         logger.error(
             f"Error during manual update for feed {feed.id}: {e}", exc_info=True
         )
-        return jsonify({"error": "An internal error occurred while manually updating the feed."}), 500
+        return (
+            jsonify(
+                {
+                    "error": "An internal error occurred while manually updating the feed."
+                }
+            ),
+            500,
+        )
 
 
 @feeds_bp.route("/<int:feed_id>/items", methods=["GET"])
@@ -374,4 +393,9 @@ def mark_item_read(item_id):
         logger.error(
             f"Error marking item {item_id} as read: {str(e)}", exc_info=True)
         # Let 500 handler manage response (or return specific error)
-        return jsonify({"error": "An internal error occurred while marking the item as read."}), 500
+        return (
+            jsonify(
+                {"error": "An internal error occurred while marking the item as read."}
+            ),
+            500,
+        )

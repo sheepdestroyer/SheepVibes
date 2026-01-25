@@ -601,7 +601,10 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
 
     assert response.status_code == 500
     assert "error" in response.json
-    assert "An internal error occurred while manually updating the feed." in response.json["error"]
+    assert (
+        "An internal error occurred while manually updating the feed."
+        in response.json["error"]
+    )
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 
