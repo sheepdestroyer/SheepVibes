@@ -332,7 +332,7 @@ def scheduled_opml_autosave():
 
 # Start the scheduler in the global scope for WSGI servers and register a cleanup function.
 
-if not os.environ.get("TESTING") and "pytest" not in sys.modules:
+if not app.config.get("TESTING"):
     try:
         scheduler.start()
         atexit.register(lambda: scheduler.shutdown())
