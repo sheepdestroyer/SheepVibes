@@ -112,7 +112,12 @@ def rename_tab(tab_id):
         logger.error(
             f"Error renaming tab {tab_id} to '{new_name}': {str(e)}", exc_info=True
         )
-        return jsonify({"error": f"Error renaming tab {tab_id} to '{new_name}': {str(e)}"}), 500
+        return (
+            jsonify(
+                {"error": f"Error renaming tab {tab_id} to '{new_name}': {str(e)}"}
+            ),
+            500,
+        )
 
 
 @tabs_bp.route("/<int:tab_id>", methods=["DELETE"])
