@@ -1,21 +1,25 @@
 import logging
 import os
 import xml.etree.ElementTree as ET
-from flask import Blueprint, jsonify, request, Response, current_app
+
 from filelock import FileLock, Timeout
+from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy import func
-from sqlalchemy.orm import selectinload
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import ArgumentError
+from sqlalchemy.orm import selectinload
 
-from ..extensions import db, cache
-from ..models import Feed, Tab
+from ..cache_utils import (
+    invalidate_tab_feeds_cache,
+    invalidate_tabs_cache,
+    make_tabs_cache_key,
+)
+from ..extensions import cache, db
 from ..feed_service import fetch_and_update_feed
-from ..cache_utils import invalidate_tabs_cache, invalidate_tab_feeds_cache, make_tabs_cache_key
+from ..models import Feed, Tab
 
-opml_bp = Blueprint('opml', __name__, url_prefix='/api/opml')
+opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
 logger = logging.getLogger(__name__)
-
 
 # --- OPML Import Configuration ---
 SKIPPED_FOLDER_TYPES = {
@@ -23,6 +27,7 @@ SKIPPED_FOLDER_TYPES = {
     "Webnote",
     "LinkModule",
 }  # Netvibes specific types to ignore for tab creation
+
 
 def _generate_opml_string(tabs=None):
     """Generates the OPML string from the database.
@@ -204,9 +209,7 @@ def _process_opml_outlines_recursive(
                     )  # Approximate skip count
                     continue  # Skip this folder
 
-            if (
-                nested_tab_id and nested_tab_name
-            ):
+            if nested_tab_id and nested_tab_name:
                 _process_opml_outlines_recursive(
                     child_outlines,
                     nested_tab_id,
@@ -240,9 +243,7 @@ def _process_opml_outlines_recursive(
                 xml_url,
                 len(child_outlines),
             )
-            if (
-                not xml_url
-            ):
+            if not xml_url:
                 skipped_count_wrapper[0] += 1
 
 
@@ -333,7 +334,12 @@ def import_opml():
                         f"OPML import: Failed to create default tab '{default_tab_name_for_creation}': {e_tab_commit}",
                         exc_info=True,
                     )
-                    return jsonify({"error": "Failed to create a default tab for import."}), 500
+                    return (
+                        jsonify(
+                            {"error": "Failed to create a default tab for import."}
+                        ),
+                        500,
+                    )
 
     if not top_level_target_tab_id:
         logger.error(
@@ -405,7 +411,10 @@ def import_opml():
                 f"OPML import: Database commit failed for new feeds: {e_commit_feeds}",
                 exc_info=True,
             )
-            return jsonify({"error": "Database error during final feed import step."}), 500
+            return (
+                jsonify({"error": "Database error during final feed import step."}),
+                500,
+            )
 
     if affected_tab_ids_set:
         invalidate_tabs_cache()
@@ -517,8 +526,8 @@ def _get_autosave_directory():
     # Default to an absolute 'data' path in the project root to avoid CWD issues
     # Note: __file__ here refers to opml.py, which is in backend/blueprints
     # So we need to go up 3 levels to reach root (blueprints -> backend -> root)
-    project_root = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", ".."))
+    project_root = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), "..", ".."))
     data_dir = os.path.join(project_root, "data")
 
     try:
@@ -535,13 +544,13 @@ def _get_autosave_directory():
             if os.path.isabs(url.database):
                 db_path = url.database
             else:
-                 # If relative, it's relative to where app was run? Or config setup?
-                 # In app.py logic, it resolved relative to project root.
-                 # Just trusting url.database as resolved by make_url might tricky if it's relative.
-                 # But generally if app.config used absolute path, make_url reflects it.
-                 # If app.config used "sqlite:///sheepvibes.db", url.database is "sheepvibes.db".
-                 # We prefer the standard data dir if we can't be sure, but let's try to match logic.
-                 db_path = os.path.join(project_root, url.database)
+                # If relative, it's relative to where app was run? Or config setup?
+                # In app.py logic, it resolved relative to project root.
+                # Just trusting url.database as resolved by make_url might tricky if it's relative.
+                # But generally if app.config used absolute path, make_url reflects it.
+                # If app.config used "sqlite:///sheepvibes.db", url.database is "sheepvibes.db".
+                # We prefer the standard data dir if we can't be sure, but let's try to match logic.
+                db_path = os.path.join(project_root, url.database)
 
             data_dir = os.path.dirname(db_path)
         # For non-sqlite databases, the default data_dir (project_root/data) is used.

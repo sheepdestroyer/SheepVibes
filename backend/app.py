@@ -4,20 +4,20 @@ import logging
 import os
 import sys
 
-from flask import Flask, jsonify, request, send_from_directory, Response
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_migrate import Migrate
 
-from .extensions import db, cache, scheduler
-from .sse import announcer
-from .blueprints.opml import opml_bp, autosave_opml
-from .blueprints.tabs import tabs_bp
 from .blueprints.feeds import feeds_bp, items_bp
+from .blueprints.opml import autosave_opml, opml_bp
+from .blueprints.tabs import tabs_bp
 from .constants import (
+    OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT,
     UPDATE_INTERVAL_MINUTES_DEFAULT,
-    OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT
 )
+from .extensions import cache, db, scheduler
 from .feed_service import update_all_feeds
+from .sse import announcer
 
 # Set up logging configuration
 logging.basicConfig(
@@ -115,6 +115,7 @@ OPML_AUTOSAVE_INTERVAL_MINUTES = int(
     )
 )
 
+
 @scheduler.scheduled_job("interval", minutes=UPDATE_INTERVAL_MINUTES, id="update_feeds")
 def scheduled_feed_update():
     """Scheduled job to periodically update all feeds in the database."""
@@ -169,6 +170,7 @@ if not app.config.get("TESTING"):
 
 # --- Error Handlers ---
 
+
 @app.errorhandler(404)
 def not_found_error(error):
     """Handles 404 Not Found errors with a JSON response."""
@@ -190,6 +192,7 @@ def internal_error(error):
 FRONTEND_FOLDER = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "frontend")
 )
+
 
 @app.route("/")
 def serve_index():

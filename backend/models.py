@@ -1,5 +1,6 @@
 import datetime
 from datetime import timezone  # Import timezone
+
 from sqlalchemy.orm import validates
 
 # Initialize SQLAlchemy ORM extension

@@ -1,18 +1,21 @@
 import logging
+
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func, select
-from ..extensions import db, cache
-from ..models import Tab, Feed, FeedItem
-from ..constants import DEFAULT_FEED_ITEMS_LIMIT
+
 from ..cache_utils import (
     invalidate_tabs_cache,
+    make_tab_feeds_cache_key,
     make_tabs_cache_key,
-    make_tab_feeds_cache_key
 )
+from ..constants import DEFAULT_FEED_ITEMS_LIMIT
+from ..extensions import cache, db
+from ..models import Feed, FeedItem, Tab
 
 logger = logging.getLogger(__name__)
 
 tabs_bp = Blueprint("tabs", __name__, url_prefix="/api/tabs")
+
 
 @tabs_bp.route("", methods=["GET"])
 @cache.cached(make_cache_key=make_tabs_cache_key)

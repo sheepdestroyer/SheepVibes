@@ -1,8 +1,11 @@
 import logging
+
 from flask import request
+
 from .extensions import cache
 
 logger = logging.getLogger(__name__)
+
 
 def get_version(key, default=1):
     """Gets a version number for a cache key from the cache.

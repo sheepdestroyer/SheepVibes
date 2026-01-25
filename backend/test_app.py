@@ -406,7 +406,9 @@ def test_get_feeds_for_tab_not_found(client):
 
 
 # Mock feed fetching/processing for add/delete tests
-@patch("backend.blueprints.feeds.fetch_feed")  # Patch fetch_feed where it's used in app.py
+@patch(
+    "backend.blueprints.feeds.fetch_feed"
+)  # Patch fetch_feed where it's used in app.py
 @patch(
     "backend.blueprints.feeds.process_feed_entries"
 )  # Patch process_feed_entries where it's used in app.py
@@ -818,7 +820,9 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
         client.post(f"/api/items/{item1_id}/read")
 
         # 5. Assert the query IS re-executed on the next call (cache miss).
-        with patch("backend.extensions.db.session.execute") as mock_execute_after_invalidation:
+        with patch(
+            "backend.extensions.db.session.execute"
+        ) as mock_execute_after_invalidation:
             client.get(f"/api/tabs/{tab1_id}/feeds")
             mock_execute_after_invalidation.assert_called()
 

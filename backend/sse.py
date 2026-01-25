@@ -1,7 +1,8 @@
-import queue
 import logging
+import queue
 
 logger = logging.getLogger(__name__)
+
 
 class MessageAnnouncer:
     """A simple message announcer that uses server-sent events.
@@ -61,5 +62,6 @@ class MessageAnnouncer:
                     "A client's SSE message queue was full. Dropping message."
                 )
                 pass
+
 
 announcer = MessageAnnouncer()
