@@ -276,7 +276,7 @@ def import_opml():
             f"OPML import failed: Could not parse file stream. Error: {e}",
             exc_info=True,
         )
-        raise e
+        raise
 
     top_level_target_tab_id = None
     top_level_target_tab_name = None
