@@ -970,7 +970,7 @@ def test_to_iso_z_string_static_method():
     assert FeedItem.to_iso_z_string(naive_dt) == "2023-01-01T12:00:00Z"
 
     # 2. Test with a timezone-aware datetime (not UTC)
-    tz_est = timezone(timedelta(hours=-5))
+    tz_est = datetime.timezone(datetime.timedelta(hours=-5))
     aware_dt_est = datetime(2023, 3, 15, 10, 0, 0,
                             tzinfo=tz_est)  # This is 15:00 UTC
     assert FeedItem.to_iso_z_string(aware_dt_est) == "2023-03-15T15:00:00Z"
