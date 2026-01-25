@@ -1,12 +1,10 @@
 import datetime
 from datetime import timezone  # Import timezone
-
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import validates
 
 # Initialize SQLAlchemy ORM extension
 # This will be initialized with the app in app.py using db.init_app(app)
-db = SQLAlchemy()
+from .extensions import db
 
 # --- Database Models ---
 

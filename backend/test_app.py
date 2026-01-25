@@ -406,9 +406,9 @@ def test_get_feeds_for_tab_not_found(client):
 
 
 # Mock feed fetching/processing for add/delete tests
-@patch("backend.app.fetch_feed")  # Patch fetch_feed where it's used in app.py
+@patch("backend.blueprints.feeds.fetch_feed")  # Patch fetch_feed where it's used in app.py
 @patch(
-    "backend.app.process_feed_entries"
+    "backend.blueprints.feeds.process_feed_entries"
 )  # Patch process_feed_entries where it's used in app.py
 def test_add_feed_success(
     mock_process_entries, mock_fetch, client, setup_tabs_and_feeds
@@ -446,7 +446,7 @@ def test_add_feed_success(
         assert feed.tab_id == tab1_id
 
 
-@patch("backend.app.fetch_feed")
+@patch("backend.blueprints.feeds.fetch_feed")
 def test_add_feed_fetch_fails(mock_fetch, client, setup_tabs_and_feeds):
     """Test POST /api/feeds when initial fetch fails (should still add)."""
     tab1_id = setup_tabs_and_feeds["tab1_id"]
@@ -463,7 +463,7 @@ def test_add_feed_fetch_fails(mock_fetch, client, setup_tabs_and_feeds):
     mock_fetch.assert_called_once_with(feed_url)
 
 
-@patch("backend.app.fetch_feed")
+@patch("backend.blueprints.feeds.fetch_feed")
 def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     """Test POST /api/feeds with a duplicate URL."""
     tab1_id = setup_tabs_and_feeds["tab1_id"]
@@ -479,7 +479,7 @@ def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
 
 
 @patch(
-    "backend.app.fetch_feed"
+    "backend.blueprints.feeds.fetch_feed"
 )  # Also needs patch if fetch_feed is involved in error path
 def test_add_feed_invalid_tab(
     mock_fetch_unused, client
@@ -566,7 +566,7 @@ def test_mark_item_read_not_found(client):
 # --- Tests for POST /api/feeds/<feed_id>/update ---
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.feeds.fetch_and_update_feed")
 def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
     # Mock the return values of fetch_and_update_feed
@@ -580,7 +580,7 @@ def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.feeds.fetch_and_update_feed")
 def test_update_feed_not_found(mock_fetch_and_update, client):
     """Test POST /api/feeds/<feed_id>/update when feed is not found."""
     feed_id = 999
@@ -589,7 +589,7 @@ def test_update_feed_not_found(mock_fetch_and_update, client):
     mock_fetch_and_update.assert_not_called()
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.feeds.fetch_and_update_feed")
 def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
     mock_fetch_and_update.side_effect = Exception("Simulated update error")
@@ -605,7 +605,7 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
 # --- Tests for PUT /api/feeds/<feed_id> (Update Feed URL) ---
 
 
-@patch("backend.app.fetch_feed")
+@patch("backend.blueprints.feeds.fetch_feed")
 def test_update_feed_url_success(mock_fetch_feed, client, setup_tabs_and_feeds):
     """Test PUT /api/feeds/<feed_id> successfully updates feed URL and name."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
@@ -628,7 +628,7 @@ def test_update_feed_url_success(mock_fetch_feed, client, setup_tabs_and_feeds):
     # The optimized implementation uses process_feed_entries directly instead of fetch_and_update_feed
 
 
-@patch("backend.app.fetch_feed")
+@patch("backend.blueprints.feeds.fetch_feed")
 def test_update_feed_url_fetch_fails(mock_fetch_feed, client, setup_tabs_and_feeds):
     """Test PUT /api/feeds/<feed_id> when feed fetch fails."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
@@ -704,7 +704,7 @@ def test_get_existing_static_file(client):
     # If app.static_folder is './static' (default) or '../static' or '../frontend/dist' etc.
     # This test might fail if 'script.js' is not in the expected static path for testing.
     # For the purpose of this task, we assume it's set up correctly.
-    response = client.get("/script.js")
+    response = client.get("/js/app.js")
     assert response.status_code == 200
     assert response.content_type == "text/javascript; charset=utf-8"
     # Check if data is not empty, actual content might change.
@@ -728,8 +728,8 @@ def test_get_non_existent_static_file(client):
 # --- Tests for POST /api/feeds/update-all ---
 
 
-@patch("backend.app.announcer.announce")
-@patch("backend.app.update_all_feeds")
+@patch("backend.blueprints.feeds.announcer.announce")
+@patch("backend.blueprints.feeds.update_all_feeds")
 def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
     """Test POST /api/feeds/update-all successfully and announces SSE."""
     # Arrange
@@ -755,8 +755,8 @@ def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
     mock_announce.assert_called_once_with(msg=expected_sse_msg)
 
 
-@patch("backend.app.announcer.announce")
-@patch("backend.app.update_all_feeds")
+@patch("backend.blueprints.feeds.announcer.announce")
+@patch("backend.blueprints.feeds.update_all_feeds")
 def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce, client):
     """Test POST /api/feeds/update-all when update_all_feeds raises an exception."""
     # Arrange
@@ -802,7 +802,7 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
         item1_id = setup_tabs_and_feeds["item1_id"]
 
         # --- Test /api/tabs/{id}/feeds caching and invalidation ---
-        with patch("backend.app.db.session.execute") as mock_execute:
+        with patch("backend.extensions.db.session.execute") as mock_execute:
             # 1. Prime the cache (this call will execute the query).
             client.get(f"/api/tabs/{tab1_id}/feeds")
 
@@ -818,12 +818,12 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
         client.post(f"/api/items/{item1_id}/read")
 
         # 5. Assert the query IS re-executed on the next call (cache miss).
-        with patch("backend.app.db.session.execute") as mock_execute_after_invalidation:
+        with patch("backend.extensions.db.session.execute") as mock_execute_after_invalidation:
             client.get(f"/api/tabs/{tab1_id}/feeds")
             mock_execute_after_invalidation.assert_called()
 
         # --- Test /api/tabs caching and invalidation ---
-        with patch("backend.app.Tab.query") as mock_tab_query:
+        with patch("backend.models.Tab.query") as mock_tab_query:
             # Mock the query result
             mock_tab_query.order_by.return_value.all.return_value = []
 
@@ -840,7 +840,7 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
         client.post("/api/tabs", json={"name": "A New Tab"})
 
         # 5. Assert the next call is a cache miss
-        with patch("backend.app.Tab.query") as mock_tab_query_after_invalidation:
+        with patch("backend.models.Tab.query") as mock_tab_query_after_invalidation:
             mock_tab_query_after_invalidation.order_by.return_value.all.return_value = []
             client.get("/api/tabs")
             mock_tab_query_after_invalidation.order_by.return_value.all.assert_called_once()
@@ -1377,7 +1377,7 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
 # --- Tests for OPML Import (/api/opml/import) ---
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_success(mock_fetch_update, client):
     """Test POST /api/opml/import with a valid OPML file and item fetching."""
     mock_fetch_update.return_value = (
@@ -1441,7 +1441,7 @@ def test_import_opml_success(mock_fetch_update, client):
         mock_fetch_update.assert_any_call(feed2_obj.id)
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_with_duplicates(mock_fetch_update, client):
     """Test POST /api/opml/import with some feeds already existing."""
     mock_fetch_update.return_value = (True, 1)
@@ -1520,7 +1520,7 @@ def test_import_opml_malformed_xml(client):
     assert "Malformed OPML file" in response.json["error"]
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, client):
     """Test import creates a default tab if none exist and imports feeds."""
     mock_fetch_update.return_value = (True, 1)
@@ -1577,7 +1577,7 @@ def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, clie
         mock_fetch_update.assert_any_call(feed_beta_obj.id)
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_specific_tab(mock_fetch_update, client):
     """Test POST /api/opml/import into a specific tab when multiple tabs exist."""
     mock_fetch_update.return_value = (True, 1)
@@ -1618,7 +1618,7 @@ def test_import_opml_specific_tab(mock_fetch_update, client):
         assert feed_in_tab2.url == "http://tab2feed.com"
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_default_tab_if_tab_id_not_provided(
     mock_fetch_update, client
 ):  # Added mock_fetch_update
@@ -1659,7 +1659,7 @@ def test_import_opml_default_tab_if_tab_id_not_provided(
 
 
 @patch(
-    "backend.app.fetch_and_update_feed"
+    "backend.blueprints.opml.fetch_and_update_feed"
 )  # Even though no feeds are imported, the setup could change.
 def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client):
     """Test that an <outline> missing xmlUrl is skipped during import."""
@@ -1709,7 +1709,7 @@ def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client)
         mock_fetch_update_unused.assert_any_call(feed_valid2.id)
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_no_body_tag(mock_fetch_update_unused, client):
     """Test OPML import with a file that has no <body> tag."""
     with app.app_context():  # Ensure a tab exists
@@ -1731,7 +1731,7 @@ def test_import_opml_no_body_tag(mock_fetch_update_unused, client):
     mock_fetch_update_unused.assert_not_called()
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
     """Test OPML import with a file that has an empty <body> tag."""
     with app.app_context():  # Ensure a tab exists
@@ -1755,7 +1755,7 @@ def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
     mock_fetch_update_unused.assert_not_called()
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, client):
     """Tests that nested OPML outlines create new tabs and feeds are correctly assigned."""
     mock_fetch_update.return_value = (True, 1)  # Simulate successful fetch
@@ -1824,7 +1824,7 @@ def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, 
         mock_fetch_update.assert_any_call(feed_a_obj.id)
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, client):
     """Tests that feeds in a folder are added to an existing tab if names match."""
     mock_fetch_update.return_value = (True, 1)
@@ -1866,7 +1866,7 @@ def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, 
         mock_fetch_update.assert_called_once_with(feeds_in_tab[0].id)
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_empty_folder(mock_fetch_update_unused, client):
     """Tests import of an OPML with an empty folder."""
     mock_fetch_update_unused.return_value = (True, 0)
@@ -1914,7 +1914,7 @@ def test_import_opml_empty_folder(mock_fetch_update_unused, client):
     assert json_data["skipped_count"] == 1
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(
     mock_fetch_update, client
 ):
@@ -1969,7 +1969,7 @@ def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(
         mock_fetch_update.assert_any_call(feeds_in_initial_tab[1].id)
 
 
-@patch("backend.app.fetch_and_update_feed")
+@patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_deletes_empty_default_imported_feeds_tab(
     mock_fetch_update, client
 ):  # Use client fixture for app context
@@ -2142,12 +2142,12 @@ def setup_autosave_test_data(client):
         return tab, feed
 
 
-@patch("backend.app.FileLock")
-@patch("backend.app.open", new_callable=MagicMock)
-@patch("backend.app.os.replace")
-@patch("backend.app.os.makedirs")
-@patch("backend.app.os.path.exists")
-@patch("backend.app.os.path.dirname")
+@patch("backend.blueprints.opml.FileLock")
+@patch("builtins.open", new_callable=MagicMock)
+@patch("backend.blueprints.opml.os.replace")
+@patch("backend.blueprints.opml.os.makedirs")
+@patch("backend.blueprints.opml.os.path.exists")
+@patch("backend.blueprints.opml.os.path.dirname")
 def test_autosave_opml_mocked(
     mock_dirname,
     mock_exists,
