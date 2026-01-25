@@ -1,7 +1,8 @@
 import logging
 import os
+import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as SafeET
 
-import defusedxml.ElementTree as ET
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.engine.url import make_url
@@ -263,7 +264,7 @@ def import_opml():
     was_default_tab_created_for_this_import = False
 
     try:
-        tree = ET.parse(opml_file.stream)
+        tree = SafeET.parse(opml_file.stream)
         root = tree.getroot()
     except ET.ParseError as e:
         logger.error(
