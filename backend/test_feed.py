@@ -46,7 +46,7 @@ def db_setup():
 )
 def test_fetch_feed(url):
     """Test fetching a feed from a given URL"""
-    logger.info(f"Testing feed fetch from: {url}")
+    logger.info("Testing feed fetch from: %s", url)
     parsed_feed = feed_service.fetch_feed(url)
 
     if not parsed_feed:
@@ -54,13 +54,13 @@ def test_fetch_feed(url):
         return False  # Or raise an assertion error for pytest
 
     logger.info(
-        f"Successfully fetched feed: {parsed_feed.feed.get('title', 'Unknown')}"
+        "Successfully fetched feed: %s", parsed_feed.feed.get('title', 'Unknown')
     )
-    logger.info(f"Found {len(parsed_feed.entries)} entries")
+    logger.info("Found %s entries", len(parsed_feed.entries))
 
     # Print first few entries
     for i, entry in enumerate(parsed_feed.entries[:3]):
-        logger.info(f"Entry {i + 1}: {entry.title}")
+        logger.info("Entry %s: %s", i + 1, entry.title)
 
     assert parsed_feed is not None  # Example assertion for pytest
     return True
@@ -72,7 +72,7 @@ def add_test_feed(url, tab_name="Home"):
     # Find or create tab
     tab = Tab.query.filter_by(name=tab_name).first()
     if not tab:
-        logger.info(f"Creating new tab: {tab_name}")
+        logger.info("Creating new tab: %s", tab_name)
         tab = Tab(name=tab_name, order=0)
         db.session.add(tab)
         db.session.commit()
@@ -80,7 +80,7 @@ def add_test_feed(url, tab_name="Home"):
     # Fetch feed to get title
     parsed_feed = feed_service.fetch_feed(url)
     if not parsed_feed:
-        logger.error(f"Failed to fetch feed from {url}")
+        logger.error("Failed to fetch feed from %s", url)
         return None
 
     feed_title = parsed_feed.feed.get("title", "Unknown Feed")
@@ -88,18 +88,18 @@ def add_test_feed(url, tab_name="Home"):
     # Check if feed already exists
     existing_feed = Feed.query.filter_by(url=url).first()
     if existing_feed:
-        logger.info(f"Feed already exists: {feed_title}")
+        logger.info("Feed already exists: %s", feed_title)
         return existing_feed
 
     # Create new feed
-    logger.info(f"Adding new feed: {feed_title}")
+    logger.info("Adding new feed: %s", feed_title)
     feed = Feed(tab_id=tab.id, name=feed_title, url=url)
     db.session.add(feed)
     db.session.commit()
 
     # Process feed entries
     new_items = feed_service.process_feed_entries(feed, parsed_feed)
-    logger.info(f"Added {new_items} new items for feed '{feed.name}'")
+    logger.info("Added %s new items for feed '%s'", new_items, feed.name)
 
     return feed
 
@@ -756,7 +756,7 @@ def test_original_update_all_feeds_empty_db(db_setup):
     app = db_setup  # Ensures app context
 
     feeds_updated, new_items = feed_service.update_all_feeds()
-    logger.info(f"Updated {feeds_updated} feeds, added {new_items} new items")
+    logger.info("Updated %s feeds, added %s new items", feeds_updated, new_items)
 
     assert feeds_updated == 0
     assert new_items == 0
