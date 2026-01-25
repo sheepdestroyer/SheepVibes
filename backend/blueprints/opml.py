@@ -288,10 +288,6 @@ def import_opml():
     root, error_response = _parse_opml_file(opml_file)
     if error_response:
         return error_response
-    # This `exc_info=True` and the following `return` statement seem misplaced.
-    # They were likely part of an `except` block that got partially deleted.
-    # Given the context, the `_parse_opml_file` function already handles errors
-    # and returns an error_response. If `error_response` is None, it means parsing was successful.
 
     top_level_target_tab_id = None
     top_level_target_tab_name = None

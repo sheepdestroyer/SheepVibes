@@ -1562,7 +1562,7 @@ def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, clie
         default_tab = Tab.query.filter_by(name="Imported Feeds").first()
         assert default_tab is not None
         new_tab_id = default_tab.id
-        # This line is not needed if we fetch by name
+        new_tab_id = default_tab.id
         assert default_tab is not None
         assert default_tab.name == "Imported Feeds"
         assert default_tab.order == 0
