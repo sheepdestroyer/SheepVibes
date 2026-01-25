@@ -1,12 +1,10 @@
 import logging
 import os
-import xml.etree.ElementTree as ET
+from defusedxml.ElementTree import parse
 
 import defusedxml.ElementTree as SafeET
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
-from sqlalchemy.engine.url import make_url
-from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import selectinload
 
 from ..cache_utils import (
@@ -31,7 +29,7 @@ SKIPPED_FOLDER_TYPES = {
 def _generate_opml_string(tabs=None):
     """Generates the OPML string from the database.
 
-    Args:
+    Args:"""
         tabs (list): Optional list of Tab objects with eager loaded feeds.
                      If None, it will be queried.
 
@@ -58,7 +56,6 @@ def _generate_opml_string(tabs=None):
         folder_outline = ET.SubElement(body_element, "outline")
         folder_outline.set("text", tab.name)
         folder_outline.set("title", tab.name)
-
         # Sort feeds by name for deterministic output because relation order is not guaranteed
         sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
 
@@ -222,40 +219,37 @@ def _process_opml_outlines_recursive(
         elif not xml_url and not element_name and child_outlines:
             # Folder without a title, process its children in the current tab
             logger.info(
-                "OPML import: Processing children of an untitled folder under current tab '%s'.",
-                current_tab_name,
-            )
-            _process_opml_outlines_recursive(
-                child_outlines,
-                current_tab_id,  # Use current tab_id
-                current_tab_name,
-                all_existing_feed_urls_set,
-                newly_added_feeds_list,
-                imported_count_wrapper,
-                skipped_count_wrapper,
-                affected_tab_ids_set,
-            )
-        else:
-            logger.info(
-                "OPML import: Skipping outline (Name: '%s', xmlUrl: %s, Children: %s) as it's not a feed or folder.",
-                element_name,
-                xml_url,
-                len(child_outlines),
-            )
-            if not xml_url:
-                skipped_count_wrapper[0] += 1
+                if not xml_url:
+                    skipped_count_wrapper[0] += 1
 
 
 @opml_bp.route("/import", methods=["POST"])
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
-    if "file" not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-    opml_file = request.files["file"]
-    if opml_file.filename == "":
-        return jsonify({"error": "No file selected for uploading"}), 400
-    if not opml_file:
-        return jsonify({"error": "File object is empty"}), 400
+    def _validate_request_file():
+        if "file" not in request.files:
+            return jsonify({"error": "No file part in the request"}), 400
+        opml_file = request.files["file"]
+        if opml_file.filename == "":
+            return jsonify({"error": "No file selected for uploading"}), 400
+        if not opml_file:
+            return jsonify({"error": "File object is empty"}), 400
+        return opml_file
+
+    def _parse_opml_file(file):
+        try:
+            tree = SafeET.parse(file.stream)
+            return tree.getroot(), None
+        except ET.ParseError as e:
+            logger.error("OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
+            return None, (jsonify({"error": f"Malformed OPML file: {e}"}), 400)
+        except Exception as e:
+            logger.error("OPML import failed: Could not parse file stream. Error: %s", e, exc_info=True)
+            return None, (jsonify({"error": f"Could not parse OPML file: {e}"}), 400)
+
+    opml_file = _validate_request_file()
+    if isinstance(opml_file, tuple):
+        return opml_file
 
     imported_count_wrapper = [0]
     skipped_count_wrapper = [0]
@@ -263,16 +257,9 @@ def import_opml():
     newly_added_feeds_list = []
     was_default_tab_created_for_this_import = False
 
-    try:
-        tree = SafeET.parse(opml_file.stream)
-        root = tree.getroot()
-    except ET.ParseError as e:
-        logger.error(
-            f"OPML import failed: Malformed XML. Error: {e}", exc_info=True)
-        return jsonify({"error": f"Malformed OPML file: {e}"}), 400
-    except Exception as e:
-        logger.error(
-            f"OPML import failed: Could not parse file stream. Error: {e}",
+    root, error_response = _parse_opml_file(opml_file)
+    if error_response:
+        return error_response
             exc_info=True,
         )
         return (
@@ -293,11 +280,13 @@ def import_opml():
                 top_level_target_tab_name = tab_obj.name
             else:
                 logger.warning(
-                    f"OPML import: Requested tab_id {tab_id_val} not found. Will use default logic."
+                    "OPML import: Requested tab_id %s not found. Will use default logic.",
+                    tab_id_val,
                 )
         except ValueError:
             logger.warning(
-                f"OPML import: Invalid tab_id format '{requested_tab_id_str}'. Will use default logic."
+                "OPML import: Invalid tab_id format '%s'. Will use default logic.",
+                requested_tab_id_str,
             )
 
     if not top_level_target_tab_id:
@@ -324,8 +313,9 @@ def import_opml():
                 try:
                     db.session.commit()
                     logger.info(
-                        f"OPML import: Created default tab '{newly_created_default_tab.name}' "
-                        f"(ID: {newly_created_default_tab.id})."
+                        "OPML import: Created default tab '%s' (ID: %s).",
+                        newly_created_default_tab.name,
+                        newly_created_default_tab.id,
                     )
                     invalidate_tabs_cache()
                     top_level_target_tab_id = newly_created_default_tab.id
@@ -334,14 +324,10 @@ def import_opml():
                 except Exception as e_tab_commit:
                     db.session.rollback()
                     logger.error(
-                        f"OPML import: Failed to create default tab '{default_tab_name_for_creation}': {e_tab_commit}",
+                        "OPML import: Failed to create default tab '%s': %s",
+                        default_tab_name_for_creation,
+                        e_tab_commit,
                         exc_info=True,
-                    )
-                    return (
-                        jsonify(
-                            {"error": "Failed to create a default tab for import."}
-                        ),
-                        500,
                     )
 
     if not top_level_target_tab_id:
@@ -386,11 +372,13 @@ def import_opml():
         try:
             db.session.commit()
             logger.info(
-                f"OPML import: Successfully batch-committed {len(newly_added_feeds_list)} new feeds to the database."
+                "OPML import: Successfully batch-committed %s new feeds to the database.",
+                len(newly_added_feeds_list),
             )
 
             logger.info(
-                f"OPML import: Attempting to fetch initial items for {len(newly_added_feeds_list)} newly added feeds."
+                "OPML import: Attempting to fetch initial items for %s newly added feeds.",
+                len(newly_added_feeds_list),
             )
             for feed_obj in newly_added_feeds_list:
                 if feed_obj.id:
@@ -398,13 +386,16 @@ def import_opml():
                         fetch_and_update_feed(feed_obj.id)
                     except Exception as fetch_e:
                         logger.error(
-                            f"OPML import: Error fetching items for new feed {feed_obj.name} "
-                            f"(ID: {feed_obj.id}): {fetch_e}",
+                            "OPML import: Error fetching items for new feed %s (ID: %s): %s",
+                            feed_obj.name,
+                            feed_obj.id,
+                            fetch_e,
                             exc_info=True,
                         )
                 else:
                     logger.error(
-                        f"OPML import: Feed '{feed_obj.name}' missing ID after batch commit, cannot fetch items."
+                        "OPML import: Feed '%s' missing ID after batch commit, cannot fetch items.",
+                        feed_obj.name,
                     )
             logger.info(
                 "OPML import: Finished attempting to fetch initial items for new feeds."
@@ -412,7 +403,8 @@ def import_opml():
         except Exception as e_commit_feeds:
             db.session.rollback()
             logger.error(
-                f"OPML import: Database commit failed for new feeds: {e_commit_feeds}",
+                "OPML import: Database commit failed for new feeds: %s",
+                e_commit_feeds,
                 exc_info=True,
             )
             return (
@@ -425,7 +417,8 @@ def import_opml():
         for tab_id_to_invalidate in affected_tab_ids_set:
             invalidate_tab_feeds_cache(tab_id_to_invalidate)
         logger.info(
-            f"OPML import: Feed-related caches invalidated for tabs: {affected_tab_ids_set}."
+            "OPML import: Feed-related caches invalidated for tabs: %s.",
+            affected_tab_ids_set,
         )
 
     if not opml_body.findall("outline") and not newly_added_feeds_list:
@@ -455,8 +448,8 @@ def import_opml():
         ).count()
         if feeds_in_default_tab == 0:
             logger.info(
-                f"OPML import: The default 'Imported Feeds' tab (ID: {top_level_target_tab_id}) "
-                "created during import is empty. Deleting it."
+                "OPML import: The default 'Imported Feeds' tab (ID: %s) created during import is empty. Deleting it.",
+                top_level_target_tab_id,
             )
             try:
                 tab_to_delete = db.session.get(Tab, top_level_target_tab_id)
@@ -465,25 +458,27 @@ def import_opml():
                     db.session.commit()
                     invalidate_tabs_cache()
                     logger.info(
-                        f"OPML import: Successfully deleted empty 'Imported Feeds' tab "
-                        f"(ID: {top_level_target_tab_id})."
+                        "OPML import: Successfully deleted empty 'Imported Feeds' tab (ID: %s).",
+                        top_level_target_tab_id,
                     )
                 else:
                     logger.warning(
-                        f"OPML import: Tried to delete empty 'Imported Feeds' (ID: {top_level_target_tab_id}), "
-                        "but it was not found."
+                        "OPML import: Tried to delete empty 'Imported Feeds' (ID: %s), but it was not found.",
+                        top_level_target_tab_id,
                     )
             except Exception as e_del_tab:
                 db.session.rollback()
                 logger.error(
-                    f"OPML import: Failed to delete empty 'Imported Feeds' tab "
-                    f"(ID: {top_level_target_tab_id}): {e_del_tab}",
+                    "OPML import: Failed to delete empty 'Imported Feeds' tab (ID: %s): %s",
+                    top_level_target_tab_id,
+                    e_del_tab,
                     exc_info=True,
                 )
         else:
             logger.info(
-                f"OPML import: Default tab 'Imported Feeds' (ID: {top_level_target_tab_id}) "
-                f"has {feeds_in_default_tab} feeds. Keeping it."
+                "OPML import: Default tab 'Imported Feeds' (ID: %s) has %s feeds. Keeping it.",
+                top_level_target_tab_id,
+                feeds_in_default_tab,
             )
 
     return (
@@ -507,6 +502,7 @@ def export_opml():
 
     Returns:
         A Flask Response object containing the OPML file, or a JSON error response.
+    """
     """
     try:
         opml_string, tab_count, feed_count = _generate_opml_string()

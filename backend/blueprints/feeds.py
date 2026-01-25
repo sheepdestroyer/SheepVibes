@@ -66,7 +66,9 @@ def add_feed():
         feed_name = feed_url
         site_link = None  # No website link if fetch failed
         logger.warning(
-            f"Could not fetch title for {feed_url}, using URL as name.")
+            "Could not fetch title for %s, using URL as name.",
+            feed_url,
+        )
     else:
         feed_name = parsed_feed.feed.get(
             "title", feed_url
@@ -91,12 +93,16 @@ def add_feed():
             try:
                 num_new_items = process_feed_entries(new_feed, parsed_feed)
                 logger.info(
-                    f"Processed initial {num_new_items} items for feed {new_feed.id}"
+                    "Processed initial %s items for feed %s",
+                    num_new_items,
+                    new_feed.id,
                 )
             except Exception as proc_e:
                 # Log error during initial processing but don't fail the add operation
                 logger.error(
-                    f"Error processing initial items for feed {new_feed.id}: {proc_e}",
+                    "Error processing initial items for feed %s: %s",
+                    new_feed.id,
+                    proc_e,
                     exc_info=True,
                 )
 
@@ -106,13 +112,21 @@ def add_feed():
             invalidate_tabs_cache()  # At least invalidate for unread count change potential
 
         logger.info(
-            f"Added new feed '{new_feed.name}' with id {new_feed.id} to tab {tab_id}."
+            "Added new feed '%s' with id %s to tab %s.",
+            new_feed.name,
+            new_feed.id,
+            tab_id,
         )
         return jsonify(new_feed.to_dict()), 201  # Created
 
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error adding feed {feed_url}: {str(e)}", exc_info=True)
+        logger.error(
+            "Error adding feed %s: %s",
+            feed_url,
+            str(e),
+            exc_info=True,
+        )
         return (
             jsonify({"error": "An internal error occurred while adding the feed."}),
             500,
@@ -138,12 +152,21 @@ def delete_feed(feed_id):
         db.session.delete(feed)
         db.session.commit()
         invalidate_tab_feeds_cache(tab_id)
-        logger.info(f"Deleted feed '{feed_name}' with id {feed_id}.")
+        logger.info(
+            "Deleted feed '%s' with id %s.",
+            feed_name,
+            feed_id,
+        )
         # OK
         return jsonify({"message": f"Feed {feed_id} deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error deleting feed {feed_id}: {str(e)}", exc_info=True)
+        logger.error(
+            "Error deleting feed %s: %s",
+            feed_id,
+            str(e),
+            exc_info=True,
+        )
         return (
             jsonify(
                 {"error": "An internal error occurred while deleting the feed."}),
@@ -192,7 +215,8 @@ def update_feed_url(feed_id):
             new_name = new_url
             new_site_link = None
             logger.warning(
-                f"Could not fetch title for {new_url}, using URL as name.")
+                "Could not fetch title for %s, using URL as name.", new_url
+            )
         else:
             new_name = parsed_feed.feed.get(
                 "title", new_url
@@ -212,7 +236,9 @@ def update_feed_url(feed_id):
         # Invalidate cache for the feed's tab, as feed properties (name, url) have changed.
         invalidate_tab_feeds_cache(feed.tab_id)
         logger.info(
-            f"Cache invalidated for tab {feed.tab_id} after updating feed {feed.id}."
+            "Cache invalidated for tab %s after updating feed %s.",
+            feed.tab_id,
+            feed.id,
         )
 
         # Trigger update to fetch new items using the already fetched feed data
@@ -224,12 +250,18 @@ def update_feed_url(feed_id):
         except Exception as update_e:
             # Log error during update but don't fail the operation
             logger.error(
-                f"Error updating feed {feed.id} after URL change: {update_e}",
+                "Error updating feed %s after URL change: %s",
+                feed.id,
+                update_e,
                 exc_info=True,
             )
 
         logger.info(
-            f"Updated feed {feed_id} from '{original_url}' to '{new_url}'.")
+            "Updated feed %s from '%s' to '%s'.",
+            feed_id,
+            original_url,
+            new_url,
+        )
 
         # Return full feed data including items for frontend to update widget
         feed_data = feed.to_dict()
@@ -244,10 +276,13 @@ def update_feed_url(feed_id):
 
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error updating feed {feed_id}: {str(e)}", exc_info=True)
+        logger.error(
+            "Error updating feed %s: %s", feed_id, e, exc_info=True
+        )
         return (
             jsonify(
-                {"error": "An internal error occurred while updating the feed."}),
+                {"error": "An internal error occurred while updating the feed."}
+            ),
             500,
         )
 
@@ -263,12 +298,15 @@ def api_update_all_feeds():
     try:
         processed_count, new_items_count = update_all_feeds()
         logger.info(
-            f"All feeds update process completed. Processed: {processed_count}, New Items: {new_items_count}"
+            "All feeds update process completed. Processed: %s, New Items: %s",
+            processed_count,
+            new_items_count,
         )
         if new_items_count > 0:
             cache.clear()
             logger.info(
-                "Cache cleared after manual 'update-all' found new items.")
+                "Cache cleared after manual 'update-all' found new items."
+            )
         # Announce the update to listening clients
         event_data = {"feeds_processed": processed_count,
                       "new_items": new_items_count}
@@ -286,11 +324,13 @@ def api_update_all_feeds():
         )
     except Exception as e:
         logger.error(
-            f"Error during /api/feeds/update-all: {str(e)}", exc_info=True)
+            "Error during /api/feeds/update-all: %s", e, exc_info=True
+        )
         # Consistent error response with other parts of the API
         return (
             jsonify(
-                {"error": "An internal error occurred while updating all feeds."}),
+                {"error": "An internal error occurred while updating all feeds."}
+            ),
             500,
         )
 
@@ -304,13 +344,18 @@ def update_feed(feed_id):
         if success and new_items > 0:
             invalidate_tab_feeds_cache(feed.tab_id)
             logger.info(
-                f"Cache invalidated for tab {feed.tab_id} after manual update of feed {feed.id}."
+                "Cache invalidated for tab %s after manual update of feed %s.",
+                feed.tab_id,
+                feed.id,
             )
 
         return jsonify(feed.to_dict())
     except Exception as e:
         logger.error(
-            f"Error during manual update for feed {feed.id}: {e}", exc_info=True
+            "Error during manual update for feed %s: %s",
+            feed.id,
+            e,
+            exc_info=True,
         )
         return (
             jsonify(
@@ -385,13 +430,13 @@ def mark_item_read(item_id):
         item.is_read = True
         db.session.commit()
         invalidate_tab_feeds_cache(tab_id)
-        logger.info(f"Marked item {item_id} as read.")
+        logger.info("Marked item %s as read.", item_id)
         # OK
         return jsonify({"message": f"Item {item_id} marked as read"}), 200
     except Exception as e:
         db.session.rollback()
         logger.error(
-            f"Error marking item {item_id} as read: {str(e)}", exc_info=True)
+            "Error marking item %s as read: %s", item_id, str(e), exc_info=True)
         # Let 500 handler manage response (or return specific error)
         return (
             jsonify(

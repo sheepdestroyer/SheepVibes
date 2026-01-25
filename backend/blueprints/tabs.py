@@ -60,12 +60,11 @@ def create_tab():
         db.session.add(new_tab)
         db.session.commit()
         invalidate_tabs_cache()
-        logger.info(f"Created new tab '{new_tab.name}' with id {new_tab.id}.")
+        logger.info("Created new tab '%s' with id %s.", new_tab.name, new_tab.id)
         return jsonify(new_tab.to_dict()), 201  # Created
     except Exception as e:
         db.session.rollback()
-        logger.error(
-            f"Error creating tab '{tab_name}': {str(e)}", exc_info=True)
+        logger.error("Error creating tab '%s': %s", tab_name, e, exc_info=True)
         # Let the 500 handler manage the response
         return (
             jsonify({"error": "An internal error occurred while creating the tab."}),
@@ -108,12 +107,13 @@ def rename_tab(tab_id):
         db.session.commit()
         invalidate_tabs_cache()
         logger.info(
-            f"Renamed tab {tab_id} from '{original_name}' to '{new_name}'.")
+            "Renamed tab %s from '%s' to '%s'.", tab_id, original_name, new_name
+        )
         return jsonify(tab.to_dict()), 200  # OK
     except Exception as e:
         db.session.rollback()
         logger.error(
-            f"Error renaming tab {tab_id} to '{new_name}': {str(e)}", exc_info=True
+            "Error renaming tab %s to '%s': %s", tab_id, new_name, str(e), exc_info=True
         )
         return (
             jsonify({"error": "An internal error occurred while renaming the tab."}),
@@ -133,12 +133,12 @@ def delete_tab(tab_id):
         db.session.delete(tab)
         db.session.commit()
         invalidate_tabs_cache()
-        logger.info(f"Deleted tab '{tab_name}' with id {tab_id}.")
+        logger.info("Deleted tab '%s' with id %s.", tab_name, tab_id)
         # OK
         return jsonify({"message": f"Tab {tab_id} deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error deleting tab {tab_id}: {str(e)}", exc_info=True)
+        logger.error("Error deleting tab %s: %s", tab_id, e, exc_info=True)
         return (
             jsonify({"error": "An internal error occurred while deleting the tab."}),
             500,

@@ -168,7 +168,7 @@ if not app.config.get("TESTING"):
     if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         try:
             scheduler.start()
-            atexit.register(lambda: scheduler.shutdown())
+            atexit.register(scheduler.shutdown)
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
 
@@ -189,7 +189,6 @@ def internal_error(error):
     # Rollback the session in case the error was database-related
     db.session.rollback()
     return jsonify({"error": "An internal server error occurred"}), 500
-
 
 # --- Static and Stream Routes ---
 
