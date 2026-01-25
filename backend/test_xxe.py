@@ -1,19 +1,23 @@
 import os
-import pytest
-from .app import app, db
 import xml.etree.ElementTree as ET
+
+import pytest
+
+from .app import app, db
+
 
 @pytest.fixture
 def client():
-    app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    app.config['CACHE_TYPE'] = 'SimpleCache'
+    app.config["TESTING"] = True
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    app.config["CACHE_TYPE"] = "SimpleCache"
 
     with app.app_context():
         db.create_all()
         yield app.test_client()
         db.session.remove()
         db.drop_all()
+
 
 def test_xxe_blocked(client):
     """
@@ -35,20 +39,24 @@ def test_xxe_blocked(client):
     """
 
     import io
-    opml_file = (io.BytesIO(opml_content.encode('utf-8')), 'xxe.opml')
+
+    opml_file = (io.BytesIO(opml_content.encode("utf-8")), "xxe.opml")
 
     response = client.post(
-        '/api/opml/import',
-        data={'file': opml_file},
-        content_type='multipart/form-data'
+        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
     )
 
     # Assert 400 Bad Request
     assert response.status_code == 400
     # Assert error message indicates rejected entity
-    error_msg = response.json.get('error', '')
+    error_msg = response.json.get("error", "")
     print(f"XXE Blocked Error: {error_msg}")
-    assert "EntitiesForbidden" in error_msg or "undefined entity" in error_msg or "unsafe" in error_msg
+    assert (
+        "EntitiesForbidden" in error_msg
+        or "undefined entity" in error_msg
+        or "unsafe" in error_msg
+    )
+
 
 def test_billion_laughs_blocked(client):
     """
@@ -68,19 +76,19 @@ def test_billion_laughs_blocked(client):
     """
 
     import io
-    opml_file = (io.BytesIO(payload.encode('utf-8')), 'dos.opml')
+
+    opml_file = (io.BytesIO(payload.encode("utf-8")), "dos.opml")
 
     response = client.post(
-        '/api/opml/import',
-        data={'file': opml_file},
-        content_type='multipart/form-data'
+        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
     )
 
     # Assert 400 Bad Request
     assert response.status_code == 400
-    error_msg = response.json.get('error', '')
+    error_msg = response.json.get("error", "")
     print(f"Billion Laughs Blocked Error: {error_msg}")
     assert "EntitiesForbidden" in error_msg or "unsafe" in error_msg
+
 
 if __name__ == "__main__":
     pass
