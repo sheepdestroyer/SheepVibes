@@ -121,44 +121,53 @@ OPML_AUTOSAVE_INTERVAL_MINUTES = int(
 )
 
 
+from filelock import FileLock
+
 @scheduler.scheduled_job("interval", minutes=UPDATE_INTERVAL_MINUTES, id="update_feeds")
 def scheduled_feed_update():
     """Scheduled job to periodically update all feeds in the database."""
-    # Need app context to access database within the scheduled job
-    with app.app_context():
-        logger.info(
-            "Running scheduled feed update (every %s minutes)", UPDATE_INTERVAL_MINUTES
-        )
-        try:
-            feeds_updated, new_items, affected_tab_ids = update_all_feeds()
-            logger.info(
-                "Scheduled update completed: %s feeds updated, %s new items",
-                feeds_updated,
-                new_items,
-            )
-            # Invalidate the cache after updates
-            if new_items > 0 and affected_tab_ids:
-                for tab_id in affected_tab_ids:
-                    invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
-                invalidate_tabs_cache()
+    # Use a file lock to ensure only one worker runs this job
+    lock = FileLock("feed_update.lock")
+    try:
+        with lock.acquire(timeout=1):  # Non-blocking attempt
+            # Need app context to access database within the scheduled job
+            with app.app_context():
                 logger.info(
-                    "Granular cache invalidation completed for affected tabs: %s",
-                    affected_tab_ids,
+                    "Running scheduled feed update (every %s minutes)", UPDATE_INTERVAL_MINUTES
                 )
+                try:
+                    feeds_updated, new_items, affected_tab_ids = update_all_feeds()
+                    logger.info(
+                        "Scheduled update completed: %s feeds updated, %s new items",
+                        feeds_updated,
+                        new_items,
+                    )
+                    # Invalidate the cache after updates
+                    if new_items > 0 and affected_tab_ids:
+                        for tab_id in affected_tab_ids:
+                            invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
+                        invalidate_tabs_cache()
+                        logger.info(
+                            "Granular cache invalidation completed for affected tabs: %s",
+                            affected_tab_ids,
+                        )
 
-            # Announce the update to any listening clients
-            event_data = {
-                "feeds_processed": feeds_updated,
-                "new_items": new_items,
-                "affected_tab_ids": (
-                    sorted(list(affected_tab_ids)) if affected_tab_ids else []
-                ),
-            }
-            msg = f"data: {json.dumps(event_data)}\n\n"
-            announcer.announce(msg=msg)
-        except Exception as e:
-            logger.error("Error during scheduled feed update: %s",
-                         e, exc_info=True)
+                    # Announce the update to any listening clients
+                    event_data = {
+                        "feeds_processed": feeds_updated,
+                        "new_items": new_items,
+                        "affected_tab_ids": (
+                            sorted(list(affected_tab_ids)) if affected_tab_ids else []
+                        ),
+                    }
+                    msg = f"data: {json.dumps(event_data)}\n\n"
+                    announcer.announce(msg=msg)
+                except Exception as e:
+                    logger.error("Error during scheduled feed update: %s",
+                                 e, exc_info=True)
+    except Exception:
+        # Lock acquisition failed (another worker is running the job), just skip
+        pass
 
 
 @scheduler.scheduled_job(

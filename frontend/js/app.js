@@ -1,4 +1,4 @@
-import { api } from './api.js';
+import { api, API_BASE_URL } from './api.js';
 import {
     showToast,
     createFeedWidget,
@@ -399,7 +399,7 @@ async function reloadTab(tabId) {
 }
 
 function initializeSSE() {
-    const eventSource = new EventSource('/api/stream');
+    const eventSource = new EventSource(`${API_BASE_URL}/api/stream`);
 
     eventSource.onmessage = async (event) => {
         try {
