@@ -942,7 +942,8 @@ def test_feed_item_to_dict_serialization(
 
         # Scenario 3: published_time is None, fetched_time is aware UTC
         dt_aware_fetched_utc = datetime.datetime(
-            2023, 5, 20, 14, 0, 0, tzinfo=datetime.timezone.utc)
+            2023, 5, 20, 14, 0, 0, tzinfo=datetime.timezone.utc
+        )
         item_none_published = FeedItem(
             feed_id=test_feed.id,
             title="None Published Test",
@@ -977,7 +978,9 @@ def test_to_iso_z_string_static_method():
     assert FeedItem.to_iso_z_string(aware_dt_est) == "2023-03-15T15:00:00Z"
 
     # 3. Test with a timezone-aware UTC datetime
-    aware_dt_utc = datetime.datetime(2023, 5, 20, 14, 30, 0, tzinfo=datetime.timezone.utc)
+    aware_dt_utc = datetime.datetime(
+        2023, 5, 20, 14, 30, 0, tzinfo=datetime.timezone.utc
+    )
     assert FeedItem.to_iso_z_string(aware_dt_utc) == "2023-05-20T14:30:00Z"
 
     # 4. Test with None input
