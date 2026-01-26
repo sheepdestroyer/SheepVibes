@@ -386,7 +386,6 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                 db.session.add(existing_item)
             continue
 
-
         # Check batch duplicates
         is_batch_duplicate = False
         if db_guid and db_guid in batch_processed_guids:
