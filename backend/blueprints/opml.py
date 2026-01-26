@@ -594,14 +594,33 @@ def export_opml():
 
 
 def _get_autosave_directory():
-    """Determines the autosave directory from the app config."""
-    # Simplified logic based on review feedback to use configured DATA_DIR
-    # or fallback to project structure if not explicitly set (though feedback suggested strict config)
-    # Ideally, app.py should set DATA_DIR logic one time.
-    # For now, let's implement the suggestion:
+    """Determines the autosave directory with flexible configuration.
+    
+    Priority:
+    1. DATA_DIR config/environment variable (explicit configuration)
+    2. Directory of the SQLite database file (alongside user data)
+    3. PROJECT_ROOT/data (default fallback)
+    """
+    # 1. Check for explicit DATA_DIR configuration
+    data_dir = current_app.config.get("DATA_DIR") or os.environ.get("DATA_DIR")
+    
+    if not data_dir:
+        # 2. Try to use the directory of the SQLite database
+        db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
+        if db_uri.startswith("sqlite:///"):
+            db_path = db_uri.replace("sqlite:///", "")
+            if os.path.isabs(db_path):
+                data_dir = os.path.dirname(db_path)
+    
+    if not data_dir:
+        # 3. Fall back to PROJECT_ROOT/data
+        project_root = current_app.config.get("PROJECT_ROOT", "")
+        if project_root:
+            data_dir = os.path.join(project_root, "data")
 
-    project_root = current_app.config["PROJECT_ROOT"]
-    data_dir = os.path.join(project_root, "data")
+    if not data_dir:
+        logger.warning("Could not determine autosave directory. Skipping OPML autosave.")
+        return None
 
     try:
         os.makedirs(data_dir, exist_ok=True)
