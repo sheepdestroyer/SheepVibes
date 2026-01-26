@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 MAX_ITEMS_PER_FEED = 100
 
 # Hard cap for concurrent fetches to avoid resource exhaustion
-# 10 is an empirical limit to prevent network/system overload on typical instances
-WORKER_FETCH_CAP = 10
+# 20 is suitable for typical small VPS instances (e.g., 4 vCPUs) handling I/O bound tasks
+WORKER_FETCH_CAP = 20
 
 
 # Maximum number of concurrent feed fetches
