@@ -167,7 +167,7 @@ def _fetch_feed_content(feed_id, feed_url):
         parsed_feed = fetch_feed(feed_url)
         return feed_id, parsed_feed
     except Exception as e:
-        logger.error("Error in fetch thread for feed %s: %s", feed_url, e)
+        logger.exception("Error in fetch thread for feed %s: %s", feed_url, e)
         return feed_id, None
 
 
