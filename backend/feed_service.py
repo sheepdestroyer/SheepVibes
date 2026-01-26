@@ -29,7 +29,10 @@ try:
     _cpu_count = os.cpu_count() or 1
 except Exception:
     _cpu_count = 1
-MAX_CONCURRENT_FETCHES = _cpu_count * 5
+
+MAX_CONCURRENT_FETCHES = int(
+    os.environ.get("FEED_FETCH_MAX_WORKERS", _cpu_count * 5)
+)
 
 # --- Helper Functions ---
 
@@ -209,6 +212,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
                 e,
                 exc_info=True,
             )
+            return False, 0, feed_db_obj.tab_id
         return True, 0, feed_db_obj.tab_id
 
     try:
