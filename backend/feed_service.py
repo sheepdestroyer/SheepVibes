@@ -661,8 +661,6 @@ def update_all_feeds():
                 # Retrieve result from the thread
                 _, parsed_feed = future.result()
 
-
-
                 # --- Sequential Processing (Main Thread) ---
                 # Check 1: Reuse the logic shared with fetch_and_update_feed
                 success, new_items, tab_id = _process_fetch_result(
