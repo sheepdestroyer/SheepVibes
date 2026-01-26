@@ -298,7 +298,9 @@ def fetch_feed(feed_url):
         logger.error("Error fetching feed %s", feed_url, exc_info=True)
         return None
 
+
 # --- Feed Processing Helpers ---
+
 
 def _update_feed_metadata(feed_db_obj, parsed_feed):
     """Updates feed title and site_link if changed."""
@@ -321,9 +323,7 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
             new_site_link,
         )
         feed_db_obj.site_link = new_site_link
-    elif (
-        not feed_db_obj.site_link and new_site_link and new_site_link.strip()
-    ):
+    elif not feed_db_obj.site_link and new_site_link and new_site_link.strip():
         logger.info(
             "Setting feed site_link for '%s' to '%s'",
             feed_db_obj.name,
@@ -392,14 +392,16 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             if db_guid in batch_processed_guids:
                 logger.warning(
                     "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
-                    db_guid, feed_db_obj.name
+                    db_guid,
+                    feed_db_obj.name,
                 )
                 is_batch_duplicate = True
         else:
             if entry_link in batch_processed_links:
                 logger.warning(
                     "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
-                    entry_link, feed_db_obj.name
+                    entry_link,
+                    feed_db_obj.name,
                 )
                 is_batch_duplicate = True
 
@@ -440,7 +442,8 @@ def _save_items_to_db(feed_db_obj, items_to_add):
         db.session.rollback()
         logger.warning(
             "Batch insert failed for feed '%s': %s. Retrying individually.",
-            feed_db_obj.name, e
+            feed_db_obj.name,
+            e,
         )
         committed_count = _save_items_individually(feed_db_obj, items_to_add)
     except Exception:
@@ -481,26 +484,31 @@ def _save_items_individually(feed_db_obj, items_to_add):
             db.session.rollback()
             logger.error(
                 "Failed to add item '%s' (link: %s): %s",
-                item.title[:100], item.link, ie
+                item.title[:100],
+                item.link,
+                ie,
             )
         except Exception:
             db.session.rollback()
             logger.error(
-                "Generic error adding item '%s'",
-                item.title[:100], exc_info=True
+                "Generic error adding item '%s'", item.title[:100], exc_info=True
             )
-    
+
     if count > 0:
-        logger.info("Recovered %s items individually for feed: %s", count, feed_db_obj.name)
+        logger.info(
+            "Recovered %s items individually for feed: %s", count, feed_db_obj.name
+        )
     else:
-        logger.info("No items added individually for feed: %s", feed_db_obj.name)
-    
+        logger.info("No items added individually for feed: %s",
+                    feed_db_obj.name)
+
     return count
 
 
 def _enforce_feed_limit(feed_db_obj):
     """Enforces MAX_ITEMS_PER_FEED by evicting oldest items."""
-    current_count = db.session.query(FeedItem).filter_by(feed_id=feed_db_obj.id).count()
+    current_count = db.session.query(FeedItem).filter_by(
+        feed_id=feed_db_obj.id).count()
     if current_count <= MAX_ITEMS_PER_FEED:
         return
 
@@ -511,7 +519,7 @@ def _enforce_feed_limit(feed_db_obj):
         .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
         .limit(num_to_delete)
     )
-    
+
     deleted_count = (
         db.session.query(FeedItem)
         .filter(FeedItem.id.in_(oldest_ids))
@@ -520,8 +528,7 @@ def _enforce_feed_limit(feed_db_obj):
 
     if deleted_count > 0:
         logger.info(
-            "Evicted %s oldest items from feed '%s'.",
-            deleted_count, feed_db_obj.name
+            "Evicted %s oldest items from feed '%s'.", deleted_count, feed_db_obj.name
         )
         try:
             db.session.commit()
@@ -529,8 +536,11 @@ def _enforce_feed_limit(feed_db_obj):
             db.session.rollback()
             logger.error(
                 "Error committing eviction for feed '%s'",
-                feed_db_obj.name, exc_info=True
+                feed_db_obj.name,
+                exc_info=True,
             )
+
+
 def process_feed_entries(feed_db_obj, parsed_feed):
     """Processes entries from a parsed feed and adds new items to the database.
 
