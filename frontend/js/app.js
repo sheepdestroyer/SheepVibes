@@ -7,10 +7,10 @@ import {
     closeEditFeedModal,
     appendItemsToFeedWidget
 } from './ui.js';
-import { throttle } from './utils.js';
 
 // State
-let activeTabId = parseInt(localStorage.getItem('activeTabId')) || null;
+const storedTabId = localStorage.getItem('activeTabId');
+let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
 let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
@@ -96,13 +96,12 @@ async function switchTab(tabId) {
 function toggleWidgetsVisibility() {
     const feedGrid = document.getElementById('feed-grid');
     const widgets = feedGrid.querySelectorAll('.feed-widget');
-    let hasVisible = false;
 
+    // Hide all first
     // Hide all first
     widgets.forEach(widget => {
         if (widget.dataset.tabId == activeTabId) {
             widget.style.display = 'block';
-            hasVisible = true;
         } else {
             widget.style.display = 'none';
         }
@@ -140,15 +139,7 @@ async function loadFeedsForTab(tabId) {
                 feedGrid.appendChild(widget);
             });
         } else {
-            // Create a message container for this tab.
-            // But for now, if grid is empty visually, it shows.
-            // If we have other tabs' widgets hidden, this P might be visible always?
-            // Fix: Only append if we are viewing this tab? Yes we are.
-            // But if we switch tabs, this P remains?
-            // Solution: Wrap the P in a div with tabId? 
-            // Or simpler: Don't use persistent P, check on toggle.
-            // For MVP refactor, assume toggle handles widgets, but p needs care.
-            // Let's create a message container for this tab.
+            // Create an empty-state message container for this tab
             const msg = document.createElement('div');
             msg.className = 'feed-widget empty-tab-message'; // Reuse class but add distinct marker
             msg.dataset.tabId = tabId;
@@ -313,7 +304,7 @@ async function handleImportOpmlFileSelect(e) {
 
     const formData = new FormData();
     formData.append('file', file);
-    if (activeTabId) formData.append('tab_id', activeTabId);
+    if (activeTabId !== null) formData.append('tab_id', activeTabId);
 
     try {
         const data = await api.importOpml(formData);
@@ -372,7 +363,7 @@ async function handleLoadMoreItems(listElement) {
 
     listElement.dataset.loading = 'true';
     const feedId = listElement.dataset.feedId;
-    const offset = parseInt(listElement.dataset.offset) || 0;
+    const offset = parseInt(listElement.dataset.offset, 10) || 0;
 
     try {
         const items = await api.getFeedItems(feedId, offset, ITEMS_PER_PAGE);
@@ -420,12 +411,12 @@ function initializeSSE() {
                     // Targeted refresh: mark affected tabs as stale
                     const affectedIds = data.affected_tab_ids || [];
                     affectedIds.forEach(id => {
-                        const numericId = parseInt(id);
+                        const numericId = parseInt(id, 10);
                         loadedTabs.delete(numericId);
                     });
 
                     // If active tab is affected, reload it immediately
-                    if (activeTabId && affectedIds.some(id => parseInt(id) === activeTabId)) {
+                    if (activeTabId && affectedIds.some(id => parseInt(id, 10) === activeTabId)) {
                         await reloadTab(activeTabId);
                     }
                 } catch (apiErr) {
