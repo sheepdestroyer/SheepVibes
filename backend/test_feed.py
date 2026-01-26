@@ -639,6 +639,7 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
     # 3. Individual insert item 1 (succeeds)
     # 4. Individual insert item 2 (succeeds)
     mock_commit.side_effect = [
+        None,  # Commit for metadata/existing items (NEW)
         IntegrityError(
             "Mocked Batch IntegrityError", params=None, orig=None
         ),  # Batch item insert fails

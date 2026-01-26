@@ -38,7 +38,7 @@ def _get_max_concurrent_fetches():
     """
     try:
         cpu_count = os.cpu_count() or 1
-    except Exception:
+    except (NotImplementedError, OSError):
         cpu_count = 1
 
     try:
