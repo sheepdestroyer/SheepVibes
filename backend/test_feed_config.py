@@ -26,10 +26,12 @@ def test_get_max_concurrent_fetches_explicit_below_cap():
         assert _get_max_concurrent_fetches() == 5
 
 
-def test_get_max_concurrent_fetches_explicit_above_cap():
-    """Test explicit configuration is capped at WORKER_FETCH_CAP."""
-    with patch.dict(os.environ, {"FEED_FETCH_MAX_WORKERS": str(WORKER_FETCH_CAP + 10)}):
-        assert _get_max_concurrent_fetches() == WORKER_FETCH_CAP
+def test_explicit_worker_limit_exceeds_cap():
+    """Verify that an explicit environment variable exceeds the default cap."""
+    with patch.dict(os.environ, {"FEED_FETCH_MAX_WORKERS": "50"}):
+        # Reloading module or re-calling logic if it was cached
+        # Since it's a constant in the module, we need to test the helper directly
+        assert _get_max_concurrent_fetches() == 50
 
 
 def test_get_max_concurrent_fetches_invalid_config():

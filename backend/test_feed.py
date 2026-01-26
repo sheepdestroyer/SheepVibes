@@ -345,6 +345,46 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: dis
     )
     assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 1
 
+def test_existing_item_link_update_with_same_guid(db_setup, mocker): # pylint: disable=unused-argument
+    """Test that an existing item's link is updated if it changes but the GUID remains the same."""
+    tab = Tab(name="Update", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Update Feed", url="http://update.com/rss", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    # Existing item in DB
+    existing_item = FeedItem(
+        feed_id=feed_obj.id,
+        title="Old Title",
+        link="http://old-link.com",
+        guid="fixed-guid",
+        published_time=datetime.datetime.now(datetime.timezone.utc)
+    )
+    db.session.add(existing_item)
+    db.session.commit()
+
+    # New entry with same GUID but different title and link
+    entry = MockFeedEntry(
+        title="New Title",
+        link="http://new-link.com",
+        guid="fixed-guid",
+        published="2024-01-01T10:00:00Z"
+    )
+    mock_feed_data = MockParsedFeed(feed_title="Update Feed", entries=[entry])
+
+    # Pre-calculate to avoid error from previous optimization
+    entry["_parsed_published"] = feed_service.parse_published_time(entry)
+
+    # Process
+    feed_service.process_feed_entries(feed_obj, mock_feed_data)
+
+    # Verify
+    db.session.refresh(existing_item)
+    assert existing_item.title == "New Title"
+    assert existing_item.link == "http://new-link.com"
+
 
 def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):  # pylint: disable=unused-argument
     """

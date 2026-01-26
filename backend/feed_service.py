@@ -1,3 +1,4 @@
+"""Service module for fetching, parsing, and processing RSS/Atom feeds."""
 # Import necessary libraries
 # Use dateutil for robust date parsing
 import concurrent.futures
@@ -50,8 +51,8 @@ def _get_max_concurrent_fetches():
         # Default heuristic with safety cap for auto-configuration
         return min(cpu_count * 5, WORKER_FETCH_CAP)
 
-    # Respect explicit user configuration, but cap it for safety
-    return min(max_workers, WORKER_FETCH_CAP)
+    # Respect explicit user configuration
+    return max_workers
 
 
 MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
@@ -137,49 +138,48 @@ def validate_and_resolve_url(url):
     """Validates URL and resolves IP to prevent SSRF (returns safe IP or None)."""
     try:
         parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            logger.warning("Blocked unsupported URL scheme: %s", parsed.scheme)
-            return None, None
-
-        hostname = parsed.hostname
-        if not hostname:
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
             return None, None
 
         try:
-            addr_info = socket.getaddrinfo(hostname, None)
+            addr_info = socket.getaddrinfo(parsed.hostname, None)
         except socket.gaierror:
             if os.environ.get("TESTING") == "true":
-                return "127.0.0.1", hostname  # Fallback for tests
-            logger.warning("Could not resolve hostname: %s", hostname)
+                return "127.0.0.1", parsed.hostname
             return None, None
 
-        safe_ip = None
         for res in addr_info:
             ip_str = res[4][0]
             clean_ip_str = ip_str.split("%")[0]
             try:
-                ip = ipaddress.ip_address(clean_ip_str)
-                if (
-                    ip.is_private
-                    or ip.is_loopback
-                    or ip.is_link_local
-                    or ip.is_reserved
-                    or ip.is_multicast
-                    or ip.is_unspecified
-                ):
-                    safe_url = f"{parsed.scheme}://{hostname}"
-                    logger.warning(
-                        "Blocked SSRF attempt: %s -> %s", safe_url, ip)
-                    return None, None
-                safe_ip = ip_str  # Keep valid IP string
-                break  # Found a safe IP
+                ip_obj = ipaddress.ip_address(clean_ip_str)
+                if _is_safe_ip(ip_obj):
+                    return ip_str, parsed.hostname
+
+                logger.warning(
+                    "Blocked SSRF attempt: %s://%s -> %s",
+                    parsed.scheme, parsed.hostname, ip_obj
+                )
+                return None, None
             except ValueError:
                 continue
 
-        return safe_ip, hostname
+        return None, None
     except Exception:
         logger.exception("Error validating URL safety")
         return None, None
+
+
+def _is_safe_ip(ip):
+    """Checks if an IP address is safe (not private, loopback, etc.)."""
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
 
 
 def _fetch_feed_content(feed_url):
@@ -395,59 +395,70 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             existing_item_data = existing_items_by_link.get(entry_link)
 
         if existing_item_data:
-            # existing_item_data is a Row/tuple: (id, guid, link, title)
-            existing_title = existing_item_data.title
-            if entry_title and entry_title != existing_title:
-                logger.info(
-                    "Updating title for existing item '%s' to '%s' in feed '%s'",
-                    existing_title,
-                    entry_title,
-                    feed_db_obj.name,
-                )
-                # Note: This executes a localized UPDATE query.
-                # Optimization: Consider collecting these updates and performing a bulk update
-                # if this becomes a bottleneck (N+1 Update pattern).
-                db.session.query(FeedItem).filter(
-                    FeedItem.id == existing_item_data.id
-                ).update({"title": entry_title}, synchronize_session=False)
-                # Any pending updates will be committed by the caller.
+            _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link)
             continue
 
         # Check batch duplicates
-        is_batch_duplicate = False
-        if db_guid and db_guid in batch_processed_guids:
-            logger.warning(
-                "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
-                db_guid,
-                feed_db_obj.name,
-            )
-            is_batch_duplicate = True
-        elif entry_link in batch_processed_links:
-            logger.warning(
-                "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
-                entry_link,
-                feed_db_obj.name,
-            )
-            is_batch_duplicate = True
-
-        if is_batch_duplicate:
+        if _is_batch_duplicate(db_guid, entry_link, batch_processed_guids, batch_processed_links, feed_db_obj.name):
             continue
 
         if db_guid:
             batch_processed_guids.add(db_guid)
         batch_processed_links.add(entry_link)
 
-        published_time = entry["_parsed_published"]
-        new_item = FeedItem(
-            feed_id=feed_db_obj.id,
-            title=entry_title,
-            link=entry_link,
-            published_time=published_time,
-            guid=db_guid,
+        items_to_add.append(
+            FeedItem(
+                feed_id=feed_db_obj.id,
+                title=entry_title,
+                link=entry_link,
+                published_time=entry["_parsed_published"],
+                guid=db_guid,
+            )
         )
-        items_to_add.append(new_item)
 
     return items_to_add
+
+
+def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link):
+    """Updates an existing item if title or link changed."""
+    existing_title = existing_item_data.title
+    existing_link = existing_item_data.link
+
+    updates = {}
+    if entry_title and entry_title != existing_title:
+        updates["title"] = entry_title
+
+    if entry_link and entry_link != existing_link:
+        updates["link"] = entry_link
+
+    if updates:
+        logger.info(
+            "Updating fields %s for existing item '%s' in feed '%s'",
+            list(updates.keys()),
+            existing_title,
+            feed_db_obj.name,
+        )
+        db.session.query(FeedItem).filter(
+            FeedItem.id == existing_item_data.id).update(
+            updates, synchronize_session=False
+        )
+
+
+def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links, feed_name):
+    """Checks if an item is a duplicate within the current processing batch."""
+    if db_guid and db_guid in batch_guids:
+        logger.warning(
+            "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
+            db_guid, feed_name,
+        )
+        return True
+    if entry_link in batch_links:
+        logger.warning(
+            "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
+            entry_link, feed_name,
+        )
+        return True
+    return False
 
 
 def _save_items_to_db(feed_db_obj, items_to_add):
@@ -508,9 +519,11 @@ def _save_items_individually(feed_db_obj, items_to_add):
         except IntegrityError as ie:
             db.session.rollback()
             logger.error(
-                "Failed to add item '%s' (link: %s): %s",
+                "Failed to add item '%s' for feed '%s' (link: %s, guid: %s): %s",
                 item.title[:100],
+                feed_db_obj.name,
                 item.link,
+                item.guid,
                 ie,
             )
         except Exception:
@@ -524,8 +537,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
             "Recovered %s items individually for feed: %s", count, feed_db_obj.name
         )
     else:
-        logger.info("No items added individually for feed: %s",
-                    feed_db_obj.name)
+        logger.info("No items added individually for feed: %s", feed_db_obj.name)
 
     return count
 
