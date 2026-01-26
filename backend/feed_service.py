@@ -33,7 +33,11 @@ except Exception:
     _cpu_count = 1
 
 try:
-    MAX_CONCURRENT_FETCHES = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 0))
+    MAX_CONCURRENT_FETCHES = int(
+        os.environ.get("FEED_FETCH_MAX_WORKERS", 0)
+    )
+    if MAX_CONCURRENT_FETCHES < 0:
+        MAX_CONCURRENT_FETCHES = 0
 except (ValueError, TypeError):
     MAX_CONCURRENT_FETCHES = 0
 if MAX_CONCURRENT_FETCHES == 0:
