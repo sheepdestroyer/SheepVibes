@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // --- Core Logic ---
 
-async function initializeTabs(preserveActive = false) {
+async function initializeTabs() {
     try {
         allTabs = await api.getTabs();
 
