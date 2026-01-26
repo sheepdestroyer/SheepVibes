@@ -627,7 +627,8 @@ def _get_autosave_directory():
         if db_uri.startswith("sqlite:///"):
             db_path = db_uri.replace("sqlite:///", "")
             if db_path == ":memory:":
-                logger.warning("Skipping OPML autosave because database is in-memory.")
+                logger.warning(
+                    "Skipping OPML autosave because database is in-memory.")
                 return None
             # Resolve relative paths to absolute ones to find the data directory correctly
             try:
