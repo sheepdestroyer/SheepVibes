@@ -1,5 +1,23 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-01-26 (v0.4.0-pre)
+
+- **Architecture: Modularization Overhaul (Backend & Frontend)**
+  - **Backend**: Split monolithic `app.py` into Flask Blueprints (`feeds`, `opml`, `tabs`) for better separation of concerns.
+  - **Frontend**: Refactored `script.js` into ES6 modules (`api.js`, `ui.js`, `utils.js`, `app.js`) to improve maintainability.
+  - **Migration**: Added new SQLAlchemy naming convention to fix constraint naming issues across different DBs.
+
+- **Fix: Critical Data Integrity & Deduplication**
+  - **GUID Priority**: Updated `feed_service` to prioritize `id` over `link` for GUIDs. This prevents data loss for feeds (like Kernel.org) where multiple items share the same URL.
+  - **Composite Constraints**: Replaced global `guid` uniqueness with `(feed_id, guid)` composite constraint to allow same-GUID items in different feeds.
+  - **Graceful Failures**: Implemented fallback to individual item insertion if batch commits fail due to integrity errors.
+
+- **Feat: Dev Experience & Quality of Life**
+  - **Hot Reloading**: Updated dev container to use `flask run` (Debug Mode) instead of Gunicorn, enabling instant code updates.
+  - **Secure Links**: Added `rel="noopener noreferrer"` to all external feed links to prevent tabnabbing.
+  - **Performance**: Optimized SSE updates to prevent full-page flicker and scroll position loss.
+  - **Cache Optimization**: Granular cache invalidation for tabs and feeds to reduce unnecessary Redis workload.
+
 ## 2026-01-11
 
 - **Feat: Add `dev_manager.sh` for Podman-based local development**

@@ -155,6 +155,7 @@ do_up() {
     echo "Starting App..."
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
         -e CACHE_REDIS_URL="$REDIS_URL_INTERNAL" \
+        -e FLASK_DEBUG=1 \
         -v "${VOLUME_NAME}:/app/data:Z" \
         "$APP_IMAGE_NAME"
 

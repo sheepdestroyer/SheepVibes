@@ -15,9 +15,14 @@ echo "Applying database migrations from $(pwd) using app 'app'..."
 /opt/venv/bin/python -m flask --app app db upgrade
 
 # Go back to the main app directory to run the application
-echo "Starting Flask application from $(pwd) using app 'backend.app'..."
-# Execute the main container command using gunicorn from venv
-# Using exec means the Gunicorn process replaces the shell script process
-# Switched to the 'gthread' worker class to handle long-lived SSE connections
-# without blocking other requests. Increased workers and threads for concurrency.
-exec /opt/venv/bin/python -m gunicorn --workers 2 --threads 4 --worker-class gthread --bind 0.0.0.0:5000 backend.app:app
+cd /app
+if [ "$FLASK_DEBUG" = "1" ] || [ "$FLASK_ENV" = "development" ]; then
+    echo "Starting Flask development server from $(pwd)..."
+    # Run Flask with hot reloading enabled (default in debug mode)
+    exec /opt/venv/bin/python -m flask run --host=0.0.0.0 --port=5000
+else
+    echo "Starting Production Server (Gunicorn) from $(pwd)..."
+    # Execute the main container command using gunicorn from venv
+    # Using exec means the Gunicorn process replaces the shell script process
+    exec /opt/venv/bin/python -m gunicorn --workers 2 --threads 4 --worker-class gthread --bind 0.0.0.0:5000 backend.app:app
+fi

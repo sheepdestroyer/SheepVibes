@@ -1,6 +1,14 @@
 ## Backend Testing
 The backend of SheepVibes is written in Python and uses the `pytest` framework for testing.
 
+## Linting
+
+We use `flake8` for Python linting.
+
+```bash
+flake8 backend/ --max-line-length=120
+```
+
 ### I. Setup for Local Testing
 1.  Navigate to the backend directory. Install the necessary development dependencies within a Python virtual environment, including `pytest`:
     ```bash
@@ -37,6 +45,20 @@ The backend tests require a running Redis instance for caching checks.
     ```bash
     podman stop sheepvibes-test-redis
     ```
+
+### III. Testing with Dev Environment (Podman)
+The project includes a robust development environment managed by `scripts/dev_manager.sh`.
+
+1.  **Start Dev Environment**
+    This will build the image, start Redis, and launch the Backend App in **Debug Mode** (Flask development server).
+    ```bash
+    ./scripts/dev_manager.sh up
+    ```
+    - The app runs at `http://localhost:5002` (default).
+    - Code changes are hot-reloaded automatically.
+
+2.  **Verify Production Parity**
+    To test the application as it runs in production (using Gunicorn), you can manually edit `scripts/dev_manager.sh` to unset `FLASK_DEBUG=1` before starting.
 
 ## Frontend Testing
 Currently, there are no automated tests specifically for the frontend JavaScript code.
