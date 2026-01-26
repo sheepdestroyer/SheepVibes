@@ -412,7 +412,9 @@ def import_opml():
         if ext.lower() not in allowed_extensions:
             return (
                 jsonify(
-                    {"error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"}
+                    {
+                        "error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                    }
                 ),
                 400,
             )
