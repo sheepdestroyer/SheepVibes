@@ -3,6 +3,7 @@ import json
 import logging
 import os
 
+from filelock import FileLock
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_migrate import Migrate
@@ -121,8 +122,6 @@ OPML_AUTOSAVE_INTERVAL_MINUTES = int(
 )
 
 
-from filelock import FileLock
-
 @scheduler.scheduled_job("interval", minutes=UPDATE_INTERVAL_MINUTES, id="update_feeds")
 def scheduled_feed_update():
     """Scheduled job to periodically update all feeds in the database."""
@@ -133,7 +132,8 @@ def scheduled_feed_update():
             # Need app context to access database within the scheduled job
             with app.app_context():
                 logger.info(
-                    "Running scheduled feed update (every %s minutes)", UPDATE_INTERVAL_MINUTES
+                    "Running scheduled feed update (every %s minutes)",
+                    UPDATE_INTERVAL_MINUTES,
                 )
                 try:
                     feeds_updated, new_items, affected_tab_ids = update_all_feeds()
@@ -145,7 +145,8 @@ def scheduled_feed_update():
                     # Invalidate the cache after updates
                     if new_items > 0 and affected_tab_ids:
                         for tab_id in affected_tab_ids:
-                            invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
+                            invalidate_tab_feeds_cache(
+                                tab_id, invalidate_tabs=False)
                         invalidate_tabs_cache()
                         logger.info(
                             "Granular cache invalidation completed for affected tabs: %s",
@@ -157,14 +158,16 @@ def scheduled_feed_update():
                         "feeds_processed": feeds_updated,
                         "new_items": new_items,
                         "affected_tab_ids": (
-                            sorted(list(affected_tab_ids)) if affected_tab_ids else []
+                            sorted(list(affected_tab_ids)
+                                   ) if affected_tab_ids else []
                         ),
                     }
                     msg = f"data: {json.dumps(event_data)}\n\n"
                     announcer.announce(msg=msg)
                 except Exception as e:
-                    logger.error("Error during scheduled feed update: %s",
-                                 e, exc_info=True)
+                    logger.error(
+                        "Error during scheduled feed update: %s", e, exc_info=True
+                    )
     except Exception:
         # Lock acquisition failed (another worker is running the job), just skip
         pass
