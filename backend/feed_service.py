@@ -355,14 +355,19 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         feed_db_obj.id,
     )
 
-    # Sort entries by published date (newest first) if available.
-    # This ensures our "First Wins" deduplication strategy prioritizes the latest version of an item
-    # in case the feed contains duplicates (e.g. updates).
+    # Pre-calculate dates to avoid double parsing and ensure consistency between
+    # sorting and storage (e.g. if parse_published_time uses current time as fallback).
+    for entry in parsed_feed.entries:
+        entry["_parsed_published"] = parse_published_time(entry)
+
+    # Sort entries by published date (newest first).
+    # Our "First Wins" deduplication strategy (below) will preserve the version
+    # that appears first in the iteration. Sorting ensures the most recently
+    # published version is processed first and thus preserved in case of duplicates.
     try:
         parsed_feed.entries.sort(
-            key=lambda e: parse_published_time(e)
-            or datetime.datetime.min.replace(tzinfo=timezone.utc),
-            reverse=True,
+            key=lambda e: e["_parsed_published"],
+            reverse=True
         )
     except Exception:
         # If sorting fails, proceed with original order.
@@ -401,25 +406,14 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                     entry_title,
                     feed_db_obj.name,
                 )
-                # Ideally, we'd batch these updates too, but individual updates are rare enough.
-                # Since we don't have the object attached, we update by ID.
                 # Note: This executes a localized UPDATE query.
+                # Optimization: Consider collecting these updates and performing a bulk update
+                # if this becomes a bottleneck (N+1 Update pattern).
                 db.session.query(FeedItem).filter(
-                    FeedItem.id == existing_item_data.id
-                ).update({"title": entry_title}, synchronize_session=False)
-                # We need to commit these updates or add them to a session.
-                # Since we are inside a larger flow that commits later, we rely on the session flush?
-                # Actually, `update` with synchronize_session=False executes immediately against DB if autocommit?
-                # No, it stays in transaction.
-                # However, our calling function `process_feed_entries` commits *before* inserting new items (metadata/existing).
-                # Wait, `process_feed_entries` calls `_collect_new_items`, getting new items, THEN commits metadata/existing?
-                # No, `_collect_new_items` returns `items_to_add`.
-                # If we do updates inside `_collect_new_items`, they are pending in the session.
-                # But `process_feed_entries` calls `_update_feed_metadata`, THEN `_collect_new_items`, THEN commits.
-                # So any pending updates (like this title update) will be committed then.
-                # EXCEPT: `update()` doesn't add to session in the same way `add()` does.
-                # It issues an UPDATE statement.
-                # It will be part of the transaction and committed when `db.session.commit()` is called.
+                    FeedItem.id == existing_item_data.id).update(
+                    {"title": entry_title}, synchronize_session=False
+                )
+                # Any pending updates will be committed by the caller.
             continue
 
         # Check batch duplicates
@@ -446,7 +440,7 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             batch_processed_guids.add(db_guid)
         batch_processed_links.add(entry_link)
 
-        published_time = parse_published_time(entry)
+        published_time = entry["_parsed_published"]
         new_item = FeedItem(
             feed_id=feed_db_obj.id,
             title=entry_title,
