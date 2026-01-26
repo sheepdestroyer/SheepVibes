@@ -314,7 +314,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
             if item_changed:
                 db.session.add(existing_item)
-                # Note: We don't increment new_items_count for updates, 
+                # Note: We don't increment new_items_count for updates,
                 # but we do want to commit the change.
             continue
 

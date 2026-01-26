@@ -212,21 +212,28 @@ def update_feed_url(feed_id):
     try:
         # Attempt to fetch the feed to get its title (and verify accessibility/SSRF)
         parsed_feed = fetch_feed(new_url)
-        
+
         if custom_name:
             new_name = custom_name
-            new_site_link = parsed_feed.feed.get("link") if parsed_feed and parsed_feed.feed else None
+            new_site_link = (
+                parsed_feed.feed.get("link")
+                if parsed_feed and parsed_feed.feed
+                else None
+            )
         elif not parsed_feed or not parsed_feed.feed:
             # If fetch fails and no custom name provided, use the URL as the name
             new_name = new_url
             new_site_link = None
             logger.warning(
-                "Could not fetch title for %s and no custom name provided, using URL as name.", new_url)
+                "Could not fetch title for %s and no custom name provided, using URL as name.",
+                new_url,
+            )
         else:
             new_name = parsed_feed.feed.get(
                 "title", new_url
             )  # Use URL as fallback if title missing
-            new_site_link = parsed_feed.feed.get("link")  # Get the website link
+            new_site_link = parsed_feed.feed.get(
+                "link")  # Get the website link
 
         # Update the feed
         original_url = feed.url

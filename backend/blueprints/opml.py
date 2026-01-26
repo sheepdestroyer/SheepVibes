@@ -635,9 +635,13 @@ def _get_autosave_directory():
             try:
                 abs_db_path = os.path.abspath(db_path)
                 data_dir = os.path.dirname(abs_db_path)
-                logger.debug("Resolved autosave directory from SQLite path: %s", data_dir)
+                logger.debug(
+                    "Resolved autosave directory from SQLite path: %s", data_dir
+                )
             except Exception:
-                logger.warning("Could not resolve absolute path for SQLite DB: %s", db_path)
+                logger.warning(
+                    "Could not resolve absolute path for SQLite DB: %s", db_path
+                )
 
     if not data_dir:
         # 3. Fall back to PROJECT_ROOT/data
