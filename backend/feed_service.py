@@ -30,11 +30,9 @@ try:
 except Exception:
     _cpu_count = 1
 
-MAX_CONCURRENT_FETCHES = int(
-    os.environ.get("FEED_FETCH_MAX_WORKERS", 0)
-)
+MAX_CONCURRENT_FETCHES = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 0))
 if MAX_CONCURRENT_FETCHES == 0:
-    MAX_CONCURRENT_FETCHES = (_cpu_count * 5)
+    MAX_CONCURRENT_FETCHES = _cpu_count * 5
 
 # Cap the workers to avoid resource exhaustion on high-core machines
 MAX_CONCURRENT_FETCHES = min(MAX_CONCURRENT_FETCHES, 20)
@@ -611,7 +609,7 @@ def fetch_and_update_feed(feed_id):
 
     # fetch_feed already handles errors and returns None, but logic here checks return
     parsed_feed = _fetch_feed_content(feed.url)
-    
+
     # Delegate processing to helper
     return _process_fetch_result(feed, parsed_feed)
 
@@ -631,16 +629,15 @@ def update_all_feeds():
     processed_successfully_count = 0
     affected_tab_ids = set()
 
-
-
     logger.info(
         "Starting update process for %s feeds (Parallelized).", len(all_feeds))
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_FETCHES) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=MAX_CONCURRENT_FETCHES
+    ) as executor:
         # Submit all fetch tasks, mapping future to the feed object directly
         future_to_feed = {
-            executor.submit(_fetch_feed_content, feed.url): feed
-            for feed in all_feeds
+            executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds
         }
         attempted_count = len(all_feeds)
 
