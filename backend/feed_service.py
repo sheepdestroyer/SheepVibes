@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 # Maximum number of items to keep per feed for cache eviction
 MAX_ITEMS_PER_FEED = 100
 
+# Maximum number of concurrent feed fetches
+# I/O bound tasks can handle more workers than CPU cores
+try:
+    _cpu_count = os.cpu_count() or 1
+except Exception:
+    _cpu_count = 1
+MAX_CONCURRENT_FETCHES = _cpu_count * 5
+
 # --- Helper Functions ---
 
 
@@ -161,6 +169,61 @@ def _fetch_feed_content(feed_id, feed_url):
     except Exception as e:
         logger.error("Error in fetch thread for feed %s: %s", feed_url, e)
         return feed_id, None
+
+
+def _process_fetch_result(feed_db_obj, parsed_feed):
+    """
+    Helper function to process the result of a feed fetch (parsed_feed).
+    Handles empty feeds, database updates, and calling process_feed_entries.
+    
+    Args:
+        feed_db_obj (Feed): The database feed object.
+        parsed_feed (feedparser.FeedParserDict): The parsed feed result.
+        
+    Returns:
+        tuple: (success, new_items_count, tab_id)
+    """
+    if not parsed_feed:
+        logger.error(
+            "Fetching content for feed '%s' (ID: %s) failed (None returned).",
+            feed_db_obj.name,
+            feed_db_obj.id,
+        )
+        return False, 0, feed_db_obj.tab_id
+
+    # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
+    if not parsed_feed.entries:
+        logger.info(
+            "Feed '%s' (ID: %s) fetched successfully but contained no entries.",
+            feed_db_obj.name,
+            feed_db_obj.id,
+        )
+        feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Error committing feed update (no entries) for %s: %s",
+                feed_db_obj.name,
+                e,
+                exc_info=True,
+            )
+        return True, 0, feed_db_obj.tab_id
+
+    try:
+        new_items = process_feed_entries(feed_db_obj, parsed_feed)
+        # process_feed_entries handles its own logging and commits for items and last_updated_time.
+        return True, new_items, feed_db_obj.tab_id
+    except Exception as e:
+        logger.error(
+            "An unexpected error occurred during entry processing for feed '%s' (ID: %s): %s",
+            feed_db_obj.name,
+            feed_db_obj.id,
+            e,
+            exc_info=True,
+        )
+        return False, 0, feed_db_obj.tab_id
 
 
 def fetch_feed(feed_url):
@@ -539,53 +602,11 @@ def fetch_and_update_feed(feed_id):
         logger.error("Feed with ID %s not found for update.", feed_id)
         return False, 0, None
 
+    # fetch_feed already handles errors and returns None, but logic here checks return
     parsed_feed = fetch_feed(feed.url)
-    if not parsed_feed:
-        logger.error(
-            "Fetching content for feed '%s' (ID: %s) failed because fetch_feed returned None.",
-            feed.name,
-            feed_id,
-        )
-        # Optionally update last_updated_time to now with a failure status
-        # feed.last_updated_time = datetime.datetime.now(timezone.utc)
-        # db.session.commit() # Be careful with commits in error paths
-        return False, 0, feed.tab_id
-
-    # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
-    if not parsed_feed.entries:
-        logger.info(
-            "Feed '%s' (ID: %s) fetched successfully but contained no entries.",
-            feed.name,
-            feed_id,
-        )
-        feed.last_updated_time = datetime.datetime.now(timezone.utc)
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logger.error(
-                "Error committing feed update (no entries) for %s: %s",
-                feed.name,
-                e,
-                exc_info=True,
-            )
-            # Still, the fetch itself might be considered a "success" in terms of reachability
-        return True, 0, feed.tab_id
-
-    try:
-        new_items = process_feed_entries(feed, parsed_feed)
-        # process_feed_entries handles its own logging and commits for items and last_updated_time.
-        # Success here means process_feed_entries completed without raising an exception to this level.
-        return True, new_items, feed.tab_id
-    except Exception as e:  # Catch any unexpected error from process_feed_entries not caught internally
-        logger.error(
-            "An unexpected error occurred during entry processing for feed '%s' (ID: %s): %s",
-            feed.name,
-            feed_id,
-            e,
-            exc_info=True,
-        )
-        return False, 0, feed.tab_id
+    
+    # Delegate processing to helper
+    return _process_fetch_result(feed, parsed_feed)
 
 
 def update_all_feeds():
@@ -609,7 +630,7 @@ def update_all_feeds():
     logger.info(
         "Starting update process for %s feeds (Parallelized).", len(all_feeds))
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_FETCHES) as executor:
         # Submit all fetch tasks
         future_to_feed_id = {
             executor.submit(_fetch_feed_content, feed.id, feed.url): feed.id
@@ -638,55 +659,17 @@ def update_all_feeds():
                 # Retrieve result from the thread
                 _, parsed_feed = future.result()
 
+                _, parsed_feed = future.result()
+
                 # --- Sequential Processing (Main Thread) ---
-                if not parsed_feed:
-                    logger.error(
-                        "Fetching content for feed '%s' (ID: %s) failed (None returned).",
-                        feed_obj.name,
-                        feed_id,
-                    )
-                    # Treat as failure, no update to last_updated_time in this specific path/logic
-                    # consistent with previous fetch_and_update_feed behavior when fetch_feed returns None
-                    continue
+                # Check 1: Reuse the logic shared with fetch_and_update_feed
+                success, new_items, tab_id = _process_fetch_result(feed_obj, parsed_feed)
 
-                # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
-                if not parsed_feed.entries:
-                    logger.info(
-                        "Feed '%s' (ID: %s) fetched successfully but contained no entries.",
-                        feed_obj.name,
-                        feed_id,
-                    )
-                    feed_obj.last_updated_time = datetime.datetime.now(
-                        timezone.utc)
-                    try:
-                        db.session.commit()
-                        processed_successfully_count += 1  # Count as success
-                    except Exception as e:
-                        db.session.rollback()
-                        logger.error(
-                            "Error committing feed update (no entries) for %s: %s",
-                            feed_obj.name,
-                            e,
-                            exc_info=True,
-                        )
-                    continue
-
-                # Process entries
-                try:
-                    new_items = process_feed_entries(feed_obj, parsed_feed)
-                    # process_feed_entries handles its own commits
-                    total_new_items += new_items
+                if success:
                     processed_successfully_count += 1
+                    total_new_items += new_items
                     if new_items > 0:
-                        affected_tab_ids.add(feed_obj.tab_id)
-                except Exception as e:
-                    logger.error(
-                        "An unexpected error occurred during entry processing for feed '%s' (ID: %s): %s",
-                        feed_obj.name,
-                        feed_id,
-                        e,
-                        exc_info=True,
-                    )
+                        affected_tab_ids.add(tab_id)
 
             except Exception as e:
                 logger.error(
