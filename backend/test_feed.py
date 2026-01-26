@@ -289,7 +289,7 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):  # pylint: disabl
 
 
 def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: disable=unused-argument
-    """Test items with no true GUID but duplicate links in the SAME feed are deduplicated by link."""
+    """Test items with no true GUID but duplicate links are deduplicated by link."""
     logger.info("Testing duplicate links (no true GUID) in same feed")
 
     entry1 = MockFeedEntry(
@@ -345,12 +345,14 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: dis
     )
     assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 1
 
-def test_existing_item_link_update_with_same_guid(db_setup, mocker): # pylint: disable=unused-argument
+
+def test_existing_item_link_update_with_same_guid(db_setup, mocker):  # pylint: disable=unused-argument
     """Test that an existing item's link is updated if it changes but the GUID remains the same."""
     tab = Tab(name="Update", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(name="Update Feed", url="http://update.com/rss", tab_id=tab.id)
+    feed_obj = Feed(name="Update Feed",
+                    url="http://update.com/rss", tab_id=tab.id)
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -360,7 +362,7 @@ def test_existing_item_link_update_with_same_guid(db_setup, mocker): # pylint: d
         title="Old Title",
         link="http://old-link.com",
         guid="fixed-guid",
-        published_time=datetime.datetime.now(datetime.timezone.utc)
+        published_time=datetime.datetime.now(datetime.timezone.utc),
     )
     db.session.add(existing_item)
     db.session.commit()
@@ -370,7 +372,7 @@ def test_existing_item_link_update_with_same_guid(db_setup, mocker): # pylint: d
         title="New Title",
         link="http://new-link.com",
         guid="fixed-guid",
-        published="2024-01-01T10:00:00Z"
+        published="2024-01-01T10:00:00Z",
     )
     mock_feed_data = MockParsedFeed(feed_title="Update Feed", entries=[entry])
 
@@ -685,8 +687,8 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # py
         feed_service.logger, "error"
     )  # To check no individual errors for valid items
 
-    # Mock db.session.commit: first call (batch) raises IntegrityError, subsequent calls (individual) succeed.
-    # Need to handle the commit for updating feed's last_updated_time after batch failure as well.
+    # Mock db.session.commit: first call (batch) fails, subsequent calls (individual) succeed.
+    # Handle commit for updating feed's last_updated_time as well.
     mock_commit = mocker.patch.object(db.session, "commit")
 
     # Sequence of commit behaviors:

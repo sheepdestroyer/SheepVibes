@@ -1,4 +1,5 @@
 """Service module for fetching, parsing, and processing RSS/Atom feeds."""
+
 # Import necessary libraries
 # Use dateutil for robust date parsing
 import concurrent.futures
@@ -72,63 +73,42 @@ def parse_published_time(entry):
                            parsing fails.
     """
     parsed_dt = None
-    if hasattr(entry, "published_parsed") and entry.published_parsed:
+    if getattr(entry, "published_parsed", None):
         try:
             parsed_dt = datetime.datetime(
                 *entry.published_parsed[:6], tzinfo=timezone.utc
             )
-        except (TypeError, ValueError) as e:
-            logger.debug(
-                "Failed to parse 'published_parsed' for entry %s: %s",
-                entry.get("link", "[no link]"),
-                e,
-            )
+        except (TypeError, ValueError):
             parsed_dt = None
 
     if parsed_dt is None:
-        # Try common date fields using dateutil.parser for more flexibility
-        # Added 'dc:date' as observed in some feeds
-        date_fields = ["published", "updated", "created", "dc:date"]
-        for field in date_fields:
-            if hasattr(entry, field):
-                field_value = getattr(entry, field)
-                if field_value:
-                    try:
-                        parsed_dt = date_parser.parse(field_value)
-                        if parsed_dt:
-                            break
-                    except (ValueError, TypeError, OverflowError) as e:
-                        logger.debug(
-                            "Specific parsing error for date field '%s' for entry %s (%s): %s",
-                            field,
-                            entry.get("link", "[no link]"),
-                            type(e).__name__,
-                            e,
-                        )
-                        continue
-                    except Exception as e:
-                        logger.warning(
-                            "Generic parsing error for date field '%s' for entry %s (%s): %s",
-                            field,
-                            entry.get("link", "[no link]"),
-                            type(e).__name__,
-                            e,
-                        )
-                        continue
+        # Try common date fields using dateutil.parser
+        for field in ["published", "updated", "created", "dc:date"]:
+            parsed_dt = _get_dt_from_field(entry, field)
+            if parsed_dt:
+                break
 
     if parsed_dt:
-        # Ensure the datetime is UTC timezone-aware
         if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(parsed_dt) is None:
-            parsed_dt = parsed_dt.replace(tzinfo=timezone.utc)
-        else:
-            parsed_dt = parsed_dt.astimezone(timezone.utc)
-        return parsed_dt
+            return parsed_dt.replace(tzinfo=timezone.utc)
+        return parsed_dt.astimezone(timezone.utc)
 
-    logger.warning(
-        "Could not parse published time for entry: %s. Using current time as fallback.",
-        entry.get("link", "[no link]"),
-    )
     return datetime.datetime.now(timezone.utc)
+
+
+def _get_dt_from_field(entry, field):
+    """Internal helper to extract a datetime from a specific entry field."""
+    if not hasattr(entry, field):
+        return None
+    field_value = getattr(entry, field)
+    if not field_value:
+        return None
+    try:
+        return date_parser.parse(field_value)
+    except (ValueError, TypeError, OverflowError):
+        return None
+    except Exception:  # pylint: disable=broad-exception-caught
+        return None
 
 
 # --- Core Feed Processing Functions ---
@@ -138,36 +118,33 @@ def validate_and_resolve_url(url):
     """Validates URL and resolves IP to prevent SSRF (returns safe IP or None)."""
     try:
         parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        if not (parsed.scheme in ("http", "https") and parsed.hostname):
             return None, None
 
         try:
             addr_info = socket.getaddrinfo(parsed.hostname, None)
         except socket.gaierror:
             if os.environ.get("TESTING") == "true":
-                return "127.0.0.1", parsed.hostname
-            return None, None
+                return ("127.0.0.1", parsed.hostname)
+            return (None, None)
 
         for res in addr_info:
             ip_str = res[4][0]
-            clean_ip_str = ip_str.split("%")[0]
-            try:
-                ip_obj = ipaddress.ip_address(clean_ip_str)
-                if _is_safe_ip(ip_obj):
-                    return ip_str, parsed.hostname
+            ip_obj = ipaddress.ip_address(ip_str.split("%")[0])
+            if _is_safe_ip(ip_obj):
+                return ip_str, parsed.hostname
 
-                logger.warning(
-                    "Blocked SSRF attempt: %s://%s -> %s",
-                    parsed.scheme, parsed.hostname, ip_obj
-                )
-                return None, None
-            except ValueError:
-                continue
+            logger.warning(
+                "Blocked SSRF attempt: %s://%s -> %s",
+                parsed.scheme,
+                parsed.hostname,
+                ip_obj,
+            )
 
-        return None, None
-    except Exception:
+        return (None, None)
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error validating URL safety")
-        return None, None
+        return (None, None)
 
 
 def _is_safe_ip(ip):
@@ -199,7 +176,7 @@ def _fetch_feed_content(feed_url):
     try:
         parsed_feed = fetch_feed(feed_url)
         return parsed_feed
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error in fetch thread for feed %s", feed_url)
         return None
 
@@ -234,7 +211,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         try:
             db.session.commit()
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error(
                 "Error committing feed update (no entries) for %s",
@@ -248,7 +225,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         new_items = process_feed_entries(feed_db_obj, parsed_feed)
         # process_feed_entries handles its own logging and commits for items and last_updated_time.
         return True, new_items, feed_db_obj.tab_id
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.error(
             "An unexpected error occurred during entry processing for feed '%s' (ID: %s)",
             feed_db_obj.name,
@@ -294,7 +271,7 @@ def fetch_feed(feed_url):
 
         return parsed_feed
 
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.error("Error fetching feed %s", feed_url, exc_info=True)
         return None
 
@@ -303,26 +280,28 @@ def fetch_feed(feed_url):
 
 
 def _update_feed_metadata(feed_db_obj, parsed_feed):
-    """Updates feed title and site_link if changed."""
-    new_title = parsed_feed.feed.get("title")
-    if new_title and new_title.strip() and new_title != feed_db_obj.name:
-        logger.info("Updating feed title for '%s' to '%s'",
-                    feed_db_obj.name, new_title)
-        feed_db_obj.name = new_title.strip()
+    """Updates feed title and site_link if changed.
 
-    new_site_link = parsed_feed.feed.get("link")
-    if (
-        new_site_link
-        and new_site_link.strip()
-        and new_site_link != feed_db_obj.site_link
-    ):
+    Args:
+        feed_db_obj (Feed): The database feed object.
+        parsed_feed (feedparser.FeedParserDict): The parsed feed result.
+    """
+    raw_title = parsed_feed.feed.get("title")
+    new_title = raw_title.strip() if raw_title else None
+    if new_title and new_title != feed_db_obj.name:
+        logger.info("Updating feed title for '%s' to '%s'", feed_db_obj.name, new_title)
+        feed_db_obj.name = new_title
+
+    raw_site_link = parsed_feed.feed.get("link")
+    new_site_link = raw_site_link.strip() if raw_site_link else None
+    if new_site_link and new_site_link != feed_db_obj.site_link:
         logger.info(
             "Updating feed site_link for '%s' from '%s' to '%s'",
             feed_db_obj.name,
             feed_db_obj.site_link,
             new_site_link,
         )
-        feed_db_obj.site_link = new_site_link.strip()
+        feed_db_obj.site_link = new_site_link
 
 
 def _collect_new_items(feed_db_obj, parsed_feed):
@@ -331,10 +310,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     batch_processed_guids = set()
     batch_processed_links = set()
 
-    # Optimization: Query only necessary columns to avoid loading full objects (content, summary, etc.)
+    # Optimization: Query only necessary columns to avoid loading full objects
     existing_items_data = (
-        db.session.query(FeedItem.id, FeedItem.guid,
-                         FeedItem.link, FeedItem.title)
+        db.session.query(FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title)
         .filter_by(feed_id=feed_db_obj.id)
         .all()
     )
@@ -367,7 +345,7 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     try:
         parsed_feed.entries.sort(
             key=lambda e: e["_parsed_published"], reverse=True)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         # If sorting fails, proceed with original order.
         logger.warning("Failed to sort entries for feed %s", feed_db_obj.name)
 
@@ -395,11 +373,19 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             existing_item_data = existing_items_by_link.get(entry_link)
 
         if existing_item_data:
-            _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link)
+            _update_existing_item(
+                feed_db_obj, existing_item_data, entry_title, entry_link
+            )
             continue
 
         # Check batch duplicates
-        if _is_batch_duplicate(db_guid, entry_link, batch_processed_guids, batch_processed_links, feed_db_obj.name):
+        if _is_batch_duplicate(
+            db_guid,
+            entry_link,
+            batch_processed_guids,
+            batch_processed_links,
+            feed_db_obj.name,
+        ):
             continue
 
         if db_guid:
@@ -420,7 +406,14 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
 
 def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link):
-    """Updates an existing item if title or link changed."""
+    """Updates an existing item if title or link changed.
+
+    Args:
+        feed_db_obj (Feed): The database feed object.
+        existing_item_data (Row): Tuple-like object with existing item ID, title, and link.
+        entry_title (str): New title from the feed entry.
+        entry_link (str): New link from the feed entry.
+    """
     existing_title = existing_item_data.title
     existing_link = existing_item_data.link
 
@@ -438,24 +431,36 @@ def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_li
             existing_title,
             feed_db_obj.name,
         )
-        db.session.query(FeedItem).filter(
-            FeedItem.id == existing_item_data.id).update(
+        db.session.query(FeedItem).filter(FeedItem.id == existing_item_data.id).update(
             updates, synchronize_session=False
         )
 
 
 def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links, feed_name):
-    """Checks if an item is a duplicate within the current processing batch."""
+    """Checks if an item is a duplicate within the current processing batch.
+
+    Args:
+        db_guid (str): Calculated GUID for the item.
+        entry_link (str): Link for the item.
+        batch_guids (set): Set of GUIDs processed in current batch.
+        batch_links (set): Set of links processed in current batch.
+        feed_name (str): Name of the feed for logging.
+
+    Returns:
+        bool: True if it's a duplicate, False otherwise.
+    """
     if db_guid and db_guid in batch_guids:
         logger.warning(
             "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
-            db_guid, feed_name,
+            db_guid,
+            feed_name,
         )
         return True
     if entry_link in batch_links:
         logger.warning(
             "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
-            entry_link, feed_name,
+            entry_link,
+            feed_name,
         )
         return True
     return False
@@ -482,7 +487,7 @@ def _save_items_to_db(feed_db_obj, items_to_add):
             e,
         )
         committed_count = _save_items_individually(feed_db_obj, items_to_add)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         db.session.rollback()
         logger.error(
             "Generic error committing new items for feed %s",
@@ -501,13 +506,13 @@ def _save_items_individually(feed_db_obj, items_to_add):
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         db.session.add(feed_db_obj)
         db.session.commit()
-    except Exception:
-        db.session.rollback()
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.error(
             "Error updating last_updated_time for feed '%s' after batch failure",
             feed_db_obj.name,
             exc_info=True,
         )
+        db.session.rollback() # Rollback if updating last_updated_time fails
 
     count = 0
     for item in items_to_add:
@@ -526,7 +531,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
                 item.guid,
                 ie,
             )
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error(
                 "Generic error adding item '%s'", item.title[:100], exc_info=True
@@ -537,7 +542,8 @@ def _save_items_individually(feed_db_obj, items_to_add):
             "Recovered %s items individually for feed: %s", count, feed_db_obj.name
         )
     else:
-        logger.info("No items added individually for feed: %s", feed_db_obj.name)
+        logger.info("No items added individually for feed: %s",
+                    feed_db_obj.name)
 
     return count
 
@@ -550,11 +556,9 @@ def _enforce_feed_limit(feed_db_obj):
         return
 
     num_to_delete = current_count - MAX_ITEMS_PER_FEED
-    # Use a subquery for efficient deletion
-    # Note: SQLite has limitations with simultaneous read/write in subqueries for DELETE,
-    # but SQLAlchemy handles basic cases. If issues arise, we can fetch IDs first (as before).
-    # Qodo suggested subquery, but let's stick to the previous "fetch IDs" approach which is safer across DBs
-    # for simple logic, but verify the efficiency.
+    # Use a subquery construct for efficient deletion.
+    # Note: SQLite has limitations with simultaneous read/write in subqueries for DELETE.
+    # We fetch IDs first which is safer across DBs for this logic.
     # Actually, the previous implementation was:
     # oldest_ids = query.limit().all() -> delete(id.in_(oldest_ids))
     # Qodo said: "Consider converting to a scalar subquery...".
@@ -591,7 +595,7 @@ def _enforce_feed_limit(feed_db_obj):
         )
         try:
             db.session.commit()
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error(
                 "Error committing eviction for feed '%s'",
@@ -625,7 +629,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     # This ensures they are preserved even if the batch insert of new items fails later.
     try:
         db.session.commit()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         db.session.rollback()
         logger.error(
             "Error committing metadata/existing items for feed %s",
@@ -643,7 +647,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         try:
             db.session.commit()
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error(
                 "Error committing feed update (no new items) for %s",
@@ -659,16 +663,13 @@ def process_feed_entries(feed_db_obj, parsed_feed):
 
 
 def fetch_and_update_feed(feed_id):
-    """Fetches a single feed by ID, processes its entries, and updates the database.
+    """Fetches a single feed by ID and updates the database.
 
     Args:
         feed_id (int): The database ID of the Feed to update.
 
     Returns:
-        A tuple (success, new_items_count, tab_id):
-        - success (bool): True if the feed was fetched and processed successfully (even if 0 new items), False otherwise.
-        - new_items_count (int): The number of new items added.
-        - tab_id (int): The ID of the tab this feed belongs to.
+        tuple (bool, int, int): (success, new_items_count, tab_id)
     """
     feed = db.session.get(Feed, feed_id)
     if not feed:
@@ -683,13 +684,10 @@ def fetch_and_update_feed(feed_id):
 
 
 def update_all_feeds():
-    """Iterates through all feeds in the database, fetches updates in parallel, and processes entries.
+    """Fetches all feeds in parallel and processes entries.
 
     Returns:
-        A tuple (total_feeds_processed_successfully, total_new_items, affected_tab_ids):
-        - total_feeds_processed_successfully (int): Number of feeds where fetch and process stages completed without critical failure.
-        - total_new_items (int): Total new items added across all feeds.
-        - affected_tab_ids (set): A set of tab IDs that received new items.
+        tuple (int, int, set): (success_count, total_new_items, affected_tab_ids)
     """
     all_feeds = Feed.query.all()
     total_new_items = 0
@@ -737,7 +735,7 @@ def update_all_feeds():
                     if new_items > 0:
                         affected_tab_ids.add(tab_id)
 
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 logger.error(
                     "Unexpected critical error processing future for feed %s (%s)",
                     feed_obj.name,
@@ -747,7 +745,7 @@ def update_all_feeds():
                 continue
 
     logger.info(
-        "Finished updating feeds. Attempted: %s, Successfully Processed: %s, Total New Items Added: %s",
+        "Finished updating feeds. Attempted: %s, Success: %s, New Items: %s",
         attempted_count,
         processed_successfully_count,
         total_new_items,
