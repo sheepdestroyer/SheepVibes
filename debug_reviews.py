@@ -1,9 +1,12 @@
-from github import Github
 import subprocess
 import sys
 
+from github import Github
+
 try:
-    res = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, check=True)
+    res = subprocess.run(
+        ["gh", "auth", "token"], capture_output=True, text=True, check=True
+    )
     token = res.stdout.strip()
 except Exception as e:
     print(f"Error getting token: {e}")
