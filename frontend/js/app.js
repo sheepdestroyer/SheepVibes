@@ -195,11 +195,15 @@ async function handleRenameTab() {
 async function handleDeleteTab() {
     if (!activeTabId || !confirm("Delete this tab and all its feeds?")) return;
     try {
-        await api.deleteTab(activeTabId);
+        const deletedTabId = activeTabId;
+        await api.deleteTab(deletedTabId);
+
+        // Surgically update the UI and state instead of a full reload
+        document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
+        loadedTabs.delete(deletedTabId);
         activeTabId = null;
-        loadedTabs.clear();
-        document.getElementById('feed-grid').innerHTML = '';
-        await initializeTabs();
+
+        await initializeTabs(); // Still need this to re-render the tab list properly
         showToast('Tab deleted.', 'success');
     } catch (e) {
         showToast(e.message, 'error');

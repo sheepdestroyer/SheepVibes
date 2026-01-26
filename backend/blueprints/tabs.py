@@ -116,6 +116,10 @@ def rename_tab(tab_id):
             "Renamed tab %s from '%s' to '%s'.", tab_id, original_name, new_name
         )
         return jsonify(tab.to_dict()), 200  # OK
+    except IntegrityError:
+        db.session.rollback()
+        logger.warning("Failed to rename tab %s to '%s' due to duplicate name.", tab_id, new_name)
+        return jsonify({"error": f'Tab name "{new_name}" is already in use'}), 409
     except Exception as e:
         db.session.rollback()
         logger.error(

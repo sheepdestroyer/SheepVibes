@@ -49,6 +49,7 @@ function createFeedItemElement(item, clickHandler) {
     link.href = item.link;
     link.textContent = item.title;
     link.target = '_blank';
+    link.rel = 'noopener noreferrer';
     link.addEventListener('click', () => clickHandler(listItem));
     listItem.appendChild(link);
 
