@@ -2,6 +2,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from ..cache_utils import (
     invalidate_tabs_cache,
@@ -63,10 +64,13 @@ def create_tab():
         logger.info("Created new tab '%s' with id %s.",
                     new_tab.name, new_tab.id)
         return jsonify(new_tab.to_dict()), 201  # Created
+    except IntegrityError:
+        db.session.rollback()
+        logger.warning("Attempted to create a tab with a duplicate name '%s'", tab_name)
+        return jsonify({"error": f'Tab with name "{tab_name}" already exists'}), 409
     except Exception as e:
         db.session.rollback()
         logger.error("Error creating tab '%s': %s", tab_name, e, exc_info=True)
-        # Let the 500 handler manage the response
         return (
             jsonify({"error": "An internal error occurred while creating the tab."}),
             500,
