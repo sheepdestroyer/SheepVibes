@@ -562,7 +562,25 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     _update_feed_metadata(feed_db_obj, parsed_feed)
     items_to_add = _collect_new_items(feed_db_obj, parsed_feed)
 
+    # Commit metadata and existing item updates immediately.
+    # This ensures they are preserved even if the batch insert of new items fails later.
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.error(
+            "Error committing metadata/existing items for feed %s",
+            feed_db_obj.name,
+            exc_info=True,
+        )
+        # Proceeding to process new items even if metadata update failed,
+        # though ideally, we'd want to stop or retry.
+        # For now, we continue to attempt adding new content.
+
     if not items_to_add:
+        # If no new items, we are done.
+        # last_updated_time is usually updated on successful commit of items,
+        # or here if there were no items but fetch succeeded.
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         try:
             db.session.commit()
