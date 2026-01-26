@@ -33,9 +33,7 @@ except Exception:
     _cpu_count = 1
 
 try:
-    MAX_CONCURRENT_FETCHES = int(
-        os.environ.get("FEED_FETCH_MAX_WORKERS", 0)
-    )
+    MAX_CONCURRENT_FETCHES = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 0))
 except (ValueError, TypeError):
     MAX_CONCURRENT_FETCHES = 0
 if MAX_CONCURRENT_FETCHES == 0:
@@ -635,8 +633,9 @@ def update_all_feeds():
         "Starting update process for %s feeds (Parallelized).", len(all_feeds))
 
     # Optimize workers: don't create more threads than actual feeds
-    actual_workers = min(MAX_CONCURRENT_FETCHES, len(all_feeds)) if all_feeds else 1
-    
+    actual_workers = min(MAX_CONCURRENT_FETCHES,
+                         len(all_feeds)) if all_feeds else 1
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
         # Submit all fetch tasks, mapping future to the feed object directly
         future_to_feed = {
