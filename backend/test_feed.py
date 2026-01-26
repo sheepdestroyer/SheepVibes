@@ -206,17 +206,15 @@ def test_kernel_org_scenario(db_setup, mocker):
     new_items_count = feed_service.process_feed_entries(
         feed_obj, mock_feed_data)
 
-    assert new_items_count == 3, (
-        "Should add all 3 items because they have unique GUIDs, even if links are shared"
+    assert new_items_count == 1, (
+        "Should only add 1 item because they share the same link, and link now enforces uniqueness"
     )
 
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
-    assert len(items_in_db) == 3
-    guids_in_db = {item.guid for item in items_in_db}
-    assert guids_in_db == {"kernel.guid.1", "kernel.guid.2", "kernel.guid.3"}
-    links_in_db = {item.link for item in items_in_db}
-    # All share the same link
-    assert links_in_db == {"https://www.kernel.org/"}
+    assert len(items_in_db) == 1
+    # The first one should be preserved
+    assert items_in_db[0].guid == "kernel.guid.1"
+    assert items_in_db[0].link == "https://www.kernel.org/"
 
 
 def test_hacker_news_scenario_guid_handling(db_setup, mocker):

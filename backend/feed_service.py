@@ -386,24 +386,23 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                 db.session.add(existing_item)
             continue
 
+
         # Check batch duplicates
         is_batch_duplicate = False
-        if db_guid:
-            if db_guid in batch_processed_guids:
-                logger.warning(
-                    "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
-                    db_guid,
-                    feed_db_obj.name,
-                )
-                is_batch_duplicate = True
-        else:
-            if entry_link in batch_processed_links:
-                logger.warning(
-                    "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
-                    entry_link,
-                    feed_db_obj.name,
-                )
-                is_batch_duplicate = True
+        if db_guid and db_guid in batch_processed_guids:
+            logger.warning(
+                "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
+                db_guid,
+                feed_db_obj.name,
+            )
+            is_batch_duplicate = True
+        elif entry_link in batch_processed_links:
+            logger.warning(
+                "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
+                entry_link,
+                feed_db_obj.name,
+            )
+            is_batch_duplicate = True
 
         if is_batch_duplicate:
             continue
@@ -575,7 +574,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         )
         # Proceeding to process new items even if metadata update failed,
         # though ideally, we'd want to stop or retry.
-        # For now, we continue to attempt adding new content.
+        # It's safer to stop processing this feed to avoid potential inconsistencies.
+        return 0
 
     if not items_to_add:
         # If no new items, we are done.
