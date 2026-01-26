@@ -537,9 +537,10 @@ def import_opml():
             )
 
     if affected_tab_ids_set:
-        invalidate_tabs_cache()
         for tab_id_to_invalidate in affected_tab_ids_set:
-            invalidate_tab_feeds_cache(tab_id_to_invalidate)
+            invalidate_tab_feeds_cache(
+                tab_id_to_invalidate, invalidate_tabs=False)
+        invalidate_tabs_cache()
         logger.info(
             "OPML import: Feed-related caches invalidated for tabs: %s.",
             affected_tab_ids_set,

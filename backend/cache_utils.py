@@ -63,16 +63,18 @@ def invalidate_tabs_cache():
     logger.info("Invalidated tabs cache. New version: %s", new_version)
 
 
-def invalidate_tab_feeds_cache(tab_id):
+def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
     """Invalidates a specific tab's feed cache and the main tabs list cache.
 
     Args:
         tab_id (int): The ID of the tab to invalidate the cache for.
+        invalidate_tabs (bool): If True, also invalidates the main tabs list cache.
     """
     version_key = f"tab_{tab_id}_version"
     new_version = get_version(version_key) + 1
     cache.set(version_key, new_version)
     logger.info("Invalidated cache for tab %s. New version: %s",
                 tab_id, new_version)
-    # Also invalidate the main tabs list because unread counts will have changed.
-    invalidate_tabs_cache()
+    if invalidate_tabs:
+        # Also invalidate the main tabs list because unread counts will have changed.
+        invalidate_tabs_cache()
