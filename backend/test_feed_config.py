@@ -1,8 +1,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
-
 from backend.feed_service import WORKER_FETCH_CAP, _get_max_concurrent_fetches
 
 
