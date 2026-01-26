@@ -63,8 +63,12 @@ async function initializeTabs() {
 
         renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
-        if (activeTabId && !loadedTabs.has(activeTabId)) {
-            await loadFeedsForTab(activeTabId);
+        if (activeTabId) {
+            if (!loadedTabs.has(activeTabId)) {
+                await loadFeedsForTab(activeTabId);
+            } else {
+                toggleWidgetsVisibility();
+            }
         }
     } catch (error) {
         console.error('Error initializing tabs:', error);
@@ -120,7 +124,9 @@ async function loadFeedsForTab(tabId) {
         const feeds = await api.getFeedsForTab(tabId);
 
         // Remove ANY existing "no feeds" messages to be clean
-        const placeholders = feedGrid.querySelectorAll('.empty-tab-message');
+        const placeholders = feedGrid.querySelectorAll(
+            `.empty-tab-message[data-tab-id="${tabId}"]`
+        );
         placeholders.forEach(p => p.remove());
 
         if (feeds && feeds.length > 0) {

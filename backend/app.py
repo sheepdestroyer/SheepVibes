@@ -19,6 +19,7 @@ from .constants import (
 from .extensions import cache, db, scheduler
 from .feed_service import update_all_feeds
 from .sse import announcer
+from filelock import FileLock, Timeout
 
 # Set up logging configuration
 logging.basicConfig(
@@ -165,10 +166,9 @@ def scheduled_feed_update():
                     msg = f"data: {json.dumps(event_data)}\n\n"
                     announcer.announce(msg=msg)
                 except Exception as e:
-                    logger.error(
-                        "Error during scheduled feed update: %s", e, exc_info=True
-                    )
-    except Exception:
+                    logger.error("Error during scheduled feed update: %s",
+                                 e, exc_info=True)
+    except Timeout:
         # Lock acquisition failed (another worker is running the job), just skip
         pass
 
