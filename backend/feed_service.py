@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 MAX_ITEMS_PER_FEED = 100
 
 # Hard cap for concurrent fetches to avoid resource exhaustion
+# 10 is an empirical limit to prevent network/system overload on typical instances
 WORKER_FETCH_CAP = 10
 
 
