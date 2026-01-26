@@ -25,25 +25,32 @@ MAX_ITEMS_PER_FEED = 100
 
 # Maximum number of concurrent feed fetches
 # I/O bound tasks can handle more workers than CPU cores
-try:
-    _cpu_count = os.cpu_count() or 1
-except NotImplementedError:
-    _cpu_count = 1
-except Exception:
-    _cpu_count = 1
+def _get_max_concurrent_fetches():
+    """Calculates the maximum number of concurrent feed fetches.
 
-try:
-    MAX_CONCURRENT_FETCHES = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 0))
-    if MAX_CONCURRENT_FETCHES < 0:
-        MAX_CONCURRENT_FETCHES = 0
-except (ValueError, TypeError):
-    MAX_CONCURRENT_FETCHES = 0
-if MAX_CONCURRENT_FETCHES == 0:
-    MAX_CONCURRENT_FETCHES = _cpu_count * 5
+    Returns:
+        int: The maximum number of concurrent fetches.
+    """
+    try:
+        cpu_count = os.cpu_count() or 1
+    except (NotImplementedError, Exception):
+        cpu_count = 1
 
-# Cap the workers to avoid resource exhaustion on high-core machines
-WORKER_FETCH_CAP = 10
-MAX_CONCURRENT_FETCHES = min(MAX_CONCURRENT_FETCHES, WORKER_FETCH_CAP)
+    try:
+        max_workers = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 0))
+    except (ValueError, TypeError):
+        max_workers = 0
+
+    if max_workers <= 0:
+        max_workers = cpu_count * 5
+
+    # Cap the workers to avoid resource exhaustion on high-core machines
+    # This hard cap ensures we don't overwhelm the system/network even if configured higher
+    WORKER_FETCH_CAP = 10
+    return min(max_workers, WORKER_FETCH_CAP)
+
+
+MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
 
 # --- Helper Functions ---
 
@@ -172,10 +179,18 @@ def validate_and_resolve_url(url):
 
 
 def _fetch_feed_content(feed_url):
-    """
-    Helper function to fetch feed content.
-    Returns parsed_feed or None.
-    This function must be side-effect-free regarding the database.
+    """Fetches and parses feed content from a given URL.
+
+    This function is a wrapper around `fetch_feed` to handle exceptions
+    when used in concurrent execution contexts. It is designed to be
+    side-effect-free regarding the database.
+
+    Args:
+        feed_url (str): The URL of the feed to fetch.
+
+    Returns:
+        feedparser.FeedParserDict | None: The parsed feed object, or None if
+        fetching or parsing failed.
     """
     try:
         parsed_feed = fetch_feed(feed_url)
