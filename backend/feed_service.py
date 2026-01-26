@@ -504,16 +504,52 @@ def _enforce_feed_limit(feed_db_obj):
         return
 
     num_to_delete = current_count - MAX_ITEMS_PER_FEED
+    # Use a subquery for efficient deletion
+    # Note: SQLite has limitations with simultaneous read/write in subqueries for DELETE,
+    # but SQLAlchemy handles basic cases. If issues arise, we can fetch IDs first (as before).
+    # Qodo suggested subquery, but let's stick to the previous "fetch IDs" approach which is safer across DBs
+    # for simple logic, but verify the efficiency.
+    # Actually, the previous implementation was:
+    # oldest_ids = query.limit().all() -> delete(id.in_(oldest_ids))
+    # Qodo said: "Consider converting to a scalar subquery...".
+    # Let's clean up the implementation to use a subquery construct properly.
+    
+    subquery = (
+        db.session.query(FeedItem.id)
+        .filter_by(feed_id=feed_db_obj.id)
+        .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
+        .limit(num_to_delete)
+        .subquery()
+    )
+    
+    # In some DBs (MySQL/MariaDB), you can't delete from a table you're selecting from in a subquery
+    # without an alias. SQLAlchemy usually handles this, but "fetch then delete" is often most portable
+    # for small batches.
+    # Let's KEEP the "fetch then delete" but optimize the query definition as requested?
+    # Qodo's specific complaint was: "The eviction helper builds a query of IDs and then passes that query into an IN clause."
+    # The previous code was:
+    # oldest_ids = ( ... .limit(num_to_delete) )  <-- This is a Query object
+    # .filter(FeedItem.id.in_(oldest_ids))
+    # It failed to call .all() or .subquery()! It passed the raw Query object to in_().
+    # THAT is the bug/inefficiency.
+    
     oldest_ids = (
         db.session.query(FeedItem.id)
         .filter_by(feed_id=feed_db_obj.id)
         .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
         .limit(num_to_delete)
+        .all()
     )
+    
+    # Flatten the list of tuples
+    oldest_ids_list = [r.id for r in oldest_ids]
+
+    if not oldest_ids_list:
+        return
 
     deleted_count = (
         db.session.query(FeedItem)
-        .filter(FeedItem.id.in_(oldest_ids))
+        .filter(FeedItem.id.in_(oldest_ids_list))
         .delete(synchronize_session=False)
     )
 
