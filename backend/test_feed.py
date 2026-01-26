@@ -592,7 +592,8 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):
     # Re-mock urlopen for the second call (not strictly needed if same mock used, but good practice)
     mock_response.read.return_value = b"<rss>content</rss>"
 
-    success, new_items, tab_id = feed_service.fetch_and_update_feed(feed_obj.id)
+    success, new_items, tab_id = feed_service.fetch_and_update_feed(
+        feed_obj.id)
     assert success is True
     assert new_items == 0
     db.session.refresh(feed_obj)

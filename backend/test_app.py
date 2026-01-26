@@ -572,7 +572,8 @@ def test_mark_item_read_not_found(client):
 def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
     # Mock the return values of fetch_and_update_feed
-    mock_fetch_and_update.return_value = (True, 1, 1)  # success, num_new_items, tab_id
+    mock_fetch_and_update.return_value = (
+        True, 1, 1)  # success, num_new_items, tab_id
 
     response = client.post(f"/api/feeds/{feed_id}/update")
 
@@ -739,7 +740,10 @@ def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
     """Test POST /api/feeds/update-all successfully and announces SSE."""
     # Arrange
     mock_update_all_feeds.return_value = (
-        5, 10, {1, 2})  # 5 feeds processed, 10 new items, affected tab_ids
+        5,
+        10,
+        {1, 2},
+    )  # 5 feeds processed, 10 new items, affected tab_ids
     # Act
     response = client.post("/api/feeds/update-all")
 
@@ -1450,7 +1454,11 @@ def test_import_opml_success(mock_fetch_update, client):
 @patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_with_duplicates(mock_fetch_update, client):
     """Test POST /api/opml/import with some feeds already existing."""
-    mock_fetch_update.return_value = (True, 1, 1) # Simulate successful fetch with 1 new item and the tab_id
+    mock_fetch_update.return_value = (
+        True,
+        1,
+        1,
+    )  # Simulate successful fetch with 1 new item and the tab_id
     with app.app_context():
         tab = Tab(name="Import Tab Dups", order=0)
         db.session.add(tab)
@@ -1529,7 +1537,11 @@ def test_import_opml_malformed_xml(client):
 @patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, client):
     """Test import creates a default tab if none exist and imports feeds."""
-    mock_fetch_update.return_value = (True, 1, 1) # Simulate successful fetch with 1 new item and the tab_id
+    mock_fetch_update.return_value = (
+        True,
+        1,
+        1,
+    )  # Simulate successful fetch with 1 new item and the tab_id
     # Ensure no tabs exist (client fixture already drops tables)
     opml_content = """
     <opml version="2.0">
@@ -1584,7 +1596,11 @@ def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, clie
 @patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_specific_tab(mock_fetch_update, client):
     """Test POST /api/opml/import into a specific tab when multiple tabs exist."""
-    mock_fetch_update.return_value = (True, 1, 1) # Simulate successful fetch with 1 new item and the tab_id
+    mock_fetch_update.return_value = (
+        True,
+        1,
+        1,
+    )  # Simulate successful fetch with 1 new item and the tab_id
     with app.app_context():
         tab1 = Tab(name="Tab One", order=0)
         tab2 = Tab(name="Tab Two", order=1)
@@ -1625,7 +1641,11 @@ def test_import_opml_default_tab_if_tab_id_not_provided(
     mock_fetch_update, client
 ):  # Added mock_fetch_update
     """Test POST /api/opml/import defaults to the first tab if tab_id is not provided."""
-    mock_fetch_update.return_value = (True, 1, 1)  # Simulate successful fetch with 1 new item and the tab_id
+    mock_fetch_update.return_value = (
+        True,
+        1,
+        1,
+    )  # Simulate successful fetch with 1 new item and the tab_id
     with app.app_context():
         tab1 = Tab(name="Default Tab", order=0)  # Should be default
         tab2 = Tab(name="Other Tab", order=1)
@@ -1763,7 +1783,12 @@ def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
 def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, client):
     """Tests that nested OPML outlines create new tabs and feeds are correctly assigned."""
     # Simulate successful fetch for each feed, returning a dummy tab_id (1)
-    mock_fetch_update.side_effect = [(True, 1, 1), (True, 1, 1), (True, 1, 1), (True, 1, 1)]
+    mock_fetch_update.side_effect = [
+        (True, 1, 1),
+        (True, 1, 1),
+        (True, 1, 1),
+        (True, 1, 1),
+    ]
     opml_content = """
     <opml version="2.0">
       <body>
@@ -1982,7 +2007,8 @@ def test_import_opml_deletes_empty_default_imported_feeds_tab(
     Tests that if 'Imported Feeds' is created because no tabs exist,
     but all OPML items go into folders (new tabs), the empty 'Imported Feeds' tab is deleted.
     """
-    mock_fetch_update.return_value = (True, 1, 1)  # Simulate feed fetch success
+    mock_fetch_update.return_value = (
+        True, 1, 1)  # Simulate feed fetch success
     # Ensure no tabs exist initially. The `client` fixture already handles db cleanup.
     with client.application.app_context():  # Use client.application.app_context()
         assert Tab.query.count() == 0
