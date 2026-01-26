@@ -9,12 +9,16 @@ import socket
 import urllib.request
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
-
-import feedparser
-import defusedxml.sax
-from defusedxml.common import DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden
 from xml.sax.handler import ContentHandler
+
+import defusedxml.sax
+import feedparser
 from dateutil import parser as date_parser
+from defusedxml.common import (
+    DTDForbidden,
+    EntitiesForbidden,
+    ExternalReferenceForbidden,
+)
 from sqlalchemy.exc import IntegrityError
 
 # Import database models from the new models.py
@@ -64,7 +68,7 @@ def _validate_xml_safety(content):
             handler,
             forbid_dtd=True,
             forbid_entities=True,
-            forbid_external=True
+            forbid_external=True,
         )
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
         logger.error("XML Security Violation detected: %s", e)
@@ -297,7 +301,8 @@ def fetch_feed(feed_url):
             content = response.read()
 
         if not _validate_xml_safety(content):
-            logger.warning("Feed rejected due to security violation: %s", feed_url)
+            logger.warning(
+                "Feed rejected due to security violation: %s", feed_url)
             return None
 
         parsed_feed = feedparser.parse(content)
