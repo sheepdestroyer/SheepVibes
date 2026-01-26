@@ -11,6 +11,7 @@ from ..cache_utils import (
     invalidate_tab_feeds_cache,
     invalidate_tabs_cache,
 )
+from ..constants import DEFAULT_OPML_IMPORT_TAB_NAME
 from ..extensions import db
 from ..feed_service import fetch_and_update_feed
 from ..models import Feed, Tab
@@ -284,7 +285,7 @@ def _determine_target_tab(requested_tab_id_str):
             logger.info(
                 "OPML import: No tabs exist. Creating a default tab for top-level feeds."
             )
-            default_tab_name_for_creation = "Imported Feeds"
+            default_tab_name_for_creation = DEFAULT_OPML_IMPORT_TAB_NAME
             temp_tab_check = Tab.query.filter_by(
                 name=default_tab_name_for_creation
             ).first()
@@ -345,7 +346,7 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
     """
     Cleans up the default tab if it was created for this import but remains empty.
     """
-    if was_created and tab_name == "Imported Feeds" and tab_id not in affected_tab_ids:
+    if was_created and tab_name == DEFAULT_OPML_IMPORT_TAB_NAME and tab_id not in affected_tab_ids:
         feeds_in_default_tab = Feed.query.filter_by(tab_id=tab_id).count()
         if feeds_in_default_tab == 0:
             logger.info(
@@ -405,14 +406,14 @@ def import_opml():
             logger.error(
                 "OPML import failed: Malformed XML. Error: %s", e, exc_info=True
             )
-            return None, (jsonify({"error": f"Malformed OPML file: {e}"}), 400)
+            return None, (jsonify({"error": "Malformed OPML file. Please check the file format."}), 400)
         except Exception as e:
             logger.error(
                 "OPML import failed: Could not parse file stream. Error: %s",
                 e,
                 exc_info=True,
             )
-            return None, (jsonify({"error": f"Could not parse OPML file: {e}"}), 400)
+            return None, (jsonify({"error": "Could not parse OPML file. Please check the file format."}), 400)
 
     opml_file = _validate_request_file()
     if isinstance(opml_file, tuple):
