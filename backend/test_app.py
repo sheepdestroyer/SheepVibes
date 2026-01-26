@@ -2225,10 +2225,11 @@ def test_autosave_opml_with_temp_fs(tmp_path, client, setup_autosave_test_data):
     with client.application.app_context():
         autosave_opml()
 
-    # Assert
-    backup_file_path = tmp_path / "data" / "sheepvibes_backup.opml"
+    # Assert: With new logic, backup is saved in the DB directory (priority 2)
+    # since SQLALCHEMY_DATABASE_URI points to an absolute path
+    backup_file_path = tmp_path / "sheepvibes_backup.opml"
     assert backup_file_path.exists(), (
-        "Backup file should have been created in the temp directory."
+        "Backup file should have been created in the DB directory."
     )
 
     written_data = backup_file_path.read_text(encoding="utf-8")
