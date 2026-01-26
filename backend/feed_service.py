@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 # Maximum number of items to keep per feed for cache eviction
 MAX_ITEMS_PER_FEED = 100
 
+# Hard cap for concurrent fetches to avoid resource exhaustion
+WORKER_FETCH_CAP = 10
 
 # Maximum number of concurrent feed fetches
 # I/O bound tasks can handle more workers than CPU cores
@@ -47,7 +49,6 @@ def _get_max_concurrent_fetches():
 
     # Cap the workers to avoid resource exhaustion on high-core machines
     # This hard cap ensures we don't overwhelm the system/network even if configured higher
-    WORKER_FETCH_CAP = 10
     return min(max_workers, WORKER_FETCH_CAP)
 
 
