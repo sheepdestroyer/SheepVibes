@@ -322,7 +322,9 @@ def api_update_all_feeds():
         event_data = {
             "feeds_processed": processed_count,
             "new_items": new_items_count,
-            "affected_tab_ids": sorted(list(affected_tab_ids)) if affected_tab_ids else [],
+            "affected_tab_ids": (
+                sorted(list(affected_tab_ids)) if affected_tab_ids else []
+            ),
         }
         msg = f"data: {json.dumps(event_data)}\n\n"
         announcer.announce(msg=msg)
