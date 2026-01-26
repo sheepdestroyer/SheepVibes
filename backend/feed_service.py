@@ -27,10 +27,17 @@ MAX_ITEMS_PER_FEED = 100
 # I/O bound tasks can handle more workers than CPU cores
 try:
     _cpu_count = os.cpu_count() or 1
+except NotImplementedError:
+    _cpu_count = 1
 except Exception:
     _cpu_count = 1
 
-MAX_CONCURRENT_FETCHES = int(os.environ.get("FEED_FETCH_MAX_WORKERS", 0))
+try:
+    MAX_CONCURRENT_FETCHES = int(
+        os.environ.get("FEED_FETCH_MAX_WORKERS", 0)
+    )
+except (ValueError, TypeError):
+    MAX_CONCURRENT_FETCHES = 0
 if MAX_CONCURRENT_FETCHES == 0:
     MAX_CONCURRENT_FETCHES = _cpu_count * 5
 
@@ -267,8 +274,8 @@ def fetch_feed(feed_url):
 
         return parsed_feed
 
-    except Exception as e:
-        logger.error("Error fetching feed %s: %s", feed_url, e, exc_info=True)
+    except Exception:
+        logger.error("Error fetching feed %s", feed_url, exc_info=True)
         return None
 
 
@@ -440,12 +447,11 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         try:
             db.session.commit()  # Commit to save updated last_updated_time
-        except Exception as e:  # Catch potential errors during this commit
+        except Exception:  # Catch potential errors during this commit
             db.session.rollback()
             logger.error(
-                "Error committing feed update (no new items) for %s: %s",
+                "Error committing feed update (no new items) for %s",
                 feed_db_obj.name,
-                e,
                 exc_info=True,
             )
         return 0
@@ -482,9 +488,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         except Exception as ts_e:
             db.session.rollback()
             logger.error(
-                "Error updating last_updated_time for feed '%s' after batch insert failure: %s",
+                "Error updating last_updated_time for feed '%s' after batch insert failure",
                 feed_db_obj.name,
-                ts_e,
                 exc_info=True,
             )
 
@@ -515,10 +520,9 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             except Exception as e_individual:
                 db.session.rollback()
                 logger.error(
-                    "Generic error individually adding item '%s' for feed '%s': %s",
+                    "Generic error individually adding item '%s' for feed '%s'",
                     item_to_add.title[:100],
                     feed_db_obj.name,
-                    e_individual,
                     exc_info=True,
                 )
 
@@ -537,9 +541,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     except Exception as e:
         db.session.rollback()
         logger.error(
-            "Generic error committing new items for feed %s: %s",
+            "Generic error committing new items for feed %s",
             feed_db_obj.name,
-            e,
             exc_info=True,
         )
         return 0  # Return 0 as no items were successfully committed in this case
@@ -581,9 +584,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             except Exception as e:
                 db.session.rollback()
                 logger.error(
-                    "Error committing eviction of old items for feed '%s': %s",
+                    "Error committing eviction of old items for feed '%s'",
                     feed_db_obj.name,
-                    e,
                     exc_info=True,
                 )
 
@@ -632,9 +634,10 @@ def update_all_feeds():
     logger.info(
         "Starting update process for %s feeds (Parallelized).", len(all_feeds))
 
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=MAX_CONCURRENT_FETCHES
-    ) as executor:
+    # Optimize workers: don't create more threads than actual feeds
+    actual_workers = min(MAX_CONCURRENT_FETCHES, len(all_feeds)) if all_feeds else 1
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
         # Submit all fetch tasks, mapping future to the feed object directly
         future_to_feed = {
             executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds
