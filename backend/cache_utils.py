@@ -47,7 +47,7 @@ def make_tab_feeds_cache_key(tab_id):
     tabs_version = get_version("tabs_version")  # For unread counts
     tab_version = get_version(f"tab_{tab_id}_version")
     # Only include parameters that are used by the endpoint in the cache key.
-    used_params = ['limit']
+    used_params = ["limit"]
     sorted_query = sorted(
         (k, v) for k, v in request.args.items(multi=True) if k in used_params
     )
