@@ -23,7 +23,8 @@ class Tab(db.Model):
     __tablename__ = "tabs"
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)  # Name of the tab
+    name = db.Column(db.String(100), nullable=False,
+                     unique=True)  # Name of the tab
     order = db.Column(db.Integer, default=0)  # Display order of the tab
     # Relationship to Feeds: One-to-Many (one Tab has many Feeds)
     # cascade='all, delete-orphan' means deleting a Tab also deletes its associated Feeds

@@ -66,7 +66,8 @@ def create_tab():
         return jsonify(new_tab.to_dict()), 201  # Created
     except IntegrityError:
         db.session.rollback()
-        logger.warning("Attempted to create a tab with a duplicate name '%s'", tab_name)
+        logger.warning(
+            "Attempted to create a tab with a duplicate name '%s'", tab_name)
         return jsonify({"error": f'Tab with name "{tab_name}" already exists'}), 409
     except Exception as e:
         db.session.rollback()
