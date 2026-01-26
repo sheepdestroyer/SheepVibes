@@ -632,10 +632,11 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
     mock_commit = mocker.patch.object(db.session, "commit")
 
     # Sequence of commit behaviors:
-    # 1. Batch item insert (fails)
-    # 2. Update last_updated_time for feed (succeeds)
-    # 3. Individual insert item 1 (succeeds)
-    # 4. Individual insert item 2 (succeeds)
+    # 1. Metadata/existing items commit (should succeed)
+    # 2. Batch item insert (fails)
+    # 3. Update last_updated_time for feed (succeeds)
+    # 4. Individual insert item 1 (succeeds)
+    # 5. Individual insert item 2 (succeeds)
     mock_commit.side_effect = [
         None,  # Commit for metadata/existing items (NEW)
         IntegrityError(
