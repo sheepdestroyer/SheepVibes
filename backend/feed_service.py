@@ -360,8 +360,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     # in case the feed contains duplicates (e.g. updates).
     try:
         parsed_feed.entries.sort(
-            key=lambda e: parse_published_time(e) or datetime.datetime.min.replace(tzinfo=timezone.utc),
-            reverse=True
+            key=lambda e: parse_published_time(e)
+            or datetime.datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
         )
     except Exception:
         # If sorting fails, proceed with original order.

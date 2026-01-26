@@ -399,9 +399,13 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     m_parse.return_value = mock_feed1_data
     count1 = feed_service.process_feed_entries(feed1_obj, mock_feed1_data)
     assert count1 == 2
-    
+
     # Assert using set or sorted list for order-independence
-    f1_items = FeedItem.query.filter_by(feed_id=feed1_obj.id).order_by(FeedItem.published_time).all()
+    f1_items = (
+        FeedItem.query.filter_by(feed_id=feed1_obj.id)
+        .order_by(FeedItem.published_time)
+        .all()
+    )
     assert f1_items[0].guid == "global.guid.1"
     assert f1_items[1].guid == "http://feed1.com/item2"
 
