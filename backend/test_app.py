@@ -1182,22 +1182,29 @@ def test_process_feed_with_in_batch_duplicate_guids(
         new_items_count = process_feed_entries(feed_obj, mock_parsed_feed)
 
         # 4. Assertions
-        assert new_items_count == 3
+        assert new_items_count == 2
 
         items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
-        assert len(items_in_db) == 3
+        assert len(items_in_db) == 2
 
         guids_in_db = {item.guid for item in items_in_db}
-        assert "http://link1.com" in guids_in_db
-        assert "http://link2.com" in guids_in_db
-        assert "http://link3.com" in guids_in_db
+        assert "guid1" in guids_in_db
+        assert "guid2" in guids_in_db
+        assert len(guids_in_db) == 2
 
         item1_db = FeedItem.query.filter_by(
-            guid="http://link1.com", feed_id=feed_obj.id
+            guid="guid1", feed_id=feed_obj.id
         ).first()
         assert item1_db is not None
         assert item1_db.title == "Title 1"
         assert item1_db.link == "http://link1.com"
+
+        item2_db = FeedItem.query.filter_by(
+            guid="guid2", feed_id=feed_obj.id
+        ).first()
+        assert item2_db is not None
+        assert item2_db.title == "Title 3"
+        assert item2_db.link == "http://link3.com"
 
 
 # Using client fixture for app_context
@@ -1287,7 +1294,7 @@ def test_process_feed_with_missing_link(client):
 
         items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
         assert len(items_in_db) == 1
-        assert items_in_db[0].guid == "http://valid.com"
+        assert items_in_db[0].guid == "guid_valid"
         assert items_in_db[0].link == "http://valid.com"
         assert items_in_db[0].title == "Valid Item"
 
@@ -1777,9 +1784,10 @@ def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
     json_data = response.json
     assert json_data["imported_count"] == 0
     assert json_data["skipped_count"] == 0
+    # Updated message for empty body elements (body exists but has no children)
     assert (
         "No feed entries or folders found in the OPML file." in json_data["message"]
-    )  # Updated message
+    )
     mock_fetch_update_unused.assert_not_called()
 
 

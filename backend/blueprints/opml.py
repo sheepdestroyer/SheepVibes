@@ -343,134 +343,144 @@ def _determine_target_tab(requested_tab_id_str):
 
 
 def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
-    """
-    Cleans up the default tab if it was created for this import but remains empty.
-    """
-    if (
-        was_created
-        and tab_name == DEFAULT_OPML_IMPORT_TAB_NAME
-        and tab_id not in affected_tab_ids
-    ):
-        feeds_in_default_tab = Feed.query.filter_by(tab_id=tab_id).count()
-        if feeds_in_default_tab == 0:
-            logger.info(
-                "OPML import: The default '%s' tab (ID: %s) created during import is empty. Deleting it.",
-                DEFAULT_OPML_IMPORT_TAB_NAME,
-                tab_id,
-            )
-            try:
-                tab_to_delete = db.session.get(Tab, tab_id)
-                if tab_to_delete:
-                    db.session.delete(tab_to_delete)
-                    db.session.commit()
-                    invalidate_tabs_cache()
-                    logger.info(
-                        "OPML import: Successfully deleted empty '%s' tab (ID: %s).",
-                        DEFAULT_OPML_IMPORT_TAB_NAME,
-                        tab_id,
-                    )
-                else:
-                    logger.warning(
-                        "OPML import: Tried to delete empty '%s' (ID: %s), but it was not found.",
-                        DEFAULT_OPML_IMPORT_TAB_NAME,
-                        tab_id,
-                    )
-            except Exception as e_del_tab:
-                db.session.rollback()
-                logger.error(
-                    "OPML import: Failed to delete empty '%s' tab (ID: %s): %s",
-                    DEFAULT_OPML_IMPORT_TAB_NAME,
+    """Cleans up the default tab if it was created for this import but remains empty."""
+    if was_created and tab_id not in affected_tab_ids:
+        try:
+            tab_to_del = db.session.get(Tab, tab_id)
+            if tab_to_del and not tab_to_del.feeds:
+                db.session.delete(tab_to_del)
+                db.session.commit()
+                invalidate_tabs_cache()
+                logger.info(
+                    "OPML import: Removed empty default tab '%s' (ID: %s) created during import.",
+                    tab_name,
                     tab_id,
-                    e_del_tab,
-                    exc_info=True,
                 )
-        else:
-            logger.info(
-                "OPML import: Default tab '%s' (ID: %s) has %s feeds. Keeping it.",
-                DEFAULT_OPML_IMPORT_TAB_NAME,
-                tab_id,
-                feeds_in_default_tab,
+        except Exception as e_cleanup:
+            db.session.rollback()
+            logger.warning(
+                "OPML import: Failed to cleanup empty default tab '%s': %s",
+                tab_name,
+                e_cleanup,
             )
+
+
+def _validate_opml_file_request():
+    """Validates the uploaded OPML file from the request."""
+    if "file" not in request.files:
+        return None, (jsonify({"error": "No file part in the request"}), 400)
+    opml_file = request.files["file"]
+    if opml_file.filename == "":
+        return None, (jsonify({"error": "No file selected for uploading"}), 400)
+    if not opml_file:
+        return None, (jsonify({"error": "File object is empty"}), 400)
+
+    # Basic security: check file extension
+    allowed_extensions = {".opml", ".xml", ".txt"}
+    _, ext = os.path.splitext(opml_file.filename)
+    if ext.lower() not in allowed_extensions:
+        return None, (
+            jsonify(
+                {"error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"}
+            ),
+            400,
+        )
+
+    # Basic security: check file size (5MB limit)
+    opml_file.seek(0, os.SEEK_END)
+    size = opml_file.tell()
+    opml_file.seek(0)
+    if size > 5 * 1024 * 1024:
+        return None, (jsonify({"error": "File is too large (max 5MB)"}), 400)
+
+    return opml_file, None
+
+
+def _parse_opml_root(opml_file):
+    """Parses the OPML file and returns the root element."""
+    try:
+        tree = SafeET.parse(opml_file.stream)
+        return tree.getroot(), None
+    except ET.ParseError as e:
+        logger.error("OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
+        return None, (
+            jsonify({"error": "Malformed OPML file. Please check the file format."}),
+            400,
+        )
+    except Exception as e:
+        logger.error(
+            "OPML import failed: Could not parse file stream. Error: %s",
+            e,
+            exc_info=True,
+        )
+        return None, (
+            jsonify({"error": "Could not parse OPML file. Please check the file format."}),
+            400,
+        )
+
+
+def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
+    """Commits new feeds to the database and initiates initial fetches."""
+    if not newly_added_feeds_list:
+        return True, None
+
+    try:
+        db.session.commit()
+        logger.info(
+            "OPML import: Successfully batch-committed %s new feeds.",
+            len(newly_added_feeds_list),
+        )
+
+        for feed_obj in newly_added_feeds_list:
+            if feed_obj.id:
+                try:
+                    fetch_and_update_feed(feed_obj.id)
+                except Exception as fetch_e:
+                    logger.error(
+                        "OPML import: Error fetching items for new feed %s (ID: %s): %s",
+                        feed_obj.name,
+                        feed_obj.id,
+                        fetch_e,
+                        exc_info=True,
+                    )
+            else:
+                logger.error(
+                    "OPML import: Feed '%s' missing ID after commit.", feed_obj.name
+                )
+        return True, None
+    except Exception as e:
+        db.session.rollback()
+        logger.error("OPML import: Database commit failed for new feeds: %s", e, exc_info=True)
+        return False, (
+            jsonify({"error": "Database error during final feed import step."}),
+            500,
+        )
+
+
+def _invalidate_import_caches(affected_tab_ids_set):
+    """Invalidates caches for all tabs affected by the import."""
+    if not affected_tab_ids_set:
+        return
+    for tab_id in affected_tab_ids_set:
+        invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
+    invalidate_tabs_cache()
+    logger.info(
+        "OPML import: Invalidated caches for tabs: %s.",
+        affected_tab_ids_set,
+    )
 
 
 @opml_bp.route("/import", methods=["POST"])
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
+    opml_file, error_resp = _validate_opml_file_request()
+    if error_resp:
+        return error_resp
 
-    def _validate_request_file():
-        if "file" not in request.files:
-            return jsonify({"error": "No file part in the request"}), 400
-        opml_file = request.files["file"]
-        if opml_file.filename == "":
-            return jsonify({"error": "No file selected for uploading"}), 400
-        if not opml_file:
-            return jsonify({"error": "File object is empty"}), 400
+    root, error_resp = _parse_opml_root(opml_file)
+    if error_resp:
+        return error_resp
 
-        # Basic security: check file extension
-        allowed_extensions = {".opml", ".xml", ".txt"}
-        _, ext = os.path.splitext(opml_file.filename)
-        if ext.lower() not in allowed_extensions:
-            return (
-                jsonify(
-                    {
-                        "error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-                    }
-                ),
-                400,
-            )
-
-        # Basic security: check file size (5MB limit)
-        opml_file.seek(0, os.SEEK_END)
-        size = opml_file.tell()
-        opml_file.seek(0)
-        if size > 5 * 1024 * 1024:
-            return jsonify({"error": "File is too large (max 5MB)"}), 400
-
-        return opml_file
-
-    def _parse_opml_file(file):
-        try:
-            tree = SafeET.parse(file.stream)
-            return tree.getroot(), None
-        except ET.ParseError as e:
-            logger.error(
-                "OPML import failed: Malformed XML. Error: %s", e, exc_info=True
-            )
-            return None, (
-                jsonify(
-                    {"error": "Malformed OPML file. Please check the file format."}
-                ),
-                400,
-            )
-        except Exception as e:
-            logger.error(
-                "OPML import failed: Could not parse file stream. Error: %s",
-                e,
-                exc_info=True,
-            )
-            return None, (
-                jsonify(
-                    {
-                        "error": "Could not parse OPML file. Please check the file format."
-                    }
-                ),
-                400,
-            )
-
-    opml_file = _validate_request_file()
-    if isinstance(opml_file, tuple):
-        return opml_file
-
-    imported_count_wrapper = [0]
-    skipped_count_wrapper = [0]
-    affected_tab_ids_set = set()
-    newly_added_feeds_list = []
-
-    root, error_response = _parse_opml_file(opml_file)
-    if error_response:
-        return error_response
-
-    # --- Refactored: Determine Target Tab ---
     (
         top_level_target_tab_id,
         top_level_target_tab_name,
@@ -479,13 +489,10 @@ def import_opml():
     ) = _determine_target_tab(request.form.get("tab_id"))
     if error_resp:
         return error_resp
-    # ----------------------------------------
-
-    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
 
     opml_body = root.find("body")
     if opml_body is None:
-        logger.warning("OPML import: No <body> element found in OPML file.")
+        logger.warning("OPML import: No <body> element found.")
         return (
             jsonify(
                 {
@@ -499,6 +506,12 @@ def import_opml():
             200,
         )
 
+    imported_count_wrapper = [0]
+    skipped_count_wrapper = [0]
+    affected_tab_ids_set = set()
+    newly_added_feeds_list = []
+    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
+
     _process_opml_outlines_recursive(
         opml_body.findall("outline"),
         top_level_target_tab_id,
@@ -510,73 +523,32 @@ def import_opml():
         affected_tab_ids_set,
     )
 
-    imported_final_count = imported_count_wrapper[0]
-    skipped_final_count = skipped_count_wrapper[0]
+    # Batch commit and fetch
+    success, error_resp = _batch_commit_and_fetch_new_feeds(newly_added_feeds_list)
+    if not success:
+        return error_resp
 
-    if newly_added_feeds_list:
-        try:
-            db.session.commit()
-            logger.info(
-                "OPML import: Successfully batch-committed %s new feeds to the database.",
-                len(newly_added_feeds_list),
-            )
+    # Cache invalidation
+    _invalidate_import_caches(affected_tab_ids_set)
 
-            logger.info(
-                "OPML import: Attempting to fetch initial items for %s newly added feeds.",
-                len(newly_added_feeds_list),
-            )
-            for feed_obj in newly_added_feeds_list:
-                if feed_obj.id:
-                    try:
-                        fetch_and_update_feed(feed_obj.id)
-                    except Exception as fetch_e:
-                        logger.error(
-                            "OPML import: Error fetching items for new feed %s (ID: %s): %s",
-                            feed_obj.name,
-                            feed_obj.id,
-                            fetch_e,
-                            exc_info=True,
-                        )
-                else:
-                    logger.error(
-                        "OPML import: Feed '%s' missing ID after batch commit, cannot fetch items.",
-                        feed_obj.name,
-                    )
-            logger.info(
-                "OPML import: Finished attempting to fetch initial items for new feeds."
-            )
-        except Exception as e_commit_feeds:
-            db.session.rollback()
-            logger.error(
-                "OPML import: Database commit failed for new feeds: %s",
-                e_commit_feeds,
-                exc_info=True,
-            )
-            return (
-                jsonify({"error": "Database error during final feed import step."}),
-                500,
-            )
-
-    if affected_tab_ids_set:
-        for tab_id_to_invalidate in affected_tab_ids_set:
-            invalidate_tab_feeds_cache(
-                tab_id_to_invalidate, invalidate_tabs=False)
-        invalidate_tabs_cache()
-        logger.info(
-            "OPML import: Feed-related caches invalidated for tabs: %s.",
-            affected_tab_ids_set,
-        )
+    # Cleanup if needed
+    _cleanup_empty_default_tab(
+        was_default_tab_created,
+        top_level_target_tab_id,
+        top_level_target_tab_name,
+        affected_tab_ids_set,
+    )
 
     if not opml_body.findall("outline") and not newly_added_feeds_list:
         logger.info(
-            "OPML import: No <outline> elements found in the OPML body to process as feeds or folders."
+            "OPML import: No <outline> elements found in the OPML body."
         )
         return (
             jsonify(
                 {
                     "message": "No feed entries or folders found in the OPML file.",
                     "imported_count": 0,
-                    "skipped_count": skipped_final_count,
+                    "skipped_count": 0,
                     "tab_id": top_level_target_tab_id,
                     "tab_name": top_level_target_tab_name,
                 }
@@ -584,14 +556,8 @@ def import_opml():
             200,
         )
 
-    # --- Refactored: Cleanup Empty Default Tab ---
-    _cleanup_empty_default_tab(
-        was_default_tab_created,
-        top_level_target_tab_id,
-        top_level_target_tab_name,
-        affected_tab_ids_set,
-    )
-    # ---------------------------------------------
+    imported_final_count = imported_count_wrapper[0]
+    skipped_final_count = skipped_count_wrapper[0]
 
     return (
         jsonify(

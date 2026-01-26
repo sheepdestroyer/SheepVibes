@@ -270,14 +270,14 @@ def test_kernel_org_scenario(db_setup, mocker):
     new_items_count = feed_service.process_feed_entries(
         feed_obj, mock_feed_data)
 
-    assert new_items_count == 1, (
-        "Should add only the first item as they all have the same link"
+    assert new_items_count == 3, (
+        "Should add all 3 items because they have unique GUIDs, even if links are shared"
     )
 
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
-    assert len(items_in_db) == 1
+    assert len(items_in_db) == 3
     guids_in_db = {item.guid for item in items_in_db}
-    assert guids_in_db == {"https://www.kernel.org/"}
+    assert guids_in_db == {"kernel.guid.1", "kernel.guid.2", "kernel.guid.3"}
     links_in_db = {item.link for item in items_in_db}
     # All share the same link
     assert links_in_db == {"https://www.kernel.org/"}
@@ -339,7 +339,7 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
     assert items_in_db[1].guid == "http://news.example.com/item2"
     # Item with a true GUID
     assert items_in_db[2].link == "http://news.example.com/item3"
-    assert items_in_db[2].guid == "http://news.example.com/item3"
+    assert items_in_db[2].guid == "true.guid.story3"
 
 
 def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
@@ -464,7 +464,8 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     count1 = feed_service.process_feed_entries(feed1_obj, mock_feed1_data)
     assert count1 == 2
     f1_items = FeedItem.query.filter_by(feed_id=feed1_obj.id).all()
-    assert f1_items[0].guid == "http://feed1.com/item1"
+    # Updated: GUIDs should follow prioritization
+    assert f1_items[0].guid == "global.guid.1"
     assert f1_items[1].guid == "http://feed1.com/item2"
 
     # Process Feed 2
@@ -488,7 +489,7 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     assert len(f2_items) == 3
 
     # entry_f2_1
-    assert f2_items[0].guid == "http://feed2.com/item1"
+    assert f2_items[0].guid == "global.guid.1"
     assert f2_items[0].title == "F2 Story 1"
     # entry_f2_2
     assert f2_items[1].guid == "http://feed2.com/item2"
