@@ -42,7 +42,8 @@ if MAX_CONCURRENT_FETCHES == 0:
     MAX_CONCURRENT_FETCHES = _cpu_count * 5
 
 # Cap the workers to avoid resource exhaustion on high-core machines
-MAX_CONCURRENT_FETCHES = min(MAX_CONCURRENT_FETCHES, 10)
+WORKER_FETCH_CAP = 10
+MAX_CONCURRENT_FETCHES = min(MAX_CONCURRENT_FETCHES, WORKER_FETCH_CAP)
 
 # --- Helper Functions ---
 
