@@ -140,9 +140,7 @@ async function loadFeedsForTab(tabId) {
                 feedGrid.appendChild(widget);
             });
         } else {
-            const p = document.createElement('p');
-            p.textContent = 'No feeds found for this tab. Add one using the form above!';
-            // We can't attach dataset.tabId easily to a P in the generic grid without logic in toggle.
+            // Create a message container for this tab.
             // But for now, if grid is empty visually, it shows.
             // If we have other tabs' widgets hidden, this P might be visible always?
             // Fix: Only append if we are viewing this tab? Yes we are.
@@ -186,7 +184,8 @@ async function handleAddTab() {
 async function handleRenameTab() {
     if (!activeTabId) return;
     const tab = allTabs.find(t => t.id === activeTabId);
-    const newName = prompt("Enter new name:", tab ? tab.name : "");
+    if (!tab) return;
+    const newName = prompt("Enter new name:", tab.name);
     if (!newName || newName === tab.name) return;
 
     try {
@@ -359,7 +358,7 @@ function updateUnreadCount(element) {
     if (!element) return;
     const badge = element.querySelector('.unread-count-badge');
     if (badge) {
-        const newCount = parseInt(badge.textContent) - 1;
+        const newCount = parseInt(badge.textContent, 10) - 1;
         if (newCount > 0) {
             badge.textContent = newCount;
         } else {
