@@ -160,11 +160,10 @@ def fetch_feed(feed_url):
         # Prevent TOCTOU: Fetch using the validated IP
         parsed = urlparse(feed_url)
         # Only rewrite URL for HTTP to avoid SSL hostname mismatch
-        # Note: This still leaves HTTPS vulnerable to DNS rebinding (TOCTOU) because
-        # we cannot easily rewrite the IP while maintaining valid SSL Hostname verification
-        # with standard urllib. For strict security, a custom Transport or SSLContext is needed.
-        # For now, we apply the IP rewrite to HTTP, and rely on the initial check for HTTPS,
-        # acknowledging the risk.
+        # WARNING: This implementation is vulnerable to DNS Rebinding for HTTPS.
+        # urllib cannot easily force an IP while validating the SNI/Hostname.
+        # For HTTP, we rewrite the URL. For HTTPS, we unfortunately rely on the
+        # race-condition-prone check above.
         if parsed.scheme == "http":
             target_url = parsed._replace(netloc=safe_ip).geturl()
         else:
