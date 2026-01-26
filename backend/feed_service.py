@@ -211,16 +211,13 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     batch_processed_guids = set()
     batch_processed_links = set()
 
-    # Get existing GUIDs and links *for this specific feed* from the DB
-    existing_feed_items_query = db.session.query(
-        FeedItem.guid, FeedItem.link
-    ).filter_by(feed_id=feed_db_obj.id)
-    # Ensure we only add non-None GUIDs to the set
-    existing_feed_guids = {
-        item.guid for item in existing_feed_items_query if item.guid}
-    # Ensure we only add non-None links to the set (though link is NOT NULL in DB)
-    existing_feed_links = {
-        item.link for item in existing_feed_items_query if item.link}
+    # Get existing items *for this specific feed* to support updates/deduplication
+    existing_items = FeedItem.query.filter_by(feed_id=feed_db_obj.id).all()
+    # Map them for quick lookup
+    existing_items_by_guid = {
+        item.guid: item for item in existing_items if item.guid}
+    existing_items_by_link = {
+        item.link: item for item in existing_items if item.link}
 
     new_title = parsed_feed.feed.get("title")
     if new_title and new_title.strip() and new_title != feed_db_obj.name:
@@ -292,12 +289,33 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         # ensuring that updates are processed correctly.
         db_guid = entry_link
 
-        # --- Deduplication Logic ---
-        # 1. Check against items already in the DB *for this specific feed*
-        if db_guid and db_guid in existing_feed_guids:
-            continue
-        # Check link for this feed, critical for items that will have db_guid=None or if link is the primary identifier
-        if entry_link in existing_feed_links:
+        # --- Deduplication & Update Logic ---
+        # Look for an existing item by GUID or Link
+        existing_item = None
+        if db_guid:
+            existing_item = existing_items_by_guid.get(db_guid)
+        if not existing_item and entry_link:
+            existing_item = existing_items_by_link.get(entry_link)
+
+        if existing_item:
+            # If item exists, check if any tracked property changed
+            item_changed = False
+            if entry_title and entry_title != existing_item.title:
+                logger.info(
+                    "Updating title for existing item '%s' to '%s' in feed '%s'",
+                    existing_item.title,
+                    entry_title,
+                    feed_db_obj.name,
+                )
+                existing_item.title = entry_title
+                item_changed = True
+
+            # In the future, we could check summary, published_time etc. here.
+
+            if item_changed:
+                db.session.add(existing_item)
+                # Note: We don't increment new_items_count for updates, 
+                # but we do want to commit the change.
             continue
 
         # 2. Check against items already processed *in this current batch*

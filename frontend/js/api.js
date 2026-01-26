@@ -72,10 +72,10 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, tab_id: tabId })
     }),
-    updateFeed: (id, url) => fetchData(`/api/feeds/${id}`, {
+    updateFeed: (id, url, name) => fetchData(`/api/feeds/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url, name })
     }),
     deleteFeed: (id) => fetchData(`/api/feeds/${id}`, { method: 'DELETE' }),
     updateAllFeeds: () => fetchData('/api/feeds/update-all', { method: 'POST' }),

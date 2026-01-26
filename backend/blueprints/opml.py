@@ -354,7 +354,8 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
         feeds_in_default_tab = Feed.query.filter_by(tab_id=tab_id).count()
         if feeds_in_default_tab == 0:
             logger.info(
-                "OPML import: The default 'Imported Feeds' tab (ID: %s) created during import is empty. Deleting it.",
+                "OPML import: The default '%s' tab (ID: %s) created during import is empty. Deleting it.",
+                DEFAULT_OPML_IMPORT_TAB_NAME,
                 tab_id,
             )
             try:
@@ -364,25 +365,29 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
                     db.session.commit()
                     invalidate_tabs_cache()
                     logger.info(
-                        "OPML import: Successfully deleted empty 'Imported Feeds' tab (ID: %s).",
+                        "OPML import: Successfully deleted empty '%s' tab (ID: %s).",
+                        DEFAULT_OPML_IMPORT_TAB_NAME,
                         tab_id,
                     )
                 else:
                     logger.warning(
-                        "OPML import: Tried to delete empty 'Imported Feeds' (ID: %s), but it was not found.",
+                        "OPML import: Tried to delete empty '%s' (ID: %s), but it was not found.",
+                        DEFAULT_OPML_IMPORT_TAB_NAME,
                         tab_id,
                     )
             except Exception as e_del_tab:
                 db.session.rollback()
                 logger.error(
-                    "OPML import: Failed to delete empty 'Imported Feeds' tab (ID: %s): %s",
+                    "OPML import: Failed to delete empty '%s' tab (ID: %s): %s",
+                    DEFAULT_OPML_IMPORT_TAB_NAME,
                     tab_id,
                     e_del_tab,
                     exc_info=True,
                 )
         else:
             logger.info(
-                "OPML import: Default tab 'Imported Feeds' (ID: %s) has %s feeds. Keeping it.",
+                "OPML import: Default tab '%s' (ID: %s) has %s feeds. Keeping it.",
+                DEFAULT_OPML_IMPORT_TAB_NAME,
                 tab_id,
                 feeds_in_default_tab,
             )
@@ -626,8 +631,13 @@ def _get_autosave_directory():
         db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if db_uri.startswith("sqlite:///"):
             db_path = db_uri.replace("sqlite:///", "")
-            if os.path.isabs(db_path):
-                data_dir = os.path.dirname(db_path)
+            # Resolve relative paths to absolute ones to find the data directory correctly
+            try:
+                abs_db_path = os.path.abspath(db_path)
+                data_dir = os.path.dirname(abs_db_path)
+                logger.debug("Resolved autosave directory from SQLite path: %s", data_dir)
+            except Exception:
+                logger.warning("Could not resolve absolute path for SQLite DB: %s", db_path)
 
     if not data_dir:
         # 3. Fall back to PROJECT_ROOT/data

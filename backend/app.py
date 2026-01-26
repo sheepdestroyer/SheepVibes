@@ -14,6 +14,7 @@ from .constants import (
     OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT,
     UPDATE_INTERVAL_MINUTES_DEFAULT,
 )
+from .cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
 from .extensions import cache, db, scheduler
 from .feed_service import update_all_feeds
 from .sse import announcer

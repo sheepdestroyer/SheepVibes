@@ -256,8 +256,9 @@ async function handleEditFeedSubmit(e) {
     e.preventDefault();
     const id = document.getElementById('edit-feed-id').value;
     const url = document.getElementById('edit-feed-url').value;
+    const name = document.getElementById('edit-feed-name').value;
     try {
-        const updatedFeed = await api.updateFeed(id, url);
+        const updatedFeed = await api.updateFeed(id, url, name);
         const oldWidget = document.querySelector(`.feed-widget[data-feed-id="${id}"]`);
         if (oldWidget) {
             const newWidget = createFeedWidget(updatedFeed, {
@@ -411,6 +412,7 @@ function initializeSSE() {
                     renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
                     // If the active tab's content is currently displayed, reload it in place
+                    // reloadTab removes widgets for activeTabId, which causes flicker but only for the active tab.
                     if (activeTabId && loadedTabs.has(activeTabId)) {
                         await reloadTab(activeTabId);
                     }

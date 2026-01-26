@@ -120,7 +120,8 @@ export function createFeedWidget(feed, callbacks) {
     const itemList = document.createElement('ul');
     widget.appendChild(itemList);
 
-    itemList.dataset.offset = feed.items.length;
+    const items = feed.items || [];
+    itemList.dataset.offset = items.length;
     itemList.dataset.feedId = feed.id;
     itemList.dataset.tabId = feed.tab_id;
     itemList.dataset.loading = 'false';
