@@ -93,19 +93,24 @@ class Feed(db.Model):
         "FeedItem", backref="feed", lazy="dynamic", cascade="all, delete-orphan"
     )
 
-    def to_dict(self):
+    def to_dict(self, unread_count=None):
         """Serializes the Feed object to a dictionary.
+
+        Args:
+            unread_count (int, optional): The unread count for this feed.
+                                          If None, it will be queried from the DB.
 
         Returns:
             dict: A dictionary representation of the feed, including the unread count.
         """
-        # Calculate unread count for this specific feed
-        unread_count = (
-            db.session.query(db.func.count(FeedItem.id))
-            .filter(FeedItem.feed_id == self.id, FeedItem.is_read == False)
-            .scalar()
-            or 0
-        )
+        if unread_count is None:
+            # Calculate unread count for this specific feed
+            unread_count = (
+                db.session.query(db.func.count(FeedItem.id))
+                .filter(FeedItem.feed_id == self.id, FeedItem.is_read == False)
+                .scalar()
+                or 0
+            )
 
         return {
             "id": self.id,
