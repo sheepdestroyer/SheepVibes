@@ -355,6 +355,18 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         feed_db_obj.id,
     )
 
+    # Sort entries by published date (newest first) if available.
+    # This ensures our "First Wins" deduplication strategy prioritizes the latest version of an item
+    # in case the feed contains duplicates (e.g. updates).
+    try:
+        parsed_feed.entries.sort(
+            key=lambda e: parse_published_time(e) or datetime.datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True
+        )
+    except Exception:
+        # If sorting fails, proceed with original order.
+        logger.warning("Failed to sort entries for feed %s", feed_db_obj.name)
+
     for entry in parsed_feed.entries:
         entry_title = entry.get("title", "[No Title]")
         entry_link = entry.get("link")
@@ -543,20 +555,6 @@ def _enforce_feed_limit(feed_db_obj):
     # oldest_ids = query.limit().all() -> delete(id.in_(oldest_ids))
     # Qodo said: "Consider converting to a scalar subquery...".
     # Let's clean up the implementation to use a subquery construct properly.
-
-    subquery = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
-        .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
-        .limit(num_to_delete)
-        .subquery()
-    )
-
-    # In some DBs (MySQL/MariaDB), you can't delete from a table you're selecting from in a subquery
-    # without an alias. SQLAlchemy usually handles this, but "fetch then delete" is often most portable
-    # for small batches.
-    # Let's KEEP the "fetch then delete" but optimize the query definition as requested?
-    # Qodo's specific complaint was: "The eviction helper builds a query of IDs and then passes that query into an IN clause."
     # The previous code was:
     # oldest_ids = ( ... .limit(num_to_delete) )  <-- This is a Query object
     # .filter(FeedItem.id.in_(oldest_ids))
@@ -630,9 +628,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             feed_db_obj.name,
             exc_info=True,
         )
-        # Proceeding to process new items even if metadata update failed,
-        # though ideally, we'd want to stop or retry.
-        # It's safer to stop processing this feed to avoid potential inconsistencies.
+        # It's safer to stop processing this feed to avoid potential inconsistencies
+        # if the metadata/update commit failed.
         return 0
 
     if not items_to_add:

@@ -212,8 +212,8 @@ def test_kernel_org_scenario(db_setup, mocker):
 
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
     assert len(items_in_db) == 1
-    # The first one should be preserved
-    assert items_in_db[0].guid == "kernel.guid.1"
+    # The newest one should be preserved (descending sort by published_time)
+    assert items_in_db[0].guid == "kernel.guid.3"
     assert items_in_db[0].link == "https://www.kernel.org/"
 
 
@@ -260,6 +260,7 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
         feed_obj, mock_feed_data)
     assert new_items_count == 3
 
+    # Sort items in DB by link for deterministic assertions
     items_in_db = (
         FeedItem.query.filter_by(
             feed_id=feed_obj.id).order_by(FeedItem.link).all()
@@ -312,11 +313,12 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     new_items_count1 = feed_service.process_feed_entries(
         feed_obj, mock_feed_data)
     assert new_items_count1 == 1, (
-        "Should only add the first item due to link deduplication in batch"
+        "Should only add one item due to link deduplication in batch"
     )
 
     item_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).one()
-    assert item_in_db.title == "Story A"
+    # Now that we sort newest-first, Story A Duplicate wins
+    assert item_in_db.title == "Story A Duplicate"
     assert (
         item_in_db.guid == "http://example.com/story"
     )  # Stored as link because guid was same as link
@@ -397,8 +399,9 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     m_parse.return_value = mock_feed1_data
     count1 = feed_service.process_feed_entries(feed1_obj, mock_feed1_data)
     assert count1 == 2
-    f1_items = FeedItem.query.filter_by(feed_id=feed1_obj.id).all()
-    # Updated: GUIDs should follow prioritization
+    
+    # Assert using set or sorted list for order-independence
+    f1_items = FeedItem.query.filter_by(feed_id=feed1_obj.id).order_by(FeedItem.published_time).all()
     assert f1_items[0].guid == "global.guid.1"
     assert f1_items[1].guid == "http://feed1.com/item2"
 
