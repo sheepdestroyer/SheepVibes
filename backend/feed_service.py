@@ -30,9 +30,8 @@ try:
 except Exception:
     _cpu_count = 1
 
-MAX_CONCURRENT_FETCHES = int(
-    os.environ.get("FEED_FETCH_MAX_WORKERS", _cpu_count * 5)
-)
+MAX_CONCURRENT_FETCHES = int(os.environ.get(
+    "FEED_FETCH_MAX_WORKERS", _cpu_count * 5))
 
 # --- Helper Functions ---
 
