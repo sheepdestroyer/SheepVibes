@@ -175,11 +175,11 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     """
     Helper function to process the result of a feed fetch (parsed_feed).
     Handles empty feeds, database updates, and calling process_feed_entries.
-    
+
     Args:
         feed_db_obj (Feed): The database feed object.
         parsed_feed (feedparser.FeedParserDict): The parsed feed result.
-        
+
     Returns:
         tuple: (success, new_items_count, tab_id)
     """
@@ -604,7 +604,7 @@ def fetch_and_update_feed(feed_id):
 
     # fetch_feed already handles errors and returns None, but logic here checks return
     parsed_feed = fetch_feed(feed.url)
-    
+
     # Delegate processing to helper
     return _process_fetch_result(feed, parsed_feed)
 
@@ -630,7 +630,9 @@ def update_all_feeds():
     logger.info(
         "Starting update process for %s feeds (Parallelized).", len(all_feeds))
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_FETCHES) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=MAX_CONCURRENT_FETCHES
+    ) as executor:
         # Submit all fetch tasks
         future_to_feed_id = {
             executor.submit(_fetch_feed_content, feed.id, feed.url): feed.id
@@ -663,7 +665,9 @@ def update_all_feeds():
 
                 # --- Sequential Processing (Main Thread) ---
                 # Check 1: Reuse the logic shared with fetch_and_update_feed
-                success, new_items, tab_id = _process_fetch_result(feed_obj, parsed_feed)
+                success, new_items, tab_id = _process_fetch_result(
+                    feed_obj, parsed_feed
+                )
 
                 if success:
                     processed_successfully_count += 1
