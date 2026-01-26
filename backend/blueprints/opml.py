@@ -243,6 +243,141 @@ def _process_opml_outlines_recursive(
                 skipped_count_wrapper[0] += 1
 
 
+
+def _determine_target_tab(requested_tab_id_str):
+    """
+    Determines the target tab for OPML import.
+    Returns:
+        tuple: (tab_id, tab_name, was_created)
+        - tab_id (int): The ID of the target tab.
+        - tab_name (str): The name of the target tab.
+        - was_created (bool): True if a new default tab was created, False otherwise.
+        - error_response (tuple): (json_response, status_code) if an error occurred, else None.
+    """
+    target_tab_id = None
+    target_tab_name = None
+    was_created = False
+
+    if requested_tab_id_str:
+        try:
+            tab_id_val = int(requested_tab_id_str)
+            tab_obj = db.session.get(Tab, tab_id_val)
+            if tab_obj:
+                target_tab_id = tab_obj.id
+                target_tab_name = tab_obj.name
+            else:
+                logger.warning(
+                    "OPML import: Requested tab_id %s not found. Will use default logic.",
+                    tab_id_val,
+                )
+        except ValueError:
+            logger.warning(
+                "OPML import: Invalid tab_id format '%s'. Will use default logic.",
+                requested_tab_id_str,
+            )
+
+    if not target_tab_id:
+        default_tab_obj = Tab.query.order_by(Tab.order).first()
+        if default_tab_obj:
+            target_tab_id = default_tab_obj.id
+            target_tab_name = default_tab_obj.name
+        else:
+            logger.info(
+                "OPML import: No tabs exist. Creating a default tab for top-level feeds."
+            )
+            default_tab_name_for_creation = "Imported Feeds"
+            temp_tab_check = Tab.query.filter_by(
+                name=default_tab_name_for_creation
+            ).first()
+            if temp_tab_check:
+                target_tab_id = temp_tab_check.id
+                target_tab_name = temp_tab_check.name
+            else:
+                newly_created_default_tab = Tab(
+                    name=default_tab_name_for_creation, order=0
+                )
+                db.session.add(newly_created_default_tab)
+                try:
+                    db.session.commit()
+                    logger.info(
+                        "OPML import: Created default tab '%s' (ID: %s).",
+                        newly_created_default_tab.name,
+                        newly_created_default_tab.id,
+                    )
+                    invalidate_tabs_cache()
+                    target_tab_id = newly_created_default_tab.id
+                    target_tab_name = newly_created_default_tab.name
+                    was_created = True
+                except Exception as e_tab_commit:
+                    db.session.rollback()
+                    logger.error(
+                        "OPML import: Failed to create default tab '%s': %s",
+                        default_tab_name_for_creation,
+                        e_tab_commit,
+                        exc_info=True,
+                    )
+                    return None, None, False, (
+                        jsonify(
+                            {"error": "Failed to create a default tab for import."}
+                        ),
+                        500,
+                    )
+
+    if not target_tab_id:
+        logger.error(
+            "OPML import: Critical error - failed to determine a top-level target tab."
+        )
+        return None, None, False, (jsonify({"error": "Failed to determine a target tab for import."}), 500)
+
+    return target_tab_id, target_tab_name, was_created, None
+
+
+def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
+    """
+    Cleans up the default tab if it was created for this import but remains empty.
+    """
+    if (
+        was_created
+        and tab_name == "Imported Feeds"
+        and tab_id not in affected_tab_ids
+    ):
+        feeds_in_default_tab = Feed.query.filter_by(tab_id=tab_id).count()
+        if feeds_in_default_tab == 0:
+            logger.info(
+                "OPML import: The default 'Imported Feeds' tab (ID: %s) created during import is empty. Deleting it.",
+                tab_id,
+            )
+            try:
+                tab_to_delete = db.session.get(Tab, tab_id)
+                if tab_to_delete:
+                    db.session.delete(tab_to_delete)
+                    db.session.commit()
+                    invalidate_tabs_cache()
+                    logger.info(
+                        "OPML import: Successfully deleted empty 'Imported Feeds' tab (ID: %s).",
+                        tab_id,
+                    )
+                else:
+                    logger.warning(
+                        "OPML import: Tried to delete empty 'Imported Feeds' (ID: %s), but it was not found.",
+                        tab_id,
+                    )
+            except Exception as e_del_tab:
+                db.session.rollback()
+                logger.error(
+                    "OPML import: Failed to delete empty 'Imported Feeds' tab (ID: %s): %s",
+                    tab_id,
+                    e_del_tab,
+                    exc_info=True,
+                )
+        else:
+            logger.info(
+                "OPML import: Default tab 'Imported Feeds' (ID: %s) has %s feeds. Keeping it.",
+                tab_id,
+                feeds_in_default_tab,
+            )
+
+
 @opml_bp.route("/import", methods=["POST"])
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
@@ -282,86 +417,18 @@ def import_opml():
     skipped_count_wrapper = [0]
     affected_tab_ids_set = set()
     newly_added_feeds_list = []
-    was_default_tab_created_for_this_import = False
 
     root, error_response = _parse_opml_file(opml_file)
     if error_response:
         return error_response
 
-    top_level_target_tab_id = None
-    top_level_target_tab_name = None
-    requested_tab_id_str = request.form.get("tab_id")
-
-    if requested_tab_id_str:
-        try:
-            tab_id_val = int(requested_tab_id_str)
-            tab_obj = db.session.get(Tab, tab_id_val)
-            if tab_obj:
-                top_level_target_tab_id = tab_obj.id
-                top_level_target_tab_name = tab_obj.name
-            else:
-                logger.warning(
-                    "OPML import: Requested tab_id %s not found. Will use default logic.",
-                    tab_id_val,
-                )
-        except ValueError:
-            logger.warning(
-                "OPML import: Invalid tab_id format '%s'. Will use default logic.",
-                requested_tab_id_str,
-            )
-
-    if not top_level_target_tab_id:
-        default_tab_obj = Tab.query.order_by(Tab.order).first()
-        if default_tab_obj:
-            top_level_target_tab_id = default_tab_obj.id
-            top_level_target_tab_name = default_tab_obj.name
-        else:
-            logger.info(
-                "OPML import: No tabs exist. Creating a default tab for top-level feeds."
-            )
-            default_tab_name_for_creation = "Imported Feeds"
-            temp_tab_check = Tab.query.filter_by(
-                name=default_tab_name_for_creation
-            ).first()
-            if temp_tab_check:
-                top_level_target_tab_id = temp_tab_check.id
-                top_level_target_tab_name = temp_tab_check.name
-            else:
-                newly_created_default_tab = Tab(
-                    name=default_tab_name_for_creation, order=0
-                )
-                db.session.add(newly_created_default_tab)
-                try:
-                    db.session.commit()
-                    logger.info(
-                        "OPML import: Created default tab '%s' (ID: %s).",
-                        newly_created_default_tab.name,
-                        newly_created_default_tab.id,
-                    )
-                    invalidate_tabs_cache()
-                    top_level_target_tab_id = newly_created_default_tab.id
-                    top_level_target_tab_name = newly_created_default_tab.name
-                    was_default_tab_created_for_this_import = True
-                except Exception as e_tab_commit:
-                    db.session.rollback()
-                    logger.error(
-                        "OPML import: Failed to create default tab '%s': %s",
-                        default_tab_name_for_creation,
-                        e_tab_commit,
-                        exc_info=True,
-                    )
-                    return (
-                        jsonify(
-                            {"error": "Failed to create a default tab for import."}
-                        ),
-                        500,
-                    )
-
-    if not top_level_target_tab_id:
-        logger.error(
-            "OPML import: Critical error - failed to determine a top-level target tab."
-        )
-        return jsonify({"error": "Failed to determine a target tab for import."}), 500
+    # --- Refactored: Determine Target Tab ---
+    top_level_target_tab_id, top_level_target_tab_name, was_default_tab_created, error_resp = _determine_target_tab(
+        request.form.get("tab_id")
+    )
+    if error_resp:
+        return error_resp
+    # ----------------------------------------
 
     all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
 
@@ -465,48 +532,14 @@ def import_opml():
             200,
         )
 
-    if (
-        was_default_tab_created_for_this_import
-        and top_level_target_tab_name == "Imported Feeds"
-        and top_level_target_tab_id not in affected_tab_ids_set
-    ):
-        feeds_in_default_tab = Feed.query.filter_by(
-            tab_id=top_level_target_tab_id
-        ).count()
-        if feeds_in_default_tab == 0:
-            logger.info(
-                "OPML import: The default 'Imported Feeds' tab (ID: %s) created during import is empty. Deleting it.",
-                top_level_target_tab_id,
-            )
-            try:
-                tab_to_delete = db.session.get(Tab, top_level_target_tab_id)
-                if tab_to_delete:
-                    db.session.delete(tab_to_delete)
-                    db.session.commit()
-                    invalidate_tabs_cache()
-                    logger.info(
-                        "OPML import: Successfully deleted empty 'Imported Feeds' tab (ID: %s).",
-                        top_level_target_tab_id,
-                    )
-                else:
-                    logger.warning(
-                        "OPML import: Tried to delete empty 'Imported Feeds' (ID: %s), but it was not found.",
-                        top_level_target_tab_id,
-                    )
-            except Exception as e_del_tab:
-                db.session.rollback()
-                logger.error(
-                    "OPML import: Failed to delete empty 'Imported Feeds' tab (ID: %s): %s",
-                    top_level_target_tab_id,
-                    e_del_tab,
-                    exc_info=True,
-                )
-        else:
-            logger.info(
-                "OPML import: Default tab 'Imported Feeds' (ID: %s) has %s feeds. Keeping it.",
-                top_level_target_tab_id,
-                feeds_in_default_tab,
-            )
+    # --- Refactored: Cleanup Empty Default Tab ---
+    _cleanup_empty_default_tab(
+        was_default_tab_created,
+        top_level_target_tab_id,
+        top_level_target_tab_name,
+        affected_tab_ids_set
+    )
+    # ---------------------------------------------
 
     return (
         jsonify(
