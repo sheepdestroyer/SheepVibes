@@ -505,14 +505,15 @@ def fetch_and_update_feed(feed_id):
         feed_id (int): The database ID of the Feed to update.
 
     Returns:
-        A tuple (success, new_items_count):
+        A tuple (success, new_items_count, tab_id):
         - success (bool): True if the feed was fetched and processed successfully (even if 0 new items), False otherwise.
         - new_items_count (int): The number of new items added.
+        - tab_id (int): The ID of the tab this feed belongs to.
     """
     feed = db.session.get(Feed, feed_id)
     if not feed:
         logger.error("Feed with ID %s not found for update.", feed_id)
-        return False, 0
+        return False, 0, None
 
     parsed_feed = fetch_feed(feed.url)
     if not parsed_feed:
@@ -524,7 +525,7 @@ def fetch_and_update_feed(feed_id):
         # Optionally update last_updated_time to now with a failure status
         # feed.last_updated_time = datetime.datetime.now(timezone.utc)
         # db.session.commit() # Be careful with commits in error paths
-        return False, 0
+        return False, 0, feed.tab_id
 
     # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
     if not parsed_feed.entries:
@@ -545,13 +546,13 @@ def fetch_and_update_feed(feed_id):
                 exc_info=True,
             )
             # Still, the fetch itself might be considered a "success" in terms of reachability
-        return True, 0
+        return True, 0, feed.tab_id
 
     try:
         new_items = process_feed_entries(feed, parsed_feed)
         # process_feed_entries handles its own logging and commits for items and last_updated_time.
         # Success here means process_feed_entries completed without raising an exception to this level.
-        return True, new_items
+        return True, new_items, feed.tab_id
     except Exception as e:  # Catch any unexpected error from process_feed_entries not caught internally
         logger.error(
             "An unexpected error occurred during entry processing for feed '%s' (ID: %s): %s",
@@ -560,23 +561,23 @@ def fetch_and_update_feed(feed_id):
             e,
             exc_info=True,
         )
-        return False, 0
+        return False, 0, feed.tab_id
 
 
 def update_all_feeds():
     """Iterates through all feeds in the database, fetches updates, and processes entries.
 
     Returns:
-        A tuple (total_feeds_processed_successfully, total_new_items):
+        A tuple (total_feeds_processed_successfully, total_new_items, affected_tab_ids):
         - total_feeds_processed_successfully (int): Number of feeds where fetch and process stages completed without critical failure.
         - total_new_items (int): Total new items added across all feeds.
+        - affected_tab_ids (set): A set of tab IDs that received new items.
     """
     all_feeds = Feed.query.all()
     total_new_items = 0
     attempted_count = 0
-    processed_successfully_count = (
-        0  # Feeds that completed fetch & process_feed_entries call
-    )
+    processed_successfully_count = 0
+    affected_tab_ids = set()
 
     logger.info("Starting update process for %s feeds.", len(all_feeds))
 
@@ -589,10 +590,12 @@ def update_all_feeds():
             feed_obj.url,
         )
         try:
-            success, new_items = fetch_and_update_feed(feed_obj.id)
+            success, new_items, tab_id = fetch_and_update_feed(feed_obj.id)
             if success:  # True if fetch_and_update_feed completed its course
                 total_new_items += new_items
                 processed_successfully_count += 1
+                if new_items > 0:
+                    affected_tab_ids.add(tab_id)
             # Failures within fetch_and_update_feed are logged there.
         except Exception as e:
             # This catches unexpected errors during the loop for a specific feed,
@@ -613,4 +616,4 @@ def update_all_feeds():
         processed_successfully_count,
         total_new_items,
     )
-    return processed_successfully_count, total_new_items
+    return processed_successfully_count, total_new_items, affected_tab_ids

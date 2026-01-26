@@ -129,7 +129,7 @@ def scheduled_feed_update():
             "Running scheduled feed update (every %s minutes)", UPDATE_INTERVAL_MINUTES
         )
         try:
-            feeds_updated, new_items = update_all_feeds()
+            feeds_updated, new_items, affected_tab_ids = update_all_feeds()
             logger.info(
                 "Scheduled update completed: %s feeds updated, %s new items",
                 feeds_updated,
@@ -137,9 +137,12 @@ def scheduled_feed_update():
             )
             # Invalidate the cache after updates
             if new_items > 0:
-                cache.clear()
+                for tab_id in affected_tab_ids:
+                    invalidate_tab_feeds_cache(tab_id)
                 logger.info(
-                    "Cache cleared after scheduled update found new items.")
+                    "Granular cache invalidation completed for affected tabs: %s",
+                    affected_tab_ids,
+                )
 
             # Announce the update to any listening clients
             event_data = {"feeds_processed": feeds_updated,

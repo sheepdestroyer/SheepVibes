@@ -592,7 +592,7 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):
     # Re-mock urlopen for the second call (not strictly needed if same mock used, but good practice)
     mock_response.read.return_value = b"<rss>content</rss>"
 
-    success, new_items = feed_service.fetch_and_update_feed(feed_obj.id)
+    success, new_items, tab_id = feed_service.fetch_and_update_feed(feed_obj.id)
     assert success is True
     assert new_items == 0
     db.session.refresh(feed_obj)
@@ -640,7 +640,7 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):
     # Side effect for multiple calls to parse
     m_parse.side_effect = [mock_feed_data1, mock_feed_data2]
 
-    processed, new_items = feed_service.update_all_feeds()
+    processed, new_items, affected_tab_ids = feed_service.update_all_feeds()
 
     assert processed == 2, "Should process both feeds"
     assert new_items == 3, "Should add 1 from FeedA and 2 from FeedB"
@@ -752,7 +752,7 @@ def test_original_update_all_feeds_empty_db(db_setup):
     """Test updating all feeds in an empty database"""
     logger.info("Testing update_all_feeds() on an empty DB")
 
-    feeds_updated, new_items = feed_service.update_all_feeds()
+    feeds_updated, new_items, affected_tab_ids = feed_service.update_all_feeds()
     logger.info("Updated %s feeds, added %s new items",
                 feeds_updated, new_items)
 

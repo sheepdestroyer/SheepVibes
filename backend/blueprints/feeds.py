@@ -292,16 +292,19 @@ def api_update_all_feeds():
     """
     logger.info("Received request to update all feeds.")
     try:
-        processed_count, new_items_count = update_all_feeds()
+        processed_count, new_items_count, affected_tab_ids = update_all_feeds()
         logger.info(
             "All feeds update process completed. Processed: %s, New Items: %s",
             processed_count,
             new_items_count,
         )
         if new_items_count > 0:
-            cache.clear()
+            for tab_id in affected_tab_ids:
+                invalidate_tab_feeds_cache(tab_id)
             logger.info(
-                "Cache cleared after manual 'update-all' found new items.")
+                "Granular cache invalidation completed for affected tabs: %s",
+                affected_tab_ids,
+            )
         # Announce the update to listening clients
         event_data = {"feeds_processed": processed_count,
                       "new_items": new_items_count}
@@ -333,7 +336,7 @@ def update_feed(feed_id):
     """Manually triggers an update check for a specific feed."""
     feed = db.get_or_404(Feed, feed_id)
     try:
-        success, new_items = fetch_and_update_feed(feed.id)
+        success, new_items, _ = fetch_and_update_feed(feed.id)
         if success and new_items > 0:
             invalidate_tab_feeds_cache(feed.tab_id)
             logger.info(
@@ -353,7 +356,7 @@ def update_feed(feed_id):
         return (
             jsonify(
                 {
-                    "error": "An internal error occurred while manually updating the feed."
+                    "error": f"An internal error occurred while manually updating feed {feed_id}."
                 }
             ),
             500,
