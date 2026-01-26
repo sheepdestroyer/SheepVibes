@@ -26,6 +26,7 @@ MAX_ITEMS_PER_FEED = 100
 # Hard cap for concurrent fetches to avoid resource exhaustion
 WORKER_FETCH_CAP = 10
 
+
 # Maximum number of concurrent feed fetches
 # I/O bound tasks can handle more workers than CPU cores
 def _get_max_concurrent_fetches():
