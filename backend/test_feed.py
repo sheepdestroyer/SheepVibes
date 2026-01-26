@@ -40,8 +40,6 @@ def db_setup():
         db.drop_all()
 
 
-
-
 # --- Mocks and Test Data ---
 
 
@@ -697,7 +695,6 @@ def test_original_update_all_feeds_empty_db(db_setup):
 
     assert feeds_updated == 0
     assert new_items == 0
-
 
 
 def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
