@@ -11,6 +11,9 @@ from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
 
 import feedparser
+import defusedxml.sax
+from defusedxml.common import DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden
+from xml.sax.handler import ContentHandler
 from dateutil import parser as date_parser
 from sqlalchemy.exc import IntegrityError
 
@@ -45,6 +48,34 @@ if MAX_CONCURRENT_FETCHES == 0:
 MAX_CONCURRENT_FETCHES = min(MAX_CONCURRENT_FETCHES, 20)
 
 # --- Helper Functions ---
+
+
+def _validate_xml_safety(content):
+    """
+    Validates XML content for XXE vulnerabilities using defusedxml.
+    Returns False if a security violation is detected.
+    Returns True if the content is safe (or not XML, or malformed in a non-dangerous way).
+    """
+    try:
+        # We use a no-op handler because we only care about the parsing process raising security exceptions
+        handler = ContentHandler()
+        defusedxml.sax.parseString(
+            content,
+            handler,
+            forbid_dtd=True,
+            forbid_entities=True,
+            forbid_external=True
+        )
+    except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
+        logger.error("XML Security Violation detected: %s", e)
+        return False
+    except Exception:
+        # Other exceptions (like SAXParseException, encoding errors, etc.)
+        # are ignored here because we want to allow feedparser to try its best
+        # with potentially malformed but non-malicious content (e.g. HTML soup).
+        pass
+
+    return True
 
 
 def parse_published_time(entry):
@@ -264,6 +295,10 @@ def fetch_feed(feed_url):
         )
         with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             content = response.read()
+
+        if not _validate_xml_safety(content):
+            logger.warning("Feed rejected due to security violation: %s", feed_url)
+            return None
 
         parsed_feed = feedparser.parse(content)
         # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
