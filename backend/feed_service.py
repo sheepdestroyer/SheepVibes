@@ -366,9 +366,7 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     # published version is processed first and thus preserved in case of duplicates.
     try:
         parsed_feed.entries.sort(
-            key=lambda e: e["_parsed_published"],
-            reverse=True
-        )
+            key=lambda e: e["_parsed_published"], reverse=True)
     except Exception:
         # If sorting fails, proceed with original order.
         logger.warning("Failed to sort entries for feed %s", feed_db_obj.name)
@@ -410,9 +408,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                 # Optimization: Consider collecting these updates and performing a bulk update
                 # if this becomes a bottleneck (N+1 Update pattern).
                 db.session.query(FeedItem).filter(
-                    FeedItem.id == existing_item_data.id).update(
-                    {"title": entry_title}, synchronize_session=False
-                )
+                    FeedItem.id == existing_item_data.id
+                ).update({"title": entry_title}, synchronize_session=False)
                 # Any pending updates will be committed by the caller.
             continue
 

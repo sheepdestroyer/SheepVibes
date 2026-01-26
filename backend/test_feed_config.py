@@ -1,4 +1,5 @@
 """Tests for feed worker configuration and limit heuristics."""
+
 import os
 from unittest.mock import patch
 

@@ -45,6 +45,7 @@ def db_setup():
 
 class MockFeedEntry(dict):
     """Mocks a feedparser entry with both dict and attribute access."""
+
     def __init__(
         self,
         title,
@@ -73,7 +74,7 @@ class MockFeedEntry(dict):
             return self[name]
         except KeyError as exc:
             raise AttributeError(name) from exc
-        
+
     @property
     def guid(self):
         """Mock guid attribute (mapping to 'id' in feedparser)."""
@@ -82,6 +83,7 @@ class MockFeedEntry(dict):
 
 class MockParsedFeed:
     """Mocks a parsed feed object from feedparser."""
+
     def __init__(self, feed_title, entries):
         self.feed = {"title": feed_title}
         self.entries = entries
@@ -172,7 +174,7 @@ def test_parse_published_time():
     assert dt7.tzinfo == datetime.timezone.utc
 
 
-def test_kernel_org_scenario(db_setup, mocker): # pylint: disable=unused-argument
+def test_kernel_org_scenario(db_setup, mocker):  # pylint: disable=unused-argument
     """Test Kernel.org scenario: multiple items with unique GUIDs but same link in one batch."""
     logger.info("Testing Kernel.org scenario (unique GUIDs, same link)")
 
@@ -226,7 +228,7 @@ def test_kernel_org_scenario(db_setup, mocker): # pylint: disable=unused-argumen
     assert items_in_db[0].link == "https://www.kernel.org/"
 
 
-def test_hacker_news_scenario_guid_handling(db_setup, mocker): # pylint: disable=unused-argument
+def test_hacker_news_scenario_guid_handling(db_setup, mocker):  # pylint: disable=unused-argument
     """Test Hacker News scenario: items with no true GUID (feedparser uses link as id)."""
     logger.info("Testing Hacker News scenario (link-as-ID handling)")
 
@@ -286,7 +288,7 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker): # pylint: disable
     assert items_in_db[2].guid == "true.guid.story3"
 
 
-def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker): # pylint: disable=unused-argument
+def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: disable=unused-argument
     """Test items with no true GUID but duplicate links in the SAME feed are deduplicated by link."""
     logger.info("Testing duplicate links (no true GUID) in same feed")
 
@@ -344,7 +346,7 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker): # pylint: disa
     assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 1
 
 
-def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker): # pylint: disable=unused-argument
+def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):  # pylint: disable=unused-argument
     """
     Tests that GUIDs are unique on a per-feed basis and that NULL GUIDs from
     different feeds do not conflict.
@@ -452,7 +454,7 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker): # py
     assert FeedItem.query.count() == (count1 + count2)
 
 
-def test_update_feed_last_updated_time(db_setup, mocker, mock_dns): # pylint: disable=unused-argument
+def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: disable=unused-argument
     """Test that feed.last_updated_time is updated even if no new items or no entries."""
     logger.info("Testing feed.last_updated_time updates")
 
@@ -552,7 +554,7 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns): # pylint: di
     )
 
 
-def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns): # pylint: disable=unused-argument
+def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disable=unused-argument
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
 
@@ -603,7 +605,7 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns): # pylint: disab
     assert feed2_db.name == "Feed B"
 
 
-def test_integrity_error_fallback_to_individual_commits(db_setup, mocker): # pylint: disable=unused-argument
+def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # pylint: disable=unused-argument
     """
     Test that if a batch insert fails due to IntegrityError, the system falls back
     to inserting items individually, and valid items are still added.
@@ -701,7 +703,9 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker): # pyl
 
 
 # Keep existing test_update_all_feeds, but rename it to avoid clash if it was meant to be different
-def test_original_update_all_feeds_empty_db(db_setup): # pylint: disable=unused-argument
+def test_original_update_all_feeds_empty_db(
+    db_setup,
+):  # pylint: disable=unused-argument
     """Test updating all feeds in an empty database"""
     logger.info("Testing update_all_feeds() on an empty DB")
 
@@ -713,7 +717,7 @@ def test_original_update_all_feeds_empty_db(db_setup): # pylint: disable=unused-
     assert new_items == 0
 
 
-def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker): # pylint: disable=unused-argument, too-many-locals
+def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):  # pylint: disable=unused-argument, too-many-locals
     """
     Test that when a feed exceeds the MAX_ITEMS_PER_FEED limit, the oldest items are evicted.
     """
