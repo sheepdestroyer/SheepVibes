@@ -314,7 +314,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     # Optimization: Query only necessary columns to avoid loading full objects
     # item[1] is guid, item[2] is link, item[3] is title
     items_tuple = (
-        db.session.query(FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title)
+        db.session.query(FeedItem.id, FeedItem.guid,
+                         FeedItem.link, FeedItem.title)
         .filter_by(feed_id=feed_db_obj.id)
         .all()
     )
@@ -366,7 +367,10 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
         if existing_match:
             _update_existing_item(
-                feed_db_obj, existing_match, entry.get("title", "[No Title]"), entry_link
+                feed_db_obj,
+                existing_match,
+                entry.get("title", "[No Title]"),
+                entry_link,
             )
             continue
 
@@ -534,7 +538,8 @@ def _save_items_individually(feed_db_obj, items_to_add):
             "Recovered %s items individually for feed: %s", count, feed_db_obj.name
         )
     else:
-        logger.info("No items added individually for feed: %s", feed_db_obj.name)
+        logger.info("No items added individually for feed: %s",
+                    feed_db_obj.name)
 
     return count
 
