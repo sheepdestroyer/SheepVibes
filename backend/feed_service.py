@@ -1,4 +1,6 @@
 # Import necessary libraries
+# Use dateutil for robust date parsing
+import concurrent.futures
 import datetime  # Import the full module
 import ipaddress
 import logging  # Standard logging
@@ -9,9 +11,6 @@ from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
 
 import feedparser
-
-# Use dateutil for robust date parsing
-import concurrent.futures
 from dateutil import parser as date_parser
 from sqlalchemy.exc import IntegrityError
 
@@ -162,7 +161,6 @@ def _fetch_feed_content(feed_id, feed_url):
     except Exception as e:
         logger.error("Error in fetch thread for feed %s: %s", feed_url, e)
         return feed_id, None
-
 
 
 def fetch_feed(feed_url):
@@ -608,7 +606,8 @@ def update_all_feeds():
     # Map feed_id to feed object for easy access during processing
     feeds_by_id = {feed.id: feed for feed in all_feeds}
 
-    logger.info("Starting update process for %s feeds (Parallelized).", len(all_feeds))
+    logger.info(
+        "Starting update process for %s feeds (Parallelized).", len(all_feeds))
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         # Submit all fetch tasks
@@ -621,11 +620,13 @@ def update_all_feeds():
         for future in concurrent.futures.as_completed(future_to_feed_id):
             feed_id = future_to_feed_id[future]
             feed_obj = feeds_by_id.get(feed_id)
-            
+
             if not feed_obj:
-                 # Should not happen given current logic, but safe guard
-                 logger.error("Feed ID %s not found in mapping during processing.", feed_id)
-                 continue
+                # Should not happen given current logic, but safe guard
+                logger.error(
+                    "Feed ID %s not found in mapping during processing.", feed_id
+                )
+                continue
 
             logger.info(
                 "Processing result for feed: %s (%s)",
@@ -644,8 +645,8 @@ def update_all_feeds():
                         feed_obj.name,
                         feed_id,
                     )
-                     # Treat as failure, no update to last_updated_time in this specific path/logic
-                     # consistent with previous fetch_and_update_feed behavior when fetch_feed returns None
+                    # Treat as failure, no update to last_updated_time in this specific path/logic
+                    # consistent with previous fetch_and_update_feed behavior when fetch_feed returns None
                     continue
 
                 # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
@@ -655,10 +656,11 @@ def update_all_feeds():
                         feed_obj.name,
                         feed_id,
                     )
-                    feed_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+                    feed_obj.last_updated_time = datetime.datetime.now(
+                        timezone.utc)
                     try:
                         db.session.commit()
-                        processed_successfully_count += 1 # Count as success
+                        processed_successfully_count += 1  # Count as success
                     except Exception as e:
                         db.session.rollback()
                         logger.error(
@@ -678,7 +680,7 @@ def update_all_feeds():
                     if new_items > 0:
                         affected_tab_ids.add(feed_obj.tab_id)
                 except Exception as e:
-                     logger.error(
+                    logger.error(
                         "An unexpected error occurred during entry processing for feed '%s' (ID: %s): %s",
                         feed_obj.name,
                         feed_id,
@@ -703,4 +705,3 @@ def update_all_feeds():
         total_new_items,
     )
     return processed_successfully_count, total_new_items, affected_tab_ids
-
