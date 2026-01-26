@@ -331,11 +331,19 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     batch_processed_guids = set()
     batch_processed_links = set()
 
-    existing_items = FeedItem.query.filter_by(feed_id=feed_db_obj.id).all()
+    # Optimization: Query only necessary columns to avoid loading full objects (content, summary, etc.)
+    existing_items_data = (
+        db.session.query(FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title)
+        .filter_by(feed_id=feed_db_obj.id)
+        .all()
+    )
+
+    # Create lookup maps from tuples: (id, guid, link, title)
+    # item[1] is guid, item[2] is link
     existing_items_by_guid = {
-        item.guid: item for item in existing_items if item.guid}
+        item.guid: item for item in existing_items_data if item.guid}
     existing_items_by_link = {
-        item.link: item for item in existing_items if item.link}
+        item.link: item for item in existing_items_data if item.link}
 
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
@@ -361,24 +369,44 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         db_guid = feedparser_id or entry_link
 
         # Check existing
-        existing_item = None
+        existing_item_data = None
         if db_guid:
-            existing_item = existing_items_by_guid.get(db_guid)
-        if not existing_item and entry_link:
-            existing_item = existing_items_by_link.get(entry_link)
+            existing_item_data = existing_items_by_guid.get(db_guid)
+        if not existing_item_data and entry_link:
+            existing_item_data = existing_items_by_link.get(entry_link)
 
-        if existing_item:
-            if entry_title and entry_title != existing_item.title:
+        if existing_item_data:
+            # existing_item_data is a Row/tuple: (id, guid, link, title)
+            existing_title = existing_item_data.title
+            if entry_title and entry_title != existing_title:
                 logger.info(
                     "Updating title for existing item '%s' to '%s' in feed '%s'",
-                    existing_item.title,
+                    existing_title,
                     entry_title,
                     feed_db_obj.name,
                 )
-                existing_item.title = entry_title
-                db.session.add(existing_item)
+                # Ideally, we'd batch these updates too, but individual updates are rare enough.
+                # Since we don't have the object attached, we update by ID.
+                # Note: This executes a localized UPDATE query.
+                db.session.query(FeedItem).filter(
+                    FeedItem.id == existing_item_data.id).update(
+                    {"title": entry_title}, synchronize_session=False
+                )
+                # We need to commit these updates or add them to a session. 
+                # Since we are inside a larger flow that commits later, we rely on the session flush?
+                # Actually, `update` with synchronize_session=False executes immediately against DB if autocommit?
+                # No, it stays in transaction.
+                # However, our calling function `process_feed_entries` commits *before* inserting new items (metadata/existing).
+                # Wait, `process_feed_entries` calls `_collect_new_items`, getting new items, THEN commits metadata/existing?
+                # No, `_collect_new_items` returns `items_to_add`.
+                # If we do updates inside `_collect_new_items`, they are pending in the session.
+                # But `process_feed_entries` calls `_update_feed_metadata`, THEN `_collect_new_items`, THEN commits.
+                # So any pending updates (like this title update) will be committed then.
+                # EXCEPT: `update()` doesn't add to session in the same way `add()` does.
+                # It issues an UPDATE statement.
+                # It will be part of the transaction and committed when `db.session.commit()` is called.
             continue
-
+            
         # Check batch duplicates
         is_batch_duplicate = False
         if db_guid and db_guid in batch_processed_guids:
