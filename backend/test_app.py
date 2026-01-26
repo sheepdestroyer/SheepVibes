@@ -758,7 +758,11 @@ def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
     mock_update_all_feeds.assert_called_once()
 
     # Assert SSE announcement
-    expected_event_data = {"feeds_processed": 5, "new_items": 10}
+    expected_event_data = {
+        "feeds_processed": 5,
+        "new_items": 10,
+        "affected_tab_ids": [1, 2],
+    }
     expected_sse_msg = f"data: {json.dumps(expected_event_data)}\n\n"
     mock_announce.assert_called_once_with(msg=expected_sse_msg)
 

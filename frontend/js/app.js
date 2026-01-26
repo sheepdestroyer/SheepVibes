@@ -406,10 +406,26 @@ function initializeSSE() {
             const data = JSON.parse(event.data);
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
-                // Clear state for all tabs to ensure fresh data
-                loadedTabs.clear();
-                // Re-initialize tabs to update counts and active tab content
-                await initializeTabs();
+
+                // Fetch latest tab metadata for unread counts
+                try {
+                    allTabs = await api.getTabs();
+                    renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
+
+                    // Targeted refresh: mark affected tabs as stale
+                    const affectedIds = data.affected_tab_ids || [];
+                    affectedIds.forEach(id => {
+                        const numericId = parseInt(id);
+                        loadedTabs.delete(numericId);
+                    });
+
+                    // If active tab is affected, reload it immediately
+                    if (activeTabId && affectedIds.some(id => parseInt(id) === activeTabId)) {
+                        await reloadTab(activeTabId);
+                    }
+                } catch (apiErr) {
+                    console.error('Failed to refresh data after SSE:', apiErr);
+                }
             }
         } catch (e) {
             console.error('SSE message parsing failed:', e);
