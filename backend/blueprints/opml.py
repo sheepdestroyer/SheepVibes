@@ -243,7 +243,6 @@ def _process_opml_outlines_recursive(
                 skipped_count_wrapper[0] += 1
 
 
-
 def _determine_target_tab(requested_tab_id_str):
     """
     Determines the target tab for OPML import.
@@ -316,18 +315,28 @@ def _determine_target_tab(requested_tab_id_str):
                         e_tab_commit,
                         exc_info=True,
                     )
-                    return None, None, False, (
-                        jsonify(
-                            {"error": "Failed to create a default tab for import."}
+                    return (
+                        None,
+                        None,
+                        False,
+                        (
+                            jsonify(
+                                {"error": "Failed to create a default tab for import."}
+                            ),
+                            500,
                         ),
-                        500,
                     )
 
     if not target_tab_id:
         logger.error(
             "OPML import: Critical error - failed to determine a top-level target tab."
         )
-        return None, None, False, (jsonify({"error": "Failed to determine a target tab for import."}), 500)
+        return (
+            None,
+            None,
+            False,
+            (jsonify({"error": "Failed to determine a target tab for import."}), 500),
+        )
 
     return target_tab_id, target_tab_name, was_created, None
 
@@ -336,11 +345,7 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
     """
     Cleans up the default tab if it was created for this import but remains empty.
     """
-    if (
-        was_created
-        and tab_name == "Imported Feeds"
-        and tab_id not in affected_tab_ids
-    ):
+    if was_created and tab_name == "Imported Feeds" and tab_id not in affected_tab_ids:
         feeds_in_default_tab = Feed.query.filter_by(tab_id=tab_id).count()
         if feeds_in_default_tab == 0:
             logger.info(
@@ -423,9 +428,12 @@ def import_opml():
         return error_response
 
     # --- Refactored: Determine Target Tab ---
-    top_level_target_tab_id, top_level_target_tab_name, was_default_tab_created, error_resp = _determine_target_tab(
-        request.form.get("tab_id")
-    )
+    (
+        top_level_target_tab_id,
+        top_level_target_tab_name,
+        was_default_tab_created,
+        error_resp,
+    ) = _determine_target_tab(request.form.get("tab_id"))
     if error_resp:
         return error_resp
     # ----------------------------------------
@@ -537,7 +545,7 @@ def import_opml():
         was_default_tab_created,
         top_level_target_tab_id,
         top_level_target_tab_name,
-        affected_tab_ids_set
+        affected_tab_ids_set,
     )
     # ---------------------------------------------
 
