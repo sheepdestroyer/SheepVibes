@@ -381,7 +381,9 @@ def _validate_opml_file_request():
     if ext.lower() not in allowed_extensions:
         return None, (
             jsonify(
-                {"error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"}
+                {
+                    "error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                }
             ),
             400,
         )
@@ -402,7 +404,8 @@ def _parse_opml_root(opml_file):
         tree = SafeET.parse(opml_file.stream)
         return tree.getroot(), None
     except ET.ParseError as e:
-        logger.error("OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
+        logger.error(
+            "OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
         return None, (
             jsonify({"error": "Malformed OPML file. Please check the file format."}),
             400,
@@ -414,7 +417,9 @@ def _parse_opml_root(opml_file):
             exc_info=True,
         )
         return None, (
-            jsonify({"error": "Could not parse OPML file. Please check the file format."}),
+            jsonify(
+                {"error": "Could not parse OPML file. Please check the file format."}
+            ),
             400,
         )
 
@@ -450,7 +455,9 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
         return True, None
     except Exception as e:
         db.session.rollback()
-        logger.error("OPML import: Database commit failed for new feeds: %s", e, exc_info=True)
+        logger.error(
+            "OPML import: Database commit failed for new feeds: %s", e, exc_info=True
+        )
         return False, (
             jsonify({"error": "Database error during final feed import step."}),
             500,
@@ -524,7 +531,8 @@ def import_opml():
     )
 
     # Batch commit and fetch
-    success, error_resp = _batch_commit_and_fetch_new_feeds(newly_added_feeds_list)
+    success, error_resp = _batch_commit_and_fetch_new_feeds(
+        newly_added_feeds_list)
     if not success:
         return error_resp
 
@@ -541,8 +549,7 @@ def import_opml():
 
     if not opml_body.findall("outline") and not newly_added_feeds_list:
         logger.info(
-            "OPML import: No <outline> elements found in the OPML body."
-        )
+            "OPML import: No <outline> elements found in the OPML body.")
         return (
             jsonify(
                 {

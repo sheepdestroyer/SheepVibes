@@ -1193,15 +1193,13 @@ def test_process_feed_with_in_batch_duplicate_guids(
         assert len(guids_in_db) == 2
 
         item1_db = FeedItem.query.filter_by(
-            guid="guid1", feed_id=feed_obj.id
-        ).first()
+            guid="guid1", feed_id=feed_obj.id).first()
         assert item1_db is not None
         assert item1_db.title == "Title 1"
         assert item1_db.link == "http://link1.com"
 
         item2_db = FeedItem.query.filter_by(
-            guid="guid2", feed_id=feed_obj.id
-        ).first()
+            guid="guid2", feed_id=feed_obj.id).first()
         assert item2_db is not None
         assert item2_db.title == "Title 3"
         assert item2_db.link == "http://link3.com"
@@ -1785,9 +1783,7 @@ def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
     assert json_data["imported_count"] == 0
     assert json_data["skipped_count"] == 0
     # Updated message for empty body elements (body exists but has no children)
-    assert (
-        "No feed entries or folders found in the OPML file." in json_data["message"]
-    )
+    assert "No feed entries or folders found in the OPML file." in json_data["message"]
     mock_fetch_update_unused.assert_not_called()
 
 
