@@ -42,7 +42,7 @@ if MAX_CONCURRENT_FETCHES == 0:
     MAX_CONCURRENT_FETCHES = _cpu_count * 5
 
 # Cap the workers to avoid resource exhaustion on high-core machines
-MAX_CONCURRENT_FETCHES = min(MAX_CONCURRENT_FETCHES, 20)
+MAX_CONCURRENT_FETCHES = min(MAX_CONCURRENT_FETCHES, 10)
 
 # --- Helper Functions ---
 
@@ -172,7 +172,7 @@ def validate_and_resolve_url(url):
 
 def _fetch_feed_content(feed_url):
     """
-    Helper function to fetch feed content in a separate thread.
+    Helper function to fetch feed content.
     Returns parsed_feed or None.
     This function must be side-effect-free regarding the database.
     """
