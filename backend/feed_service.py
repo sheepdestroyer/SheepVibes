@@ -308,7 +308,7 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     if new_title and new_title.strip() and new_title != feed_db_obj.name:
         logger.info("Updating feed title for '%s' to '%s'",
                     feed_db_obj.name, new_title)
-        feed_db_obj.name = new_title
+        feed_db_obj.name = new_title.strip()
 
     new_site_link = parsed_feed.feed.get("link")
     if (
@@ -322,14 +322,7 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
             feed_db_obj.site_link,
             new_site_link,
         )
-        feed_db_obj.site_link = new_site_link
-    elif not feed_db_obj.site_link and new_site_link and new_site_link.strip():
-        logger.info(
-            "Setting feed site_link for '%s' to '%s'",
-            feed_db_obj.name,
-            new_site_link,
-        )
-        feed_db_obj.site_link = new_site_link
+        feed_db_obj.site_link = new_site_link.strip()
 
 
 def _collect_new_items(feed_db_obj, parsed_feed):
