@@ -400,33 +400,23 @@ async function reloadTab(tabId) {
 
 function initializeSSE() {
     const eventSource = new EventSource('/api/stream');
+
     eventSource.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
-
-                // Re-fetch tab data to update unread counts on all tab buttons
-                try {
-                    allTabs = await api.getTabs();
-                    renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
-
-                    // If the active tab's content is currently displayed, reload it in place
-                    // reloadTab removes widgets for activeTabId, which causes flicker but only for the active tab.
-                    if (activeTabId && loadedTabs.has(activeTabId)) {
-                        await reloadTab(activeTabId);
-                    }
-
-                    // Mark all other tabs as unloaded so they fetch fresh data when selected
-                    const previouslyLoaded = Array.from(loadedTabs);
-                    loadedTabs.clear();
-                    if (activeTabId && previouslyLoaded.includes(activeTabId)) {
-                        loadedTabs.add(activeTabId);
-                    }
-                } catch (err) {
-                    console.error('Error updating UI after SSE:', err);
-                }
+                // Clear state for all tabs to ensure fresh data
+                loadedTabs.clear();
+                // Re-initialize tabs to update counts and active tab content
+                await initializeTabs();
             }
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error('SSE message parsing failed:', e);
+        }
+    };
+
+    eventSource.onerror = (err) => {
+        console.error('SSE connection failed:', err);
     };
 }

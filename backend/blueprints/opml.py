@@ -405,6 +405,25 @@ def import_opml():
             return jsonify({"error": "No file selected for uploading"}), 400
         if not opml_file:
             return jsonify({"error": "File object is empty"}), 400
+
+        # Basic security: check file extension
+        allowed_extensions = {".opml", ".xml", ".txt"}
+        _, ext = os.path.splitext(opml_file.filename)
+        if ext.lower() not in allowed_extensions:
+            return (
+                jsonify(
+                    {"error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"}
+                ),
+                400,
+            )
+
+        # Basic security: check file size (5MB limit)
+        opml_file.seek(0, os.SEEK_END)
+        size = opml_file.tell()
+        opml_file.seek(0)
+        if size > 5 * 1024 * 1024:
+            return jsonify({"error": "File is too large (max 5MB)"}), 400
+
         return opml_file
 
     def _parse_opml_file(file):

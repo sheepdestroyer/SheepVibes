@@ -1,5 +1,6 @@
 import logging
 import queue
+from threading import Lock
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ class MessageAnnouncer:
     def __init__(self):
         """Initializes the MessageAnnouncer."""
         self.listeners = []
+        self.lock = Lock()
 
     def listen(self):
         """Listens for messages and yields them to the client.
@@ -27,7 +29,9 @@ class MessageAnnouncer:
             str: A message from the queue, formatted for SSE.
         """
         q = queue.Queue(maxsize=5)
-        self.listeners.append(q)
+        with self.lock:
+            self.listeners.append(q)
+
         try:
             while True:
                 try:
@@ -41,9 +45,14 @@ class MessageAnnouncer:
                     # and, crucially, to provide a yield point for GeneratorExit
                     # to be raised when the client disconnects.
                     yield ": heartbeat\n\n"
-        except GeneratorExit:
-            # This is triggered when the client disconnects
-            self.listeners.remove(q)
+        finally:
+            # This is triggered when the client disconnects or an error occurs
+            with self.lock:
+                try:
+                    self.listeners.remove(q)
+                except ValueError:
+                    # Already removed
+                    pass
 
     def announce(self, msg):
         """Announces a message to all listening clients.
@@ -53,7 +62,10 @@ class MessageAnnouncer:
         """
         # Use a copy of the list to avoid issues if a client disconnects
         # during iteration.
-        for q in list(self.listeners):
+        with self.lock:
+            current_listeners = list(self.listeners)
+
+        for q in current_listeners:
             try:
                 q.put_nowait(msg)
             except queue.Full:
