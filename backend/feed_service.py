@@ -513,7 +513,7 @@ def _enforce_feed_limit(feed_db_obj):
     # oldest_ids = query.limit().all() -> delete(id.in_(oldest_ids))
     # Qodo said: "Consider converting to a scalar subquery...".
     # Let's clean up the implementation to use a subquery construct properly.
-    
+
     subquery = (
         db.session.query(FeedItem.id)
         .filter_by(feed_id=feed_db_obj.id)
@@ -521,7 +521,7 @@ def _enforce_feed_limit(feed_db_obj):
         .limit(num_to_delete)
         .subquery()
     )
-    
+
     # In some DBs (MySQL/MariaDB), you can't delete from a table you're selecting from in a subquery
     # without an alias. SQLAlchemy usually handles this, but "fetch then delete" is often most portable
     # for small batches.
@@ -532,7 +532,7 @@ def _enforce_feed_limit(feed_db_obj):
     # .filter(FeedItem.id.in_(oldest_ids))
     # It failed to call .all() or .subquery()! It passed the raw Query object to in_().
     # THAT is the bug/inefficiency.
-    
+
     oldest_ids = (
         db.session.query(FeedItem.id)
         .filter_by(feed_id=feed_db_obj.id)
@@ -540,7 +540,7 @@ def _enforce_feed_limit(feed_db_obj):
         .limit(num_to_delete)
         .all()
     )
-    
+
     # Flatten the list of tuples
     oldest_ids_list = [r.id for r in oldest_ids]
 
