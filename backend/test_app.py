@@ -883,8 +883,8 @@ def test_feed_item_to_dict_serialization(
             db.session.commit()
 
         # Scenario 1: Naive datetimes (assumed UTC)
-        dt_naive_published = datetime(2023, 1, 1, 10, 30, 0)
-        dt_naive_fetched = datetime(2023, 1, 1, 11, 0, 0)
+        dt_naive_published = datetime.datetime(2023, 1, 1, 10, 30, 0)
+        dt_naive_fetched = datetime.datetime(2023, 1, 1, 11, 0, 0)
         item_naive = FeedItem(
             feed_id=test_feed.id,
             title="Naive Datetime Test",
@@ -907,12 +907,12 @@ def test_feed_item_to_dict_serialization(
 
         # Scenario 2: Aware datetimes (EST and PST)
         # EST is UTC-5, PST is UTC-8
-        tz_est = timezone(timedelta(hours=-5))
-        tz_pst = timezone(timedelta(hours=-8))
-        dt_aware_published_est = datetime(
+        tz_est = datetime.timezone(datetime.timedelta(hours=-5))
+        tz_pst = datetime.timezone(datetime.timedelta(hours=-8))
+        dt_aware_published_est = datetime.datetime(
             2023, 3, 15, 12, 0, 0, tzinfo=tz_est
         )  # 17:00 UTC
-        dt_aware_fetched_pst = datetime(
+        dt_aware_fetched_pst = datetime.datetime(
             2023, 3, 15, 9, 0, 0, tzinfo=tz_pst
         )  # 17:00 UTC
 
@@ -941,8 +941,8 @@ def test_feed_item_to_dict_serialization(
         db.session.commit()
 
         # Scenario 3: published_time is None, fetched_time is aware UTC
-        dt_aware_fetched_utc = datetime(
-            2023, 5, 20, 14, 0, 0, tzinfo=timezone.utc)
+        dt_aware_fetched_utc = datetime.datetime(
+            2023, 5, 20, 14, 0, 0, tzinfo=datetime.timezone.utc)
         item_none_published = FeedItem(
             feed_id=test_feed.id,
             title="None Published Test",
@@ -977,7 +977,7 @@ def test_to_iso_z_string_static_method():
     assert FeedItem.to_iso_z_string(aware_dt_est) == "2023-03-15T15:00:00Z"
 
     # 3. Test with a timezone-aware UTC datetime
-    aware_dt_utc = datetime(2023, 5, 20, 14, 30, 0, tzinfo=timezone.utc)
+    aware_dt_utc = datetime.datetime(2023, 5, 20, 14, 30, 0, tzinfo=datetime.timezone.utc)
     assert FeedItem.to_iso_z_string(aware_dt_utc) == "2023-05-20T14:30:00Z"
 
     # 4. Test with None input
