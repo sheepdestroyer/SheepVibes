@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Maximum number of items to keep per feed for cache eviction
 MAX_ITEMS_PER_FEED = 100
 
+
 # Maximum number of concurrent feed fetches
 # I/O bound tasks can handle more workers than CPU cores
 def _get_max_concurrent_fetches():
