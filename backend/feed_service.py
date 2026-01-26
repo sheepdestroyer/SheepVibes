@@ -30,8 +30,14 @@ try:
 except Exception:
     _cpu_count = 1
 
-MAX_CONCURRENT_FETCHES = int(os.environ.get(
-    "FEED_FETCH_MAX_WORKERS", _cpu_count * 5))
+MAX_CONCURRENT_FETCHES = int(
+    os.environ.get("FEED_FETCH_MAX_WORKERS", 0)
+)
+if MAX_CONCURRENT_FETCHES == 0:
+    MAX_CONCURRENT_FETCHES = (_cpu_count * 5)
+
+# Cap the workers to avoid resource exhaustion on high-core machines
+MAX_CONCURRENT_FETCHES = min(MAX_CONCURRENT_FETCHES, 20)
 
 # --- Helper Functions ---
 
@@ -159,18 +165,18 @@ def validate_and_resolve_url(url):
         return None, None
 
 
-def _fetch_feed_content(feed_id, feed_url):
+def _fetch_feed_content(feed_url):
     """
     Helper function to fetch feed content in a separate thread.
-    Returns (feed_id, parsed_feed).
+    Returns parsed_feed or None.
     This function must be side-effect-free regarding the database.
     """
     try:
         parsed_feed = fetch_feed(feed_url)
-        return feed_id, parsed_feed
-    except Exception as e:
-        logger.exception("Error in fetch thread for feed %s: %s", feed_url, e)
-        return feed_id, None
+        return parsed_feed
+    except Exception:
+        logger.exception("Error in fetch thread for feed %s", feed_url)
+        return None
 
 
 def _process_fetch_result(feed_db_obj, parsed_feed):
@@ -203,27 +209,25 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         try:
             db.session.commit()
-        except Exception as e:
+        except Exception:
             db.session.rollback()
             logger.error(
-                "Error committing feed update (no entries) for %s: %s",
+                "Error committing feed update (no entries) for %s",
                 feed_db_obj.name,
-                e,
                 exc_info=True,
             )
-            return False, 0, feed_db_obj.tab_id
+            # Still, the fetch itself might be considered a "success" in terms of reachability
         return True, 0, feed_db_obj.tab_id
 
     try:
         new_items = process_feed_entries(feed_db_obj, parsed_feed)
         # process_feed_entries handles its own logging and commits for items and last_updated_time.
         return True, new_items, feed_db_obj.tab_id
-    except Exception as e:
+    except Exception:
         logger.error(
-            "An unexpected error occurred during entry processing for feed '%s' (ID: %s): %s",
+            "An unexpected error occurred during entry processing for feed '%s' (ID: %s)",
             feed_db_obj.name,
             feed_db_obj.id,
-            e,
             exc_info=True,
         )
         return False, 0, feed_db_obj.tab_id
@@ -606,8 +610,8 @@ def fetch_and_update_feed(feed_id):
         return False, 0, None
 
     # fetch_feed already handles errors and returns None, but logic here checks return
-    parsed_feed = fetch_feed(feed.url)
-
+    parsed_feed = _fetch_feed_content(feed.url)
+    
     # Delegate processing to helper
     return _process_fetch_result(feed, parsed_feed)
 
@@ -627,42 +631,32 @@ def update_all_feeds():
     processed_successfully_count = 0
     affected_tab_ids = set()
 
-    # Map feed_id to feed object for easy access during processing
-    feeds_by_id = {feed.id: feed for feed in all_feeds}
+
 
     logger.info(
         "Starting update process for %s feeds (Parallelized).", len(all_feeds))
 
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=MAX_CONCURRENT_FETCHES
-    ) as executor:
-        # Submit all fetch tasks
-        future_to_feed_id = {
-            executor.submit(_fetch_feed_content, feed.id, feed.url): feed.id
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_FETCHES) as executor:
+        # Submit all fetch tasks, mapping future to the feed object directly
+        future_to_feed = {
+            executor.submit(_fetch_feed_content, feed.url): feed
             for feed in all_feeds
         }
         attempted_count = len(all_feeds)
 
-        for future in concurrent.futures.as_completed(future_to_feed_id):
-            feed_id = future_to_feed_id[future]
-            feed_obj = feeds_by_id.get(feed_id)
-
-            if not feed_obj:
-                # Should not happen given current logic, but safe guard
-                logger.error(
-                    "Feed ID %s not found in mapping during processing.", feed_id
-                )
-                continue
+        for future in concurrent.futures.as_completed(future_to_feed):
+            feed_obj = future_to_feed[future]
+            feed_id = feed_obj.id
 
             logger.info(
                 "Processing result for feed: %s (%s)",
                 feed_obj.name,
-                feed_obj.id,
+                feed_id,
             )
 
             try:
                 # Retrieve result from the thread
-                _, parsed_feed = future.result()
+                parsed_feed = future.result()
 
                 # --- Sequential Processing (Main Thread) ---
                 # Check 1: Reuse the logic shared with fetch_and_update_feed
@@ -676,12 +670,11 @@ def update_all_feeds():
                     if new_items > 0:
                         affected_tab_ids.add(tab_id)
 
-            except Exception as e:
+            except Exception:
                 logger.error(
-                    "Unexpected critical error processing future for feed %s (%s): %s",
+                    "Unexpected critical error processing future for feed %s (%s)",
                     feed_obj.name,
                     feed_id,
-                    e,
                     exc_info=True,
                 )
                 continue
