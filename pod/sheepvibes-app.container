@@ -5,7 +5,7 @@ Requires=sheepvibes-redis.container
 
 [Container]
 ContainerName=sheepvibes-app
-Image=localhost/sheepvibes-app:latest
+Image=ghcr.io/sheepdestroyer/sheepvibes:latest
 Pod=sheepvibespod.pod
 Volume=sheepvibes-db.volume:/app/data
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
