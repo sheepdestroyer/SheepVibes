@@ -595,7 +595,7 @@ def export_opml():
 
 def _get_autosave_directory():
     """Determines the autosave directory with flexible configuration.
-    
+
     Priority:
     1. DATA_DIR config/environment variable (explicit configuration)
     2. Directory of the SQLite database file (alongside user data)
@@ -603,7 +603,7 @@ def _get_autosave_directory():
     """
     # 1. Check for explicit DATA_DIR configuration
     data_dir = current_app.config.get("DATA_DIR") or os.environ.get("DATA_DIR")
-    
+
     if not data_dir:
         # 2. Try to use the directory of the SQLite database
         db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
@@ -611,7 +611,7 @@ def _get_autosave_directory():
             db_path = db_uri.replace("sqlite:///", "")
             if os.path.isabs(db_path):
                 data_dir = os.path.dirname(db_path)
-    
+
     if not data_dir:
         # 3. Fall back to PROJECT_ROOT/data
         project_root = current_app.config.get("PROJECT_ROOT", "")
@@ -619,7 +619,9 @@ def _get_autosave_directory():
             data_dir = os.path.join(project_root, "data")
 
     if not data_dir:
-        logger.warning("Could not determine autosave directory. Skipping OPML autosave.")
+        logger.warning(
+            "Could not determine autosave directory. Skipping OPML autosave."
+        )
         return None
 
     try:
