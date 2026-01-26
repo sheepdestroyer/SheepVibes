@@ -73,11 +73,10 @@ def parse_published_time(entry):
                            parsing fails.
     """
     parsed_dt = None
-    if getattr(entry, "published_parsed", None):
+    pub_parsed = getattr(entry, "published_parsed", None)
+    if isinstance(pub_parsed, (list, tuple)) and len(pub_parsed) >= 6:
         try:
-            parsed_dt = datetime.datetime(
-                *entry.published_parsed[:6], tzinfo=timezone.utc
-            )
+            parsed_dt = datetime.datetime(*pub_parsed[:6], tzinfo=timezone.utc)
         except (TypeError, ValueError):
             parsed_dt = None
 
@@ -85,10 +84,11 @@ def parse_published_time(entry):
         # Try common date fields using dateutil.parser
         for field in ["published", "updated", "created", "dc:date"]:
             parsed_dt = _get_dt_from_field(entry, field)
-            if parsed_dt:
+            if isinstance(parsed_dt, datetime.datetime):
                 break
+            parsed_dt = None
 
-    if parsed_dt:
+    if isinstance(parsed_dt, datetime.datetime):
         if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(parsed_dt) is None:
             return parsed_dt.replace(tzinfo=timezone.utc)
         return parsed_dt.astimezone(timezone.utc)
@@ -289,7 +289,8 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     raw_title = parsed_feed.feed.get("title")
     new_title = raw_title.strip() if raw_title else None
     if new_title and new_title != feed_db_obj.name:
-        logger.info("Updating feed title for '%s' to '%s'", feed_db_obj.name, new_title)
+        logger.info("Updating feed title for '%s' to '%s'",
+                    feed_db_obj.name, new_title)
         feed_db_obj.name = new_title
 
     raw_site_link = parsed_feed.feed.get("link")
@@ -311,20 +312,16 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     batch_processed_links = set()
 
     # Optimization: Query only necessary columns to avoid loading full objects
-    existing_items_data = (
+    # item[1] is guid, item[2] is link, item[3] is title
+    items_tuple = (
         db.session.query(FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title)
         .filter_by(feed_id=feed_db_obj.id)
         .all()
     )
 
-    # Create lookup maps from tuples: (id, guid, link, title)
-    # item[1] is guid, item[2] is link
-    existing_items_by_guid = {
-        item.guid: item for item in existing_items_data if item.guid
-    }
-    existing_items_by_link = {
-        item.link: item for item in existing_items_data if item.link
-    }
+    # Create lookup maps
+    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
+    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
 
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
@@ -335,46 +332,41 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
     # Pre-calculate dates to avoid double parsing and ensure consistency between
     # sorting and storage (e.g. if parse_published_time uses current time as fallback).
+    entries_with_dates = []
     for entry in parsed_feed.entries:
-        entry["_parsed_published"] = parse_published_time(entry)
+        entries_with_dates.append((entry, parse_published_time(entry)))
 
     # Sort entries by published date (newest first).
     # Our "First Wins" deduplication strategy (below) will preserve the version
     # that appears first in the iteration. Sorting ensures the most recently
     # published version is processed first and thus preserved in case of duplicates.
     try:
-        parsed_feed.entries.sort(
-            key=lambda e: e["_parsed_published"], reverse=True)
+        entries_with_dates.sort(key=lambda x: x[1], reverse=True)
     except Exception:  # pylint: disable=broad-exception-caught
         # If sorting fails, proceed with original order.
         logger.warning("Failed to sort entries for feed %s", feed_db_obj.name)
 
-    for entry in parsed_feed.entries:
-        entry_title = entry.get("title", "[No Title]")
+    for entry, parsed_published in entries_with_dates:
         entry_link = entry.get("link")
-        feedparser_id = entry.get("id")
 
         if not entry_link:
             logger.warning(
-                "Skipping entry titled '%s' for feed '%s' due to missing link. (ID: %s)",
-                entry_title[:100],
+                "Skipping entry titled '%s' for feed '%s' due to missing link.",
+                entry.get("title", "[No Title]")[:100],
                 feed_db_obj.name,
-                feedparser_id if feedparser_id else "N/A",
             )
             continue
 
-        db_guid = feedparser_id or entry_link
+        db_guid = entry.get("id") or entry_link
 
         # Check existing
-        existing_item_data = None
-        if db_guid:
-            existing_item_data = existing_items_by_guid.get(db_guid)
-        if not existing_item_data and entry_link:
-            existing_item_data = existing_items_by_link.get(entry_link)
+        existing_match = existing_items_by_guid.get(db_guid)
+        if not existing_match:
+            existing_match = existing_items_by_link.get(entry_link)
 
-        if existing_item_data:
+        if existing_match:
             _update_existing_item(
-                feed_db_obj, existing_item_data, entry_title, entry_link
+                feed_db_obj, existing_match, entry.get("title", "[No Title]"), entry_link
             )
             continue
 
@@ -395,9 +387,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         items_to_add.append(
             FeedItem(
                 feed_id=feed_db_obj.id,
-                title=entry_title,
+                title=entry.get("title", "[No Title]"),
                 link=entry_link,
-                published_time=entry["_parsed_published"],
+                published_time=parsed_published,
                 guid=db_guid,
             )
         )
@@ -512,7 +504,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
             feed_db_obj.name,
             exc_info=True,
         )
-        db.session.rollback() # Rollback if updating last_updated_time fails
+        db.session.rollback()  # Rollback if updating last_updated_time fails
 
     count = 0
     for item in items_to_add:
@@ -542,8 +534,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
             "Recovered %s items individually for feed: %s", count, feed_db_obj.name
         )
     else:
-        logger.info("No items added individually for feed: %s",
-                    feed_db_obj.name)
+        logger.info("No items added individually for feed: %s", feed_db_obj.name)
 
     return count
 
