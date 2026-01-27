@@ -26,18 +26,25 @@ def create_malformed_xml():
     return b"""<rss><channel><title>Unclosed Tag</title>"""
 
 
-def test_fetch_feed_blocks_xxe(mocker):
-    """Test that fetch_feed detects and blocks XXE payloads."""
-    # Mock urllib.request.urlopen
+@pytest.fixture
+def mock_network(mocker):
+    """Mocks network calls and returns the urlopen mock's response object for configuration."""
+    mocker.patch(
+        "backend.feed_service.socket.getaddrinfo",
+        return_value=[(2, 1, 6, "", ("93.184.216.34", 80))]
+    )
     mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
+
     mock_response = MagicMock()
-    mock_response.read.return_value = create_xxe_payload()
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
 
-    # Mock socket.getaddrinfo to pass SSRF check
-    mock_getaddrinfo = mocker.patch("backend.feed_service.socket.getaddrinfo")
-    mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 80))]
+    return mock_response
+
+
+def test_fetch_feed_blocks_xxe(mock_network):
+    """Test that fetch_feed detects and blocks XXE payloads."""
+    mock_network.read.return_value = create_xxe_payload()
 
     url = "http://example.com/feed.xml"
     result = feed_service.fetch_feed(url)
@@ -46,16 +53,9 @@ def test_fetch_feed_blocks_xxe(mocker):
     assert result is None
 
 
-def test_fetch_feed_allows_valid_xml(mocker):
+def test_fetch_feed_allows_valid_xml(mock_network):
     """Test that fetch_feed allows valid XML."""
-    mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
-    mock_response = MagicMock()
-    mock_response.read.return_value = create_valid_feed()
-    mock_response.__enter__.return_value = mock_response
-    mock_urlopen.return_value = mock_response
-
-    mock_getaddrinfo = mocker.patch("backend.feed_service.socket.getaddrinfo")
-    mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 80))]
+    mock_network.read.return_value = create_valid_feed()
 
     url = "http://example.com/valid.xml"
     result = feed_service.fetch_feed(url)
@@ -64,16 +64,9 @@ def test_fetch_feed_allows_valid_xml(mocker):
     assert result.feed.title == "Valid Feed"
 
 
-def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(mocker):
+def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(mocker, mock_network):
     """Test that malformed XML (which triggers SAXParseException) is NOT blocked and passed to feedparser."""
-    mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
-    mock_response = MagicMock()
-    mock_response.read.return_value = create_malformed_xml()
-    mock_response.__enter__.return_value = mock_response
-    mock_urlopen.return_value = mock_response
-
-    mock_getaddrinfo = mocker.patch("backend.feed_service.socket.getaddrinfo")
-    mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 80))]
+    mock_network.read.return_value = create_malformed_xml()
 
     # Mock feedparser to verify we pass the content through
     mock_feedparser = mocker.patch("backend.feed_service.feedparser.parse")
