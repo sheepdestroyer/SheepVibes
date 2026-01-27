@@ -914,9 +914,11 @@ def test_fetch_feed_toctou_prevention_http(mocker):
 
     # For HTTP, we now use SafeHTTPHandler which uses the IP internally, so the URL remains the same
     assert req_obj.full_url == url
-    assert req_obj.get_header("Host") is None # Host header is not manually set if URL is not rewritten
+    assert (req_obj.get_header("Host")
+            is None)  # Host header is not manually set if URL is not rewritten
 
     # Verify SafeHTTPHandler was used
     args, _ = mock_build_opener.call_args
-    has_safe_handler = any(isinstance(h, feed_service.SafeHTTPHandler) for h in args)
+    has_safe_handler = any(
+        isinstance(h, feed_service.SafeHTTPHandler) for h in args)
     assert has_safe_handler, "SafeHTTPHandler should be used for HTTP requests"

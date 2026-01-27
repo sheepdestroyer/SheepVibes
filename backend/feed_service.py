@@ -472,7 +472,7 @@ def fetch_feed(feed_url):
         else:
             # For HTTP: Use SafeHTTPHandler to pin IP
             handler = SafeHTTPHandler(safe_ip=safe_ip)
-            
+
             # Add SafeRedirectHandler to the chain
             redirect_handler = SafeRedirectHandler()
             opener = urllib.request.build_opener(handler, redirect_handler)

@@ -153,7 +153,6 @@ def test_fetch_feed_blocks_dtd_with_external_reference(mock_network):
     assert result is None
 
 
-
 def test_fetch_feed_redirect_security(mock_network, mocker):
     """Test that SafeRedirectHandler validates and pins the IP for redirects."""
     # 1. Mock validate_and_resolve_url to return safe IPs
@@ -163,12 +162,13 @@ def test_fetch_feed_redirect_security(mock_network, mocker):
         ("93.184.216.34", "example.com"),  # Initial
         ("1.1.1.1", "redirected.com"),  # Redirect
     ]
-    
+
     # 2. Mock urllib.request.build_opener to inspect handlers
-    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    mock_build_opener = mocker.patch(
+        "backend.feed_service.urllib.request.build_opener")
     mock_opener = MagicMock()
     mock_build_opener.return_value = mock_opener
-    
+
     # Mock response to simulate redirect logic if we were running full stack,
     # but here we just want to verify handlers are set up correctly.
     # Actually, fetch_feed calls opener.open().
@@ -183,17 +183,20 @@ def test_fetch_feed_redirect_security(mock_network, mocker):
 
     # 4. Verify validate_and_resolve_url was called for the initial URL
     mock_validate.assert_any_call("http://example.com/feed")
-    
+
     # 5. Verify SafeHTTPHandler (or HTTPS) and SafeRedirectHandler were passed to build_opener
     assert mock_build_opener.called
     handlers = mock_build_opener.call_args[0]
-    
+
     # Check for SafeHTTPHandler/SafeHTTPSHandler
-    has_safe_con_handler = any(isinstance(h, (feed_service.SafeHTTPHandler, feed_service.SafeHTTPSHandler)) for h in handlers)
+    has_safe_con_handler = any(
+        isinstance(h, (feed_service.SafeHTTPHandler,
+                       feed_service.SafeHTTPSHandler)) for h in handlers)
     assert has_safe_con_handler, "SafeHTTPHandler or SafeHTTPSHandler should be used"
-    
+
     # Check for SafeRedirectHandler
-    has_redirect_handler = any(isinstance(h, feed_service.SafeRedirectHandler) for h in handlers)
+    has_redirect_handler = any(
+        isinstance(h, feed_service.SafeRedirectHandler) for h in handlers)
     assert has_redirect_handler, "SafeRedirectHandler should be used"
 
 
