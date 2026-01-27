@@ -325,7 +325,8 @@ def fetch_feed(feed_url):
         return parsed_feed
 
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.error("Error fetching feed %s", _sanitize_url_for_log(feed_url),
+        logger.error("Error fetching feed %s",
+                     _sanitize_url_for_log(feed_url),
                      exc_info=True)
         return None
 
