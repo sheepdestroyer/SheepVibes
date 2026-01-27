@@ -149,7 +149,7 @@ def test_fetch_feed_blocks_dtd_with_external_reference(mock_network):
 
     url = "http://example.com/safe_dtd.xml"
     result = feed_service.fetch_feed(url)
-    
+
     # STRICT MODE: Must be None (blocked) because it contains external entities (implied by test name, though mock data might be simple, policy is strict)
     assert result is None
 

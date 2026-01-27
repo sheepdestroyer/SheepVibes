@@ -101,15 +101,18 @@ def _validate_xml_safety(content):
             forbid_external=True,
         )
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
-        logger.error("XML Security Violation detected: %s", _sanitize_url_for_log(str(e)))
+        logger.error("XML Security Violation detected: %s",
+                     _sanitize_url_for_log(str(e)))
         return False
     except (SAXParseException, UnicodeError) as e:
         # SECURITY HARDENING: Fail closed on malformed XML.
         # If defusedxml cannot parse it, we do not bypass to feedparser.
         # This prevents attackers from constructing payloads that defusedxml chokes on
         # but feedparser/libxml2 might process unsafely.
-        logger.warning("XML Parsing failed during safety check (rejecting): %s",
-                       _sanitize_url_for_log(str(e)))
+        logger.warning(
+            "XML Parsing failed during safety check (rejecting): %s",
+            _sanitize_url_for_log(str(e)),
+        )
         return False
 
     return True
@@ -259,7 +262,7 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
 
 class SafeHTTPSHandler(urllib.request.HTTPSHandler):
     """Handler that uses SafeHTTPSConnection."""
-    
+
     def __init__(self, safe_ip):
         self.safe_ip = safe_ip
         super().__init__()
@@ -280,13 +283,17 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     Custom RedirectHandler that validates the target URL of a redirect
     to prevent SSRF via redirection to unsafe IPs.
     """
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         # Resolve and validate the NEW url
         safe_ip, _ = validate_and_resolve_url(newurl)
         if not safe_ip:
-            logger.warning("Blocked unsafe redirect to: %s", _sanitize_url_for_log(newurl))
-            raise urllib.error.HTTPError(newurl, code, "Blocked unsafe redirect", headers, fp)
-            
+            logger.warning("Blocked unsafe redirect to: %s",
+                           _sanitize_url_for_log(newurl))
+            raise urllib.error.HTTPError(newurl, code,
+                                         "Blocked unsafe redirect", headers,
+                                         fp)
+
         # If safe, let the superclass handle creation of the new request
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -389,10 +396,13 @@ def fetch_feed(feed_url):
             # Add SafeRedirectHandler to the chain
             redirect_handler = SafeRedirectHandler()
             opener = urllib.request.build_opener(handler, redirect_handler)
-            req = urllib.request.Request(feed_url, headers={
-                "User-Agent": "SheepVibes/1.0",
-                "Accept-Encoding": "identity"  # Prevent Zip Bombs
-            })
+            req = urllib.request.Request(
+                feed_url,
+                headers={
+                    "User-Agent": "SheepVibes/1.0",
+                    "Accept-Encoding": "identity",  # Prevent Zip Bombs
+                },
+            )
             url_opener = opener.open(req, timeout=10)
 
         else:
@@ -400,9 +410,9 @@ def fetch_feed(feed_url):
             netloc = safe_ip
             if parsed.port:
                 netloc = f"{safe_ip}:{parsed.port}"
-                
+
             target_url = parsed._replace(netloc=netloc).geturl()
-            
+
             # Host header must also include port if originally present
             host_header = hostname
             if parsed.port:
@@ -411,13 +421,15 @@ def fetch_feed(feed_url):
             # Use SafeRedirectHandler for HTTP as well
             redirect_handler = SafeRedirectHandler()
             opener = urllib.request.build_opener(redirect_handler)
-            
-            req = urllib.request.Request(target_url,
-                                         headers={
-                                             "Host": host_header,
-                                             "User-Agent": "SheepVibes/1.0",
-                                             "Accept-Encoding": "identity"  # Prevent Zip Bombs
-                                         })
+
+            req = urllib.request.Request(
+                target_url,
+                headers={
+                    "Host": host_header,
+                    "User-Agent": "SheepVibes/1.0",
+                    "Accept-Encoding": "identity",  # Prevent Zip Bombs
+                },
+            )
             url_opener = opener.open(req, timeout=10)
 
         with url_opener as response:
@@ -428,8 +440,10 @@ def fetch_feed(feed_url):
         # Even with 'Accept-Encoding: identity', some servers might send GZIP.
         # We manually check for the GZIP magic header (\x1f\x8b) and reject.
         if content.startswith(b"\x1f\x8b"):
-            logger.warning("Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
-                           _sanitize_url_for_log(feed_url))
+            logger.warning(
+                "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+                _sanitize_url_for_log(feed_url),
+            )
             return None
 
         if not _validate_xml_safety(content):
