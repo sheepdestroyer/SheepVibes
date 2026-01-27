@@ -673,9 +673,7 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         # Check batch duplicates
         if _is_batch_duplicate(
                 db_guid,
-                entry_link,
                 batch_processed_guids,
-                batch_processed_links,
                 feed_db_obj.name,
         ):
             continue
@@ -728,15 +726,12 @@ def _update_existing_item(feed_db_obj, existing_item_data, entry_title,
                 updates, synchronize_session=False)
 
 
-def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links,
-                        feed_name):
+def _is_batch_duplicate(db_guid, batch_guids, feed_name):
     """Checks if an item is a duplicate within the current processing batch.
 
     Args:
         db_guid (str): Calculated GUID for the item.
-        entry_link (str): Link for the item.
         batch_guids (set): Set of GUIDs processed in current batch.
-        batch_links (set): Set of links processed in current batch.
         feed_name (str): Name of the feed for logging.
 
     Returns:
