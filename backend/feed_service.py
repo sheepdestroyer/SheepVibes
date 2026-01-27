@@ -458,8 +458,6 @@ def fetch_feed(feed_url):
     try:
         # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
 
-
-
         # Register BOTH handlers to ensure safety during redirects (HTTPS -> HTTP or HTTP -> HTTPS)
         # Both handlers utilize ip pinning via `safe_ip` (and `req.safe_ip` for redirects).
         http_handler = SafeHTTPHandler(safe_ip=safe_ip)
