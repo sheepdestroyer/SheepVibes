@@ -4,6 +4,7 @@
 # Use dateutil for robust date parsing
 import concurrent.futures
 import datetime  # Import the full module
+import hashlib
 import http.client
 import ipaddress
 import logging  # Standard logging
@@ -12,7 +13,7 @@ import socket
 import ssl
 import urllib.request
 from datetime import timezone  # Specifically import timezone
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
@@ -83,13 +84,16 @@ def _sanitize_for_log(value):
 def _validate_xml_safety(content):
     """
     Validates XML content for XXE vulnerabilities using defusedxml.
-    Returns False if a security violation is detected.
-    Returns True if the content is safe (or not XML).
+    Returns False if a security violation is detected or if parsing fails (fail-closed).
+    Returns True IF AND ONLY IF the content is successfully validated and safe.
 
     Policy:
     - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration (required for many valid RSS feeds).
     - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against internal entity expansion (Billion Laughs) and external entity injection.
-    - forbid_external=True: STRICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.
+    - forbid_external=True: STICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.
+
+    Malformed XML or non-XML input that raises SAXParseException or UnicodeError
+    is REJECTED (returns False) for safety.
     """
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions
@@ -256,8 +260,7 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
 
         self.sock = self._context.wrap_socket(
             self.sock,
-            server_hostname=self.
-            host,  # This ensures SNI and Cert Check match the Host, not the IP
+            server_hostname=self.host,  # This ensures SNI and Cert Check match the Host, not the IP
         )
 
 
@@ -340,17 +343,21 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Handle relative redirects by joining with original URL
+        absolute_newurl = urljoin(req.full_url, newurl)
+
         # Resolve and validate the NEW url
-        safe_ip, _ = validate_and_resolve_url(newurl)
+        safe_ip, _ = validate_and_resolve_url(absolute_newurl)
         if not safe_ip:
             logger.warning("Blocked unsafe redirect to: %s",
-                           _sanitize_for_log(newurl))
-            raise urllib.error.HTTPError(newurl, code,
+                           _sanitize_for_log(absolute_newurl))
+            raise urllib.error.HTTPError(absolute_newurl, code,
                                          "Blocked unsafe redirect", headers,
                                          fp)
 
         # Create the new request
-        new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+        new_req = super().redirect_request(req, fp, code, msg, headers,
+                                           absolute_newurl)
 
         # PIN THE IP: Attach the resolved safe_ip to the new request
         # This allows SafeHTTPSHandler (and HTTP logic) to use the validated IP
@@ -630,7 +637,6 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             # Create a synthetic GUID based on link and title to ensure uniqueness
             # for items that share a link but have different content.
             unique_string = f"{entry_link}{entry.get('title', '')}"
-            import hashlib
 
             db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
 
@@ -730,13 +736,6 @@ def _is_batch_duplicate(db_guid, batch_guids, feed_name):
             _sanitize_for_log(feed_name),
         )
         return True
-    if db_guid and db_guid in batch_guids:
-        logger.warning(
-            "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
-            _sanitize_for_log(db_guid),
-            _sanitize_for_log(feed_name),
-        )
-        return True
 
     # RELAXATION: Do not strict dedupe by link alone.
     # We rely on the robust GUID (which includes Title) to catch duplicates.
@@ -763,7 +762,7 @@ def _save_items_to_db(feed_db_obj, items_to_add):
         logger.warning(
             "Batch insert failed for feed '%s': %s. Retrying individually.",
             _sanitize_for_log(feed_db_obj.name),
-            e,
+            _sanitize_for_log(str(e)),
         )
         committed_count = _save_items_individually(feed_db_obj, items_to_add)
     except Exception:  # pylint: disable=broad-exception-caught
@@ -809,7 +808,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
                 _sanitize_for_log(feed_db_obj.name),
                 _sanitize_for_log(item.link),
                 _sanitize_for_log(item.guid),
-                ie,
+                _sanitize_for_log(str(ie)),
             )
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
