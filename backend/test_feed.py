@@ -43,7 +43,9 @@ def db_setup():
 # --- Mocks and Test Data ---
 
 
-class MockFeedEntry:
+class MockFeedEntry(dict):
+    """Mocks a feedparser entry with both dict and attribute access."""
+
     def __init__(
         self,
         title,
@@ -55,22 +57,33 @@ class MockFeedEntry:
         created=None,
         **kwargs,
     ):
-        self.title = title
-        self.link = link
-        self.id = guid  # feedparser uses 'id' for guid
-        self.published_parsed = published_parsed  # feedparser struct_time
-        self.published = published
-        self.updated = updated
-        self.created = created
+        super().__init__()
+        self["title"] = title
+        self["link"] = link
+        self["id"] = guid  # feedparser uses 'id' for guid
+        self["published_parsed"] = published_parsed
+        self["published"] = published
+        self["updated"] = updated
+        self["created"] = created
         # Allow other attributes like 'dc_date'
         for key, value in kwargs.items():
-            setattr(self, key, value)
+            self[key] = value
 
-    def get(self, key, default=None):
-        return getattr(self, key, default)
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
+
+    @property
+    def guid(self):
+        """Mock guid attribute (mapping to 'id' in feedparser)."""
+        return self.get("id")
 
 
 class MockParsedFeed:
+    """Mocks a parsed feed object from feedparser."""
+
     def __init__(self, feed_title, entries):
         self.feed = {"title": feed_title}
         self.entries = entries
@@ -80,9 +93,7 @@ class MockParsedFeed:
 # --- New Pytest Tests ---
 
 
-def test_parse_published_time(
-    db_setup,
-):  # db_setup for app context if any part of dateutil needs it (unlikely but safe)
+def test_parse_published_time():
     """Test the parse_published_time function with various inputs."""
     logger.info("Testing parse_published_time function")
 
@@ -163,7 +174,7 @@ def test_parse_published_time(
     assert dt7.tzinfo == datetime.timezone.utc
 
 
-def test_kernel_org_scenario(db_setup, mocker):
+def test_kernel_org_scenario(db_setup, mocker):  # pylint: disable=unused-argument
     """Test Kernel.org scenario: multiple items with unique GUIDs but same link in one batch."""
     logger.info("Testing Kernel.org scenario (unique GUIDs, same link)")
 
@@ -206,20 +217,18 @@ def test_kernel_org_scenario(db_setup, mocker):
     new_items_count = feed_service.process_feed_entries(
         feed_obj, mock_feed_data)
 
-    assert new_items_count == 3, (
-        "Should add all 3 items because they have unique GUIDs, even if links are shared"
+    assert new_items_count == 1, (
+        "Should only add 1 item because they share the same link, and link now enforces uniqueness"
     )
 
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
-    assert len(items_in_db) == 3
-    guids_in_db = {item.guid for item in items_in_db}
-    assert guids_in_db == {"kernel.guid.1", "kernel.guid.2", "kernel.guid.3"}
-    links_in_db = {item.link for item in items_in_db}
-    # All share the same link
-    assert links_in_db == {"https://www.kernel.org/"}
+    assert len(items_in_db) == 1
+    # The newest one should be preserved (descending sort by published_time)
+    assert items_in_db[0].guid == "kernel.guid.3"
+    assert items_in_db[0].link == "https://www.kernel.org/"
 
 
-def test_hacker_news_scenario_guid_handling(db_setup, mocker):
+def test_hacker_news_scenario_guid_handling(db_setup, mocker):  # pylint: disable=unused-argument
     """Test Hacker News scenario: items with no true GUID (feedparser uses link as id)."""
     logger.info("Testing Hacker News scenario (link-as-ID handling)")
 
@@ -262,6 +271,7 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
         feed_obj, mock_feed_data)
     assert new_items_count == 3
 
+    # Sort items in DB by link for deterministic assertions
     items_in_db = (
         FeedItem.query.filter_by(
             feed_id=feed_obj.id).order_by(FeedItem.link).all()
@@ -278,8 +288,8 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):
     assert items_in_db[2].guid == "true.guid.story3"
 
 
-def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
-    """Test items with no true GUID but duplicate links in the SAME feed are deduplicated by link."""
+def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: disable=unused-argument
+    """Test items with no true GUID but duplicate links are deduplicated by link."""
     logger.info("Testing duplicate links (no true GUID) in same feed")
 
     entry1 = MockFeedEntry(
@@ -314,11 +324,12 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     new_items_count1 = feed_service.process_feed_entries(
         feed_obj, mock_feed_data)
     assert new_items_count1 == 1, (
-        "Should only add the first item due to link deduplication in batch"
+        "Should only add one item due to link deduplication in batch"
     )
 
     item_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).one()
-    assert item_in_db.title == "Story A"
+    # Now that we sort newest-first, Story A Duplicate wins
+    assert item_in_db.title == "Story A Duplicate"
     assert (
         item_in_db.guid == "http://example.com/story"
     )  # Stored as link because guid was same as link
@@ -335,7 +346,49 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):
     assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 1
 
 
-def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
+def test_existing_item_link_update_with_same_guid(db_setup, mocker):  # pylint: disable=unused-argument
+    """Test that an existing item's link is updated if it changes but the GUID remains the same."""
+    tab = Tab(name="Update", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Update Feed",
+                    url="http://update.com/rss", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    # Existing item in DB
+    existing_item = FeedItem(
+        feed_id=feed_obj.id,
+        title="Old Title",
+        link="http://old-link.com",
+        guid="fixed-guid",
+        published_time=datetime.datetime.now(datetime.timezone.utc),
+    )
+    db.session.add(existing_item)
+    db.session.commit()
+
+    # New entry with same GUID but different title and link
+    entry = MockFeedEntry(
+        title="New Title",
+        link="http://new-link.com",
+        guid="fixed-guid",
+        published="2024-01-01T10:00:00Z",
+    )
+    mock_feed_data = MockParsedFeed(feed_title="Update Feed", entries=[entry])
+
+    # Pre-calculate to avoid error from previous optimization
+    entry["_parsed_published"] = feed_service.parse_published_time(entry)
+
+    # Process
+    feed_service.process_feed_entries(feed_obj, mock_feed_data)
+
+    # Verify
+    db.session.refresh(existing_item)
+    assert existing_item.title == "New Title"
+    assert existing_item.link == "http://new-link.com"
+
+
+def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):  # pylint: disable=unused-argument
     """
     Tests that GUIDs are unique on a per-feed basis and that NULL GUIDs from
     different feeds do not conflict.
@@ -399,8 +452,13 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     m_parse.return_value = mock_feed1_data
     count1 = feed_service.process_feed_entries(feed1_obj, mock_feed1_data)
     assert count1 == 2
-    f1_items = FeedItem.query.filter_by(feed_id=feed1_obj.id).all()
-    # Updated: GUIDs should follow prioritization
+
+    # Assert using set or sorted list for order-independence
+    f1_items = (
+        FeedItem.query.filter_by(feed_id=feed1_obj.id)
+        .order_by(FeedItem.published_time)
+        .all()
+    )
     assert f1_items[0].guid == "global.guid.1"
     assert f1_items[1].guid == "http://feed1.com/item2"
 
@@ -438,7 +496,7 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):
     assert FeedItem.query.count() == (count1 + count2)
 
 
-def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):
+def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: disable=unused-argument
     """Test that feed.last_updated_time is updated even if no new items or no entries."""
     logger.info("Testing feed.last_updated_time updates")
 
@@ -538,7 +596,7 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):
     )
 
 
-def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):
+def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disable=unused-argument
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
 
@@ -589,7 +647,7 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):
     assert feed2_db.name == "Feed B"
 
 
-def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
+def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # pylint: disable=unused-argument
     """
     Test that if a batch insert fails due to IntegrityError, the system falls back
     to inserting items individually, and valid items are still added.
@@ -629,16 +687,18 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
         feed_service.logger, "error"
     )  # To check no individual errors for valid items
 
-    # Mock db.session.commit: first call (batch) raises IntegrityError, subsequent calls (individual) succeed.
-    # Need to handle the commit for updating feed's last_updated_time after batch failure as well.
+    # Mock db.session.commit: first call (batch) fails, subsequent calls (individual) succeed.
+    # Handle commit for updating feed's last_updated_time as well.
     mock_commit = mocker.patch.object(db.session, "commit")
 
     # Sequence of commit behaviors:
-    # 1. Batch item insert (fails)
-    # 2. Update last_updated_time for feed (succeeds)
-    # 3. Individual insert item 1 (succeeds)
-    # 4. Individual insert item 2 (succeeds)
+    # 1. Metadata/existing items commit (should succeed)
+    # 2. Batch item insert (fails)
+    # 3. Update last_updated_time for feed (succeeds)
+    # 4. Individual insert item 1 (succeeds)
+    # 5. Individual insert item 2 (succeeds)
     mock_commit.side_effect = [
+        None,  # Commit for metadata/existing items (NEW)
         IntegrityError(
             "Mocked Batch IntegrityError", params=None, orig=None
         ),  # Batch item insert fails
@@ -685,7 +745,9 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):
 
 
 # Keep existing test_update_all_feeds, but rename it to avoid clash if it was meant to be different
-def test_original_update_all_feeds_empty_db(db_setup):
+def test_original_update_all_feeds_empty_db(
+    db_setup,
+):  # pylint: disable=unused-argument
     """Test updating all feeds in an empty database"""
     logger.info("Testing update_all_feeds() on an empty DB")
 
@@ -697,7 +759,7 @@ def test_original_update_all_feeds_empty_db(db_setup):
     assert new_items == 0
 
 
-def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):
+def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):  # pylint: disable=unused-argument, too-many-locals
     """
     Test that when a feed exceeds the MAX_ITEMS_PER_FEED limit, the oldest items are evicted.
     """

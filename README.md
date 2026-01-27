@@ -76,6 +76,15 @@ This section describes how to deploy SheepVibes using a Podman Pod managed by sy
     sudo loginctl enable-linger $(whoami)
     ```
 
+### Static Analysis & Linting
+
+To maintain code quality, we use `pylint`. It is highly recommended to run it before submitting pull requests:
+```bash
+# From the root directory
+pylint backend/feed_service.py backend/app.py
+```
+A high score (9.0+) is generally expected for new contributions.
+
 ### Accessing the Application
 
 Once started, the application will be accessible at `http://127.0.0.1:5001` by default. To access the application from other machines, you may need to modify the `PublishPort` setting in `~/.config/containers/systemd/sheepvibespod.pod` (e.g., to `0.0.0.0:5001:5000`) and then run `systemctl --user daemon-reload && systemctl --user restart sheepvibespod-pod.service`.

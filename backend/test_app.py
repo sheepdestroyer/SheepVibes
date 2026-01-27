@@ -1195,8 +1195,8 @@ def test_process_feed_with_in_batch_duplicate_guids(
         item1_db = FeedItem.query.filter_by(
             guid="guid1", feed_id=feed_obj.id).first()
         assert item1_db is not None
-        assert item1_db.title == "Title 1"
-        assert item1_db.link == "http://link1.com"
+        assert item1_db.title == "Title 2 (Same GUID)"
+        assert item1_db.link == "http://link2.com"
 
         item2_db = FeedItem.query.filter_by(
             guid="guid2", feed_id=feed_obj.id).first()
