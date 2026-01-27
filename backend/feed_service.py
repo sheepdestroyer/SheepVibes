@@ -512,8 +512,8 @@ def fetch_feed(feed_url):
         if parsed_feed.bozo:
             # Check for bozo_exception and sanitize it (it can contain malicious input)
             bozo_exc = parsed_feed.get("bozo_exception")
-            safe_exc_msg = (_sanitize_for_log(str(bozo_exc))
-                            if bozo_exc else "Unknown")
+            safe_exc_msg = _sanitize_for_log(
+                str(bozo_exc)) if bozo_exc else "Unknown"
             logger.warning("Feed parsing warning: %s", safe_exc_msg)
 
         return parsed_feed
@@ -538,9 +538,11 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     raw_title = parsed_feed.feed.get("title")
     new_title = raw_title.strip() if raw_title else None
     if new_title and new_title != feed_db_obj.name:
-        logger.info("Updating feed title for '%s' to '%s'",
-                    _sanitize_for_log(feed_db_obj.name),
-                    _sanitize_for_log(new_title))
+        logger.info(
+            "Updating feed title for '%s' to '%s'",
+            _sanitize_for_log(feed_db_obj.name),
+            _sanitize_for_log(new_title),
+        )
         feed_db_obj.name = new_title
 
     raw_site_link = parsed_feed.feed.get("link")
@@ -779,16 +781,23 @@ def _save_items_individually(feed_db_obj, items_to_add):
             )
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
-            logger.error("Generic error adding item '%s'",
-                         _sanitize_for_log(item.title[:100]),
-                         exc_info=True)
+            logger.error(
+                "Generic error adding item '%s'",
+                _sanitize_for_log(item.title[:100]),
+                exc_info=True,
+            )
 
     if count > 0:
-        logger.info("Recovered %s items individually for feed: %s", count,
-                    _sanitize_for_log(feed_db_obj.name))
+        logger.info(
+            "Recovered %s items individually for feed: %s",
+            count,
+            _sanitize_for_log(feed_db_obj.name),
+        )
     else:
-        logger.info("No items added individually for feed: %s",
-                    _sanitize_for_log(feed_db_obj.name))
+        logger.info(
+            "No items added individually for feed: %s",
+            _sanitize_for_log(feed_db_obj.name),
+        )
 
     return count
 
@@ -829,8 +838,11 @@ def _enforce_feed_limit(feed_db_obj):
         FeedItem.id.in_(oldest_ids_list)).delete(synchronize_session=False))
 
     if deleted_count > 0:
-        logger.info("Evicted %s oldest items from feed '%s'.", deleted_count,
-                    _sanitize_for_log(feed_db_obj.name))
+        logger.info(
+            "Evicted %s oldest items from feed '%s'.",
+            deleted_count,
+            _sanitize_for_log(feed_db_obj.name),
+        )
         try:
             db.session.commit()
         except Exception:  # pylint: disable=broad-exception-caught
