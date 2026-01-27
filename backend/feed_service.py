@@ -271,20 +271,14 @@ class SafeHTTPSHandler(urllib.request.HTTPSHandler):
 
     def __init__(self, safe_ip):
         self.safe_ip = safe_ip
+        self.current_safe_ip = safe_ip
         super().__init__()
 
     def _get_connection(self, host, **kwargs):
         # Callback to create our custom connection
-        # Check if the request has a pinned safe_ip attached by SafeRedirectHandler
-        # If not, fall back to the initial safe_ip
-        req_safe_ip = getattr(kwargs.get("_req", None), "safe_ip",
-                              self.safe_ip)
-
         # NOTE: urllib's do_open doesn't pass the request object to the connection factory directly.
         # We need a way to pass it.
-        # Check if 'host' was rewritten? No.
-        # Actually, we can access the request if we hack it, OR we rely on modifying SafeHTTPSHandler state.
-        # Better approach:
+        # We rely on modifying SafeHTTPSHandler state in https_open.
         return SafeHTTPSConnection(host, self.current_safe_ip, **kwargs)
 
     def https_open(self, req):
