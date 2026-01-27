@@ -87,9 +87,9 @@ def _validate_xml_safety(content):
     Returns True if the content is safe (or not XML, or malformed in a non-dangerous way).
 
     Policy:
-    - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration.
-    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against all XXE attacks.
-    - forbid_external=True: STRICTLY blocks any external DTDs or entities (e.g., `SYSTEM "..."`), preventing SSRF and other external reference attacks.
+    - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration (required for many valid RSS feeds).
+    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against internal entity expansion (Billion Laughs) and external entity injection.
+    - forbid_external=True: STRICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.
     """
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions
@@ -452,39 +452,25 @@ def fetch_feed(feed_url):
         # Determine protocol
         parsed = urlparse(feed_url)
 
-        url_opener = None
-
         if parsed.scheme == "https":
             # For HTTPS: Use SafeHTTPSHandler to pin IP + Validate Hostname
             handler = SafeHTTPSHandler(safe_ip=safe_ip)
-            # Add SafeRedirectHandler to the chain
-            redirect_handler = SafeRedirectHandler()
-            opener = urllib.request.build_opener(handler, redirect_handler)
-            req = urllib.request.Request(
-                feed_url,
-                headers={
-                    "User-Agent": "SheepVibes/1.0",
-                    "Accept-Encoding": "identity",  # Prevent Zip Bombs
-                },
-            )
-            url_opener = opener.open(req, timeout=10)
-
         else:
             # For HTTP: Use SafeHTTPHandler to pin IP
             handler = SafeHTTPHandler(safe_ip=safe_ip)
 
-            # Add SafeRedirectHandler to the chain
-            redirect_handler = SafeRedirectHandler()
-            opener = urllib.request.build_opener(handler, redirect_handler)
+        # Add SafeRedirectHandler to the chain
+        redirect_handler = SafeRedirectHandler()
+        opener = urllib.request.build_opener(handler, redirect_handler)
 
-            req = urllib.request.Request(
-                feed_url,  # Use original URL, SafeHTTPHandler handles the IP pinning
-                headers={
-                    "User-Agent": "SheepVibes/1.0",
-                    "Accept-Encoding": "identity",  # Prevent Zip Bombs
-                },
-            )
-            url_opener = opener.open(req, timeout=10)
+        req = urllib.request.Request(
+            feed_url,
+            headers={
+                "User-Agent": "SheepVibes/1.0",
+                "Accept-Encoding": "identity",  # Prevent Zip Bombs
+            },
+        )
+        url_opener = opener.open(req, timeout=10)
 
         with url_opener as response:
             # Limit response size to 10MB to prevent DoS/OOM
