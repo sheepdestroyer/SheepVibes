@@ -84,7 +84,7 @@ def _validate_xml_safety(content):
     """
     Validates XML content for XXE vulnerabilities using defusedxml.
     Returns False if a security violation is detected.
-    Returns True if the content is safe (or not XML, or malformed in a non-dangerous way).
+    Returns True if the content is safe (or not XML).
 
     Policy:
     - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration (required for many valid RSS feeds).
@@ -264,8 +264,7 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
 
         self.sock = self._context.wrap_socket(
             self.sock,
-            server_hostname=self.
-            host,  # This ensures SNI and Cert Check match the Host, not the IP
+            server_hostname=self.host,  # This ensures SNI and Cert Check match the Host, not the IP
         )
 
 
