@@ -60,8 +60,8 @@ def _get_max_concurrent_fetches():
         # Default heuristic with safety cap for auto-configuration
         return min(cpu_count * 5, WORKER_FETCH_CAP)
 
-    # Respect explicit user configuration, but enforce the hard cap
-    return min(max_workers, WORKER_FETCH_CAP)
+    # Respect explicit user configuration, allowing it to exceed the default cap
+    return max_workers
 
 
 MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
