@@ -483,7 +483,8 @@ def fetch_feed(feed_url):
         with url_opener as response:
             # Check Content-Length header first
             content_length = response.getheader("Content-Length")
-            if content_length and int(content_length) > MAX_FEED_RESPONSE_BYTES:
+            if content_length and int(
+                    content_length) > MAX_FEED_RESPONSE_BYTES:
                 logger.warning(
                     "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
                     content_length,
