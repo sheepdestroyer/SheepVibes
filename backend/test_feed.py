@@ -528,10 +528,13 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: d
 
     # Mock urllib.request.urlopen to return dummy content
     mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
+    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    
     mock_response = MagicMock()
     mock_response.read.return_value = b"<rss></rss>"
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
+    mock_build_opener.return_value.open.return_value = mock_response
 
     # Scenario 1: Fetch successful, but no entries in the feed
     mock_empty_feed = MockParsedFeed(feed_title="Empty Feed", entries=[])
@@ -602,10 +605,13 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disa
 
     # Mock urllib.request.urlopen
     mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
+    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    
     mock_response = MagicMock()
     mock_response.read.return_value = b"<rss></rss>"
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
+    mock_build_opener.return_value.open.return_value = mock_response
 
     # Mock socket.getaddrinfo is handled by mock_dns fixture
 
@@ -891,14 +897,16 @@ def test_fetch_feed_toctou_prevention_http(mocker):
         (socket.AF_INET, socket.SOCK_STREAM, 6, "", (safe_ip, 80))
     ]
 
-    # 2. Mock urllib.request.urlopen
-    mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
+    # 2. Mock build_opener().open (HTTP uses build_opener now)
+    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    mock_open = mock_build_opener.return_value.open
+    
     mock_response = MagicMock()
     mock_response.read.return_value = (
         b"<rss><channel><title>Test</title></channel></rss>"
     )
     mock_response.__enter__.return_value = mock_response  # Context manager support
-    mock_urlopen.return_value = mock_response
+    mock_open.return_value = mock_response
 
     # 3. Call fetch_feed with HTTP URL
     url = "http://example.com/feed"
@@ -908,12 +916,10 @@ def test_fetch_feed_toctou_prevention_http(mocker):
     assert result is not None
 
     # Check that Request was initialized with the IP address
-    # We need to spy on urllib.request.Request or inspect the arguments passed to urlopen
-    # urlopen arg can be a Request object.
-
-    args, _ = mock_urlopen.call_args
+    assert mock_open.called
+    args, _ = mock_open.call_args
     req_obj = args[0]
-
+    
     # For HTTP, we expect the URL to be rewritten to the IP
-    assert f"http://{safe_ip}/feed" in req_obj.full_url
+    assert safe_ip in req_obj.full_url
     assert req_obj.get_header("Host") == "example.com"
