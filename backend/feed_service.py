@@ -458,8 +458,7 @@ def fetch_feed(feed_url):
     try:
         # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
 
-        # Determine protocol
-        parsed = urlparse(feed_url)
+
 
         # Register BOTH handlers to ensure safety during redirects (HTTPS -> HTTP or HTTP -> HTTPS)
         # Both handlers utilize ip pinning via `safe_ip` (and `req.safe_ip` for redirects).
@@ -483,15 +482,23 @@ def fetch_feed(feed_url):
         with url_opener as response:
             # Check Content-Length header first
             content_length = response.getheader("Content-Length")
-            if content_length and int(
-                    content_length) > MAX_FEED_RESPONSE_BYTES:
-                logger.warning(
-                    "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
-                    content_length,
-                    MAX_FEED_RESPONSE_BYTES,
-                    _sanitize_for_log(feed_url),
-                )
-                return None
+            if content_length:
+                try:
+                    if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                        logger.warning(
+                            "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                            _sanitize_for_log(content_length),
+                            MAX_FEED_RESPONSE_BYTES,
+                            _sanitize_for_log(feed_url),
+                        )
+                        return None
+                except (ValueError, TypeError):
+                    # Malformed header; ignore and rely on read limit
+                    logger.warning(
+                        "Ignored invalid Content-Length (%s) for feed %s",
+                        _sanitize_for_log(content_length),
+                        _sanitize_for_log(feed_url),
+                    )
 
             # Read limited amount + 1 byte to detect overflow
             content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
