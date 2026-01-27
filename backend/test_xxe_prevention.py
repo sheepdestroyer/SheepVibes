@@ -36,6 +36,17 @@ def create_malformed_xml():
     return b"""<rss><channel><title>Unclosed Tag</title>"""
 
 
+def create_feed_with_safe_dtd():
+    return b"""<?xml version="1.0"?>
+<!DOCTYPE rss PUBLIC "-//Netscape Communications//DTD RSS 0.91//EN"
+            "http://my.netscape.com/publish/formats/rss-0.91.dtd">
+<rss version="0.91">
+  <channel>
+    <title>Safe DTD Feed</title>
+  </channel>
+</rss>"""
+
+
 @pytest.fixture
 def mock_network(mocker):
     """Mocks network calls and returns the urlopen mock's response object for configuration."""
@@ -88,3 +99,14 @@ def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(
 
     # Verify feedparser was called with the content
     mock_feedparser.assert_called_once_with(create_malformed_xml())
+
+
+def test_fetch_feed_allows_safe_dtd(mock_network):
+    """Test that feeds with safe DTDs (e.g. RSS 0.91) are allowed (forbid_dtd=False)."""
+    mock_network.read.return_value = create_feed_with_safe_dtd()
+
+    url = "http://example.com/safe_dtd.xml"
+    result = feed_service.fetch_feed(url)
+
+    assert result is not None
+    assert result.feed.title == "Safe DTD Feed"

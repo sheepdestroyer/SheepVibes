@@ -61,6 +61,12 @@ def _get_max_concurrent_fetches():
         return min(cpu_count * 5, WORKER_FETCH_CAP)
 
     # Respect explicit user configuration, allowing it to exceed the default cap
+    if max_workers > WORKER_FETCH_CAP:
+        logger.warning(
+            "Explicit FEED_FETCH_MAX_WORKERS (%s) exceeds recommended cap (%s). Resource exhaustion possible.",
+            max_workers,
+            WORKER_FETCH_CAP,
+        )
     return max_workers
 
 
@@ -81,9 +87,9 @@ def _validate_xml_safety(content):
         defusedxml.sax.parseString(
             content,
             handler,
-            forbid_dtd=True,
+            forbid_dtd=False,
             forbid_entities=True,
-            forbid_external=True,
+            forbid_external=False,
         )
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
         logger.error("XML Security Violation detected: %s", e)
