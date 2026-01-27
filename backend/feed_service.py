@@ -111,6 +111,8 @@ def _validate_xml_safety(content):
         # This prevents attackers from constructing payloads that defusedxml chokes on
         # but feedparser/libxml2 might process unsafely (e.g. parser differentials).
         # We explicitly reject ANY malformed XML to guarantee safety over availability.
+        # This means that valid but slightly malformed feeds might be rejected, but this is a
+        # necessary trade-off for security against XXE and DoS vectors.
         if str(e):
             logger.warning(
                 "XML Parsing failed during safety check (rejecting): %s",
@@ -459,16 +461,15 @@ def fetch_feed(feed_url):
         # Determine protocol
         parsed = urlparse(feed_url)
 
-        if parsed.scheme == "https":
-            # For HTTPS: Use SafeHTTPSHandler to pin IP + Validate Hostname
-            handler = SafeHTTPSHandler(safe_ip=safe_ip)
-        else:
-            # For HTTP: Use SafeHTTPHandler to pin IP
-            handler = SafeHTTPHandler(safe_ip=safe_ip)
-
-        # Add SafeRedirectHandler to the chain
+        # Register BOTH handlers to ensure safety during redirects (HTTPS -> HTTP or HTTP -> HTTPS)
+        # Both handlers utilize ip pinning via `safe_ip` (and `req.safe_ip` for redirects).
+        http_handler = SafeHTTPHandler(safe_ip=safe_ip)
+        https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
         redirect_handler = SafeRedirectHandler()
-        opener = urllib.request.build_opener(handler, redirect_handler)
+
+        # Build opener with all handlers
+        opener = urllib.request.build_opener(http_handler, https_handler,
+                                             redirect_handler)
 
         req = urllib.request.Request(
             feed_url,
