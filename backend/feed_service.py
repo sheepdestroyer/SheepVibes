@@ -11,8 +11,8 @@ import socket
 import urllib.request
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
-from xml.sax.handler import ContentHandler
 from xml.sax import SAXParseException
+from xml.sax.handler import ContentHandler
 
 import defusedxml.sax
 import feedparser
@@ -125,7 +125,8 @@ def parse_published_time(entry):
             parsed_dt = None
 
     if isinstance(parsed_dt, datetime.datetime):
-        if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(parsed_dt) is None:
+        if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(
+                parsed_dt) is None:
             return parsed_dt.replace(tzinfo=timezone.utc)
         return parsed_dt.astimezone(timezone.utc)
 
@@ -185,14 +186,8 @@ def validate_and_resolve_url(url):
 
 def _is_safe_ip(ip):
     """Checks if an IP address is safe (not private, loopback, etc.)."""
-    return not (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
 
 
 def _fetch_feed_content(feed_url):
@@ -291,26 +286,26 @@ def fetch_feed(feed_url):
         else:
             target_url = feed_url
 
-        req = urllib.request.Request(
-            target_url, headers={"Host": hostname,
-                                 "User-Agent": "SheepVibes/1.0"}
-        )
+        req = urllib.request.Request(target_url,
+                                     headers={
+                                         "Host": hostname,
+                                         "User-Agent": "SheepVibes/1.0"
+                                     })
         with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             content = response.read()
 
         if not _validate_xml_safety(content):
             # Sanitize URL for logging to prevent log injection
-            safe_log_url = feed_url.replace('\n', '\\n').replace('\r', '\\r')
-            logger.warning(
-                "Feed rejected due to security violation: %s", safe_log_url)
+            safe_log_url = feed_url.replace("\n", "\\n").replace("\r", "\\r")
+            logger.warning("Feed rejected due to security violation: %s",
+                           safe_log_url)
             return None
 
         parsed_feed = feedparser.parse(content)
         # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
         if parsed_feed.bozo:
-            logger.warning(
-                "Feed parsing warning: %s", parsed_feed.get("bozo_exception")
-            )
+            logger.warning("Feed parsing warning: %s",
+                           parsed_feed.get("bozo_exception"))
 
         return parsed_feed
 
@@ -332,8 +327,8 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     raw_title = parsed_feed.feed.get("title")
     new_title = raw_title.strip() if raw_title else None
     if new_title and new_title != feed_db_obj.name:
-        logger.info("Updating feed title for '%s' to '%s'",
-                    feed_db_obj.name, new_title)
+        logger.info("Updating feed title for '%s' to '%s'", feed_db_obj.name,
+                    new_title)
         feed_db_obj.name = new_title
 
     raw_site_link = parsed_feed.feed.get("link")
@@ -356,12 +351,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
     # Optimization: Query only necessary columns to avoid loading full objects
     # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (
-        db.session.query(FeedItem.id, FeedItem.guid,
-                         FeedItem.link, FeedItem.title)
-        .filter_by(feed_id=feed_db_obj.id)
-        .all()
-    )
+    items_tuple = (db.session.query(
+        FeedItem.id, FeedItem.guid, FeedItem.link,
+        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
 
     # Create lookup maps
     existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
@@ -419,11 +411,11 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
         # Check batch duplicates
         if _is_batch_duplicate(
-            db_guid,
-            entry_link,
-            batch_processed_guids,
-            batch_processed_links,
-            feed_db_obj.name,
+                db_guid,
+                entry_link,
+                batch_processed_guids,
+                batch_processed_links,
+                feed_db_obj.name,
         ):
             continue
 
@@ -438,13 +430,13 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                 link=entry_link,
                 published_time=parsed_published,
                 guid=db_guid,
-            )
-        )
+            ))
 
     return items_to_add
 
 
-def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link):
+def _update_existing_item(feed_db_obj, existing_item_data, entry_title,
+                          entry_link):
     """Updates an existing item if title or link changed.
 
     Args:
@@ -470,12 +462,13 @@ def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_li
             existing_title,
             feed_db_obj.name,
         )
-        db.session.query(FeedItem).filter(FeedItem.id == existing_item_data.id).update(
-            updates, synchronize_session=False
-        )
+        db.session.query(FeedItem).filter(
+            FeedItem.id == existing_item_data.id).update(
+                updates, synchronize_session=False)
 
 
-def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links, feed_name):
+def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links,
+                        feed_name):
     """Checks if an item is a duplicate within the current processing batch.
 
     Args:
@@ -572,14 +565,13 @@ def _save_items_individually(feed_db_obj, items_to_add):
             )
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
-            logger.error(
-                "Generic error adding item '%s'", item.title[:100], exc_info=True
-            )
+            logger.error("Generic error adding item '%s'",
+                         item.title[:100],
+                         exc_info=True)
 
     if count > 0:
-        logger.info(
-            "Recovered %s items individually for feed: %s", count, feed_db_obj.name
-        )
+        logger.info("Recovered %s items individually for feed: %s", count,
+                    feed_db_obj.name)
     else:
         logger.info("No items added individually for feed: %s",
                     feed_db_obj.name)
@@ -608,13 +600,10 @@ def _enforce_feed_limit(feed_db_obj):
     # It failed to call .all() or .subquery()! It passed the raw Query object to in_().
     # THAT is the bug/inefficiency.
 
-    oldest_ids = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
-        .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
-        .limit(num_to_delete)
-        .all()
-    )
+    oldest_ids = (db.session.query(
+        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+            FeedItem.published_time.asc(),
+            FeedItem.fetched_time.asc()).limit(num_to_delete).all())
 
     # Flatten the list of tuples
     oldest_ids_list = [r.id for r in oldest_ids]
@@ -622,16 +611,12 @@ def _enforce_feed_limit(feed_db_obj):
     if not oldest_ids_list:
         return
 
-    deleted_count = (
-        db.session.query(FeedItem)
-        .filter(FeedItem.id.in_(oldest_ids_list))
-        .delete(synchronize_session=False)
-    )
+    deleted_count = (db.session.query(FeedItem).filter(
+        FeedItem.id.in_(oldest_ids_list)).delete(synchronize_session=False))
 
     if deleted_count > 0:
-        logger.info(
-            "Evicted %s oldest items from feed '%s'.", deleted_count, feed_db_obj.name
-        )
+        logger.info("Evicted %s oldest items from feed '%s'.", deleted_count,
+                    feed_db_obj.name)
         try:
             db.session.commit()
         except Exception:  # pylint: disable=broad-exception-caught
@@ -734,17 +719,19 @@ def update_all_feeds():
     processed_successfully_count = 0
     affected_tab_ids = set()
 
-    logger.info(
-        "Starting update process for %s feeds (Parallelized).", len(all_feeds))
+    logger.info("Starting update process for %s feeds (Parallelized).",
+                len(all_feeds))
 
     # Optimize workers: don't create more threads than actual feeds
     actual_workers = min(MAX_CONCURRENT_FETCHES,
                          len(all_feeds)) if all_feeds else 1
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=actual_workers) as executor:
         # Submit all fetch tasks, mapping future to the feed object directly
         future_to_feed = {
-            executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds
+            executor.submit(_fetch_feed_content, feed.url): feed
+            for feed in all_feeds
         }
         attempted_count = len(all_feeds)
 
@@ -765,8 +752,7 @@ def update_all_feeds():
                 # --- Sequential Processing (Main Thread) ---
                 # Check 1: Reuse the logic shared with fetch_and_update_feed
                 success, new_items, tab_id = _process_fetch_result(
-                    feed_obj, parsed_feed
-                )
+                    feed_obj, parsed_feed)
 
                 if success:
                     processed_successfully_count += 1

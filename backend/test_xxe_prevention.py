@@ -31,7 +31,7 @@ def mock_network(mocker):
     """Mocks network calls and returns the urlopen mock's response object for configuration."""
     mocker.patch(
         "backend.feed_service.socket.getaddrinfo",
-        return_value=[(2, 1, 6, "", ("93.184.216.34", 80))]
+        return_value=[(2, 1, 6, "", ("93.184.216.34", 80))],
     )
     mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
 
@@ -64,7 +64,8 @@ def test_fetch_feed_allows_valid_xml(mock_network):
     assert result.feed.title == "Valid Feed"
 
 
-def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(mocker, mock_network):
+def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(
+        mocker, mock_network):
     """Test that malformed XML (which triggers SAXParseException) is NOT blocked and passed to feedparser."""
     mock_network.read.return_value = create_malformed_xml()
 
