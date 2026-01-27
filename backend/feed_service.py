@@ -9,8 +9,8 @@ import socket
 import urllib.request
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
-from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
+from xml.sax import SAXParseException
 
 import defusedxml.sax
 import feedparser
@@ -97,8 +97,9 @@ def parse_published_time(entry):
     parsed_dt = None
     if hasattr(entry, "published_parsed") and entry.published_parsed:
         try:
-            parsed_dt = datetime.datetime(*entry.published_parsed[:6],
-                                          tzinfo=timezone.utc)
+            parsed_dt = datetime.datetime(
+                *entry.published_parsed[:6], tzinfo=timezone.utc
+            )
         except (TypeError, ValueError) as e:
             logger.debug(
                 "Failed to parse 'published_parsed' for entry %s: %s",
@@ -140,8 +141,7 @@ def parse_published_time(entry):
 
     if parsed_dt:
         # Ensure the datetime is UTC timezone-aware
-        if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(
-                parsed_dt) is None:
+        if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(parsed_dt) is None:
             parsed_dt = parsed_dt.replace(tzinfo=timezone.utc)
         else:
             parsed_dt = parsed_dt.astimezone(timezone.utc)
@@ -183,12 +183,17 @@ def validate_and_resolve_url(url):
             clean_ip_str = ip_str.split("%")[0]
             try:
                 ip = ipaddress.ip_address(clean_ip_str)
-                if (ip.is_private or ip.is_loopback or ip.is_link_local
-                        or ip.is_reserved or ip.is_multicast
-                        or ip.is_unspecified):
+                if (
+                    ip.is_private
+                    or ip.is_loopback
+                    or ip.is_link_local
+                    or ip.is_reserved
+                    or ip.is_multicast
+                    or ip.is_unspecified
+                ):
                     safe_url = f"{parsed.scheme}://{hostname}"
-                    logger.warning("Blocked SSRF attempt: %s -> %s", safe_url,
-                                   ip)
+                    logger.warning(
+                        "Blocked SSRF attempt: %s -> %s", safe_url, ip)
                     return None, None
                 safe_ip = ip_str  # Keep valid IP string
                 break  # Found a safe IP
@@ -289,24 +294,26 @@ def fetch_feed(feed_url):
         else:
             target_url = feed_url
 
-        req = urllib.request.Request(target_url,
-                                     headers={
-                                         "Host": hostname,
-                                         "User-Agent": "SheepVibes/1.0"
-                                     })
+        req = urllib.request.Request(
+            target_url, headers={"Host": hostname,
+                                 "User-Agent": "SheepVibes/1.0"}
+        )
         with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             content = response.read()
 
         if not _validate_xml_safety(content):
-            logger.warning("Feed rejected due to security violation: %s",
-                           feed_url)
+            # Sanitize URL for logging to prevent log injection
+            safe_log_url = feed_url.replace('\n', '\\n').replace('\r', '\\r')
+            logger.warning(
+                "Feed rejected due to security violation: %s", safe_log_url)
             return None
 
         parsed_feed = feedparser.parse(content)
         # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
         if parsed_feed.bozo:
-            logger.warning("Feed parsing warning: %s",
-                           parsed_feed.get("bozo_exception"))
+            logger.warning(
+                "Feed parsing warning: %s", parsed_feed.get("bozo_exception")
+            )
 
         return parsed_feed
 
@@ -341,25 +348,24 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     existing_items = FeedItem.query.filter_by(feed_id=feed_db_obj.id).all()
     # Map them for quick lookup
     existing_items_by_guid = {
-        item.guid: item
-        for item in existing_items if item.guid
-    }
+        item.guid: item for item in existing_items if item.guid}
     existing_items_by_link = {
-        item.link: item
-        for item in existing_items if item.link
-    }
+        item.link: item for item in existing_items if item.link}
 
     new_title = parsed_feed.feed.get("title")
     if new_title and new_title.strip() and new_title != feed_db_obj.name:
-        logger.info("Updating feed title for '%s' to '%s'", feed_db_obj.name,
-                    new_title)
+        logger.info("Updating feed title for '%s' to '%s'",
+                    feed_db_obj.name, new_title)
         feed_db_obj.name = new_title
 
     # Update site_link if available and different
     # This is typically the website link
     new_site_link = parsed_feed.feed.get("link")
-    if (new_site_link and new_site_link.strip()
-            and new_site_link != feed_db_obj.site_link):
+    if (
+        new_site_link
+        and new_site_link.strip()
+        and new_site_link != feed_db_obj.site_link
+    ):
         logger.info(
             "Updating feed site_link for '%s' from '%s' to '%s'",
             feed_db_obj.name,
@@ -367,8 +373,9 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             new_site_link,
         )
         feed_db_obj.site_link = new_site_link
-    elif (not feed_db_obj.site_link and new_site_link
-          and new_site_link.strip()):  # If current is null, set it
+    elif (
+        not feed_db_obj.site_link and new_site_link and new_site_link.strip()
+    ):  # If current is null, set it
         logger.info(
             "Setting feed site_link for '%s' to '%s'",
             feed_db_obj.name,
@@ -496,7 +503,8 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     try:
         db.session.add_all(items_to_add)
         feed_db_obj.last_updated_time = datetime.datetime.now(
-            timezone.utc)  # Set time before trying to commit
+            timezone.utc
+        )  # Set time before trying to commit
         db.session.commit()
         committed_items_count = len(items_to_add)
         logger.info(
@@ -585,23 +593,28 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     # --- Cache Eviction Logic ---
     # After adding new items, check if the total number of items exceeds the limit.
     # If so, delete the oldest items to keep the total at the limit.
-    current_item_count = (db.session.query(FeedItem).filter_by(
-        feed_id=feed_db_obj.id).count())
+    current_item_count = (
+        db.session.query(FeedItem).filter_by(feed_id=feed_db_obj.id).count()
+    )
 
     if current_item_count > MAX_ITEMS_PER_FEED:
         num_to_delete = current_item_count - MAX_ITEMS_PER_FEED
 
         # Use a subquery to find and delete the oldest items in a single operation.
         # This is more efficient than fetching IDs into application memory.
-        oldest_item_ids_q = (db.session.query(
-            FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
-                FeedItem.published_time.asc(),
-                FeedItem.fetched_time.asc()).limit(num_to_delete))
+        oldest_item_ids_q = (
+            db.session.query(FeedItem.id)
+            .filter_by(feed_id=feed_db_obj.id)
+            .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
+            .limit(num_to_delete)
+        )
 
         # The `delete()` method returns the number of rows deleted.
-        deleted_count = (db.session.query(FeedItem).filter(
-            FeedItem.id.in_(oldest_item_ids_q)).delete(
-                synchronize_session=False))
+        deleted_count = (
+            db.session.query(FeedItem)
+            .filter(FeedItem.id.in_(oldest_item_ids_q))
+            .delete(synchronize_session=False)
+        )
 
         if deleted_count > 0:
             logger.info(
@@ -661,19 +674,17 @@ def update_all_feeds():
     processed_successfully_count = 0
     affected_tab_ids = set()
 
-    logger.info("Starting update process for %s feeds (Parallelized).",
-                len(all_feeds))
+    logger.info(
+        "Starting update process for %s feeds (Parallelized).", len(all_feeds))
 
     # Optimize workers: don't create more threads than actual feeds
     actual_workers = min(MAX_CONCURRENT_FETCHES,
                          len(all_feeds)) if all_feeds else 1
 
-    with concurrent.futures.ThreadPoolExecutor(
-            max_workers=actual_workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
         # Submit all fetch tasks, mapping future to the feed object directly
         future_to_feed = {
-            executor.submit(_fetch_feed_content, feed.url): feed
-            for feed in all_feeds
+            executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds
         }
         attempted_count = len(all_feeds)
 
@@ -694,7 +705,8 @@ def update_all_feeds():
                 # --- Sequential Processing (Main Thread) ---
                 # Check 1: Reuse the logic shared with fetch_and_update_feed
                 success, new_items, tab_id = _process_fetch_result(
-                    feed_obj, parsed_feed)
+                    feed_obj, parsed_feed
+                )
 
                 if success:
                     processed_successfully_count += 1
