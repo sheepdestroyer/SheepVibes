@@ -4,16 +4,27 @@
 # Use dateutil for robust date parsing
 import concurrent.futures
 import datetime  # Import the full module
+import hashlib
+import http.client
 import ipaddress
 import logging  # Standard logging
 import os
 import socket
+import ssl
 import urllib.request
 from datetime import timezone  # Specifically import timezone
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
+from xml.sax import SAXParseException
+from xml.sax.handler import ContentHandler
 
+import defusedxml.sax
 import feedparser
 from dateutil import parser as date_parser
+from defusedxml.common import (
+    DTDForbidden,
+    EntitiesForbidden,
+    ExternalReferenceForbidden,
+)
 from sqlalchemy.exc import IntegrityError
 
 # Import database models from the new models.py
@@ -24,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 # Maximum number of items to keep per feed for cache eviction
 MAX_ITEMS_PER_FEED = 100
+
+MAX_FEED_RESPONSE_BYTES = 10 * 1024 * 1024  # 10MB cap for feed responses
 
 # Hard cap for concurrent fetches to avoid resource exhaustion
 # 20 is suitable for typical small VPS instances (e.g., 4 vCPUs) handling I/O bound tasks
@@ -61,6 +74,59 @@ MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
 # --- Helper Functions ---
 
 
+def _sanitize_for_log(value):
+    """Sanitizes a string for safe logging (prevents log injection)."""
+    if value is None:
+        return "[None]"
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
+def _validate_xml_safety(content):
+    """
+    Validates XML content for XXE vulnerabilities using defusedxml.
+    Returns False if a security violation is detected or if parsing fails (fail-closed).
+    Returns True IF AND ONLY IF the content is successfully validated and safe.
+
+    Policy:
+    - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration (required for many valid RSS feeds).
+    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against internal entity expansion (Billion Laughs) and external entity injection.
+    - forbid_external=True: STICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.
+
+    Malformed XML or non-XML input that raises SAXParseException or UnicodeError
+    is REJECTED (returns False) for safety.
+    """
+    try:
+        # We use a no-op handler because we only care about the parsing process raising security exceptions
+        handler = ContentHandler()
+        defusedxml.sax.parseString(
+            content,
+            handler,
+            forbid_dtd=False,
+            forbid_entities=True,
+            forbid_external=True,
+        )
+    except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
+        logger.error("XML Security Violation detected: %s",
+                     _sanitize_for_log(str(e)))
+        return False
+    except (SAXParseException, UnicodeError) as e:
+        # SECURITY HARDENING: Fail closed on malformed XML.
+        # If defusedxml cannot parse it, we do not bypass to feedparser.
+        # This prevents attackers from constructing payloads that defusedxml chokes on
+        # but feedparser/libxml2 might process unsafely (e.g. parser differentials).
+        # We explicitly reject ANY malformed XML to guarantee safety over availability.
+        # This means that valid but slightly malformed feeds might be rejected, but this is a
+        # necessary trade-off for security against XXE and DoS vectors.
+        if str(e):
+            logger.warning(
+                "XML Parsing failed during safety check (rejecting): %s",
+                _sanitize_for_log(str(e)),
+            )
+        return False
+
+    return True
+
+
 def parse_published_time(entry):
     """Attempts to parse the published time from a feed entry.
 
@@ -89,7 +155,8 @@ def parse_published_time(entry):
             parsed_dt = None
 
     if isinstance(parsed_dt, datetime.datetime):
-        if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(parsed_dt) is None:
+        if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(
+                parsed_dt) is None:
             return parsed_dt.replace(tzinfo=timezone.utc)
         return parsed_dt.astimezone(timezone.utc)
 
@@ -149,14 +216,157 @@ def validate_and_resolve_url(url):
 
 def _is_safe_ip(ip):
     """Checks if an IP address is safe (not private, loopback, etc.)."""
-    return not (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
+
+
+class SafeHTTPSConnection(http.client.HTTPSConnection):
+    """
+    Custom HTTPSConnection that connects to a specific 'safe_ip'
+    but uses the original hostname for SNI and SSL validation.
+    Prevents DNS Rebinding (TOCTOU) on HTTPS.
+
+    This class ensures that the IP address validated in the check phase
+    is the EXACT same IP address used for the connection, preventing
+    an attacker from swapping the IP (DNS Rebinding) between check and use.
+    """
+
+    def __init__(
+        self,
+        host,
+        safe_ip,
+        **kwargs,
+    ):
+        super().__init__(
+            host,
+            **kwargs,
+        )
+        self.safe_ip = safe_ip
+
+    def connect(self):
+        # Override connect to force connection to self.safe_ip
+        # Logic adapted from http.client.HTTPSConnection.connect
+
+        # 1. Establish TCP connection to the SAFE IP
+        self.sock = socket.create_connection((self.safe_ip, self.port),
+                                             self.timeout, self.source_address)
+
+        if self._tunnel_host:
+            self._tunnel()
+
+        # 2. Wrap socket with SSL using the ORIGINAL hostname for validation
+        if self._context is None:
+            self._context = ssl.create_default_context()
+
+        self.sock = self._context.wrap_socket(
+            self.sock,
+            server_hostname=self.
+            host,  # This ensures SNI and Cert Check match the Host, not the IP
+        )
+
+
+class SafeHTTPConnection(http.client.HTTPConnection):
+    """
+    Custom HTTPConnection that connects to a specific 'safe_ip'.
+    Prevents DNS Rebinding (TOCTOU) on HTTP.
+    """
+
+    def __init__(
+        self,
+        host,
+        safe_ip,
+        **kwargs,
+    ):
+        super().__init__(
+            host,
+            **kwargs,
+        )
+        self.safe_ip = safe_ip
+
+    def connect(self):
+        # Override connect to force connection to self.safe_ip
+        self.sock = socket.create_connection((self.safe_ip, self.port),
+                                             self.timeout, self.source_address)
+
+
+class SafeHTTPHandler(urllib.request.HTTPHandler):
+    """
+    Handler that uses SafeHTTPConnection.
+    WARNING: THIS HANDLER IS STATEFUL (`current_safe_ip`).
+    IT MUST NOT BE SHARED ACROSS THREADS OR REQUESTS.
+    INSTANTIATE A NEW HANDLER FOR EACH FETCH.
+    """
+
+    def __init__(self, safe_ip):
+        self.safe_ip = safe_ip
+        self.current_safe_ip = safe_ip
+        super().__init__()
+
+    def _get_connection(self, host, **kwargs):
+        return SafeHTTPConnection(host, self.current_safe_ip, **kwargs)
+
+    def http_open(self, req):
+        self.current_safe_ip = getattr(req, "safe_ip", self.safe_ip)
+        return self.do_open(self._get_connection, req)
+
+
+class SafeHTTPSHandler(urllib.request.HTTPSHandler):
+    """
+    Handler that uses SafeHTTPSConnection.
+    WARNING: THIS HANDLER IS STATEFUL (`current_safe_ip`).
+    IT MUST NOT BE SHARED ACROSS THREADS OR REQUESTS.
+    INSTANTIATE A NEW HANDLER FOR EACH FETCH.
+    """
+
+    def __init__(self, safe_ip):
+        self.safe_ip = safe_ip
+        self.current_safe_ip = safe_ip
+        super().__init__()
+
+    def _get_connection(self, host, **kwargs):
+        # Callback to create our custom connection
+        # NOTE: urllib's do_open doesn't pass the request object to the connection factory directly.
+        # We need a way to pass it.
+        # We rely on modifying SafeHTTPSHandler state in https_open.
+        return SafeHTTPSConnection(host, self.current_safe_ip, **kwargs)
+
+    def https_open(self, req):
+        # Determine safe_ip for this request.
+        # If it's a redirect, SafeRedirectHandler attached 'safe_ip' to 'req'.
+        self.current_safe_ip = getattr(req, "safe_ip", self.safe_ip)
+        return self.do_open(self._get_connection, req)
+
+
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """
+    Custom RedirectHandler that validates the target URL of a redirect
+    to prevent SSRF via redirection to unsafe IPs.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Handle relative redirects by joining with original URL
+        absolute_newurl = urljoin(req.full_url, newurl)
+
+        # Resolve and validate the NEW url
+        safe_ip, _ = validate_and_resolve_url(absolute_newurl)
+        if not safe_ip:
+            logger.warning("Blocked unsafe redirect to: %s",
+                           _sanitize_for_log(absolute_newurl))
+            raise urllib.error.HTTPError(absolute_newurl, code,
+                                         "Blocked unsafe redirect", headers,
+                                         fp)
+
+        # Create the new request
+        new_req = super().redirect_request(req, fp, code, msg, headers,
+                                           absolute_newurl)
+
+        # PIN THE IP: Attach the resolved safe_ip to the new request
+        # This allows SafeHTTPSHandler (and HTTP logic) to use the validated IP
+        # without re-resolving (TOCTOU protection).
+        if new_req:
+            new_req.safe_ip = safe_ip
+
+        return new_req
 
 
 def _fetch_feed_content(feed_url):
@@ -177,7 +387,8 @@ def _fetch_feed_content(feed_url):
         parsed_feed = fetch_feed(feed_url)
         return parsed_feed
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("Error in fetch thread for feed %s", feed_url)
+        logger.exception("Error in fetch thread for feed %s",
+                         _sanitize_for_log(feed_url))
         return None
 
 
@@ -196,7 +407,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     if not parsed_feed:
         logger.error(
             "Fetching content for feed '%s' (ID: %s) failed (None returned).",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
         )
         return False, 0, feed_db_obj.tab_id
@@ -205,17 +416,19 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     if not parsed_feed.entries:
         logger.info(
             "Feed '%s' (ID: %s) fetched successfully but contained no entries.",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
         )
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+        # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
+        feed_name = feed_db_obj.name
         try:
             db.session.commit()
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error(
                 "Error committing feed update (no entries) for %s",
-                feed_db_obj.name,
+                _sanitize_for_log(feed_name),
                 exc_info=True,
             )
             # Still, the fetch itself might be considered a "success" in terms of reachability
@@ -226,10 +439,14 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         # process_feed_entries handles its own logging and commits for items and last_updated_time.
         return True, new_items, feed_db_obj.tab_id
     except Exception:  # pylint: disable=broad-exception-caught
+        # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
+        feed_name = feed_db_obj.name
+        feed_id = feed_db_obj.id
+        db.session.rollback()
         logger.error(
             "An unexpected error occurred during entry processing for feed '%s' (ID: %s)",
-            feed_db_obj.name,
-            feed_db_obj.id,
+            _sanitize_for_log(feed_name),
+            feed_id,
             exc_info=True,
         )
         return False, 0, feed_db_obj.tab_id
@@ -237,42 +454,96 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
 
 def fetch_feed(feed_url):
     """Fetches and parses a feed, preventing SSRF via IP pinning."""
-    safe_ip, hostname = validate_and_resolve_url(feed_url)
+    safe_ip, _ = validate_and_resolve_url(feed_url)
     if not safe_ip:
         return None
 
-    logger.info("Fetching feed: %s", feed_url)
+    logger.info("Fetching feed: %s", _sanitize_for_log(feed_url))
     try:
-        # Prevent TOCTOU: Fetch using the validated IP
-        parsed = urlparse(feed_url)
-        # Only rewrite URL for HTTP to avoid SSL hostname mismatch
-        # WARNING: This implementation is vulnerable to DNS Rebinding for HTTPS.
-        # urllib cannot easily force an IP while validating the SNI/Hostname.
-        # For HTTP, we rewrite the URL. For HTTPS, we unfortunately rely on the
-        # race-condition-prone check above.
-        if parsed.scheme == "http":
-            target_url = parsed._replace(netloc=safe_ip).geturl()
-        else:
-            target_url = feed_url
+        # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
+
+        # Register BOTH handlers to ensure safety during redirects (HTTPS -> HTTP or HTTP -> HTTPS)
+        # Both handlers utilize ip pinning via `safe_ip` (and `req.safe_ip` for redirects).
+        http_handler = SafeHTTPHandler(safe_ip=safe_ip)
+        https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
+        redirect_handler = SafeRedirectHandler()
+
+        # Build opener with all handlers
+        opener = urllib.request.build_opener(http_handler, https_handler,
+                                             redirect_handler)
 
         req = urllib.request.Request(
-            target_url, headers={"Host": hostname,
-                                 "User-Agent": "SheepVibes/1.0"}
+            feed_url,
+            headers={
+                "User-Agent": "SheepVibes/1.0",
+                "Accept-Encoding": "identity",  # Prevent Zip Bombs
+            },
         )
-        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
-            content = response.read()
+        url_opener = opener.open(req, timeout=10)
+
+        with url_opener as response:
+            # Check Content-Length header first
+            content_length = response.getheader("Content-Length")
+            if content_length:
+                try:
+                    if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                        logger.warning(
+                            "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                            _sanitize_for_log(content_length),
+                            MAX_FEED_RESPONSE_BYTES,
+                            _sanitize_for_log(feed_url),
+                        )
+                        return None
+                except (ValueError, TypeError):
+                    # Malformed header; ignore and rely on read limit
+                    logger.warning(
+                        "Ignored invalid Content-Length (%s) for feed %s",
+                        _sanitize_for_log(content_length),
+                        _sanitize_for_log(feed_url),
+                    )
+
+            # Read limited amount + 1 byte to detect overflow
+            content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
+            if len(content) > MAX_FEED_RESPONSE_BYTES:
+                logger.warning(
+                    "Feed rejected: Response size exceeds limit (%s) for %s",
+                    MAX_FEED_RESPONSE_BYTES,
+                    _sanitize_for_log(feed_url),
+                )
+                return None
+
+        # ZIP BOMB PROTECTION
+        # Even with 'Accept-Encoding: identity', some servers might send GZIP.
+        # We manually check for the GZIP magic header (\x1f\x8b) and reject.
+        if content.startswith(b"\x1f\x8b"):
+            logger.warning(
+                "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+                _sanitize_for_log(feed_url),
+            )
+            return None
+
+        if not _validate_xml_safety(content):
+            # Sanitize URL for logging to prevent log injection
+            safe_log_url = _sanitize_for_log(feed_url)
+            logger.warning("Feed rejected due to security violation: %s",
+                           safe_log_url)
+            return None
 
         parsed_feed = feedparser.parse(content)
         # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
         if parsed_feed.bozo:
-            logger.warning(
-                "Feed parsing warning: %s", parsed_feed.get("bozo_exception")
-            )
+            # Check for bozo_exception and sanitize it (it can contain malicious input)
+            bozo_exc = parsed_feed.get("bozo_exception")
+            safe_exc_msg = _sanitize_for_log(
+                str(bozo_exc)) if bozo_exc else "Unknown"
+            logger.warning("Feed parsing warning: %s", safe_exc_msg)
 
         return parsed_feed
 
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.error("Error fetching feed %s", feed_url, exc_info=True)
+        logger.error("Error fetching feed %s",
+                     _sanitize_for_log(feed_url),
+                     exc_info=True)
         return None
 
 
@@ -289,8 +560,11 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     raw_title = parsed_feed.feed.get("title")
     new_title = raw_title.strip() if raw_title else None
     if new_title and new_title != feed_db_obj.name:
-        logger.info("Updating feed title for '%s' to '%s'",
-                    feed_db_obj.name, new_title)
+        logger.info(
+            "Updating feed title for '%s' to '%s'",
+            _sanitize_for_log(feed_db_obj.name),
+            _sanitize_for_log(new_title),
+        )
         feed_db_obj.name = new_title
 
     raw_site_link = parsed_feed.feed.get("link")
@@ -298,9 +572,9 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     if new_site_link and new_site_link != feed_db_obj.site_link:
         logger.info(
             "Updating feed site_link for '%s' from '%s' to '%s'",
-            feed_db_obj.name,
-            feed_db_obj.site_link,
-            new_site_link,
+            _sanitize_for_log(feed_db_obj.name),
+            _sanitize_for_log(feed_db_obj.site_link),
+            _sanitize_for_log(new_site_link),
         )
         feed_db_obj.site_link = new_site_link
 
@@ -313,12 +587,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
     # Optimization: Query only necessary columns to avoid loading full objects
     # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (
-        db.session.query(FeedItem.id, FeedItem.guid,
-                         FeedItem.link, FeedItem.title)
-        .filter_by(feed_id=feed_db_obj.id)
-        .all()
-    )
+    items_tuple = (db.session.query(
+        FeedItem.id, FeedItem.guid, FeedItem.link,
+        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
 
     # Create lookup maps
     existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
@@ -327,7 +598,7 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
         len(parsed_feed.entries),
-        feed_db_obj.name,
+        _sanitize_for_log(feed_db_obj.name),
         feed_db_obj.id,
     )
 
@@ -345,7 +616,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         entries_with_dates.sort(key=lambda x: x[1], reverse=True)
     except Exception:  # pylint: disable=broad-exception-caught
         # If sorting fails, proceed with original order.
-        logger.warning("Failed to sort entries for feed %s", feed_db_obj.name)
+        logger.warning("Failed to sort entries for feed %s",
+                       _sanitize_for_log(feed_db_obj.name))
 
     for entry, parsed_published in entries_with_dates:
         entry_link = entry.get("link")
@@ -353,16 +625,33 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         if not entry_link:
             logger.warning(
                 "Skipping entry titled '%s' for feed '%s' due to missing link.",
-                entry.get("title", "[No Title]")[:100],
-                feed_db_obj.name,
+                _sanitize_for_log(entry.get("title", "[No Title]")[:100]),
+                _sanitize_for_log(feed_db_obj.name),
             )
             continue
 
-        db_guid = entry.get("id") or entry_link
+        # SECURITY & LOGIC: Generate a robust GUID if missing.
+        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
+        if entry.get("id"):
+            db_guid = entry.get("id")
+        else:
+            # Create a synthetic GUID based on link and title to ensure uniqueness
+            # for items that share a link but have different content.
+            unique_string = f"{entry_link}{entry.get('title', '')}"
+
+            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
 
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
         if not existing_match:
+            # Minimal fallback: Check by link ONLY if we used link as GUID (legacy)
+            # or if we really want to strict de-dupe.
+            # But for now, let's rely on our robust GUID.
+            # We still check existing_items_by_link just in case we have old DB entries
+            # that were saved with just the link as GUID?
+            # Actually, standard behavior is to trust the GUID.
+            # If we change how GUID is generated, we might duplicate old items once.
+            # This is acceptable to fix the regression.
             existing_match = existing_items_by_link.get(entry_link)
 
         if existing_match:
@@ -376,11 +665,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
         # Check batch duplicates
         if _is_batch_duplicate(
-            db_guid,
-            entry_link,
-            batch_processed_guids,
-            batch_processed_links,
-            feed_db_obj.name,
+                db_guid,
+                batch_processed_guids,
+                feed_db_obj.name,
         ):
             continue
 
@@ -395,13 +682,13 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                 link=entry_link,
                 published_time=parsed_published,
                 guid=db_guid,
-            )
-        )
+            ))
 
     return items_to_add
 
 
-def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link):
+def _update_existing_item(feed_db_obj, existing_item_data, entry_title,
+                          entry_link):
     """Updates an existing item if title or link changed.
 
     Args:
@@ -424,22 +711,20 @@ def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_li
         logger.info(
             "Updating fields %s for existing item '%s' in feed '%s'",
             list(updates.keys()),
-            existing_title,
-            feed_db_obj.name,
+            _sanitize_for_log(existing_title),
+            _sanitize_for_log(feed_db_obj.name),
         )
-        db.session.query(FeedItem).filter(FeedItem.id == existing_item_data.id).update(
-            updates, synchronize_session=False
-        )
+        db.session.query(FeedItem).filter(
+            FeedItem.id == existing_item_data.id).update(
+                updates, synchronize_session=False)
 
 
-def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links, feed_name):
+def _is_batch_duplicate(db_guid, batch_guids, feed_name):
     """Checks if an item is a duplicate within the current processing batch.
 
     Args:
         db_guid (str): Calculated GUID for the item.
-        entry_link (str): Link for the item.
         batch_guids (set): Set of GUIDs processed in current batch.
-        batch_links (set): Set of links processed in current batch.
         feed_name (str): Name of the feed for logging.
 
     Returns:
@@ -448,17 +733,15 @@ def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links, feed_name
     if db_guid and db_guid in batch_guids:
         logger.warning(
             "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
-            db_guid,
-            feed_name,
+            _sanitize_for_log(db_guid),
+            _sanitize_for_log(feed_name),
         )
         return True
-    if entry_link in batch_links:
-        logger.warning(
-            "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
-            entry_link,
-            feed_name,
-        )
-        return True
+
+    # RELAXATION: Do not strict dedupe by link alone.
+    # We rely on the robust GUID (which includes Title) to catch duplicates.
+    # if entry_link in batch_links: ... -> REMOVED
+
     return False
 
 
@@ -473,21 +756,21 @@ def _save_items_to_db(feed_db_obj, items_to_add):
         logger.info(
             "Successfully batch-added %s new items for feed: %s",
             committed_count,
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
         )
     except IntegrityError as e:
         db.session.rollback()
         logger.warning(
             "Batch insert failed for feed '%s': %s. Retrying individually.",
-            feed_db_obj.name,
-            e,
+            _sanitize_for_log(feed_db_obj.name),
+            _sanitize_for_log(str(e)),
         )
         committed_count = _save_items_individually(feed_db_obj, items_to_add)
     except Exception:  # pylint: disable=broad-exception-caught
         db.session.rollback()
         logger.error(
             "Generic error committing new items for feed %s",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             exc_info=True,
         )
         return 0
@@ -505,7 +788,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
     except Exception:  # pylint: disable=broad-exception-caught
         logger.error(
             "Error updating last_updated_time for feed '%s' after batch failure",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             exc_info=True,
         )
         db.session.rollback()  # Rollback if updating last_updated_time fails
@@ -516,30 +799,37 @@ def _save_items_individually(feed_db_obj, items_to_add):
             db.session.add(item)
             db.session.commit()
             count += 1
-            logger.debug("Individually added item: %s", item.title[:50])
+            logger.debug("Individually added item: %s",
+                         _sanitize_for_log(item.title[:50]))
         except IntegrityError as ie:
             db.session.rollback()
             logger.error(
                 "Failed to add item '%s' for feed '%s' (link: %s, guid: %s): %s",
-                item.title[:100],
-                feed_db_obj.name,
-                item.link,
-                item.guid,
-                ie,
+                _sanitize_for_log(item.title[:100]),
+                _sanitize_for_log(feed_db_obj.name),
+                _sanitize_for_log(item.link),
+                _sanitize_for_log(item.guid),
+                _sanitize_for_log(str(ie)),
             )
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error(
-                "Generic error adding item '%s'", item.title[:100], exc_info=True
+                "Generic error adding item '%s'",
+                _sanitize_for_log(item.title[:100]),
+                exc_info=True,
             )
 
     if count > 0:
         logger.info(
-            "Recovered %s items individually for feed: %s", count, feed_db_obj.name
+            "Recovered %s items individually for feed: %s",
+            count,
+            _sanitize_for_log(feed_db_obj.name),
         )
     else:
-        logger.info("No items added individually for feed: %s",
-                    feed_db_obj.name)
+        logger.info(
+            "No items added individually for feed: %s",
+            _sanitize_for_log(feed_db_obj.name),
+        )
 
     return count
 
@@ -565,13 +855,10 @@ def _enforce_feed_limit(feed_db_obj):
     # It failed to call .all() or .subquery()! It passed the raw Query object to in_().
     # THAT is the bug/inefficiency.
 
-    oldest_ids = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
-        .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
-        .limit(num_to_delete)
-        .all()
-    )
+    oldest_ids = (db.session.query(
+        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+            FeedItem.published_time.asc(),
+            FeedItem.fetched_time.asc()).limit(num_to_delete).all())
 
     # Flatten the list of tuples
     oldest_ids_list = [r.id for r in oldest_ids]
@@ -579,15 +866,14 @@ def _enforce_feed_limit(feed_db_obj):
     if not oldest_ids_list:
         return
 
-    deleted_count = (
-        db.session.query(FeedItem)
-        .filter(FeedItem.id.in_(oldest_ids_list))
-        .delete(synchronize_session=False)
-    )
+    deleted_count = (db.session.query(FeedItem).filter(
+        FeedItem.id.in_(oldest_ids_list)).delete(synchronize_session=False))
 
     if deleted_count > 0:
         logger.info(
-            "Evicted %s oldest items from feed '%s'.", deleted_count, feed_db_obj.name
+            "Evicted %s oldest items from feed '%s'.",
+            deleted_count,
+            _sanitize_for_log(feed_db_obj.name),
         )
         try:
             db.session.commit()
@@ -595,7 +881,7 @@ def _enforce_feed_limit(feed_db_obj):
             db.session.rollback()
             logger.error(
                 "Error committing eviction for feed '%s'",
-                feed_db_obj.name,
+                _sanitize_for_log(feed_db_obj.name),
                 exc_info=True,
             )
 
@@ -691,17 +977,19 @@ def update_all_feeds():
     processed_successfully_count = 0
     affected_tab_ids = set()
 
-    logger.info(
-        "Starting update process for %s feeds (Parallelized).", len(all_feeds))
+    logger.info("Starting update process for %s feeds (Parallelized).",
+                len(all_feeds))
 
     # Optimize workers: don't create more threads than actual feeds
     actual_workers = min(MAX_CONCURRENT_FETCHES,
                          len(all_feeds)) if all_feeds else 1
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=actual_workers) as executor:
         # Submit all fetch tasks, mapping future to the feed object directly
         future_to_feed = {
-            executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds
+            executor.submit(_fetch_feed_content, feed.url): feed
+            for feed in all_feeds
         }
         attempted_count = len(all_feeds)
 
@@ -722,8 +1010,7 @@ def update_all_feeds():
                 # --- Sequential Processing (Main Thread) ---
                 # Check 1: Reuse the logic shared with fetch_and_update_feed
                 success, new_items, tab_id = _process_fetch_result(
-                    feed_obj, parsed_feed
-                )
+                    feed_obj, parsed_feed)
 
                 if success:
                     processed_successfully_count += 1
