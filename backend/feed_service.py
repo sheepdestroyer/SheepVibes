@@ -10,6 +10,7 @@ import urllib.request
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
 from xml.sax.handler import ContentHandler
+from xml.sax import SAXParseException
 
 import defusedxml.sax
 import feedparser
@@ -73,7 +74,7 @@ def _validate_xml_safety(content):
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
         logger.error("XML Security Violation detected: %s", e)
         return False
-    except Exception:
+    except (SAXParseException, UnicodeError):
         # Other exceptions (like SAXParseException, encoding errors, etc.)
         # are ignored here because we want to allow feedparser to try its best
         # with potentially malformed but non-malicious content (e.g. HTML soup).
