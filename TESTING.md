@@ -58,7 +58,10 @@ The project includes a robust development environment managed by `scripts/dev_ma
     - Code changes are hot-reloaded automatically.
 
 2.  **Verify Production Parity**
-    To test the application as it runs in production (using Gunicorn), you can manually edit `scripts/dev_manager.sh` to unset `FLASK_DEBUG=1` before starting.
+    To test the application as it runs in production (using Gunicorn), use the `--prod` flag:
+    ```bash
+    ./scripts/dev_manager.sh up --prod
+    ```
 
 ## Frontend Testing
 Currently, there are no automated tests specifically for the frontend JavaScript code.

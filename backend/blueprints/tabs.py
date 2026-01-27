@@ -177,7 +177,15 @@ def get_feeds_for_tab(tab_id):
 
     feed_ids = [feed.id for feed in feeds]
 
-    # Query 2: Get the top N items for ALL those feeds in a single, efficient query.
+    # Query 2: Get unread counts for all feeds in this tab to avoid N+1 queries.
+    unread_counts_query = (
+        db.session.query(FeedItem.feed_id, func.count(FeedItem.id))
+        .filter(FeedItem.feed_id.in_(feed_ids), FeedItem.is_read == False)
+        .group_by(FeedItem.feed_id)
+    )
+    unread_counts = dict(unread_counts_query.all())
+
+    # Query 3: Get the top N items for ALL those feeds in a single, efficient query.
     # Use a window function to rank items within each feed.
     ranked_items_subq = (
         select(
@@ -226,7 +234,8 @@ def get_feeds_for_tab(tab_id):
     # Build the final response, combining feeds with their items.
     response_data = []
     for feed in feeds:
-        feed_dict = feed.to_dict()
+        # Pass the pre-calculated unread count to avoid N+1 queries
+        feed_dict = feed.to_dict(unread_count=unread_counts.get(feed.id, 0))
         feed_dict["items"] = items_by_feed.get(feed.id, [])
         response_data.append(feed_dict)
 
