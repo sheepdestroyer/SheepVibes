@@ -300,7 +300,12 @@ class SafeHTTPConnection(http.client.HTTPConnection):
 
 
 class SafeHTTPHandler(urllib.request.HTTPHandler):
-    """Handler that uses SafeHTTPConnection."""
+    """
+    Handler that uses SafeHTTPConnection.
+    WARNING: THIS HANDLER IS STATEFUL (`current_safe_ip`).
+    IT MUST NOT BE SHARED ACROSS THREADS OR REQUESTS.
+    INSTANTIATE A NEW HANDLER FOR EACH FETCH.
+    """
 
     def __init__(self, safe_ip):
         self.safe_ip = safe_ip
@@ -316,7 +321,12 @@ class SafeHTTPHandler(urllib.request.HTTPHandler):
 
 
 class SafeHTTPSHandler(urllib.request.HTTPSHandler):
-    """Handler that uses SafeHTTPSConnection."""
+    """
+    Handler that uses SafeHTTPSConnection.
+    WARNING: THIS HANDLER IS STATEFUL (`current_safe_ip`).
+    IT MUST NOT BE SHARED ACROSS THREADS OR REQUESTS.
+    INSTANTIATE A NEW HANDLER FOR EACH FETCH.
+    """
 
     def __init__(self, safe_ip):
         self.safe_ip = safe_ip
