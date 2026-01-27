@@ -74,6 +74,11 @@ def _validate_xml_safety(content):
     Validates XML content for XXE vulnerabilities using defusedxml.
     Returns False if a security violation is detected.
     Returns True if the content is safe (or not XML, or malformed in a non-dangerous way).
+
+    Policy:
+    - forbid_dtd=False: We allow DTDs generally (e.g. for internal entities or standard RSS).
+    - forbid_entities=True: We STRICTLY block custom entity declarations (XXE vector).
+    - forbid_external=True: We STRICTLY block external DTDs/Entities (SSRF vector).
     """
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions
@@ -292,7 +297,8 @@ def fetch_feed(feed_url):
                                          "User-Agent": "SheepVibes/1.0"
                                      })
         with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
-            content = response.read()
+            # Limit response size to 10MB to prevent DoS/OOM
+            content = response.read(10 * 1024 * 1024)
 
         if not _validate_xml_safety(content):
             # Sanitize URL for logging to prevent log injection
