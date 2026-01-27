@@ -1,8 +1,18 @@
 from unittest.mock import MagicMock
+import os
 
 import pytest
 
 from . import feed_service
+
+
+@pytest.fixture(autouse=True)
+def _set_cache_redis_port(monkeypatch):
+    # Keep CI-configurable value; fall back to a non-default test port if unset.
+    monkeypatch.setenv(
+        "CACHE_REDIS_PORT",
+        os.environ.get("CACHE_REDIS_PORT", "6380"),
+    )
 
 
 # Helper to create a malicious XML string
