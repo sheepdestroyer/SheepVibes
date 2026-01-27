@@ -75,8 +75,8 @@ MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
 
 def _sanitize_for_log(value):
     """Sanitizes a string for safe logging (prevents log injection)."""
-    if not value:
-        return ""
+    if value is None:
+        return "[None]"
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
@@ -109,7 +109,8 @@ def _validate_xml_safety(content):
         # SECURITY HARDENING: Fail closed on malformed XML.
         # If defusedxml cannot parse it, we do not bypass to feedparser.
         # This prevents attackers from constructing payloads that defusedxml chokes on
-        # but feedparser/libxml2 might process unsafely.
+        # but feedparser/libxml2 might process unsafely (e.g. parser differentials).
+        # We explicitly reject ANY malformed XML to guarantee safety over availability.
         if str(e):
             logger.warning(
                 "XML Parsing failed during safety check (rejecting): %s",
@@ -413,13 +414,15 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
             feed_db_obj.id,
         )
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+        # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
+        feed_name = feed_db_obj.name
         try:
             db.session.commit()
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error(
                 "Error committing feed update (no entries) for %s",
-                _sanitize_for_log(feed_db_obj.name),
+                _sanitize_for_log(feed_name),
                 exc_info=True,
             )
             # Still, the fetch itself might be considered a "success" in terms of reachability
@@ -430,10 +433,14 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         # process_feed_entries handles its own logging and commits for items and last_updated_time.
         return True, new_items, feed_db_obj.tab_id
     except Exception:  # pylint: disable=broad-exception-caught
+        # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
+        feed_name = feed_db_obj.name
+        feed_id = feed_db_obj.id
+        db.session.rollback()
         logger.error(
             "An unexpected error occurred during entry processing for feed '%s' (ID: %s)",
-            _sanitize_for_log(feed_db_obj.name),
-            feed_db_obj.id,
+            _sanitize_for_log(feed_name),
+            feed_id,
             exc_info=True,
         )
         return False, 0, feed_db_obj.tab_id
