@@ -13,7 +13,10 @@ from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
 
 import feedparser
+import xml.sax.handler
 from dateutil import parser as date_parser
+from defusedxml.sax import parseString
+from defusedxml.common import DefusedXmlException
 from sqlalchemy.exc import IntegrityError
 
 # Import database models from the new models.py
@@ -261,6 +264,28 @@ def fetch_feed(feed_url):
         )
         with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             content = response.read()
+
+        # Validate content for XML vulnerabilities (XXE, Billion Laughs) using defusedxml
+        try:
+            # We only use this as a validator. forbid_dtd=True is strict but safer.
+            # If the content is not XML (e.g. JSON), this will likely raise a SAXParseException,
+            # which we catch and allow to proceed (as feedparser handles other formats).
+            # However, if it IS XML and contains malicious entities/DTDs, it raises DefusedXmlException.
+            # Note: SAX parseString requires a handler. We use a no-op ContentHandler.
+            parseString(
+                content,
+                xml.sax.handler.ContentHandler(),
+                forbid_dtd=True,
+                forbid_entities=True,
+                forbid_external=True,
+            )
+        except DefusedXmlException as e:
+            logger.warning("Security violation detected in feed %s: %s", feed_url, e)
+            return None
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Parsing failed (e.g. not XML, or malformed), but not a security violation from defusedxml.
+            # We proceed to let feedparser attempt to handle it (e.g. JSON feeds, loose HTML).
+            pass
 
         parsed_feed = feedparser.parse(content)
         # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
