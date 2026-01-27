@@ -636,11 +636,28 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             )
             continue
 
-        db_guid = entry.get("id") or entry_link
+        # SECURITY & LOGIC: Generate a robust GUID if missing.
+        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
+        if entry.get("id"):
+            db_guid = entry.get("id")
+        else:
+            # Create a synthetic GUID based on link and title to ensure uniqueness
+            # for items that share a link but have different content.
+            unique_string = f"{entry_link}{entry.get('title', '')}"
+            import hashlib
+            db_guid = hashlib.sha256(unique_string.encode('utf-8')).hexdigest()
 
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
         if not existing_match:
+            # Minimal fallback: Check by link ONLY if we used link as GUID (legacy)
+            # or if we really want to strict de-dupe.
+            # But for now, let's rely on our robust GUID.
+            # We still check existing_items_by_link just in case we have old DB entries
+            # that were saved with just the link as GUID?
+            # Actually, standard behavior is to trust the GUID.
+            # If we change how GUID is generated, we might duplicate old items once.
+            # This is acceptable to fix the regression.
             existing_match = existing_items_by_link.get(entry_link)
 
         if existing_match:
@@ -731,13 +748,18 @@ def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links,
             _sanitize_for_log(feed_name),
         )
         return True
-    if entry_link in batch_links:
+    if db_guid and db_guid in batch_guids:
         logger.warning(
-            "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
-            _sanitize_for_log(entry_link),
+            "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
+            _sanitize_for_log(db_guid),
             _sanitize_for_log(feed_name),
         )
         return True
+    
+    # RELAXATION: Do not strict dedupe by link alone.
+    # We rely on the robust GUID (which includes Title) to catch duplicates.
+    # if entry_link in batch_links: ... -> REMOVED
+    
     return False
 
 

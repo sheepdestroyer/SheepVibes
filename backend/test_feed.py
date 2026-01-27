@@ -247,15 +247,12 @@ def test_kernel_org_scenario(db_setup, mocker):  # pylint: disable=unused-argume
     new_items_count = feed_service.process_feed_entries(
         feed_obj, mock_feed_data)
 
-    assert new_items_count == 1, (
-        "Should only add 1 item because they share the same link, and link now enforces uniqueness"
+    assert new_items_count == 3, (
+        "Should add 3 items. GUID uniqueness should override shared links."
     )
 
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
-    assert len(items_in_db) == 1
-    # The newest one should be preserved (descending sort by published_time)
-    assert items_in_db[0].guid == "kernel.guid.3"
-    assert items_in_db[0].link == "https://www.kernel.org/"
+    assert len(items_in_db) == 3
 
 
 def test_hacker_news_scenario_guid_handling(db_setup, mocker):  # pylint: disable=unused-argument
