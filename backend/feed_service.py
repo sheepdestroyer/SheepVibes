@@ -101,13 +101,16 @@ def _validate_xml_safety(content):
             forbid_external=True,
         )
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
-        logger.error("XML Security Violation detected: %s", e)
+        logger.error("XML Security Violation detected: %s", _sanitize_url_for_log(str(e)))
         return False
-    except (SAXParseException, UnicodeError):
-        # Other exceptions (like SAXParseException, encoding errors, etc.)
-        # are ignored here because we want to allow feedparser to try its best
-        # with potentially malformed but non-malicious content (e.g. HTML soup).
-        pass
+    except (SAXParseException, UnicodeError) as e:
+        # SECURITY HARDENING: Fail closed on malformed XML.
+        # If defusedxml cannot parse it, we do not bypass to feedparser.
+        # This prevents attackers from constructing payloads that defusedxml chokes on
+        # but feedparser/libxml2 might process unsafely.
+        logger.warning("XML Parsing failed during safety check (rejecting): %s",
+                       _sanitize_url_for_log(str(e)))
+        return False
 
     return True
 
@@ -371,24 +374,34 @@ def fetch_feed(feed_url):
             # For HTTPS: Use SafeHTTPSHandler to pin IP + Validate Hostname
             handler = SafeHTTPSHandler(safe_ip=safe_ip)
             opener = urllib.request.build_opener(handler)
-            req = urllib.request.Request(
-                feed_url, headers={"User-Agent": "SheepVibes/1.0"})
+            req = urllib.request.Request(feed_url, headers={
+                "User-Agent": "SheepVibes/1.0",
+                "Accept-Encoding": "identity"  # Prevent Zip Bombs
+            })
             url_opener = opener.open(req, timeout=10)
 
         else:
             # For HTTP: We can simply rewrite the URL (as there's no SSL SNI mismatch)
-            # This is simpler than a full custom handler for HTTP
             target_url = parsed._replace(netloc=safe_ip).geturl()
             req = urllib.request.Request(target_url,
                                          headers={
                                              "Host": hostname,
-                                             "User-Agent": "SheepVibes/1.0"
+                                             "User-Agent": "SheepVibes/1.0",
+                                             "Accept-Encoding": "identity"  # Prevent Zip Bombs
                                          })
             url_opener = urllib.request.urlopen(req, timeout=10)  # nosec B310
 
         with url_opener as response:
             # Limit response size to 10MB to prevent DoS/OOM
             content = response.read(MAX_FEED_RESPONSE_BYTES)
+
+        # ZIP BOMB PROTECTION
+        # Even with 'Accept-Encoding: identity', some servers might send GZIP.
+        # We manually check for the GZIP magic header (\x1f\x8b) and reject.
+        if content.startswith(b"\x1f\x8b"):
+            logger.warning("Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+                           _sanitize_url_for_log(feed_url))
+            return None
 
         if not _validate_xml_safety(content):
             # Sanitize URL for logging to prevent log injection

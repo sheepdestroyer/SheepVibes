@@ -127,20 +127,20 @@ def test_fetch_feed_allows_valid_xml(mock_network):
     assert result.feed.title == "Valid Feed"
 
 
-def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(
-        mocker, mock_network):
-    """Test that malformed XML (which triggers SAXParseException) is NOT blocked and passed to feedparser."""
+def test_fetch_feed_blocks_malformed_xml(mock_network, mocker):
+    """Test that malformed XML (which triggers SAXParseException) is NOW BLOCKED (Fail Closed policy)."""
     mock_network.read.return_value = create_malformed_xml()
 
-    # Mock feedparser to verify we pass the content through
+    # We mock feedparser just to ensure it's NOT called
     mock_feedparser = mocker.patch("backend.feed_service.feedparser.parse")
-    mock_feedparser.return_value = MagicMock(bozo=False)
 
     url = "http://example.com/malformed.xml"
-    feed_service.fetch_feed(url)
+    result = feed_service.fetch_feed(url)
 
-    # Verify feedparser was called with the content
-    mock_feedparser.assert_called_once_with(create_malformed_xml())
+    # STRICT MODE: Must be blocked
+    assert result is None
+    # Check that feedparser was NEVER called
+    mock_feedparser.assert_not_called()
 
 
 def test_fetch_feed_blocks_dtd_with_external_reference(mock_network):
@@ -150,5 +150,12 @@ def test_fetch_feed_blocks_dtd_with_external_reference(mock_network):
     url = "http://example.com/safe_dtd.xml"
     result = feed_service.fetch_feed(url)
 
-    # STRICT MODE: Must be None (blocked)
+def test_fetch_feed_blocks_gzip_content(mock_network):
+    """Test that content starting with GZIP magic bytes is blocked (Zip Bomb protection)."""
+    # GZIP magic bytes \x1f\x8b followed by garbage
+    mock_network.read.return_value = b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03\x00\x00"
+
+    url = "http://example.com/bomb.gz"
+    result = feed_service.fetch_feed(url)
+
     assert result is None
