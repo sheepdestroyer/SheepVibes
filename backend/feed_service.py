@@ -89,12 +89,12 @@ def _validate_xml_safety(content):
             handler,
             forbid_dtd=False,
             forbid_entities=True,
-            forbid_external=False,
+            forbid_external=True,
         )
-    except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
+    except (DTDForbidden, EntitiesForbidden) as e:
         logger.error("XML Security Violation detected: %s", e)
         return False
-    except (SAXParseException, UnicodeError):
+    except (SAXParseException, UnicodeError, ExternalReferenceForbidden):
         # Other exceptions (like SAXParseException, encoding errors, etc.)
         # are ignored here because we want to allow feedparser to try its best
         # with potentially malformed but non-malicious content (e.g. HTML soup).
