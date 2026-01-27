@@ -150,6 +150,7 @@ def test_fetch_feed_blocks_dtd_with_external_reference(mock_network):
     url = "http://example.com/safe_dtd.xml"
     result = feed_service.fetch_feed(url)
 
+
 def test_fetch_feed_blocks_gzip_content(mock_network):
     """Test that content starting with GZIP magic bytes is blocked (Zip Bomb protection)."""
     # GZIP magic bytes \x1f\x8b followed by garbage
