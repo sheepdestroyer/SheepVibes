@@ -73,11 +73,11 @@ MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
 # --- Helper Functions ---
 
 
-def _sanitize_url_for_log(url):
-    """Sanitizes a URL for safe logging (prevents log injection)."""
-    if not url:
+def _sanitize_for_log(value):
+    """Sanitizes a string for safe logging (prevents log injection)."""
+    if not value:
         return ""
-    return url.replace("\n", "\\n").replace("\r", "\\r")
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 def _validate_xml_safety(content):
@@ -103,7 +103,7 @@ def _validate_xml_safety(content):
         )
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
         logger.error("XML Security Violation detected: %s",
-                     _sanitize_url_for_log(str(e)))
+                     _sanitize_for_log(str(e)))
         return False
     except (SAXParseException, UnicodeError) as e:
         # SECURITY HARDENING: Fail closed on malformed XML.
@@ -113,7 +113,7 @@ def _validate_xml_safety(content):
         if str(e):
             logger.warning(
                 "XML Parsing failed during safety check (rejecting): %s",
-                _sanitize_url_for_log(str(e)),
+                _sanitize_for_log(str(e)),
             )
         return False
 
@@ -345,7 +345,7 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         safe_ip, _ = validate_and_resolve_url(newurl)
         if not safe_ip:
             logger.warning("Blocked unsafe redirect to: %s",
-                           _sanitize_url_for_log(newurl))
+                           _sanitize_for_log(newurl))
             raise urllib.error.HTTPError(newurl, code,
                                          "Blocked unsafe redirect", headers,
                                          fp)
@@ -381,7 +381,7 @@ def _fetch_feed_content(feed_url):
         return parsed_feed
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error in fetch thread for feed %s",
-                         _sanitize_url_for_log(feed_url))
+                         _sanitize_for_log(feed_url))
         return None
 
 
@@ -400,7 +400,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     if not parsed_feed:
         logger.error(
             "Fetching content for feed '%s' (ID: %s) failed (None returned).",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
         )
         return False, 0, feed_db_obj.tab_id
@@ -409,7 +409,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     if not parsed_feed.entries:
         logger.info(
             "Feed '%s' (ID: %s) fetched successfully but contained no entries.",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
         )
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
@@ -419,7 +419,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
             db.session.rollback()
             logger.error(
                 "Error committing feed update (no entries) for %s",
-                feed_db_obj.name,
+                _sanitize_for_log(feed_db_obj.name),
                 exc_info=True,
             )
             # Still, the fetch itself might be considered a "success" in terms of reachability
@@ -432,7 +432,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     except Exception:  # pylint: disable=broad-exception-caught
         logger.error(
             "An unexpected error occurred during entry processing for feed '%s' (ID: %s)",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
             exc_info=True,
         )
@@ -441,11 +441,11 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
 
 def fetch_feed(feed_url):
     """Fetches and parses a feed, preventing SSRF via IP pinning."""
-    safe_ip, hostname = validate_and_resolve_url(feed_url)
+    safe_ip, _ = validate_and_resolve_url(feed_url)
     if not safe_ip:
         return None
 
-    logger.info("Fetching feed: %s", _sanitize_url_for_log(feed_url))
+    logger.info("Fetching feed: %s", _sanitize_for_log(feed_url))
     try:
         # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
 
@@ -496,13 +496,13 @@ def fetch_feed(feed_url):
         if content.startswith(b"\x1f\x8b"):
             logger.warning(
                 "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
-                _sanitize_url_for_log(feed_url),
+                _sanitize_for_log(feed_url),
             )
             return None
 
         if not _validate_xml_safety(content):
             # Sanitize URL for logging to prevent log injection
-            safe_log_url = _sanitize_url_for_log(feed_url)
+            safe_log_url = _sanitize_for_log(feed_url)
             logger.warning("Feed rejected due to security violation: %s",
                            safe_log_url)
             return None
@@ -512,7 +512,7 @@ def fetch_feed(feed_url):
         if parsed_feed.bozo:
             # Check for bozo_exception and sanitize it (it can contain malicious input)
             bozo_exc = parsed_feed.get("bozo_exception")
-            safe_exc_msg = (_sanitize_url_for_log(str(bozo_exc))
+            safe_exc_msg = (_sanitize_for_log(str(bozo_exc))
                             if bozo_exc else "Unknown")
             logger.warning("Feed parsing warning: %s", safe_exc_msg)
 
@@ -520,7 +520,7 @@ def fetch_feed(feed_url):
 
     except Exception:  # pylint: disable=broad-exception-caught
         logger.error("Error fetching feed %s",
-                     _sanitize_url_for_log(feed_url),
+                     _sanitize_for_log(feed_url),
                      exc_info=True)
         return None
 
@@ -538,8 +538,9 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     raw_title = parsed_feed.feed.get("title")
     new_title = raw_title.strip() if raw_title else None
     if new_title and new_title != feed_db_obj.name:
-        logger.info("Updating feed title for '%s' to '%s'", feed_db_obj.name,
-                    new_title)
+        logger.info("Updating feed title for '%s' to '%s'",
+                    _sanitize_for_log(feed_db_obj.name),
+                    _sanitize_for_log(new_title))
         feed_db_obj.name = new_title
 
     raw_site_link = parsed_feed.feed.get("link")
@@ -547,9 +548,9 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     if new_site_link and new_site_link != feed_db_obj.site_link:
         logger.info(
             "Updating feed site_link for '%s' from '%s' to '%s'",
-            feed_db_obj.name,
-            feed_db_obj.site_link,
-            new_site_link,
+            _sanitize_for_log(feed_db_obj.name),
+            _sanitize_for_log(feed_db_obj.site_link),
+            _sanitize_for_log(new_site_link),
         )
         feed_db_obj.site_link = new_site_link
 
@@ -573,7 +574,7 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
         len(parsed_feed.entries),
-        feed_db_obj.name,
+        _sanitize_for_log(feed_db_obj.name),
         feed_db_obj.id,
     )
 
@@ -591,7 +592,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         entries_with_dates.sort(key=lambda x: x[1], reverse=True)
     except Exception:  # pylint: disable=broad-exception-caught
         # If sorting fails, proceed with original order.
-        logger.warning("Failed to sort entries for feed %s", feed_db_obj.name)
+        logger.warning("Failed to sort entries for feed %s",
+                       _sanitize_for_log(feed_db_obj.name))
 
     for entry, parsed_published in entries_with_dates:
         entry_link = entry.get("link")
@@ -599,8 +601,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         if not entry_link:
             logger.warning(
                 "Skipping entry titled '%s' for feed '%s' due to missing link.",
-                entry.get("title", "[No Title]")[:100],
-                feed_db_obj.name,
+                _sanitize_for_log(entry.get("title", "[No Title]")[:100]),
+                _sanitize_for_log(feed_db_obj.name),
             )
             continue
 
@@ -670,8 +672,8 @@ def _update_existing_item(feed_db_obj, existing_item_data, entry_title,
         logger.info(
             "Updating fields %s for existing item '%s' in feed '%s'",
             list(updates.keys()),
-            existing_title,
-            feed_db_obj.name,
+            _sanitize_for_log(existing_title),
+            _sanitize_for_log(feed_db_obj.name),
         )
         db.session.query(FeedItem).filter(
             FeedItem.id == existing_item_data.id).update(
@@ -695,15 +697,15 @@ def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links,
     if db_guid and db_guid in batch_guids:
         logger.warning(
             "Skipping duplicate item (GUID: %s) in batch for feed '%s'.",
-            db_guid,
-            feed_name,
+            _sanitize_for_log(db_guid),
+            _sanitize_for_log(feed_name),
         )
         return True
     if entry_link in batch_links:
         logger.warning(
             "Skipping duplicate item (Link: %s) in batch for feed '%s'.",
-            entry_link,
-            feed_name,
+            _sanitize_for_log(entry_link),
+            _sanitize_for_log(feed_name),
         )
         return True
     return False
@@ -720,13 +722,13 @@ def _save_items_to_db(feed_db_obj, items_to_add):
         logger.info(
             "Successfully batch-added %s new items for feed: %s",
             committed_count,
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
         )
     except IntegrityError as e:
         db.session.rollback()
         logger.warning(
             "Batch insert failed for feed '%s': %s. Retrying individually.",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             e,
         )
         committed_count = _save_items_individually(feed_db_obj, items_to_add)
@@ -734,7 +736,7 @@ def _save_items_to_db(feed_db_obj, items_to_add):
         db.session.rollback()
         logger.error(
             "Generic error committing new items for feed %s",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             exc_info=True,
         )
         return 0
@@ -752,7 +754,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
     except Exception:  # pylint: disable=broad-exception-caught
         logger.error(
             "Error updating last_updated_time for feed '%s' after batch failure",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
             exc_info=True,
         )
         db.session.rollback()  # Rollback if updating last_updated_time fails
@@ -763,29 +765,30 @@ def _save_items_individually(feed_db_obj, items_to_add):
             db.session.add(item)
             db.session.commit()
             count += 1
-            logger.debug("Individually added item: %s", item.title[:50])
+            logger.debug("Individually added item: %s",
+                         _sanitize_for_log(item.title[:50]))
         except IntegrityError as ie:
             db.session.rollback()
             logger.error(
                 "Failed to add item '%s' for feed '%s' (link: %s, guid: %s): %s",
-                item.title[:100],
-                feed_db_obj.name,
-                item.link,
-                item.guid,
+                _sanitize_for_log(item.title[:100]),
+                _sanitize_for_log(feed_db_obj.name),
+                _sanitize_for_log(item.link),
+                _sanitize_for_log(item.guid),
                 ie,
             )
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error("Generic error adding item '%s'",
-                         item.title[:100],
+                         _sanitize_for_log(item.title[:100]),
                          exc_info=True)
 
     if count > 0:
         logger.info("Recovered %s items individually for feed: %s", count,
-                    feed_db_obj.name)
+                    _sanitize_for_log(feed_db_obj.name))
     else:
         logger.info("No items added individually for feed: %s",
-                    feed_db_obj.name)
+                    _sanitize_for_log(feed_db_obj.name))
 
     return count
 
@@ -827,14 +830,14 @@ def _enforce_feed_limit(feed_db_obj):
 
     if deleted_count > 0:
         logger.info("Evicted %s oldest items from feed '%s'.", deleted_count,
-                    feed_db_obj.name)
+                    _sanitize_for_log(feed_db_obj.name))
         try:
             db.session.commit()
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.error(
                 "Error committing eviction for feed '%s'",
-                feed_db_obj.name,
+                _sanitize_for_log(feed_db_obj.name),
                 exc_info=True,
             )
 

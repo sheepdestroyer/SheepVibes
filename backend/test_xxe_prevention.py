@@ -44,7 +44,7 @@ def test_fetch_feed_blocks_external_dtd(mock_network, caplog):
     assert "\r" not in combined
 
     # The sanitized URL (with escaped newlines/carriage returns) should be present.
-    # Note: The _sanitize_url_for_log function replaces \n with \\n and \r with \\r.
+    # Note: The _sanitize_for_log function replaces \n with \\n and \r with \\r.
     # In the log string, we expect to see literal backslashes.
     assert (
         "http://example.com/ext_dtd.xml\\nwith\\nnewline\\rand\\rcarriagereturn"
