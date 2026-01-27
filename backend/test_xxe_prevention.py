@@ -15,6 +15,16 @@ def _set_cache_redis_port(monkeypatch):
     )
 
 
+def test_fetch_feed_blocks_external_dtd(mock_network):
+    """Test that external DTDs are blocked when forbid_external=True."""
+    mock_network.read.return_value = b'<!DOCTYPE foo SYSTEM "http://example.com/dtd">'
+
+    url = "http://example.com/ext_dtd.xml"
+    result = feed_service.fetch_feed(url)
+
+    assert result is None
+
+
 # Helper to create a malicious XML string
 def create_xxe_payload():
     return b"""<?xml version="1.0" encoding="ISO-8859-1"?>
@@ -102,11 +112,11 @@ def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(
 
 
 def test_fetch_feed_allows_safe_dtd(mock_network):
-    """Test that feeds with safe DTDs (e.g. RSS 0.91) are allowed (forbid_dtd=False)."""
+    """Test that feeds with external DTDs are NOW BLOCKED due to strict SSRF protection."""
     mock_network.read.return_value = create_feed_with_safe_dtd()
 
     url = "http://example.com/safe_dtd.xml"
     result = feed_service.fetch_feed(url)
 
-    assert result is not None
-    assert result.feed.title == "Safe DTD Feed"
+    # STRICT MODE: Must be None (blocked)
+    assert result is None

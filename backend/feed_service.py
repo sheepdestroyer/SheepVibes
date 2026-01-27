@@ -60,14 +60,8 @@ def _get_max_concurrent_fetches():
         # Default heuristic with safety cap for auto-configuration
         return min(cpu_count * 5, WORKER_FETCH_CAP)
 
-    # Respect explicit user configuration, allowing it to exceed the default cap
-    if max_workers > WORKER_FETCH_CAP:
-        logger.warning(
-            "Explicit FEED_FETCH_MAX_WORKERS (%s) exceeds recommended cap (%s). Resource exhaustion possible.",
-            max_workers,
-            WORKER_FETCH_CAP,
-        )
-    return max_workers
+    # Respect explicit user configuration, but enforce the hard cap
+    return min(max_workers, WORKER_FETCH_CAP)
 
 
 MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
@@ -91,10 +85,10 @@ def _validate_xml_safety(content):
             forbid_entities=True,
             forbid_external=True,
         )
-    except (DTDForbidden, EntitiesForbidden) as e:
+    except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
         logger.error("XML Security Violation detected: %s", e)
         return False
-    except (SAXParseException, UnicodeError, ExternalReferenceForbidden):
+    except (SAXParseException, UnicodeError):
         # Other exceptions (like SAXParseException, encoding errors, etc.)
         # are ignored here because we want to allow feedparser to try its best
         # with potentially malformed but non-malicious content (e.g. HTML soup).
