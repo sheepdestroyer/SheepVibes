@@ -481,8 +481,26 @@ def fetch_feed(feed_url):
         url_opener = opener.open(req, timeout=10)
 
         with url_opener as response:
-            # Limit response size to 10MB to prevent DoS/OOM
-            content = response.read(MAX_FEED_RESPONSE_BYTES)
+            # Check Content-Length header first
+            content_length = response.getheader("Content-Length")
+            if content_length and int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                logger.warning(
+                    "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                    content_length,
+                    MAX_FEED_RESPONSE_BYTES,
+                    _sanitize_for_log(feed_url),
+                )
+                return None
+
+            # Read limited amount + 1 byte to detect overflow
+            content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
+            if len(content) > MAX_FEED_RESPONSE_BYTES:
+                logger.warning(
+                    "Feed rejected: Response size exceeds limit (%s) for %s",
+                    MAX_FEED_RESPONSE_BYTES,
+                    _sanitize_for_log(feed_url),
+                )
+                return None
 
         # ZIP BOMB PROTECTION
         # Even with 'Accept-Encoding: identity', some servers might send GZIP.
