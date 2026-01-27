@@ -17,13 +17,13 @@ from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
 import defusedxml.sax
+import feedparser
+from dateutil import parser as date_parser
 from defusedxml.common import (
     DTDForbidden,
     EntitiesForbidden,
     ExternalReferenceForbidden,
 )
-import feedparser
-from dateutil import parser as date_parser
 from sqlalchemy.exc import IntegrityError
 
 # Import database models from the new models.py
@@ -111,7 +111,7 @@ def _validate_xml_safety(content):
         # This prevents attackers from constructing payloads that defusedxml chokes on
         # but feedparser/libxml2 might process unsafely.
         if str(e):
-             logger.warning(
+            logger.warning(
                 "XML Parsing failed during safety check (rejecting): %s",
                 _sanitize_url_for_log(str(e)),
             )
@@ -218,7 +218,7 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
     Custom HTTPSConnection that connects to a specific 'safe_ip'
     but uses the original hostname for SNI and SSL validation.
     Prevents DNS Rebinding (TOCTOU) on HTTPS.
-    
+
     This class ensures that the IP address validated in the check phase
     is the EXACT same IP address used for the connection, preventing
     an attacker from swapping the IP (DNS Rebinding) between check and use.
@@ -261,7 +261,8 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
 
         self.sock = self._context.wrap_socket(
             self.sock,
-            server_hostname=self.host,  # This ensures SNI and Cert Check match the Host, not the IP
+            server_hostname=self.
+            host,  # This ensures SNI and Cert Check match the Host, not the IP
         )
 
 
@@ -276,8 +277,9 @@ class SafeHTTPSHandler(urllib.request.HTTPSHandler):
         # Callback to create our custom connection
         # Check if the request has a pinned safe_ip attached by SafeRedirectHandler
         # If not, fall back to the initial safe_ip
-        req_safe_ip = getattr(kwargs.get("_req", None), "safe_ip", self.safe_ip)
-        
+        req_safe_ip = getattr(kwargs.get("_req", None), "safe_ip",
+                              self.safe_ip)
+
         # NOTE: urllib's do_open doesn't pass the request object to the connection factory directly.
         # We need a way to pass it.
         # Check if 'host' was rewritten? No.
@@ -310,13 +312,13 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 
         # Create the new request
         new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
-        
+
         # PIN THE IP: Attach the resolved safe_ip to the new request
         # This allows SafeHTTPSHandler (and HTTP logic) to use the validated IP
         # without re-resolving (TOCTOU protection).
         if new_req:
             new_req.safe_ip = safe_ip
-            
+
         return new_req
 
 
@@ -480,7 +482,8 @@ def fetch_feed(feed_url):
         if parsed_feed.bozo:
             # Check for bozo_exception and sanitize it (it can contain malicious input)
             bozo_exc = parsed_feed.get("bozo_exception")
-            safe_exc_msg = _sanitize_url_for_log(str(bozo_exc)) if bozo_exc else "Unknown"
+            safe_exc_msg = (_sanitize_url_for_log(str(bozo_exc))
+                            if bozo_exc else "Unknown")
             logger.warning("Feed parsing warning: %s", safe_exc_msg)
 
         return parsed_feed
