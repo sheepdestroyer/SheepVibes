@@ -13,7 +13,7 @@ import socket
 import ssl
 import urllib.request
 from datetime import timezone  # Specifically import timezone
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
@@ -260,7 +260,8 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
 
         self.sock = self._context.wrap_socket(
             self.sock,
-            server_hostname=self.host,  # This ensures SNI and Cert Check match the Host, not the IP
+            server_hostname=self.
+            host,  # This ensures SNI and Cert Check match the Host, not the IP
         )
 
 
