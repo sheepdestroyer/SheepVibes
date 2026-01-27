@@ -65,8 +65,16 @@ def _get_max_concurrent_fetches():
 
 
 MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
+MAX_FEED_RESPONSE_BYTES = 10 * 1024 * 1024  # 10MB cap for feed responses
 
 # --- Helper Functions ---
+
+
+def _sanitize_url_for_log(url):
+    """Sanitizes a URL for safe logging (prevents log injection)."""
+    if not url:
+        return ""
+    return url.replace("\n", "\\n").replace("\r", "\\r")
 
 
 def _validate_xml_safety(content):
@@ -213,7 +221,8 @@ def _fetch_feed_content(feed_url):
         parsed_feed = fetch_feed(feed_url)
         return parsed_feed
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("Error in fetch thread for feed %s", feed_url)
+        logger.exception("Error in fetch thread for feed %s",
+                         _sanitize_url_for_log(feed_url))
         return None
 
 
@@ -277,7 +286,7 @@ def fetch_feed(feed_url):
     if not safe_ip:
         return None
 
-    logger.info("Fetching feed: %s", feed_url)
+    logger.info("Fetching feed: %s", _sanitize_url_for_log(feed_url))
     try:
         # Prevent TOCTOU: Fetch using the validated IP
         parsed = urlparse(feed_url)
@@ -298,11 +307,11 @@ def fetch_feed(feed_url):
                                      })
         with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             # Limit response size to 10MB to prevent DoS/OOM
-            content = response.read(10 * 1024 * 1024)
+            content = response.read(MAX_FEED_RESPONSE_BYTES)
 
         if not _validate_xml_safety(content):
             # Sanitize URL for logging to prevent log injection
-            safe_log_url = feed_url.replace("\n", "\\n").replace("\r", "\\r")
+            safe_log_url = _sanitize_url_for_log(feed_url)
             logger.warning("Feed rejected due to security violation: %s",
                            safe_log_url)
             return None
@@ -316,7 +325,8 @@ def fetch_feed(feed_url):
         return parsed_feed
 
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.error("Error fetching feed %s", feed_url, exc_info=True)
+        logger.error("Error fetching feed %s", _sanitize_url_for_log(feed_url),
+                     exc_info=True)
         return None
 
 

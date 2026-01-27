@@ -15,14 +15,35 @@ def _set_cache_redis_port(monkeypatch):
     )
 
 
-def test_fetch_feed_blocks_external_dtd(mock_network):
-    """Test that external DTDs are blocked when forbid_external=True."""
+def test_fetch_feed_blocks_external_dtd(mock_network, caplog):
+    """Test that external DTDs are blocked when forbid_external=True and logged safely."""
     mock_network.read.return_value = b'<!DOCTYPE foo SYSTEM "http://example.com/dtd">'
 
-    url = "http://example.com/ext_dtd.xml"
-    result = feed_service.fetch_feed(url)
+    # Include raw newlines and carriage returns in the URL to exercise log-injection hardening.
+    url = "http://example.com/ext_dtd.xml\nwith\nnewline\rand\rcarriagereturn"
+    
+    import logging
+    with caplog.at_level(logging.WARNING):
+        result = feed_service.fetch_feed(url)
 
+    # The unsafe XML should still be blocked.
     assert result is None
+    
+    # Ensure a warning was logged about blocking unsafe XML.
+    warning_records = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert warning_records, "Expected a WARNING log entry when unsafe XML is blocked"
+
+    messages = [record.getMessage() for record in warning_records]
+    combined = " ".join(messages)
+
+    # Raw newlines/carriage returns must not appear in the log message.
+    assert "\n" not in combined
+    assert "\r" not in combined
+
+    # The sanitized URL (with escaped newlines/carriage returns) should be present.
+    # Note: The _sanitize_url_for_log function replaces \n with \\n and \r with \\r.
+    # In the log string, we expect to see literal backslashes.
+    assert "http://example.com/ext_dtd.xml\\nwith\\nnewline\\rand\\rcarriagereturn" in combined
 
 
 # Helper to create a malicious XML string
