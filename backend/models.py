@@ -28,9 +28,10 @@ class Tab(db.Model):
     order = db.Column(db.Integer, default=0)  # Display order of the tab
     # Relationship to Feeds: One-to-Many (one Tab has many Feeds)
     # cascade='all, delete-orphan' means deleting a Tab also deletes its associated Feeds
-    feeds = db.relationship(
-        "Feed", backref="tab", lazy=True, cascade="all, delete-orphan"
-    )
+    feeds = db.relationship("Feed",
+                            backref="tab",
+                            lazy=True,
+                            cascade="all, delete-orphan")
 
     def to_dict(self, unread_count=None):
         """Serializes the Tab object to a dictionary.
@@ -44,13 +45,10 @@ class Tab(db.Model):
         """
         if unread_count is None:
             # Calculate total unread count for all feeds within this tab
-            unread_count = (
-                db.session.query(db.func.count(FeedItem.id))
-                .join(Feed)
-                .filter(Feed.tab_id == self.id, FeedItem.is_read == False)
-                .scalar()
-                or 0
-            )
+            unread_count = (db.session.query(
+                db.func.count(FeedItem.id)).join(Feed).filter(
+                    Feed.tab_id == self.id, FeedItem.is_read
+                    == False).scalar() or 0)
 
         return {
             "id": self.id,
@@ -76,27 +74,26 @@ class Feed(db.Model):
     __tablename__ = "feeds"
 
     id = db.Column(db.Integer, primary_key=True)
-    tab_id = db.Column(
-        db.Integer, db.ForeignKey("tabs.id"), nullable=False
-    )  # Foreign key to Tab
+    tab_id = db.Column(db.Integer, db.ForeignKey("tabs.id"),
+                       nullable=False)  # Foreign key to Tab
     name = db.Column(
-        db.String(200), nullable=False
-    )  # Name of the feed (often from feed title)
-    url = db.Column(
-        db.String(500), nullable=False
-    )  # URL of the feed (the XML feed URL)
+        db.String(200),
+        nullable=False)  # Name of the feed (often from feed title)
+    url = db.Column(db.String(500),
+                    nullable=False)  # URL of the feed (the XML feed URL)
     site_link = db.Column(
-        db.String(500), nullable=True
-    )  # URL of the feed's main website (HTML link)
+        db.String(500),
+        nullable=True)  # URL of the feed's main website (HTML link)
     last_updated_time = db.Column(
-        db.DateTime, default=lambda: datetime.datetime.now(timezone.utc)
-    )  # Last time feed was successfully fetched
+        db.DateTime, default=lambda: datetime.datetime.now(
+            timezone.utc))  # Last time feed was successfully fetched
     # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
     # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
     # lazy='dynamic' allows for further querying on the relationship.
-    items = db.relationship(
-        "FeedItem", backref="feed", lazy="dynamic", cascade="all, delete-orphan"
-    )
+    items = db.relationship("FeedItem",
+                            backref="feed",
+                            lazy="dynamic",
+                            cascade="all, delete-orphan")
 
     def to_dict(self, unread_count=None):
         """Serializes the Feed object to a dictionary.
@@ -110,23 +107,25 @@ class Feed(db.Model):
         """
         if unread_count is None:
             # Calculate unread count for this specific feed
-            unread_count = (
-                db.session.query(db.func.count(FeedItem.id))
-                .filter(FeedItem.feed_id == self.id, FeedItem.is_read == False)
-                .scalar()
-                or 0
-            )
+            unread_count = (db.session.query(db.func.count(
+                FeedItem.id)).filter(FeedItem.feed_id == self.id,
+                                     FeedItem.is_read == False).scalar() or 0)
 
         return {
-            "id": self.id,
-            "tab_id": self.tab_id,
-            "name": self.name,
-            "url": self.url,
-            "site_link": self.site_link,
-            "last_updated_time": (
-                self.last_updated_time.isoformat() if self.last_updated_time else None
-            ),
-            "unread_count": unread_count,
+            "id":
+            self.id,
+            "tab_id":
+            self.tab_id,
+            "name":
+            self.name,
+            "url":
+            self.url,
+            "site_link":
+            self.site_link,
+            "last_updated_time": (self.last_updated_time.isoformat()
+                                  if self.last_updated_time else None),
+            "unread_count":
+            unread_count,
         }
 
 
@@ -154,20 +153,20 @@ class FeedItem(db.Model):
     )  # Add index
     title = db.Column(db.String, nullable=False)
     link = db.Column(db.String, nullable=False)
-    published_time = db.Column(
-        db.DateTime, nullable=True, index=True)  # Add index
+    published_time = db.Column(db.DateTime, nullable=True,
+                               index=True)  # Add index
     fetched_time = db.Column(
-        db.DateTime, nullable=False, default=lambda: datetime.datetime.now(timezone.utc)
-    )
-    is_read = db.Column(
-        db.Boolean, nullable=False, default=False, index=True
-    )  # Add index
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.datetime.now(timezone.utc))
+    is_read = db.Column(db.Boolean, nullable=False, default=False,
+                        index=True)  # Add index
     guid = db.Column(
-        db.String, nullable=True
-    )  # GUID unique per feed via UniqueConstraint
+        db.String, nullable=True)  # GUID unique per feed via UniqueConstraint
 
     __table_args__ = (
-        db.UniqueConstraint("feed_id", "guid",
+        db.UniqueConstraint("feed_id",
+                            "guid",
                             name="uq_feed_item_feed_id_guid"),
         db.Index(
             "ix_feed_items_feed_id_published_fetched_time",
