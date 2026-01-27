@@ -123,10 +123,13 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 
 1.  **Start the Dev Environment**:
     ```bash
-    ./scripts/dev_manager.sh up [port]
-    # Example: ./scripts/dev_manager.sh up 5003
+    ./scripts/dev_manager.sh up [port] [--prod]
+    # Example: ./scripts/dev_manager.sh up 5003 --prod
     ```
-    This will build the image (if needed), create a pod, start Redis, and launch the Backend App in **Debug Mode** (Flask Development Server) with **Hot Reloading** enabled. The app is exposed on the specified port (default 5002).
+    This will build the image (if needed), create a pod, start Redis, and launch the Backend App.
+    - **Default**: Debug Mode (Flask Development Server) with **Hot Reloading**.
+    - **--prod**: Production Mode (Gunicorn) with debug disabled.
+    The app is exposed on the specified port (default 5002).
 
 2.  **Stop the Dev Environment**:
     ```bash

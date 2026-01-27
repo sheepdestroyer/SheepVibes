@@ -17,7 +17,7 @@
 
 ### Tooling for Agents
 - **`scripts/dev_manager.sh`**: Use this script to easily spin up a full development environment (App + Redis) in a pod for integration testing or verification.
-  - `up [port]`: Starts the environment.
+  - `up [port] [--prod]`: Starts the environment (use `--prod` for Gunicorn).
   - `down [--clean]`: Stops it (use `--clean` to wipe data).
 
 ## CI/CD and Automated Agent Execution Guide

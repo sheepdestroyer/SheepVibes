@@ -77,11 +77,16 @@ do_up() {
     local HOST_PORT="${DEFAULT_HOST_PORT}"
     local REBUILD=false
     local PORT_SET=false
+    local PRODUCTION_MODE=false
     
     while (( $# )); do
         case "$1" in
             --rebuild)
                 REBUILD=true
+                shift
+                ;;
+            --prod)
+                PRODUCTION_MODE=true
                 shift
                 ;;
             [0-9]*)
@@ -152,10 +157,18 @@ do_up() {
     echo "Starting Redis ($REDIS_IMAGE)..."
     "$CMD" run -d --pod "$POD_NAME" --name "$REDIS_CONTAINER_NAME" "$REDIS_IMAGE"
 
+    local DEBUG_VAL=1
+    local MODE_MSG="DEVELOPMENT mode (Flask Debug)..."
+    if [[ "$PRODUCTION_MODE" == true ]]; then
+        DEBUG_VAL=0
+        MODE_MSG="PRODUCTION mode (Gunicorn)..."
+    fi
+    echo "Starting App in $MODE_MSG"
+
     echo "Starting App..."
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
         -e CACHE_REDIS_URL="$REDIS_URL_INTERNAL" \
-        -e FLASK_DEBUG=1 \
+        -e FLASK_DEBUG="$DEBUG_VAL" \
         -v "${VOLUME_NAME}:/app/data:Z" \
         "$APP_IMAGE_NAME"
 
@@ -212,9 +225,10 @@ do_down() {
 usage() {
     local SCRIPT_NAME
     SCRIPT_NAME="$(basename -- "$0")"
-    echo "Usage: \"$SCRIPT_NAME\" {up [port] [--rebuild]|down [--clean]}" >&2
-    echo "  up [port] [--rebuild]: Start dev environment (default port: ${DEFAULT_HOST_PORT})" >&2
+    echo "Usage: \"$SCRIPT_NAME\" {up [port] [--rebuild] [--prod]|down [--clean]}" >&2
+    echo "  up [port] [--rebuild] [--prod]: Start dev environment (default port: ${DEFAULT_HOST_PORT})" >&2
     echo "                         Use --rebuild to force image rebuild." >&2
+    echo "                         Use --prod to run with Gunicorn (debug disabled)." >&2
     echo "  down [--clean]       : Stop dev environment. Use --clean to delete data volume." >&2
     exit 1
 }
