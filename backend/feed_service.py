@@ -266,6 +266,52 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
         )
 
 
+class SafeHTTPConnection(http.client.HTTPConnection):
+    """
+    Custom HTTPConnection that connects to a specific 'safe_ip'.
+    Prevents DNS Rebinding (TOCTOU) on HTTP.
+    """
+
+    def __init__(
+        self,
+        host,
+        safe_ip,
+        port=None,
+        timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+        source_address=None,
+        blocksize=8192,
+    ):
+        super().__init__(
+            host,
+            port=port,
+            timeout=timeout,
+            source_address=source_address,
+            blocksize=blocksize,
+        )
+        self.safe_ip = safe_ip
+
+    def connect(self):
+        # Override connect to force connection to self.safe_ip
+        self.sock = socket.create_connection((self.safe_ip, self.port),
+                                             self.timeout, self.source_address)
+
+
+class SafeHTTPHandler(urllib.request.HTTPHandler):
+    """Handler that uses SafeHTTPConnection."""
+
+    def __init__(self, safe_ip):
+        self.safe_ip = safe_ip
+        self.current_safe_ip = safe_ip
+        super().__init__()
+
+    def _get_connection(self, host, **kwargs):
+        return SafeHTTPConnection(host, self.current_safe_ip, **kwargs)
+
+    def http_open(self, req):
+        self.current_safe_ip = getattr(req, "safe_ip", self.safe_ip)
+        return self.do_open(self._get_connection, req)
+
+
 class SafeHTTPSHandler(urllib.request.HTTPSHandler):
     """Handler that uses SafeHTTPSConnection."""
 
@@ -424,26 +470,16 @@ def fetch_feed(feed_url):
             url_opener = opener.open(req, timeout=10)
 
         else:
-            # For HTTP: rewrite URL to use IP, but preserve PORT if present
-            netloc = safe_ip
-            if parsed.port:
-                netloc = f"{safe_ip}:{parsed.port}"
-
-            target_url = parsed._replace(netloc=netloc).geturl()
-
-            # Host header must also include port if originally present
-            host_header = hostname
-            if parsed.port:
-                host_header = f"{hostname}:{parsed.port}"
-
-            # Use SafeRedirectHandler for HTTP as well
+            # For HTTP: Use SafeHTTPHandler to pin IP
+            handler = SafeHTTPHandler(safe_ip=safe_ip)
+            
+            # Add SafeRedirectHandler to the chain
             redirect_handler = SafeRedirectHandler()
-            opener = urllib.request.build_opener(redirect_handler)
+            opener = urllib.request.build_opener(handler, redirect_handler)
 
             req = urllib.request.Request(
-                target_url,
+                feed_url,  # Use original URL, SafeHTTPHandler handles the IP pinning
                 headers={
-                    "Host": host_header,
                     "User-Agent": "SheepVibes/1.0",
                     "Accept-Encoding": "identity",  # Prevent Zip Bombs
                 },

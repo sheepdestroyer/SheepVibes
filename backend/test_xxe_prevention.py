@@ -153,37 +153,48 @@ def test_fetch_feed_blocks_dtd_with_external_reference(mock_network):
     assert result is None
 
 
+
 def test_fetch_feed_redirect_security(mock_network, mocker):
     """Test that SafeRedirectHandler validates and pins the IP for redirects."""
-    # 1. Mock DNS:
-    #   Initial URL -> Safe IP 1
-    #   Redirect URL -> Safe IP 2 (we want to verify this is used)
-    #   We mock getaddrinfo to separate responses based on host?
-    #   Simpler: Mock validate_and_resolve_url
-
+    # 1. Mock validate_and_resolve_url to return safe IPs
     mock_validate = mocker.patch(
         "backend.feed_service.validate_and_resolve_url")
     mock_validate.side_effect = [
         ("93.184.216.34", "example.com"),  # Initial
         ("1.1.1.1", "redirected.com"),  # Redirect
     ]
+    
+    # 2. Mock urllib.request.build_opener to inspect handlers
+    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    mock_opener = MagicMock()
+    mock_build_opener.return_value = mock_opener
+    
+    # Mock response to simulate redirect logic if we were running full stack,
+    # but here we just want to verify handlers are set up correctly.
+    # Actually, fetch_feed calls opener.open().
+    # We mock opener.open() to return a harmless response so the function completes.
+    mock_response = MagicMock()
+    mock_response.read.return_value = b"<rss></rss>"
+    mock_response.__enter__.return_value = mock_response
+    mock_opener.open.return_value = mock_response
 
-    # 2. Mock build_opener factory and the handlers
-    # We want to verify that the request passed to open() for the redirect has .safe_ip set
+    # 3. Call fetch_feed with HTTP url
+    feed_service.fetch_feed("http://example.com/feed")
 
-    # ...This is complex to verify deeply with mocks without rewriting the whole test harness.
-    # Instead, we'll trust the unit logic we added to SafeRedirectHandler and just verify
-    # that validate_and_resolve_url IS called for the redirect URL.
-
-    # Mock HTTP response with a redirect
-    mock_response_initial = MagicMock()
-    mock_response_initial.geturl.return_value = "http://example.com/feed"
-    mock_response_initial.info.return_value = {}
-
-    # We can't easily mock the urllib internals for redirection in a high-level test.
-    # So we simply assert on the comment fix for now and rely on manual verification logic
-    # or existing tests if they cover redirects.
-    pass
+    # 4. Verify validate_and_resolve_url was called for the initial URL
+    mock_validate.assert_any_call("http://example.com/feed")
+    
+    # 5. Verify SafeHTTPHandler (or HTTPS) and SafeRedirectHandler were passed to build_opener
+    assert mock_build_opener.called
+    handlers = mock_build_opener.call_args[0]
+    
+    # Check for SafeHTTPHandler/SafeHTTPSHandler
+    has_safe_con_handler = any(isinstance(h, (feed_service.SafeHTTPHandler, feed_service.SafeHTTPSHandler)) for h in handlers)
+    assert has_safe_con_handler, "SafeHTTPHandler or SafeHTTPSHandler should be used"
+    
+    # Check for SafeRedirectHandler
+    has_redirect_handler = any(isinstance(h, feed_service.SafeRedirectHandler) for h in handlers)
+    assert has_redirect_handler, "SafeRedirectHandler should be used"
 
 
 def test_fetch_feed_blocks_gzip_content(mock_network):
