@@ -16,9 +16,9 @@ from urllib.parse import urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
+import defusedxml.sax
 import feedparser
 from dateutil import parser as date_parser
-import defusedxml.sax
 from defusedxml.common import (
     DTDForbidden,
     EntitiesForbidden,
