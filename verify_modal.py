@@ -1,6 +1,7 @@
-
 import asyncio
+
 from playwright.async_api import async_playwright, expect
+
 
 async def main():
     async with async_playwright() as p:
@@ -19,7 +20,8 @@ async def main():
             print("Checking if modal is visible...")
             is_visible = await modal.is_visible()
             if is_visible:
-                raise AssertionError("Test Failed: Edit feed modal is visible by default.")
+                raise AssertionError(
+                    "Test Failed: Edit feed modal is visible by default.")
             else:
                 print("Test Passed: Edit feed modal is hidden by default.")
 
@@ -30,6 +32,7 @@ async def main():
             raise  # Re-raise the exception to fail the script
         finally:
             await browser.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
