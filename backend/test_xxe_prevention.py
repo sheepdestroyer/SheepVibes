@@ -92,11 +92,12 @@ def mock_network(mocker):
         return_value=[(2, 1, 6, "", ("93.184.216.34", 80))],
     )
     mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
-    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    mock_build_opener = mocker.patch(
+        "backend.feed_service.urllib.request.build_opener")
 
     mock_response = MagicMock()
     mock_response.__enter__.return_value = mock_response
-    
+
     # Support both direct urlopen (HTTP) and opener.open (HTTPS)
     mock_urlopen.return_value = mock_response
     mock_build_opener.return_value.open.return_value = mock_response

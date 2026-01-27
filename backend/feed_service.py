@@ -4,17 +4,17 @@
 # Use dateutil for robust date parsing
 import concurrent.futures
 import datetime  # Import the full module
+import http.client
 import ipaddress
 import logging  # Standard logging
 import os
 import socket
+import ssl
 import urllib.request
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
-import http.client
-import ssl
 
 import defusedxml.sax
 import feedparser
@@ -212,43 +212,58 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
     Prevents DNS Rebinding (TOCTOU) on HTTPS.
     """
 
-    def __init__(self, host, safe_ip, port=443, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-                 context=None, blocksize=8192, source_address=None):
-        super().__init__(host, port=port, timeout=timeout, source_address=source_address,
-                         context=context, blocksize=blocksize)
+    def __init__(
+        self,
+        host,
+        safe_ip,
+        port=443,
+        timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+        context=None,
+        blocksize=8192,
+        source_address=None,
+    ):
+        super().__init__(
+            host,
+            port=port,
+            timeout=timeout,
+            source_address=source_address,
+            context=context,
+            blocksize=blocksize,
+        )
         self.safe_ip = safe_ip
 
     def connect(self):
         # Override connect to force connection to self.safe_ip
         # Logic adapted from http.client.HTTPSConnection.connect
-        
+
         # 1. Establish TCP connection to the SAFE IP
-        self.sock = socket.create_connection(
-            (self.safe_ip, self.port), self.timeout, self.source_address
-        )
-        
+        self.sock = socket.create_connection((self.safe_ip, self.port),
+                                             self.timeout, self.source_address)
+
         if self._tunnel_host:
             self._tunnel()
 
         # 2. Wrap socket with SSL using the ORIGINAL hostname for validation
         if self._context is None:
             self._context = ssl.create_default_context()
-            
+
         self.sock = self._context.wrap_socket(
-            self.sock, 
-            server_hostname=self.host  # This ensures SNI and Cert Check match the Host, not the IP
+            self.sock,
+            server_hostname=self.
+            host,  # This ensures SNI and Cert Check match the Host, not the IP
         )
+
 
 class SafeHTTPSHandler(urllib.request.HTTPSHandler):
     """Handler that uses SafeHTTPSConnection."""
-    
+
     def __init__(self, safe_ip):
         self.safe_ip = safe_ip
         super().__init__()
 
     def http_open(self, req):
         return self.do_open(self.getConnection, req)
-        
+
     def https_open(self, req):
         return self.do_open(self.getConnection, req)
 
@@ -346,19 +361,20 @@ def fetch_feed(feed_url):
     logger.info("Fetching feed: %s", _sanitize_url_for_log(feed_url))
     try:
         # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
-        
+
         # Determine protocol
         parsed = urlparse(feed_url)
-        
+
         url_opener = None
-        
+
         if parsed.scheme == "https":
             # For HTTPS: Use SafeHTTPSHandler to pin IP + Validate Hostname
             handler = SafeHTTPSHandler(safe_ip=safe_ip)
             opener = urllib.request.build_opener(handler)
-            req = urllib.request.Request(feed_url, headers={"User-Agent": "SheepVibes/1.0"})
+            req = urllib.request.Request(
+                feed_url, headers={"User-Agent": "SheepVibes/1.0"})
             url_opener = opener.open(req, timeout=10)
-            
+
         else:
             # For HTTP: We can simply rewrite the URL (as there's no SSL SNI mismatch)
             # This is simpler than a full custom handler for HTTP
@@ -368,7 +384,7 @@ def fetch_feed(feed_url):
                                              "Host": hostname,
                                              "User-Agent": "SheepVibes/1.0"
                                          })
-            url_opener = urllib.request.urlopen(req, timeout=10) # nosec B310
+            url_opener = urllib.request.urlopen(req, timeout=10)  # nosec B310
 
         with url_opener as response:
             # Limit response size to 10MB to prevent DoS/OOM
