@@ -51,4 +51,5 @@ Thumbs.db
 .aider*
 
 # Agent/Tool temporary files
+tests/artifacts/
 # (None for this PR to keep it focused)
