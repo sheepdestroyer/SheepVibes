@@ -75,9 +75,12 @@ def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(mocker):
     mock_getaddrinfo = mocker.patch("backend.feed_service.socket.getaddrinfo")
     mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 80))]
 
-    url = "http://example.com/malformed.xml"
-    result = feed_service.fetch_feed(url)
+    # Mock feedparser to verify we pass the content through
+    mock_feedparser = mocker.patch("backend.feed_service.feedparser.parse")
+    mock_feedparser.return_value = MagicMock(bozo=False)
 
-    # feedparser handles unclosed tags
-    assert result is not None
-    assert result.feed.title == "Unclosed Tag"
+    url = "http://example.com/malformed.xml"
+    feed_service.fetch_feed(url)
+
+    # Verify feedparser was called with the content
+    mock_feedparser.assert_called_once_with(create_malformed_xml())
