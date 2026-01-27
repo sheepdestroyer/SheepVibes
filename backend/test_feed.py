@@ -613,20 +613,10 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disa
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
 
-    # Mock urllib.request.urlopen
-    mock_urlopen = mocker.patch("backend.feed_service.urllib.request.urlopen")
-    mock_build_opener = mocker.patch(
-        "backend.feed_service.urllib.request.build_opener")
 
-    mock_response = MagicMock()
-    mock_response.read.return_value = b"<rss></rss>"
-    mock_response.__enter__.return_value = mock_response
-    mock_urlopen.return_value = mock_response
-    mock_build_opener.return_value.open.return_value = mock_response
-
-    # Mock socket.getaddrinfo is handled by mock_dns fixture
 
     # Mock feedparser.parse to return some basic feeds
+    # Mock feedparser.parse output objects
     mock_feed_data1 = MockParsedFeed(
         "Feed A", [MockFeedEntry("A1", "http://a.com/1", "gA1")])
     mock_feed_data2 = MockParsedFeed(
@@ -637,7 +627,16 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disa
         ],
     )
 
-    m_parse = mocker.patch("backend.feed_service.feedparser.parse")
+    m_fetch = mocker.patch("backend.feed_service.fetch_feed")
+
+    def fake_fetch_feed(url):
+        if url == "http://feedA.url":
+            return mock_feed_data1
+        if url == "http://feedB.url":
+            return mock_feed_data2
+        return None
+
+    m_fetch.side_effect = fake_fetch_feed
 
     # Add feeds
     tab = Tab(name="TestTab", order=0)
@@ -647,9 +646,6 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disa
     feed2 = Feed(name="FeedB_init", url="http://feedB.url", tab_id=tab.id)
     db.session.add_all([feed1, feed2])
     db.session.commit()
-
-    # Side effect for multiple calls to parse
-    m_parse.side_effect = [mock_feed_data1, mock_feed_data2]
 
     processed, new_items, _ = feed_service.update_all_feeds()
 
