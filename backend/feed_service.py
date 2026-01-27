@@ -76,9 +76,9 @@ def _validate_xml_safety(content):
     Returns True if the content is safe (or not XML, or malformed in a non-dangerous way).
 
     Policy:
-    - forbid_dtd=False: We allow DTDs generally (e.g. for internal entities or standard RSS).
-    - forbid_entities=True: We STRICTLY block custom entity declarations (XXE vector).
-    - forbid_external=True: We STRICTLY block external DTDs/Entities (SSRF vector).
+    - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration.
+    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against all XXE attacks.
+    - forbid_external=True: STRICTLY blocks any external DTDs or entities (e.g., `SYSTEM "..."`), preventing SSRF and other external reference attacks.
     """
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions

@@ -111,7 +111,7 @@ def test_fetch_feed_allows_malformed_xml_passed_to_feedparser(
     mock_feedparser.assert_called_once_with(create_malformed_xml())
 
 
-def test_fetch_feed_allows_safe_dtd(mock_network):
+def test_fetch_feed_blocks_dtd_with_external_reference(mock_network):
     """Test that feeds with 'safe' DTDs (e.g. RSS 0.91) are BLOCKED if they contain external references (SSRF protection)."""
     mock_network.read.return_value = create_feed_with_safe_dtd()
 
