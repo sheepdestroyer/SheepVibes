@@ -231,19 +231,11 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
         self,
         host,
         safe_ip,
-        port=443,
-        timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-        context=None,
-        blocksize=8192,
-        source_address=None,
+        **kwargs,
     ):
         super().__init__(
             host,
-            port=port,
-            timeout=timeout,
-            source_address=source_address,
-            context=context,
-            blocksize=blocksize,
+            **kwargs,
         )
         self.safe_ip = safe_ip
 
@@ -279,17 +271,11 @@ class SafeHTTPConnection(http.client.HTTPConnection):
         self,
         host,
         safe_ip,
-        port=None,
-        timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-        source_address=None,
-        blocksize=8192,
+        **kwargs,
     ):
         super().__init__(
             host,
-            port=port,
-            timeout=timeout,
-            source_address=source_address,
-            blocksize=blocksize,
+            **kwargs,
         )
         self.safe_ip = safe_ip
 
