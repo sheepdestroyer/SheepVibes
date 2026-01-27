@@ -158,12 +158,12 @@ do_up() {
     "$CMD" run -d --pod "$POD_NAME" --name "$REDIS_CONTAINER_NAME" "$REDIS_IMAGE"
 
     local DEBUG_VAL=1
+    local MODE_MSG="DEVELOPMENT mode (Flask Debug)..."
     if [[ "$PRODUCTION_MODE" == true ]]; then
-        echo "Starting App in PRODUCTION mode (Gunicorn)..."
         DEBUG_VAL=0
-    else
-        echo "Starting App in DEVELOPMENT mode (Flask Debug)..."
+        MODE_MSG="PRODUCTION mode (Gunicorn)..."
     fi
+    echo "Starting App in $MODE_MSG"
 
     echo "Starting App..."
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
