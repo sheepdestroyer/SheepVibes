@@ -1,7 +1,9 @@
-import pytest
-from unittest.mock import MagicMock
-from . import feed_service
 import socket
+from unittest.mock import MagicMock
+
+import pytest
+
+from . import feed_service
 
 # Mock XXE payload
 XXE_PAYLOAD = b"""<?xml version="1.0" encoding="ISO-8859-1"?>
@@ -46,14 +48,15 @@ VALID_RSS_PAYLOAD = b"""<?xml version="1.0" encoding="UTF-8" ?>
 </channel>
 </rss>"""
 
+
 @pytest.fixture
 def mock_network(mocker):
     # Mock socket.getaddrinfo to avoid DNS lookup / SSRF check failures
     mock_getaddrinfo = mocker.patch("backend.feed_service.socket.getaddrinfo")
-    mock_getaddrinfo.return_value = [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 80))
-    ]
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6,
+                                      "", ("93.184.216.34", 80))]
     return mock_getaddrinfo
+
 
 def test_xxe_rejection(mocker, mock_network):
     # Mock urllib to return XXE payload
@@ -64,13 +67,15 @@ def test_xxe_rejection(mocker, mock_network):
     mock_urlopen.return_value = mock_response
 
     # Mock feedparser to avoid actual parsing errors, we want to test if it reaches here
-    mocker.patch("backend.feed_service.feedparser.parse", return_value=MagicMock())
+    mocker.patch("backend.feed_service.feedparser.parse",
+                 return_value=MagicMock())
 
     # Call fetch_feed
     result = feed_service.fetch_feed("http://example.com/feed")
 
     # Expect None due to security violation
     assert result is None
+
 
 def test_billion_laughs_rejection(mocker, mock_network):
     # Mock urllib to return Billion Laughs payload
@@ -81,13 +86,15 @@ def test_billion_laughs_rejection(mocker, mock_network):
     mock_urlopen.return_value = mock_response
 
     # Mock feedparser to avoid actual parsing errors
-    mocker.patch("backend.feed_service.feedparser.parse", return_value=MagicMock())
+    mocker.patch("backend.feed_service.feedparser.parse",
+                 return_value=MagicMock())
 
     # Call fetch_feed
     result = feed_service.fetch_feed("http://example.com/feed")
 
     # Expect None due to security violation
     assert result is None
+
 
 def test_json_pass_through(mocker, mock_network):
     # Mock urllib to return JSON
@@ -100,13 +107,15 @@ def test_json_pass_through(mocker, mock_network):
     # Mock feedparser to return a success object
     mock_parsed_feed = MagicMock()
     mock_parsed_feed.bozo = 0
-    mocker.patch("backend.feed_service.feedparser.parse", return_value=mock_parsed_feed)
+    mocker.patch("backend.feed_service.feedparser.parse",
+                 return_value=mock_parsed_feed)
 
     # Call fetch_feed
     result = feed_service.fetch_feed("http://example.com/feed")
 
     # Expect result (validation failed syntax, but passed to feedparser)
     assert result == mock_parsed_feed
+
 
 def test_valid_rss_pass_through(mocker, mock_network):
     # Mock urllib to return valid RSS
@@ -119,7 +128,8 @@ def test_valid_rss_pass_through(mocker, mock_network):
     # Mock feedparser
     mock_parsed_feed = MagicMock()
     mock_parsed_feed.bozo = 0
-    mocker.patch("backend.feed_service.feedparser.parse", return_value=mock_parsed_feed)
+    mocker.patch("backend.feed_service.feedparser.parse",
+                 return_value=mock_parsed_feed)
 
     # Call fetch_feed
     result = feed_service.fetch_feed("http://example.com/feed")
