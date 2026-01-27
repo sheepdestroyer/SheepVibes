@@ -645,7 +645,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             # for items that share a link but have different content.
             unique_string = f"{entry_link}{entry.get('title', '')}"
             import hashlib
-            db_guid = hashlib.sha256(unique_string.encode('utf-8')).hexdigest()
+
+            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
 
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
@@ -755,11 +756,11 @@ def _is_batch_duplicate(db_guid, entry_link, batch_guids, batch_links,
             _sanitize_for_log(feed_name),
         )
         return True
-    
+
     # RELAXATION: Do not strict dedupe by link alone.
     # We rely on the robust GUID (which includes Title) to catch duplicates.
     # if entry_link in batch_links: ... -> REMOVED
-    
+
     return False
 
 

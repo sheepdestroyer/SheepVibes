@@ -248,8 +248,7 @@ def test_kernel_org_scenario(db_setup, mocker):  # pylint: disable=unused-argume
         feed_obj, mock_feed_data)
 
     assert new_items_count == 3, (
-        "Should add 3 items. GUID uniqueness should override shared links."
-    )
+        "Should add 3 items. GUID uniqueness should override shared links.")
 
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
     assert len(items_in_db) == 3
