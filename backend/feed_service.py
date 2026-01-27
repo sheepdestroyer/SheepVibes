@@ -268,9 +268,9 @@ class SafeHTTPSHandler(urllib.request.HTTPSHandler):
         super().__init__()
 
     def https_open(self, req):
-        return self.do_open(self.getConnection, req)
+        return self.do_open(self._get_connection, req)
 
-    def getConnection(self, host, **kwargs):
+    def _get_connection(self, host, **kwargs):
         # Callback to create our custom connection
         # context argument might be passed by do_open, we need to handle it foundationally if needed
         # do_open passes: host, port=None, timeout=..., context=...

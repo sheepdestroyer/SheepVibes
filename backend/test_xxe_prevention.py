@@ -1,3 +1,4 @@
+import logging
 import os
 from unittest.mock import MagicMock
 
@@ -22,7 +23,6 @@ def test_fetch_feed_blocks_external_dtd(mock_network, caplog):
     # Include raw newlines and carriage returns in the URL to exercise log-injection hardening.
     url = "http://example.com/ext_dtd.xml\nwith\nnewline\rand\rcarriagereturn"
 
-    import logging
 
     with caplog.at_level(logging.WARNING):
         result = feed_service.fetch_feed(url)
