@@ -613,8 +613,6 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disa
     """Basic test for update_all_feeds to ensure it runs and updates counts."""
     logger.info("Testing update_all_feeds() basic run")
 
-
-
     # Mock feedparser.parse to return some basic feeds
     # Mock feedparser.parse output objects
     mock_feed_data1 = MockParsedFeed(
