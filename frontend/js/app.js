@@ -327,6 +327,10 @@ async function handleImportOpmlFileSelect(e) {
                     await reloadTab(tabId);
                 }
             }
+        } else {
+            // Backup hide in case of early exit without SSE
+            hideProgress();
+            showToast(data.message, 'success');
         }
         // The final success message will be handled by the 'progress_complete' SSE event.
     } catch (err) {
@@ -422,8 +426,8 @@ function initializeSSE() {
                 allTabs = await api.getTabs();
                 renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
-                const affectedIds = data.affected_tab_ids || [];
-                affectedIds.forEach(id => loadedTabs.delete(parseInt(id, 10)));
+                const affectedIds = (data.affected_tab_ids || []).map(id => parseInt(id, 10));
+                affectedIds.forEach(id => loadedTabs.delete(id));
 
                 if (activeTabId && affectedIds.includes(activeTabId)) {
                     await reloadTab(activeTabId);
