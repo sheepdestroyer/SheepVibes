@@ -68,7 +68,6 @@ def _generate_opml_string(tabs=None):
     return opml_string, tab_count, feed_count
 
 
-
 def _validate_opml_file_request():
     """Validates the uploaded OPML file from the request."""
     if "file" not in request.files:
