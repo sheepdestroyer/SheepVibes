@@ -28,7 +28,7 @@ from defusedxml.common import (
     EntitiesForbidden,
     ExternalReferenceForbidden,
 )
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from .cache_utils import (
     invalidate_tab_feeds_cache,
@@ -1556,9 +1556,17 @@ def update_all_feeds():
                     total_new_items += new_items
                     if new_items > 0:
                         affected_tab_ids.add(tab_id)
-            except Exception:
+            except SQLAlchemyError as e:
                 logger.error(
-                    "Critical error processing future for feed %s (%s)",
+                    "Database error processing future for feed %s (%s): %s",
+                    feed_obj.name,
+                    feed_obj.id,
+                    e,
+                    exc_info=True,
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Unexpected critical error processing future for feed %s (%s)",
                     feed_obj.name,
                     feed_obj.id,
                     exc_info=True,
