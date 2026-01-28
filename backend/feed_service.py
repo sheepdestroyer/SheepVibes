@@ -84,10 +84,10 @@ def _process_opml_outlines_iterative(
             outline_element = outline_elements.pop()
 
             # Throttled Progress update: every 10% or every 10 items, plus first and last
-            processed_count = imported_count_wrapper[0] + skipped_count_wrapper[0]
-            current_percent = (
-                processed_count * 100 //
-                total_feeds_to_import) if total_feeds_to_import > 0 else 0
+            processed_count = imported_count_wrapper[
+                0] + skipped_count_wrapper[0]
+            current_percent = ((processed_count * 100 // total_feeds_to_import)
+                               if total_feeds_to_import > 0 else 0)
 
             should_announce = (
                 processed_count == 0  # First
@@ -98,7 +98,9 @@ def _process_opml_outlines_iterative(
             )
 
             if should_announce:
-                status_msg = f"Processing feed {processed_count}/{total_feeds_to_import}..."
+                status_msg = (
+                    f"Processing feed {processed_count}/{total_feeds_to_import}..."
+                )
                 event_data = {
                     "type": "progress",
                     "status": status_msg,
@@ -119,12 +121,13 @@ def _process_opml_outlines_iterative(
             child_outlines = list(outline_element)
 
             if xml_url:  # It's a feed
-                feed_name = (element_name if element_name else xml_url)
+                feed_name = element_name if element_name else xml_url
 
                 if xml_url in all_existing_feed_urls_set:
                     logger.info(
                         "OPML import: Feed with URL '%s' already exists. Skipping.",
-                        xml_url)
+                        xml_url,
+                    )
                     skipped_count_wrapper[0] += 1
                     continue
 
@@ -150,15 +153,15 @@ def _process_opml_outlines_iterative(
                 )
                 continue
 
-            elif (not xml_url and element_name and child_outlines):
+            elif not xml_url and element_name and child_outlines:
                 # It's a folder
                 existing_tab = Tab.query.filter_by(name=element_name).first()
                 if existing_tab:
                     nested_tab_id = existing_tab.id
                     nested_tab_name = existing_tab.name
                 else:
-                    max_order = db.session.query(
-                        db.func.max(Tab.order)).scalar()
+                    max_order = db.session.query(db.func.max(
+                        Tab.order)).scalar()
                     new_order = (max_order or -1) + 1
                     new_folder_tab = Tab(name=element_name, order=new_order)
                     db.session.add(new_folder_tab)
@@ -178,8 +181,8 @@ def _process_opml_outlines_iterative(
                 if nested_tab_id and nested_tab_name:
                     # Save current state and move to child outlines
                     if outline_elements:
-                        stack.append(
-                            (outline_elements, current_tab_id, current_tab_name))
+                        stack.append((outline_elements, current_tab_id,
+                                      current_tab_name))
                     outline_elements = list(reversed(child_outlines))
                     current_tab_id = nested_tab_id
                     current_tab_name = nested_tab_name
@@ -366,14 +369,13 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
             status_msg = f"Fetching new feed {i + 1}/{len(newly_added_feeds_list)}: {feed_obj.name}"
             # Throttled Progress update: every 10% or every 5 items
             progress_val = processed_feed_count + i + 1
-            current_percent = (progress_val * 100 // total_feeds_to_import) if total_feeds_to_import > 0 else 0
-            
-            should_announce = (
-                progress_val == 1 
-                or progress_val >= total_feeds_to_import
-                or (current_percent % 10 == 0)
-                or (progress_val % 5 == 0)
-            )
+            current_percent = ((progress_val * 100 // total_feeds_to_import)
+                               if total_feeds_to_import > 0 else 0)
+
+            should_announce = (progress_val == 1
+                               or progress_val >= total_feeds_to_import
+                               or (current_percent % 10 == 0)
+                               or (progress_val % 5 == 0))
 
             if should_announce:
                 event_data = {
@@ -1510,16 +1512,17 @@ def update_all_feeds():
             feed_obj = future_to_feed[future]
             processed_count += 1
             # Throttled Progress update: every 10% or every 5 items
-            current_percent = (processed_count * 100 // total_feeds) if total_feeds > 0 else 0
-            should_announce = (
-                processed_count == 1 
-                or processed_count >= total_feeds
-                or (current_percent % 10 == 0)
-                or (processed_count % 5 == 0)
-            )
+            current_percent = ((processed_count * 100 //
+                                total_feeds) if total_feeds > 0 else 0)
+            should_announce = (processed_count == 1
+                               or processed_count >= total_feeds
+                               or (current_percent % 10 == 0)
+                               or (processed_count % 5 == 0))
 
             if should_announce:
-                status_msg = f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
+                status_msg = (
+                    f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
+                )
                 announcer.announce(
                     msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"
                 )
