@@ -33,8 +33,8 @@ def _generate_opml_string(tabs=None):
 
     if tabs is None:
         # Eager load feeds to avoid N+1 queries
-        tabs = Tab.query.options(selectinload(
-            Tab.feeds)).order_by(Tab.order).all()
+        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(
+            Tab.order).all()
 
     for tab in tabs:
         # Skip tabs with no feeds
@@ -59,9 +59,8 @@ def _generate_opml_string(tabs=None):
                 feed_outline.set("htmlUrl", feed.site_link)
 
     # Convert the XML tree to a string
-    opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode(
-        "utf-8"
-    )
+    opml_string = ET.tostring(opml_element, encoding="utf-8",
+                              method="xml").decode("utf-8")
 
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)
@@ -91,37 +90,33 @@ def _process_opml_outlines_recursive(
         title_attr = outline_element.get("title")
         text_attr = outline_element.get("text")
         element_name = (
-            title_attr.strip()
-            if title_attr and title_attr.strip()
-            else (text_attr.strip() if text_attr and text_attr.strip() else "")
-        )
+            title_attr.strip() if title_attr and title_attr.strip() else
+            (text_attr.strip() if text_attr and text_attr.strip() else ""))
 
         xml_url = outline_element.get("xmlUrl")
         child_outlines = list(
-            outline_element
-        )  # More robust than findall for direct children
+            outline_element)  # More robust than findall for direct children
 
         if xml_url:  # It's a feed
-            feed_name = (
-                element_name if element_name else xml_url
-            )  # Fallback to URL if no title/text
+            feed_name = (element_name if element_name else xml_url
+                         )  # Fallback to URL if no title/text
 
             if xml_url in all_existing_feed_urls_set:
                 logger.info(
-                    "OPML import: Feed with URL '%s' already exists. Skipping.", xml_url
-                )
+                    "OPML import: Feed with URL '%s' already exists. Skipping.",
+                    xml_url)
                 skipped_count_wrapper[0] += 1
                 continue
 
             try:
                 new_feed = Feed(tab_id=current_tab_id,
-                                name=feed_name, url=xml_url)
+                                name=feed_name,
+                                url=xml_url)
                 # Add to session, but commit will be done in batch later for feeds
                 db.session.add(new_feed)
                 newly_added_feeds_list.append(new_feed)
                 all_existing_feed_urls_set.add(
-                    xml_url
-                )  # Track for current import session
+                    xml_url)  # Track for current import session
                 imported_count_wrapper[0] += 1
                 affected_tab_ids_set.add(current_tab_id)
                 logger.info(
@@ -133,16 +128,12 @@ def _process_opml_outlines_recursive(
                 )
             except Exception:
                 # Should be rare if checks are done, but good for safety
-                logger.exception(
-                    "OPML import: Error preparing feed '%s'", feed_name)
+                logger.exception("OPML import: Error preparing feed '%s'",
+                                 feed_name)
                 skipped_count_wrapper[0] += 1
 
-        elif (
-            not xml_url
-            and element_name
-            and folder_type_attr
-            and folder_type_attr in SKIPPED_FOLDER_TYPES
-        ):
+        elif (not xml_url and element_name and folder_type_attr
+              and folder_type_attr in SKIPPED_FOLDER_TYPES):
             logger.info(
                 "OPML import: Skipping Netvibes-specific folder '%s' due to type: %s.",
                 element_name,
@@ -150,9 +141,8 @@ def _process_opml_outlines_recursive(
             )
             continue
 
-        elif (
-            not xml_url and element_name and child_outlines
-        ):  # It's a folder (has a name, no xmlUrl, AND children)
+        elif (not xml_url and element_name and child_outlines
+              ):  # It's a folder (has a name, no xmlUrl, AND children)
             folder_name = element_name
             existing_tab = Tab.query.filter_by(name=folder_name).first()
 
@@ -174,7 +164,8 @@ def _process_opml_outlines_recursive(
                 new_folder_tab = Tab(name=folder_name, order=new_order)
                 db.session.add(new_folder_tab)
                 try:
-                    db.session.flush()  # Flush to assign an ID without committing the transaction
+                    db.session.flush(
+                    )  # Flush to assign an ID without committing the transaction
                     logger.info(
                         "OPML import: Created new tab '%s' (ID: %s) from OPML folder.",
                         new_folder_tab.name,
@@ -190,8 +181,7 @@ def _process_opml_outlines_recursive(
                         folder_name,
                     )
                     skipped_count_wrapper[0] += len(
-                        child_outlines
-                    )  # Approximate skip count
+                        child_outlines)  # Approximate skip count
                     continue  # Skip this folder
 
             if nested_tab_id and nested_tab_name:
@@ -275,15 +265,13 @@ def _determine_target_tab(requested_tab_id_str):
             )
             default_tab_name_for_creation = DEFAULT_OPML_IMPORT_TAB_NAME
             temp_tab_check = Tab.query.filter_by(
-                name=default_tab_name_for_creation
-            ).first()
+                name=default_tab_name_for_creation).first()
             if temp_tab_check:
                 target_tab_id = temp_tab_check.id
                 target_tab_name = temp_tab_check.name
             else:
                 newly_created_default_tab = Tab(
-                    name=default_tab_name_for_creation, order=0
-                )
+                    name=default_tab_name_for_creation, order=0)
                 db.session.add(newly_created_default_tab)
                 try:
                     db.session.commit()
@@ -309,9 +297,10 @@ def _determine_target_tab(requested_tab_id_str):
                         None,
                         False,
                         (
-                            jsonify(
-                                {"error": "Failed to create a default tab for import."}
-                            ),
+                            jsonify({
+                                "error":
+                                "Failed to create a default tab for import."
+                            }),
                             500,
                         ),
                     )
@@ -324,13 +313,15 @@ def _determine_target_tab(requested_tab_id_str):
             None,
             None,
             False,
-            (jsonify({"error": "Failed to determine a target tab for import."}), 500),
+            (jsonify({"error":
+                      "Failed to determine a target tab for import."}), 500),
         )
 
     return target_tab_id, target_tab_name, was_created, None
 
 
-def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
+def _cleanup_empty_default_tab(was_created, tab_id, tab_name,
+                               affected_tab_ids):
     """Cleans up the default tab if it was created for this import but remains empty."""
     if was_created and tab_id not in affected_tab_ids:
         try:
@@ -359,7 +350,8 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "No file part in the request"}), 400)
     opml_file = request.files["file"]
     if opml_file.filename == "":
-        return None, (jsonify({"error": "No file selected for uploading"}), 400)
+        return None, (jsonify({"error":
+                               "No file selected for uploading"}), 400)
     if not opml_file:
         return None, (jsonify({"error": "File object is empty"}), 400)
 
@@ -368,11 +360,10 @@ def _validate_opml_file_request():
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
         return None, (
-            jsonify(
-                {
-                    "error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-                }
-            ),
+            jsonify({
+                "error":
+                f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+            }),
             400,
         )
 
@@ -396,9 +387,8 @@ def import_opml():
     requested_tab_id_str = request.form.get("tab_id")
 
     # Call the service function
-    result, error_info = import_opml_service(
-        opml_file.stream, requested_tab_id_str
-    )
+    result, error_info = import_opml_service(opml_file.stream,
+                                             requested_tab_id_str)
 
     if error_info:
         error_json, status_code = error_info
@@ -424,8 +414,7 @@ def export_opml():
     else:
         response = Response(opml_string, mimetype="application/xml")
         response.headers["Content-Disposition"] = (
-            'attachment; filename="sheepvibes_feeds.opml"'
-        )
+            'attachment; filename="sheepvibes_feeds.opml"')
 
         logger.info(
             "Successfully generated OPML export for %d feeds across %d tabs.",
@@ -460,12 +449,12 @@ def _get_autosave_directory():
                 abs_db_path = os.path.abspath(db_path)
                 data_dir = os.path.dirname(abs_db_path)
                 logger.debug(
-                    "Resolved autosave directory from SQLite path: %s", data_dir
-                )
+                    "Resolved autosave directory from SQLite path: %s",
+                    data_dir)
             except Exception:
                 logger.warning(
-                    "Could not resolve absolute path for SQLite DB: %s", db_path
-                )
+                    "Could not resolve absolute path for SQLite DB: %s",
+                    db_path)
 
     if not data_dir:
         # 3. Fall back to PROJECT_ROOT/data
@@ -475,8 +464,7 @@ def _get_autosave_directory():
 
     if not data_dir:
         logger.warning(
-            "Could not determine autosave directory. Skipping OPML autosave."
-        )
+            "Could not determine autosave directory. Skipping OPML autosave.")
         return None
 
     try:
@@ -517,8 +505,8 @@ def _write_atomically_with_lock(autosave_path, opml_string):
             try:
                 os.remove(temp_path)
             except OSError as e:
-                logger.warning(
-                    "Failed to remove temporary file %s: %s", temp_path, e)
+                logger.warning("Failed to remove temporary file %s: %s",
+                               temp_path, e)
     return False
 
 
