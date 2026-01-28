@@ -2,29 +2,17 @@ import logging
 import os
 import xml.etree.ElementTree as ET  # nosec B405
 
-import defusedxml.ElementTree as SafeET
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.orm import selectinload
 
-from ..cache_utils import (
-    invalidate_tab_feeds_cache,
-    invalidate_tabs_cache,
-)
 from ..constants import DEFAULT_OPML_IMPORT_TAB_NAME
 from ..extensions import db
-from ..feed_service import fetch_and_update_feed
+from ..feed_service import import_opml as import_opml_service
 from ..models import Feed, Tab
 
 opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
 logger = logging.getLogger(__name__)
-
-# --- OPML Import Configuration ---
-SKIPPED_FOLDER_TYPES = {
-    "UWA",
-    "Webnote",
-    "LinkModule",
-}  # Netvibes specific types to ignore for tab creation
 
 
 def _generate_opml_string(tabs=None):
@@ -398,85 +386,6 @@ def _validate_opml_file_request():
     return opml_file, None
 
 
-def _parse_opml_root(opml_file):
-    """Parses the OPML file and returns the root element."""
-    try:
-        tree = SafeET.parse(opml_file.stream)
-        return tree.getroot(), None
-    except ET.ParseError as e:
-        logger.error(
-            "OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
-        return None, (
-            jsonify({"error": "Malformed OPML file. Please check the file format."}),
-            400,
-        )
-    except Exception as e:
-        logger.error(
-            "OPML import failed: Could not parse file stream. Error: %s",
-            e,
-            exc_info=True,
-        )
-        return None, (
-            jsonify(
-                {"error": "Could not parse OPML file. Please check the file format."}
-            ),
-            400,
-        )
-
-
-def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
-    """Commits new feeds to the database and initiates initial fetches."""
-    if not newly_added_feeds_list:
-        return True, None
-
-    try:
-        db.session.commit()
-        logger.info(
-            "OPML import: Successfully batch-committed %s new feeds.",
-            len(newly_added_feeds_list),
-        )
-
-        for feed_obj in newly_added_feeds_list:
-            if feed_obj.id:
-                try:
-                    fetch_and_update_feed(feed_obj.id)
-                except Exception as fetch_e:
-                    logger.error(
-                        "OPML import: Error fetching items for new feed %s (ID: %s): %s",
-                        feed_obj.name,
-                        feed_obj.id,
-                        fetch_e,
-                        exc_info=True,
-                    )
-            else:
-                logger.error(
-                    "OPML import: Feed '%s' missing ID after commit.", feed_obj.name
-                )
-        return True, None
-    except Exception as e:
-        db.session.rollback()
-        logger.error(
-            "OPML import: Database commit failed for new feeds: %s", e, exc_info=True
-        )
-        return False, (
-            jsonify({"error": "Database error during final feed import step."}),
-            500,
-        )
-
-
-def _invalidate_import_caches(affected_tab_ids_set):
-    """Invalidates caches for all tabs affected by the import."""
-    if not affected_tab_ids_set:
-        return
-    for tab_id in affected_tab_ids_set:
-        invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
-    invalidate_tabs_cache()
-    logger.info(
-        "OPML import: Invalidated caches for tabs: %s.",
-        affected_tab_ids_set,
-    )
-
-
 @opml_bp.route("/import", methods=["POST"])
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
@@ -484,102 +393,18 @@ def import_opml():
     if error_resp:
         return error_resp
 
-    root, error_resp = _parse_opml_root(opml_file)
-    if error_resp:
-        return error_resp
+    requested_tab_id_str = request.form.get("tab_id")
 
-    (
-        top_level_target_tab_id,
-        top_level_target_tab_name,
-        was_default_tab_created,
-        error_resp,
-    ) = _determine_target_tab(request.form.get("tab_id"))
-    if error_resp:
-        return error_resp
-
-    opml_body = root.find("body")
-    if opml_body is None:
-        logger.warning("OPML import: No <body> element found.")
-        return (
-            jsonify(
-                {
-                    "message": "No feeds found in OPML (missing body).",
-                    "imported_count": 0,
-                    "skipped_count": 0,
-                    "tab_id": top_level_target_tab_id,
-                    "tab_name": top_level_target_tab_name,
-                }
-            ),
-            200,
-        )
-
-    imported_count_wrapper = [0]
-    skipped_count_wrapper = [0]
-    affected_tab_ids_set = set()
-    newly_added_feeds_list = []
-    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
-
-    _process_opml_outlines_recursive(
-        opml_body.findall("outline"),
-        top_level_target_tab_id,
-        top_level_target_tab_name,
-        all_existing_feed_urls_set,
-        newly_added_feeds_list,
-        imported_count_wrapper,
-        skipped_count_wrapper,
-        affected_tab_ids_set,
+    # Call the service function
+    result, error_info = import_opml_service(
+        opml_file.stream, requested_tab_id_str
     )
 
-    # Batch commit and fetch
-    success, error_resp = _batch_commit_and_fetch_new_feeds(
-        newly_added_feeds_list)
-    if not success:
-        return error_resp
+    if error_info:
+        error_json, status_code = error_info
+        return jsonify(error_json), status_code
 
-    # Cache invalidation
-    _invalidate_import_caches(affected_tab_ids_set)
-
-    # Cleanup if needed
-    _cleanup_empty_default_tab(
-        was_default_tab_created,
-        top_level_target_tab_id,
-        top_level_target_tab_name,
-        affected_tab_ids_set,
-    )
-
-    if not opml_body.findall("outline") and not newly_added_feeds_list:
-        logger.info(
-            "OPML import: No <outline> elements found in the OPML body.")
-        return (
-            jsonify(
-                {
-                    "message": "No feed entries or folders found in the OPML file.",
-                    "imported_count": 0,
-                    "skipped_count": 0,
-                    "tab_id": top_level_target_tab_id,
-                    "tab_name": top_level_target_tab_name,
-                }
-            ),
-            200,
-        )
-
-    imported_final_count = imported_count_wrapper[0]
-    skipped_final_count = skipped_count_wrapper[0]
-
-    return (
-        jsonify(
-            {
-                "message": f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
-                f"Tab: {top_level_target_tab_name}.",
-                "imported_count": imported_final_count,
-                "skipped_count": skipped_final_count,
-                "tab_id": top_level_target_tab_id,
-                "tab_name": top_level_target_tab_name,
-                "affected_tab_ids": list(affected_tab_ids_set),
-            }
-        ),
-        200,
-    )
+    return jsonify(result), 200
 
 
 @opml_bp.route("/export", methods=["GET"])
