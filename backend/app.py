@@ -101,6 +101,9 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Initialize extensions
 db.init_app(app)
+if app.config.get("TESTING"):
+    with app.app_context():
+        db.create_all()
 migrate = Migrate(app, db)
 cache.init_app(app)
 
