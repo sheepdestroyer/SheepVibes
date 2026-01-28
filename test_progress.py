@@ -8,21 +8,23 @@ def test_opml_import_and_feed_refresh_progress(page: Page):
     page.click("#settings-button")
     page.set_input_files('input[type="file"]', "test_feeds.opml")
     import re
+
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_contain_text(
-        re.compile(r"Processing feed|Fetching new feed|Importing OPML file")
-    )
-    expect(page.locator("#progress-bar")).to_have_attribute("value", re.compile(r"\d+"))
+        re.compile(r"Processing feed|Fetching new feed|Importing OPML file"))
+    expect(page.locator("#progress-bar")).to_have_attribute(
+        "value", re.compile(r"\d+"))
     page.wait_for_selector("#progress-container.hidden", timeout=10000)
 
     # Test feed refresh
     # Ensure settings menu is open
     if not page.is_visible("#refresh-all-feeds-button"):
         page.click("#settings-button")
-    
+
     page.click("#refresh-all-feeds-button")
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
         "Starting feed refresh...")
-    expect(page.locator("#progress-bar")).to_have_attribute("value", re.compile(r"\d+"))
+    expect(page.locator("#progress-bar")).to_have_attribute(
+        "value", re.compile(r"\d+"))
     page.wait_for_selector("#progress-container.hidden", timeout=10000)

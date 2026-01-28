@@ -101,14 +101,14 @@ def _process_opml_outlines_iterative(
                 status_msg = (
                     f"Processing feed {processed_count}/{total_feeds_to_import}..."
                 )
-                # Max is total entries + we'll fetch 'imported' count later. 
+                # Max is total entries + we'll fetch 'imported' count later.
                 # Since we don't know 'imported' yet, we'll just use total_feeds_to_import for Phase 1
                 # and broaden it in Phase 2.
                 event_data = {
                     "type": "progress",
                     "status": status_msg,
                     "value": processed_count,
-                    "max": total_feeds_to_import, 
+                    "max": total_feeds_to_import,
                 }
                 announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
                 last_announced_percent = current_percent
@@ -383,10 +383,10 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
             status_msg = f"Fetching new feed {i + 1}/{len(newly_added_feeds_list)}: {feed_obj.name}"
             # Continuous scale: Phase 1 (total_feeds) + Phase 2 (i+1)
             progress_val = total_feeds_to_import + i + 1
-            current_percent = (progress_val * 100 // total_steps) if total_steps > 0 else 0
+            current_percent = ((progress_val * 100 //
+                                total_steps) if total_steps > 0 else 0)
 
-            should_announce = (i == 0
-                               or progress_val >= total_steps
+            should_announce = (i == 0 or progress_val >= total_steps
                                or (current_percent % 10 == 0)
                                or (progress_val % 5 == 0))
 
