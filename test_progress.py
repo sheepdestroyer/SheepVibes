@@ -1,4 +1,5 @@
 import re
+
 from playwright.sync_api import Page, expect
 
 
@@ -11,7 +12,8 @@ def test_opml_import_and_feed_refresh_progress(page: Page):
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
         re.compile(r"(Processing feed|Starting)"))
-    expect(page.locator("#progress-bar")).to_have_attribute("value", re.compile(r"\d+"))
+    expect(page.locator("#progress-bar")).to_have_attribute(
+        "value", re.compile(r"\d+"))
     page.wait_for_selector("#progress-container.hidden", timeout=10000)
 
     # Test feed refresh
@@ -22,5 +24,6 @@ def test_opml_import_and_feed_refresh_progress(page: Page):
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
         re.compile(r"(Starting|Updating)"))
-    expect(page.locator("#progress-bar")).to_have_attribute("value", re.compile(r"\d+"))
+    expect(page.locator("#progress-bar")).to_have_attribute(
+        "value", re.compile(r"\d+"))
     page.wait_for_selector("#progress-container.hidden", timeout=10000)

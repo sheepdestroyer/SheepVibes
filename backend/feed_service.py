@@ -83,8 +83,9 @@ def _process_opml_outlines_iterative(
         while outline_elements:
             outline_element = outline_elements.pop()
 
-            processed_count = imported_count_wrapper[0] + skipped_count_wrapper[0]
-            
+            processed_count = imported_count_wrapper[
+                0] + skipped_count_wrapper[0]
+
             # Phase 1 value: 0 to 50
             if total_feeds_to_import > 0:
                 progress_val = (processed_count * 50) // total_feeds_to_import
@@ -93,15 +94,16 @@ def _process_opml_outlines_iterative(
 
             current_percent = progress_val
 
-            should_announce = (
-                processed_count == 0 
-                or processed_count >= total_feeds_to_import
-                or (current_percent != last_announced_percent and current_percent % 5 == 0)
-                or processed_count % 20 == 0
-            )
+            should_announce = (processed_count == 0
+                               or processed_count >= total_feeds_to_import
+                               or (current_percent != last_announced_percent
+                                   and current_percent % 5 == 0)
+                               or processed_count % 20 == 0)
 
             if should_announce:
-                status_msg = f"Processing feed {processed_count}/{total_feeds_to_import}..."
+                status_msg = (
+                    f"Processing feed {processed_count}/{total_feeds_to_import}..."
+                )
                 event_data = {
                     "type": "progress",
                     "status": status_msg,
@@ -165,7 +167,7 @@ def _process_opml_outlines_iterative(
                 )
                 continue
 
-            elif (not xml_url and element_name and child_outlines):
+            elif not xml_url and element_name and child_outlines:
                 folder_name = element_name
                 existing_tab = Tab.query.filter_by(name=folder_name).first()
 
@@ -173,7 +175,8 @@ def _process_opml_outlines_iterative(
                     nested_tab_id = existing_tab.id
                     nested_tab_name = existing_tab.name
                 else:
-                    max_order = db.session.query(db.func.max(Tab.order)).scalar()
+                    max_order = db.session.query(db.func.max(
+                        Tab.order)).scalar()
                     new_order = (max_order or -1) + 1
                     new_folder_tab = Tab(name=folder_name, order=new_order)
                     db.session.add(new_folder_tab)
@@ -192,10 +195,10 @@ def _process_opml_outlines_iterative(
                         continue
 
                 stack.append((list(reversed(child_outlines)), nested_tab_id,
-                             nested_tab_name))
+                              nested_tab_name))
             elif not xml_url and not element_name and child_outlines:
                 stack.append((list(reversed(child_outlines)), current_tab_id,
-                             current_tab_name))
+                              current_tab_name))
             else:
                 if not xml_url:
                     skipped_count_wrapper[0] += 1
@@ -371,7 +374,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
         total_to_fetch = len(newly_added_feeds_list)
         for i, feed_obj in enumerate(newly_added_feeds_list):
             status_msg = f"Fetching new feed {i + 1}/{total_to_fetch}: {feed_obj.name}"
-            
+
             # Phase 2 value: 50 to 100
             if total_to_fetch > 0:
                 progress_val = 50 + ((i + 1) * 50 // total_to_fetch)
@@ -379,7 +382,8 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
                 progress_val = 100
 
             # Only announce if significant progress or first/last
-            should_announce = (i == 0 or i == total_to_fetch - 1 or (i + 1) % 5 == 0)
+            should_announce = i == 0 or i == total_to_fetch - 1 or (i +
+                                                                    1) % 5 == 0
 
             if should_announce:
                 event_data = {
