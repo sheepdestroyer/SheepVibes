@@ -16,6 +16,7 @@ def test_opml_import_and_feed_refresh_progress(page: Page):
     page.click("#settings-button")
     page.click("#refresh-all-feeds-button")
     expect(page.locator("#progress-container")).to_be_visible()
-    expect(page.locator("#progress-status")).to_have_text("Starting feed refresh...")
+    expect(page.locator("#progress-status")).to_have_text(
+        "Starting feed refresh...")
     expect(page.locator("#progress-bar")).to_have_attribute("value", "0")
     page.wait_for_selector("#progress-container.hidden", timeout=10000)
