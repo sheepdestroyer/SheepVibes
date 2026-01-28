@@ -1,8 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <opml version="1.0">
-  <head>
-    <title>Test Feeds</title>
-  </head>
-  <body>
-    <outline text="Test Feed" title="Test Feed" type="rss" xmlUrl="http://example.com/feed" htmlUrl="http://example.com" />
-  </body>
+    <head>
+        <title>Test Feeds</title>
+    </head>
+    <body>
+        <outline text="Tech News" title="Tech News">
+            <outline type="rss" text="Hacker News" title="Hacker News" xmlUrl="https://news.ycombinator.com/rss" htmlUrl="https://news.ycombinator.com/"/>
+            <outline type="rss" text="Ars Technica" title="Ars Technica" xmlUrl="http://feeds.arstechnica.com/arstechnica/index" htmlUrl="http://arstechnica.com"/>
+        </outline>
+        <outline text="Comics" title="Comics">
+            <outline type="rss" text="XKCD" title="XKCD" xmlUrl="https://xkcd.com/rss.xml" htmlUrl="https://xkcd.com/"/>
+        </outline>
+        <outline type="rss" text="Loose Feed" title="Loose Feed" xmlUrl="http://example.com/feed" htmlUrl="http://example.com"/>
+    </body>
 </opml>

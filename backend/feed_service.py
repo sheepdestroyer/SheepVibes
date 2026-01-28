@@ -7,19 +7,17 @@ import datetime  # Import the full module
 import hashlib
 import http.client
 import ipaddress
-import json
 import logging  # Standard logging
 import os
 import socket
 import ssl
 import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
+import json
 
-import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
 from dateutil import parser as date_parser
@@ -30,15 +28,17 @@ from defusedxml.common import (
 )
 from sqlalchemy.exc import IntegrityError
 
+# Import database models from the new models.py
+from .models import Feed, FeedItem, db, Tab
+from .sse import announcer
 from .cache_utils import (
     invalidate_tab_feeds_cache,
     invalidate_tabs_cache,
 )
 from .constants import DEFAULT_OPML_IMPORT_TAB_NAME
+import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as SafeET
 
-# Import database models from the new models.py
-from .models import Feed, FeedItem, Tab, db
-from .sse import announcer
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -57,10 +57,10 @@ SKIPPED_FOLDER_TYPES = {
 }  # Netvibes specific types to ignore for tab creation
 
 
-def _process_opml_outlines_iterative(
-    initial_outline_elements,
-    top_level_tab_id,
-    top_level_tab_name,
+def _process_opml_outlines_recursive(
+    outline_elements,
+    current_tab_id,
+    current_tab_name,
     all_existing_feed_urls_set,
     newly_added_feeds_list,
     imported_count_wrapper,
@@ -68,134 +68,162 @@ def _process_opml_outlines_iterative(
     affected_tab_ids_set,
     total_feeds_to_import,
 ):
-    """Iteratively processes OPML outline elements with throttled progress updates."""
-    # Stack stores (outline_elements_list, current_tab_id, current_tab_name)
-    # We use common depth-first traversal with a stack.
-    # We reverse the initial list to maintain the original file order when popping.
-    stack = [(list(reversed(initial_outline_elements)), top_level_tab_id,
-              top_level_tab_name)]
+    """Recursively processes OPML outline elements with progress updates."""
+    for outline_element in outline_elements:
+        # Progress update for each outline processed
+        processed_count = imported_count_wrapper[0] + skipped_count_wrapper[0]
+        status_msg = f"Processing feed {processed_count}/{total_feeds_to_import}..."
+        event_data = {
+            "type": "progress", "status": status_msg,
+            "value": processed_count, "max": total_feeds_to_import
+        }
+        announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
 
-    last_announced_percent = -1
+        folder_type_attr = outline_element.get("type")
+        title_attr = outline_element.get("title")
+        text_attr = outline_element.get("text")
+        element_name = (
+            title_attr.strip()
+            if title_attr and title_attr.strip()
+            else (text_attr.strip() if text_attr and text_attr.strip() else "")
+        )
 
-    while stack:
-        outline_elements, current_tab_id, current_tab_name = stack.pop()
+        xml_url = outline_element.get("xmlUrl")
+        child_outlines = list(
+            outline_element
+        )  # More robust than findall for direct children
 
-        while outline_elements:
-            outline_element = outline_elements.pop()
+        if xml_url:  # It's a feed
+            feed_name = (
+                element_name if element_name else xml_url
+            )  # Fallback to URL if no title/text
 
-            # Throttled Progress update: every 10% or every 10 items, plus first and last
-            processed_count = imported_count_wrapper[
-                0] + skipped_count_wrapper[0]
-            current_percent = ((processed_count * 100 // total_feeds_to_import)
-                               if total_feeds_to_import > 0 else 0)
-
-            should_announce = (
-                processed_count == 0  # First
-                or processed_count >= total_feeds_to_import - 1  # Last
-                or (current_percent != last_announced_percent
-                    and current_percent % 10 == 0)  # Every 10%
-                or processed_count % 10 == 0  # Every 10 items
-            )
-
-            if should_announce:
-                status_msg = (
-                    f"Processing feed {processed_count}/{total_feeds_to_import}..."
-                )
-                event_data = {
-                    "type": "progress",
-                    "status": status_msg,
-                    "value": processed_count,
-                    "max": total_feeds_to_import,
-                }
-                announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
-                last_announced_percent = current_percent
-
-            folder_type_attr = outline_element.get("type")
-            title_attr = outline_element.get("title")
-            text_attr = outline_element.get("text")
-            element_name = (
-                title_attr.strip() if title_attr and title_attr.strip() else
-                (text_attr.strip() if text_attr and text_attr.strip() else ""))
-
-            xml_url = outline_element.get("xmlUrl")
-            child_outlines = list(outline_element)
-
-            if xml_url:  # It's a feed
-                feed_name = element_name if element_name else xml_url
-
-                if xml_url in all_existing_feed_urls_set:
-                    logger.info(
-                        "OPML import: Feed with URL '%s' already exists. Skipping.",
-                        xml_url,
-                    )
-                    skipped_count_wrapper[0] += 1
-                    continue
-
-                try:
-                    new_feed = Feed(tab_id=current_tab_id,
-                                    name=feed_name,
-                                    url=xml_url)
-                    db.session.add(new_feed)
-                    newly_added_feeds_list.append(new_feed)
-                    all_existing_feed_urls_set.add(xml_url)
-                    imported_count_wrapper[0] += 1
-                    affected_tab_ids_set.add(current_tab_id)
-                except Exception:
-                    logger.exception("OPML import: Error preparing feed '%s'",
-                                     feed_name)
-                    skipped_count_wrapper[0] += 1
-
-            elif (not xml_url and element_name and folder_type_attr
-                  and folder_type_attr in SKIPPED_FOLDER_TYPES):
+            if xml_url in all_existing_feed_urls_set:
                 logger.info(
-                    "OPML import: Skipping Netvibes folder '%s'.",
-                    element_name,
+                    "OPML import: Feed with URL '%s' already exists. Skipping.", xml_url
                 )
+                skipped_count_wrapper[0] += 1
                 continue
 
-            elif not xml_url and element_name and child_outlines:
-                # It's a folder
-                existing_tab = Tab.query.filter_by(name=element_name).first()
-                if existing_tab:
-                    nested_tab_id = existing_tab.id
-                    nested_tab_name = existing_tab.name
-                else:
-                    max_order = db.session.query(db.func.max(
-                        Tab.order)).scalar()
-                    new_order = (max_order or -1) + 1
-                    new_folder_tab = Tab(name=element_name, order=new_order)
-                    db.session.add(new_folder_tab)
-                    try:
-                        db.session.flush()
-                        invalidate_tabs_cache()
-                        nested_tab_id = new_folder_tab.id
-                        nested_tab_name = new_folder_tab.name
-                    except Exception:
-                        db.session.rollback()
-                        logger.exception(
-                            "OPML import: Failed to create tab '%s'.",
-                            element_name)
-                        skipped_count_wrapper[0] += len(child_outlines)
-                        continue
+            try:
+                new_feed = Feed(tab_id=current_tab_id,
+                                name=feed_name, url=xml_url)
+                # Add to session, but commit will be done in batch later for feeds
+                db.session.add(new_feed)
+                newly_added_feeds_list.append(new_feed)
+                all_existing_feed_urls_set.add(
+                    xml_url
+                )  # Track for current import session
+                imported_count_wrapper[0] += 1
+                affected_tab_ids_set.add(current_tab_id)
+                logger.info(
+                    "OPML import: Prepared new feed '%s' (%s) for tab ID %s ('%s').",
+                    feed_name,
+                    xml_url,
+                    current_tab_id,
+                    current_tab_name,
+                )
+            except Exception:
+                # Should be rare if checks are done, but good for safety
+                logger.exception(
+                    "OPML import: Error preparing feed '%s'", feed_name)
+                skipped_count_wrapper[0] += 1
 
-                if nested_tab_id and nested_tab_name:
-                    # Save current state and move to child outlines
-                    if outline_elements:
-                        stack.append((outline_elements, current_tab_id,
-                                      current_tab_name))
-                    outline_elements = list(reversed(child_outlines))
-                    current_tab_id = nested_tab_id
-                    current_tab_name = nested_tab_name
+        elif (
+            not xml_url
+            and element_name
+            and folder_type_attr
+            and folder_type_attr in SKIPPED_FOLDER_TYPES
+        ):
+            logger.info(
+                "OPML import: Skipping Netvibes-specific folder '%s' due to type: %s.",
+                element_name,
+                folder_type_attr,
+            )
+            continue
 
-            elif not xml_url and not element_name and child_outlines:
-                # Untitled folder, process children in current tab
-                if outline_elements:
-                    stack.append(
-                        (outline_elements, current_tab_id, current_tab_name))
-                outline_elements = list(reversed(child_outlines))
+        elif (
+            not xml_url and element_name and child_outlines
+        ):  # It's a folder (has a name, no xmlUrl, AND children)
+            folder_name = element_name
+            existing_tab = Tab.query.filter_by(name=folder_name).first()
+
+            nested_tab_id = None
+            nested_tab_name = None
+
+            if existing_tab:
+                nested_tab_id = existing_tab.id
+                nested_tab_name = existing_tab.name
+                logger.info(
+                    "OPML import: Folder '%s' matches existing tab '%s' (ID: %s). Feeds will be added to it.",
+                    folder_name,
+                    nested_tab_name,
+                    nested_tab_id,
+                )
             else:
-                if not xml_url:
-                    skipped_count_wrapper[0] += 1
+                max_order = db.session.query(db.func.max(Tab.order)).scalar()
+                new_order = (max_order or -1) + 1
+                new_folder_tab = Tab(name=folder_name, order=new_order)
+                db.session.add(new_folder_tab)
+                try:
+                    db.session.flush()  # Flush to assign an ID without committing the transaction
+                    logger.info(
+                        "OPML import: Created new tab '%s' (ID: %s) from OPML folder.",
+                        new_folder_tab.name,
+                        new_folder_tab.id,
+                    )
+                    invalidate_tabs_cache()  # Crucial: new tab added
+                    nested_tab_id = new_folder_tab.id
+                    nested_tab_name = new_folder_tab.name
+                except Exception:
+                    db.session.rollback()
+                    logger.exception(
+                        "OPML import: Failed to commit new tab '%s'. Skipping this folder and its contents.",
+                        folder_name,
+                    )
+                    skipped_count_wrapper[0] += len(
+                        child_outlines
+                    )  # Approximate skip count
+                    continue  # Skip this folder
+
+            if nested_tab_id and nested_tab_name:
+                _process_opml_outlines_recursive(
+                    child_outlines,
+                    nested_tab_id,
+                    nested_tab_name,
+                    all_existing_feed_urls_set,
+                    newly_added_feeds_list,
+                    imported_count_wrapper,
+                    skipped_count_wrapper,
+                    affected_tab_ids_set,
+                    total_feeds_to_import,
+                )
+        elif not xml_url and not element_name and child_outlines:
+            # Folder without a title, process its children in the current tab
+            logger.info(
+                "OPML import: Processing children of an untitled folder under current tab '%s'.",
+                current_tab_name,
+            )
+            _process_opml_outlines_recursive(
+                child_outlines,
+                current_tab_id,  # Use current tab_id
+                current_tab_name,
+                all_existing_feed_urls_set,
+                newly_added_feeds_list,
+                imported_count_wrapper,
+                skipped_count_wrapper,
+                affected_tab_ids_set,
+                total_feeds_to_import,
+            )
+        else:
+            logger.info(
+                "OPML import: Skipping outline (Name: '%s', xmlUrl: %s, Children: %s) as it's not a feed or folder.",
+                element_name,
+                xml_url,
+                len(child_outlines),
+            )
+            if not xml_url:
+                skipped_count_wrapper[0] += 1
 
 
 def _determine_target_tab(requested_tab_id_str):
@@ -241,13 +269,15 @@ def _determine_target_tab(requested_tab_id_str):
             )
             default_tab_name_for_creation = DEFAULT_OPML_IMPORT_TAB_NAME
             temp_tab_check = Tab.query.filter_by(
-                name=default_tab_name_for_creation).first()
+                name=default_tab_name_for_creation
+            ).first()
             if temp_tab_check:
                 target_tab_id = temp_tab_check.id
                 target_tab_name = temp_tab_check.name
             else:
                 newly_created_default_tab = Tab(
-                    name=default_tab_name_for_creation, order=0)
+                    name=default_tab_name_for_creation, order=0
+                )
                 db.session.add(newly_created_default_tab)
                 try:
                     db.session.commit()
@@ -273,10 +303,7 @@ def _determine_target_tab(requested_tab_id_str):
                         None,
                         False,
                         (
-                            {
-                                "error":
-                                "Failed to create a default tab for import."
-                            },
+                            {"error": "Failed to create a default tab for import."},
                             500,
                         ),
                     )
@@ -289,16 +316,13 @@ def _determine_target_tab(requested_tab_id_str):
             None,
             None,
             False,
-            ({
-                "error": "Failed to determine a target tab for import."
-            }, 500),
+            ({"error": "Failed to determine a target tab for import."}, 500),
         )
 
     return target_tab_id, target_tab_name, was_created, None
 
 
-def _cleanup_empty_default_tab(was_created, tab_id, tab_name,
-                               affected_tab_ids):
+def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
     """Cleans up the default tab if it was created for this import but remains empty."""
     if was_created and tab_id not in affected_tab_ids:
         try:
@@ -327,13 +351,9 @@ def _parse_opml_root(opml_content):
         root = SafeET.fromstring(opml_content)
         return root, None
     except ET.ParseError as e:
-        logger.error("OPML import failed: Malformed XML. Error: %s",
-                     e,
-                     exc_info=True)
+        logger.error("OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
         return None, (
-            {
-                "error": "Malformed OPML file. Please check the file format."
-            },
+            {"error": "Malformed OPML file. Please check the file format."},
             400,
         )
     except Exception as e:
@@ -343,48 +363,31 @@ def _parse_opml_root(opml_content):
             exc_info=True,
         )
         return None, (
-            {
-                "error":
-                "Could not parse OPML file. Please check the file format."
-            },
+            {"error": "Could not parse OPML file. Please check the file format."},
             400,
         )
 
 
-def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
-                                      total_feeds_to_import,
-                                      processed_feed_count):
+def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list, total_feeds_to_import, processed_feed_count):
     """Commits new feeds and fetches them, with progress updates."""
     if not newly_added_feeds_list:
         return True, None
 
     try:
         db.session.commit()
-        logger.info(
-            "OPML import: Successfully batch-committed %s new feeds.",
-            len(newly_added_feeds_list),
-        )
+        logger.info("OPML import: Successfully batch-committed %s new feeds.", len(newly_added_feeds_list))
 
         for i, feed_obj in enumerate(newly_added_feeds_list):
             status_msg = f"Fetching new feed {i + 1}/{len(newly_added_feeds_list)}: {feed_obj.name}"
-            # Throttled Progress update: every 10% or every 5 items
+            # Announce progress for each new feed fetched
             progress_val = processed_feed_count + i + 1
-            current_percent = ((progress_val * 100 // total_feeds_to_import)
-                               if total_feeds_to_import > 0 else 0)
-
-            should_announce = (progress_val == 1
-                               or progress_val >= total_feeds_to_import
-                               or (current_percent % 10 == 0)
-                               or (progress_val % 5 == 0))
-
-            if should_announce:
-                event_data = {
-                    "type": "progress",
-                    "status": status_msg,
-                    "value": progress_val,
-                    "max": total_feeds_to_import,
-                }
-                announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
+            event_data = {
+                "type": "progress",
+                "status": status_msg,
+                "value": progress_val,
+                "max": total_feeds_to_import,
+            }
+            announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
 
             if feed_obj.id:
                 try:
@@ -392,24 +395,18 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
                 except Exception as fetch_e:
                     logger.error(
                         "OPML import: Error fetching for new feed %s (ID: %s): %s",
-                        feed_obj.name,
-                        feed_obj.id,
-                        fetch_e,
-                        exc_info=True,
+                        feed_obj.name, feed_obj.id, fetch_e, exc_info=True
                     )
             else:
-                logger.error("OPML import: Feed '%s' missing ID after commit.",
-                             feed_obj.name)
+                logger.error("OPML import: Feed '%s' missing ID after commit.", feed_obj.name)
         return True, None
     except Exception as e:
         db.session.rollback()
-        logger.error("OPML import: Database commit failed for new feeds: %s",
-                     e,
-                     exc_info=True)
+        logger.error(
+            "OPML import: Database commit failed for new feeds: %s", e, exc_info=True
+        )
         return False, (
-            {
-                "error": "Database error during final feed import step."
-            },
+            {"error": "Database error during final feed import step."},
             500,
         )
 
@@ -451,25 +448,16 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         return None, error_resp
 
     # ... (rest of the function, passing total_feeds_to_import down)
-    (
-        top_level_target_tab_id,
-        top_level_target_tab_name,
-        was_default_tab_created,
-        error_resp,
-    ) = _determine_target_tab(requested_tab_id_str)
+    (top_level_target_tab_id, top_level_target_tab_name, was_default_tab_created, error_resp) = \
+        _determine_target_tab(requested_tab_id_str)
     if error_resp:
         return None, error_resp
 
     opml_body = root.find("body")
     if opml_body is None:
         logger.warning("OPML import: No <body> element found.")
-        return {
-            "message": "No feeds found in OPML (missing body).",
-            "imported_count": 0,
-            "skipped_count": 0,
-            "tab_id": top_level_target_tab_id,
-            "tab_name": top_level_target_tab_name,
-        }, None
+        return {"message": "No feeds found in OPML (missing body).", "imported_count": 0, "skipped_count": 0,
+                "tab_id": top_level_target_tab_id, "tab_name": top_level_target_tab_name}, None
 
     imported_count_wrapper = [0]
     skipped_count_wrapper = [0]
@@ -478,28 +466,18 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
 
     # Announce start
-    announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting OPML import...', 'value': 0, 'max': total_feeds_to_import})}\n\n"
-    )
+    announcer.announce(msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting OPML import...', 'value': 0, 'max': total_feeds_to_import})}\n\n")
 
-    _process_opml_outlines_iterative(
-        opml_body.findall("outline"),
-        top_level_target_tab_id,
-        top_level_target_tab_name,
-        all_existing_feed_urls_set,
-        newly_added_feeds_list,
-        imported_count_wrapper,
-        skipped_count_wrapper,
-        affected_tab_ids_set,
-        total_feeds_to_import,
+    _process_opml_outlines_recursive(
+        opml_body.findall("outline"), top_level_target_tab_id, top_level_target_tab_name,
+        all_existing_feed_urls_set, newly_added_feeds_list, imported_count_wrapper,
+        skipped_count_wrapper, affected_tab_ids_set, total_feeds_to_import
     )
 
     # Batch commit and fetch
     success, error_resp = _batch_commit_and_fetch_new_feeds(
-        newly_added_feeds_list,
-        total_feeds_to_import,
-        imported_count_wrapper[0] + skipped_count_wrapper[0] -
-        len(newly_added_feeds_list),
+        newly_added_feeds_list, total_feeds_to_import,
+        imported_count_wrapper[0] + skipped_count_wrapper[0] - len(newly_added_feeds_list)
     )
     if not success:
         return None, error_resp
@@ -530,28 +508,15 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     skipped_final_count = skipped_count_wrapper[0]
 
     result = {
-        "message":
-        f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
-        f"Tab: {top_level_target_tab_name}.",
-        "imported_count":
-        imported_final_count,
-        "skipped_count":
-        skipped_final_count,
-        "tab_id":
-        top_level_target_tab_id,
-        "tab_name":
-        top_level_target_tab_name,
-        "affected_tab_ids":
-        list(affected_tab_ids_set),
+        "message": f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
+                   f"Tab: {top_level_target_tab_name}.",
+        "imported_count": imported_final_count,
+        "skipped_count": skipped_final_count,
+        "tab_id": top_level_target_tab_id,
+        "tab_name": top_level_target_tab_name,
+        "affected_tab_ids": list(affected_tab_ids_set),
     }
-
-    # Final 'complete' message for SSE
-    announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
-    )
-
     return result, None
-
 
 # Maximum number of items to keep per feed for cache eviction
 MAX_ITEMS_PER_FEED = 100
@@ -1493,44 +1458,22 @@ def update_all_feeds():
     total_new_items = 0
     affected_tab_ids = set()
 
-    logger.info("Starting update process for %d feeds (Parallelized).",
-                total_feeds)
-    announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"
-    )
+    logger.info("Starting update process for %d feeds (Parallelized).", total_feeds)
+    announcer.announce(msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n")
 
-    actual_workers = min(MAX_CONCURRENT_FETCHES,
-                         total_feeds) if all_feeds else 1
-    with concurrent.futures.ThreadPoolExecutor(
-            max_workers=actual_workers) as executor:
-        future_to_feed = {
-            executor.submit(_fetch_feed_content, feed.url): feed
-            for feed in all_feeds
-        }
+    actual_workers = min(MAX_CONCURRENT_FETCHES, total_feeds) if all_feeds else 1
+    with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
+        future_to_feed = {executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds}
 
         for future in concurrent.futures.as_completed(future_to_feed):
             feed_obj = future_to_feed[future]
             processed_count += 1
-            # Throttled Progress update: every 10% or every 5 items
-            current_percent = ((processed_count * 100 //
-                                total_feeds) if total_feeds > 0 else 0)
-            should_announce = (processed_count == 1
-                               or processed_count >= total_feeds
-                               or (current_percent % 10 == 0)
-                               or (processed_count % 5 == 0))
-
-            if should_announce:
-                status_msg = (
-                    f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
-                )
-                announcer.announce(
-                    msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"
-                )
+            status_msg = f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
+            announcer.announce(msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n")
 
             try:
                 parsed_feed = future.result()
-                success, new_items, tab_id = _process_fetch_result(
-                    feed_obj, parsed_feed)
+                success, new_items, tab_id = _process_fetch_result(feed_obj, parsed_feed)
                 if success:
                     total_new_items += new_items
                     if new_items > 0:
@@ -1538,18 +1481,13 @@ def update_all_feeds():
             except Exception:
                 logger.error(
                     "Critical error processing future for feed %s (%s)",
-                    feed_obj.name,
-                    feed_obj.id,
-                    exc_info=True,
+                    feed_obj.name, feed_obj.id, exc_info=True
                 )
 
     logger.info(
         "Finished updating feeds. Processed: %d, New Items: %s",
-        processed_count,
-        total_new_items,
+        processed_count, total_new_items
     )
     # Final 'complete' message
-    announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress_complete', 'status': 'Refresh complete.'})}\n\n"
-    )
+    announcer.announce(msg=f"data: {json.dumps({'type': 'progress_complete', 'status': 'Refresh complete.'})}\n\n")
     return processed_count, total_new_items, affected_tab_ids

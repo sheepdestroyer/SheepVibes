@@ -16,10 +16,6 @@ a:hover {
     text-decoration: underline;
 }
 
-.hidden {
-    display: none !important;
-}
-
 /* Header Styles */
 header {
     background-color: #f8f9fa; /* Lighter header background */
