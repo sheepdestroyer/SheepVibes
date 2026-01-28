@@ -1,7 +1,9 @@
 import logging
+
 from backend.app import app
 
 logger = logging.getLogger(__name__)
+
 
 def test_security_headers(client):
     """Test that security headers are present in the response."""
@@ -28,4 +30,5 @@ def test_security_headers(client):
     headers_api = response_api.headers
     assert headers_api["X-Content-Type-Options"] == "nosniff"
     assert headers_api["X-Frame-Options"] == "DENY"
-    assert headers_api["Content-Security-Policy"] == headers["Content-Security-Policy"]
+    assert headers_api["Content-Security-Policy"] == headers[
+        "Content-Security-Policy"]
