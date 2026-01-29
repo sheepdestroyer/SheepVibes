@@ -311,6 +311,29 @@ def _determine_target_tab(requested_tab_id_str):
                     target_tab_id = newly_created_default_tab.id
                     target_tab_name = newly_created_default_tab.name
                     was_created = True
+                except sqlalchemy.exc.IntegrityError:
+                    db.session.rollback()
+                    logger.info(
+                        "OPML import: Race condition on default tab creation. Re-fetching tab '%s'.",
+                        default_tab_name_for_creation,
+                    )
+                    # Another process likely created it. Fetch it.
+                    refetched_tab = Tab.query.filter_by(
+                        name=default_tab_name_for_creation).first()
+                    if refetched_tab:
+                        target_tab_id = refetched_tab.id
+                        target_tab_name = refetched_tab.name
+                        # was_created remains False, as this process didn't create it.
+                    else:
+                        # This is an unexpected state, but we should fail gracefully.
+                        logger.error(
+                            "OPML import: Failed to create or find default tab '%s' after race.",
+                            default_tab_name_for_creation)
+                        return (None, None, False,
+                                ({
+                                    "error":
+                                    "Failed to create a default tab for import."
+                                }, 500))
                 except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
                     db.session.rollback()
                     logger.exception(
