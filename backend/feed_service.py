@@ -1505,7 +1505,11 @@ def fetch_and_update_feed(feed_id):
 
 
 def update_all_feeds():
-    """Fetches all feeds in parallel, with progress updates, and processes entries."""
+    """Fetches all feeds in parallel, with progress updates, and processes entries.
+
+    Returns:
+        tuple (int, int, set): (successful_count, total_new_items, affected_tab_ids)
+    """
     all_feeds = Feed.query.all()
     total_feeds = len(all_feeds)
     processed_count = 0
