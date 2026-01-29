@@ -10,9 +10,12 @@ import pytest
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
-from .app import app, cache  # Import the app and cache instance
-from .feed_service import parse_published_time, process_feed_entries  # For new tests
-from .models import Feed, FeedItem, Tab, db  # Import models directly
+from backend.app import app, cache  # Import the app and cache instance
+from backend.feed_service import (  # For new tests
+    parse_published_time,
+    process_feed_entries,
+)
+from backend.models import Feed, FeedItem, Tab, db  # Import models directly
 
 
 @pytest.fixture

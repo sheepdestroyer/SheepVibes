@@ -48,4 +48,4 @@ jobs:
         # Pass the static Redis host port to the tests.
         CACHE_REDIS_PORT: 6379
       run: |
-        python -m pytest backend/ -v
+        python -m pytest -c tests/pytest.ini tests/ -v
