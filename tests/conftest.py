@@ -1,5 +1,6 @@
 import os
 import socket
+from pathlib import Path
 
 import pytest
 
@@ -8,12 +9,11 @@ from backend.app import app, db
 os.environ["TESTING"] = "true"
 
 
-from pathlib import Path
-
 @pytest.fixture
 def tests_root():
     """Return the root path of the tests directory."""
     return Path(__file__).parent.resolve()
+
 
 EXAMPLE_COM_IP = "93.184.216.34"
 
