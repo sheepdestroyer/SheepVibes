@@ -57,7 +57,6 @@ OPML_IMPORT_PROCESSING_WEIGHT = 50  # Percent of total progress
 OPML_IMPORT_FETCHING_WEIGHT = 50  # Percent of total progress
 
 
-
 def _sanitize_for_log(text):
     """Sanitizes text for logging to prevent log injection."""
     if not text:
@@ -256,8 +255,8 @@ def _process_opml_outlines_iterative(
                     nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
                         element_name)
                     # Push children to stack
-                    stack.append((list(reversed(child_outlines)), nested_tab_id,
-                                  nested_tab_name))
+                    stack.append((list(reversed(child_outlines)),
+                                  nested_tab_id, nested_tab_name))
                 except sqlalchemy.exc.SQLAlchemyError:
                     logger.exception(
                         "OPML import: DB error creating tab for folder '%s'. Skipping folder.",
