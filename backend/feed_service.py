@@ -261,8 +261,13 @@ def _process_opml_outlines_iterative(
                 # Don't create a new tab for skipped folder types, but
                 # process their children under the current tab.
                 if child_outlines:
-                    stack.append((list(reversed(child_outlines)),
-                                  current_tab_id, current_tab_name))
+                    stack.append(
+                        (
+                            list(reversed(child_outlines)),
+                            current_tab_id,
+                            current_tab_name,
+                        )
+                    )
 
             elif not xml_url and element_name and child_outlines:
                 try:
