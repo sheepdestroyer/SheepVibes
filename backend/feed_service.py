@@ -54,7 +54,7 @@ def _count_feeds_in_opml(root):
 
 # --- OPML Import Configuration ---
 OPML_IMPORT_PROCESSING_WEIGHT = 50  # Percent of total progress
-OPML_IMPORT_FETCHING_WEIGHT = 50    # Percent of total progress
+OPML_IMPORT_FETCHING_WEIGHT = 50  # Percent of total progress
 
 SKIPPED_FOLDER_TYPES = {
     "UWA",
@@ -93,13 +93,12 @@ def _process_opml_outlines_iterative(
         while outline_elements:
             outline_element = outline_elements.pop()
 
-            processed_count = (imported_count_wrapper[0] +
-                               skipped_count_wrapper[0])
+            processed_count = imported_count_wrapper[
+                0] + skipped_count_wrapper[0]
 
             # Phase 1 value: 0 to OPML_IMPORT_PROCESSING_WEIGHT
             if total_feeds_to_import > 0:
-                progress_val = (processed_count *
-                                OPML_IMPORT_PROCESSING_WEIGHT
+                progress_val = (processed_count * OPML_IMPORT_PROCESSING_WEIGHT
                                 ) // total_feeds_to_import
             else:
                 progress_val = OPML_IMPORT_PROCESSING_WEIGHT
