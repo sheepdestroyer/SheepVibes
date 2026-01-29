@@ -1,6 +1,5 @@
 import os
 import re
-import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -25,8 +24,7 @@ def test_opml_import_and_feed_refresh_progress(page: Page, opml_file_path: Path)
 
     # Test OPML import
     page.click("#settings-button")
-    opml_path = opml_file_path
-    page.set_input_files('input[type="file"]', str(opml_path))
+    page.set_input_files('input[type="file"]', str(opml_file_path))
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
         re.compile(r"(Importing|Processing|Starting|Fetching)")
