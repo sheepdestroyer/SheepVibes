@@ -1,8 +1,8 @@
 import os
 import re
 import urllib.request
-from urllib.parse import urlparse
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -19,7 +19,7 @@ def test_opml_import_and_feed_refresh_progress(page: Page, opml_file_path: Path)
     parsed = urlparse(base_url)
     if parsed.scheme not in {"http", "https"}:
         pytest.skip(f"Unsupported scheme for TEST_BASE_URL: {parsed.scheme}")
-    
+
     try:
         urllib.request.urlopen(base_url, timeout=1).close()
     except OSError:
