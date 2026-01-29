@@ -1,3 +1,5 @@
 pytest
 pytest-mock
 pytest-env
+pytest-playwright
+pytest-base-url
