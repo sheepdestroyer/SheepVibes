@@ -5,10 +5,7 @@ import {
     renderTabs,
     showEditFeedModal,
     closeEditFeedModal,
-    appendItemsToFeedWidget,
-    showProgress,
-    updateProgress,
-    hideProgress
+    appendItemsToFeedWidget
 } from './ui.js';
 
 // State
@@ -276,13 +273,11 @@ async function handleEditFeedSubmit(e) {
 }
 
 async function handleRefreshAllFeeds() {
-    showProgress('Starting feed refresh...');
     try {
         await api.updateAllFeeds();
-        // The SSE events will drive the rest of the UI updates.
+        showToast('Refresh triggered. Updates will appear shortly.', 'success');
     } catch (e) {
         showToast('Failed to refresh: ' + e.message, 'error');
-        hideProgress(); // Hide progress bar on failure
     }
 }
 
@@ -311,31 +306,28 @@ async function handleImportOpmlFileSelect(e) {
     formData.append('file', file);
     if (activeTabId !== null) formData.append('tab_id', activeTabId);
 
-    showProgress('Importing OPML file...');
     try {
         const data = await api.importOpml(formData);
+        showToast(data.message, 'success');
         if (data.imported_count > 0) {
-            // The progress SSEs will handle the UI updates, but we need to reload the tabs
-            // to show new tabs and unread counts.
+            // Re-fetch tab data to update names and unread counts on all tab buttons.
             await initializeTabs();
+
+            // Use the `affected_tab_ids` from the backend to perform a more targeted refresh.
             const tabsToReload = new Set(data.affected_tab_ids || []);
-            if (data.tab_id) {
+            if (data.tab_id) { // The default tab for loose feeds might also be affected.
                 tabsToReload.add(data.tab_id);
             }
+
             for (const tabId of tabsToReload) {
+                // If the tab is currently cached/loaded, refresh it.
                 if (loadedTabs.has(tabId)) {
                     await reloadTab(tabId);
                 }
             }
-        } else {
-            // Backup hide in case of early exit without SSE
-            hideProgress();
-            showToast(data.message, 'success');
         }
-        // The final success message will be handled by the 'progress_complete' SSE event.
     } catch (err) {
         showToast(err.message, 'error');
-        hideProgress();
     } finally {
         e.target.value = '';
     }
@@ -408,29 +400,27 @@ function initializeSSE() {
     eventSource.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
-
-            // Handle progress updates
-            if (data.type === 'progress') {
-                updateProgress(data.status, data.value, data.max);
-                return;
-            }
-            if (data.type === 'progress_complete') {
-                hideProgress();
-                showToast(data.status || 'Operation complete!', 'success');
-                return;
-            }
-
-            // Handle new items notification
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
-                allTabs = await api.getTabs();
-                renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
-                const affectedIds = (data.affected_tab_ids || []).map(id => parseInt(id, 10));
-                affectedIds.forEach(id => loadedTabs.delete(id));
+                // Fetch latest tab metadata for unread counts
+                try {
+                    allTabs = await api.getTabs();
+                    renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
-                if (activeTabId && affectedIds.includes(activeTabId)) {
-                    await reloadTab(activeTabId);
+                    // Targeted refresh: mark affected tabs as stale
+                    const affectedIds = data.affected_tab_ids || [];
+                    affectedIds.forEach(id => {
+                        const numericId = parseInt(id, 10);
+                        loadedTabs.delete(numericId);
+                    });
+
+                    // If active tab is affected, reload it immediately
+                    if (activeTabId && affectedIds.some(id => parseInt(id, 10) === activeTabId)) {
+                        await reloadTab(activeTabId);
+                    }
+                } catch (apiErr) {
+                    console.error('Failed to refresh data after SSE:', apiErr);
                 }
             }
         } catch (e) {
