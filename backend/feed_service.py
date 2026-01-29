@@ -291,9 +291,8 @@ def _determine_target_tab(requested_tab_id_str):
                 except sqlalchemy.exc.SQLAlchemyError as e_tab_commit:  # pylint: disable=broad-exception-caught
                     db.session.rollback()
                     logger.exception(
-                        "OPML import: Failed to create default tab '%s': %s",
+                        "OPML import: Failed to create default tab '%s'",
                         default_tab_name_for_creation,
-                        e_tab_commit,
                     )
                     return (
                         None,
@@ -431,7 +430,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
     except sqlalchemy.exc.SQLAlchemyError as e:  # pylint: disable=broad-exception-caught
         db.session.rollback()
         logger.exception(
-            "OPML import: Database commit failed for new feeds: %s", e)
+            "OPML import: Database commit failed for new feeds")
         return False, (
             {
                 "error": "Database error during final feed import step."
@@ -463,9 +462,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         return None, ({"error": "Could not read OPML file stream."}, 400)
 
     # Initial progress announcement
-    announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting OPML import...', 'value': 0, 'max': 100})}\n\n"
-    )
+
 
     total_feeds_to_import = 0
     try:
@@ -987,7 +984,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         return True, new_items, feed_db_obj.tab_id
     except Exception:  # pylint: disable=broad-exception-caught
         # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
-        feed_name = feed_db_obj.id
+        feed_name = feed_db_obj.name
         feed_id = feed_db_obj.id
         db.session.rollback()
         logger.exception(

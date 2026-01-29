@@ -438,7 +438,9 @@ function initializeSSE() {
                 renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
                 const affectedIds = (data.affected_tab_ids || []).map(id => parseInt(id, 10));
-                affectedIds.forEach(id => loadedTabs.delete(id));
+                affectedIds.forEach(id => {
+                    loadedTabs.delete(id);
+                });
 
                 if (activeTabId && affectedIds.includes(activeTabId)) {
                     await reloadTab(activeTabId);
