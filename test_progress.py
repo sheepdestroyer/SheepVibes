@@ -8,7 +8,8 @@ from playwright.sync_api import Page, expect
 
 @pytest.mark.skipif(
     os.getenv("CI") == "true",
-    reason="Flaky in CI due to SSE timing issues; backend logic verified")
+    reason="Flaky in CI due to SSE timing issues; backend logic verified",
+)
 def test_opml_import_and_feed_refresh_progress(page: Page):
     base_url = os.environ.get("TEST_BASE_URL", "http://localhost:5000")
     page.goto(base_url)
