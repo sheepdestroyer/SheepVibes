@@ -1,6 +1,7 @@
 import os
 import re
 import urllib.request
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,9 @@ def test_opml_import_and_feed_refresh_progress(page: Page, opml_file_path: Path)
 
     # Check if the server is running
     try:
+        scheme = urllib.parse.urlparse(base_url).scheme
+        if scheme not in {"http", "https"}:
+            pytest.skip(f"Unsupported scheme for TEST_BASE_URL: {scheme}")
         urllib.request.urlopen(base_url, timeout=1).close()
     except OSError:
         pytest.skip(f"Server at {base_url} is not running. Skipping E2E test.")
