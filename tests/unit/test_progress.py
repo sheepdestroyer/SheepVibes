@@ -17,7 +17,7 @@ def test_opml_import_and_feed_refresh_progress(page: Page, tests_root: Path):
     # Test OPML import
     page.click("#settings-button")
     opml_path = tests_root.joinpath("test_feeds.opml")
-    assert opml_path.exists(), f"Test data file not found at: {opml_path}"
+    assert opml_path.is_file(), f"Test data file not found at: {opml_path}"
     page.set_input_files('input[type="file"]', str(opml_path))
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
