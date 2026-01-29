@@ -174,7 +174,7 @@ def _get_or_create_nested_tab(folder_name):
         nested.rollback()  # Rollback only to savepoint
         # Remove the failed object from session identity map to prevent re-flush issues
         db.session.expunge(new_folder_tab)
-        
+
         # Another process created this tab; fetch it
         existing_tab = Tab.query.filter_by(name=folder_name).first()
         if existing_tab:
@@ -311,7 +311,7 @@ def _determine_target_tab(requested_tab_id_str):
                     # Since this is the start of the import, we can safely commit the new tab
                     # without worrying about partial feed state (none exists yet).
                     db.session.commit()
-                    
+
                     logger.info(
                         "OPML import: Created default tab '%s' (ID: %s).",
                         newly_created_default_tab.name,

@@ -6,8 +6,8 @@ import xml.etree.ElementTree as ET
 
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
-from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab
