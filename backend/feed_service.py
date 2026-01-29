@@ -513,13 +513,11 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
             if feed_obj.id:
                 try:
                     fetch_and_update_feed(feed_obj.id)
-                except Exception as fetch_e:  # pylint: disable=broad-exception-caught
-                    logger.error(
-                        "OPML import: Error fetching for new feed %s (ID: %s): %s",
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logger.exception(
+                        "OPML import: Error fetching for new feed %s (ID: %s)",
                         feed_obj.name,
                         feed_obj.id,
-                        fetch_e,
-                        exc_info=True,
                     )
             else:
                 logger.error(
