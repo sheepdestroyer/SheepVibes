@@ -328,12 +328,20 @@ def _determine_target_tab(requested_tab_id_str):
                         # This is an unexpected state, but we should fail gracefully.
                         logger.error(
                             "OPML import: Failed to create or find default tab '%s' after race.",
-                            default_tab_name_for_creation)
-                        return (None, None, False,
-                                ({
+                            default_tab_name_for_creation,
+                        )
+                        return (
+                            None,
+                            None,
+                            False,
+                            (
+                                {
                                     "error":
                                     "Failed to create a default tab for import."
-                                }, 500))
+                                },
+                                500,
+                            ),
+                        )
                 except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
                     db.session.rollback()
                     logger.exception(
