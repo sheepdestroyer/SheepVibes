@@ -10,17 +10,16 @@ import ipaddress
 import json
 import logging  # Standard logging
 import os
-import logging
 import re
 import socket
 import ssl
 import urllib.request
-import defusedxml.ElementTree as ET
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
+import defusedxml.ElementTree as ET
 import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
@@ -67,14 +66,12 @@ def is_valid_feed_url(url):
     return url.lower().startswith(("http://", "https://"))
 
 
-def _calculate_and_announce_progress(
-        processed_count,
-        total_feeds_to_import,
-        last_announced_percent):
+def _calculate_and_announce_progress(processed_count, total_feeds_to_import,
+                                     last_announced_percent):
     """Calculates progress and announces it if significant change occurred."""
     if total_feeds_to_import > 0:
-        progress_val = (processed_count * OPML_IMPORT_PROCESSING_WEIGHT
-                        ) // total_feeds_to_import
+        progress_val = (processed_count *
+                        OPML_IMPORT_PROCESSING_WEIGHT) // total_feeds_to_import
     else:
         progress_val = OPML_IMPORT_PROCESSING_WEIGHT
 
@@ -98,10 +95,16 @@ def _calculate_and_announce_progress(
     return last_announced_percent
 
 
-def _process_opml_feed_node(xml_url, feed_name, current_tab_id,
-                            all_existing_feed_urls_set, newly_added_feeds_list,
-                            imported_count_wrapper, skipped_count_wrapper,
-                            affected_tab_ids_set):
+def _process_opml_feed_node(
+    xml_url,
+    feed_name,
+    current_tab_id,
+    all_existing_feed_urls_set,
+    newly_added_feeds_list,
+    imported_count_wrapper,
+    skipped_count_wrapper,
+    affected_tab_ids_set,
+):
     """Processes a single feed node from the OPML."""
     # XSS Prevention: Validate URL scheme
     if not is_valid_feed_url(xml_url):
@@ -189,12 +192,16 @@ def _process_opml_outlines_iterative(
 
             if xml_url:  # It's a feed
                 feed_name = element_name if element_name else xml_url
-                _process_opml_feed_node(xml_url, feed_name, current_tab_id,
-                                        all_existing_feed_urls_set,
-                                        newly_added_feeds_list,
-                                        imported_count_wrapper,
-                                        skipped_count_wrapper,
-                                        affected_tab_ids_set)
+                _process_opml_feed_node(
+                    xml_url,
+                    feed_name,
+                    current_tab_id,
+                    all_existing_feed_urls_set,
+                    newly_added_feeds_list,
+                    imported_count_wrapper,
+                    skipped_count_wrapper,
+                    affected_tab_ids_set,
+                )
 
             elif (not xml_url and element_name and folder_type_attr
                   and folder_type_attr in SKIPPED_FOLDER_TYPES):
