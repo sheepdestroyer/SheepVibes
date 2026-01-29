@@ -254,20 +254,12 @@ def _process_opml_outlines_iterative(
                 and folder_type_attr in SKIPPED_FOLDER_TYPES
             ):
                 logger.info(
-                    "OPML import: Skipping folder '%s' (type: %s), but processing children under current tab.",
+                    "OPML import: Skipping folder '%s' and its children (type: %s).",
                     _sanitize_for_log(element_name),
                     _sanitize_for_log(folder_type_attr),
                 )
-                # Don't create a new tab for skipped folder types, but
-                # process their children under the current tab.
-                if child_outlines:
-                    stack.append(
-                        (
-                            list(reversed(child_outlines)),
-                            current_tab_id,
-                            current_tab_name,
-                        )
-                    )
+                # Skip the entire branch including children for safety.
+                continue
 
             elif not xml_url and element_name and child_outlines:
                 try:
