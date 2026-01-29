@@ -83,8 +83,10 @@ def _calculate_and_announce_progress(processed_count, total_feeds_to_import,
                                      last_announced_percent):
     """Calculates progress and announces it if significant change occurred."""
     if total_feeds_to_import > 0:
-        progress_val = (processed_count *
-                        OPML_IMPORT_PROCESSING_WEIGHT) // total_feeds_to_import
+        # Cap progress value, as processed_count can exceed total_feeds_to_import.
+        progress_val = min(OPML_IMPORT_PROCESSING_WEIGHT,
+                           (processed_count *
+                            OPML_IMPORT_PROCESSING_WEIGHT) // total_feeds_to_import)
     else:
         progress_val = OPML_IMPORT_PROCESSING_WEIGHT
 
@@ -96,7 +98,7 @@ def _calculate_and_announce_progress(processed_count, total_feeds_to_import,
                        or processed_count % 20 == 0)
 
     if should_announce:
-        status_msg = f"Processing feed {processed_count}/{total_feeds_to_import}..."
+        status_msg = f"Processing OPML... ({processed_count} outlines analyzed)"
         event_data = {
             "type": "progress",
             "status": status_msg,
