@@ -42,8 +42,7 @@ def client():
 
     # Get the Redis URL set by pytest-env from pytest.ini
     redis_url = os.environ.get(
-        "CACHE_REDIS_URL", "redis://localhost:6379/0"
-    )  # Default if not set
+        "CACHE_REDIS_URL", "redis://localhost:6379/0")  # Default if not set
 
     # Force IPv4 for localhost if it's being used.
     if "localhost" in redis_url:
@@ -364,7 +363,8 @@ def test_get_feeds_for_tab_with_items_and_limit(client, setup_tabs_and_feeds):
     assert len(feed2_data["items"]) == 1  # Limited to 1
 
 
-def test_get_feeds_for_tab_with_feed_having_no_items(client, setup_tabs_and_feeds):
+def test_get_feeds_for_tab_with_feed_having_no_items(client,
+                                                     setup_tabs_and_feeds):
     """Test GET /api/tabs/<tab_id>/feeds for a tab with a feed that has no items."""
     tab2_id = setup_tabs_and_feeds["tab2_id"]
 
@@ -406,15 +406,12 @@ def test_get_feeds_for_tab_not_found(client):
 
 
 # Mock feed fetching/processing for add/delete tests
-@patch(
-    "backend.blueprints.feeds.fetch_feed"
-)  # Patch fetch_feed where it's used in app.py
-@patch(
-    "backend.blueprints.feeds.process_feed_entries"
-)  # Patch process_feed_entries where it's used in app.py
-def test_add_feed_success(
-    mock_process_entries, mock_fetch, client, setup_tabs_and_feeds
-):
+@patch("backend.blueprints.feeds.fetch_feed"
+       )  # Patch fetch_feed where it's used in app.py
+@patch("backend.blueprints.feeds.process_feed_entries"
+       )  # Patch process_feed_entries where it's used in app.py
+def test_add_feed_success(mock_process_entries, mock_fetch, client,
+                          setup_tabs_and_feeds):
     """Test POST /api/feeds successfully adding a feed."""
     # Arrange
     tab1_id = setup_tabs_and_feeds["tab1_id"]
@@ -427,8 +424,11 @@ def test_add_feed_success(
     mock_process_entries.return_value = 0
 
     # Act
-    response = client.post(
-        "/api/feeds", json={"url": feed_url, "tab_id": tab1_id})
+    response = client.post("/api/feeds",
+                           json={
+                               "url": feed_url,
+                               "tab_id": tab1_id
+                           })
 
     # Assert
     assert response.status_code == 201
@@ -455,8 +455,11 @@ def test_add_feed_fetch_fails(mock_fetch, client, setup_tabs_and_feeds):
     feed_url = "http://badsite.com/rss"
     mock_fetch.return_value = None  # Simulate fetch failure
 
-    response = client.post(
-        "/api/feeds", json={"url": feed_url, "tab_id": tab1_id})
+    response = client.post("/api/feeds",
+                           json={
+                               "url": feed_url,
+                               "tab_id": tab1_id
+                           })
 
     assert response.status_code == 201
     # Uses URL as name on fetch failure
@@ -471,8 +474,11 @@ def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     tab1_id = setup_tabs_and_feeds["tab1_id"]
     existing_url = "url1"  # From setup_tabs_and_feeds
 
-    response = client.post(
-        "/api/feeds", json={"url": existing_url, "tab_id": tab1_id})
+    response = client.post("/api/feeds",
+                           json={
+                               "url": existing_url,
+                               "tab_id": tab1_id
+                           })
 
     assert response.status_code == 409  # Conflict
     assert "error" in response.json
@@ -480,15 +486,17 @@ def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     mock_fetch.assert_not_called()  # Should check DB before fetching
 
 
-@patch(
-    "backend.blueprints.feeds.fetch_feed"
-)  # Also needs patch if fetch_feed is involved in error path
+@patch("backend.blueprints.feeds.fetch_feed"
+       )  # Also needs patch if fetch_feed is involved in error path
 def test_add_feed_invalid_tab(
-    mock_fetch_unused, client
-):  # mock_fetch_unused if not directly used but to be consistent
+        mock_fetch_unused,
+        client):  # mock_fetch_unused if not directly used but to be consistent
     """Test POST /api/feeds with a non-existent tab_id."""
-    response = client.post(
-        "/api/feeds", json={"url": "some_url", "tab_id": 999})
+    response = client.post("/api/feeds",
+                           json={
+                               "url": "some_url",
+                               "tab_id": 999
+                           })
     assert response.status_code == 404
 
 
@@ -569,11 +577,12 @@ def test_mark_item_read_not_found(client):
 
 
 @patch("backend.blueprints.feeds.fetch_and_update_feed")
-def test_update_feed_success(mock_fetch_and_update, client, setup_tabs_and_feeds):
+def test_update_feed_success(mock_fetch_and_update, client,
+                             setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
     # Mock the return values of fetch_and_update_feed
-    mock_fetch_and_update.return_value = (
-        True, 1, 1)  # success, num_new_items, tab_id
+    mock_fetch_and_update.return_value = (True, 1, 1
+                                          )  # success, num_new_items, tab_id
 
     response = client.post(f"/api/feeds/{feed_id}/update")
 
@@ -593,7 +602,8 @@ def test_update_feed_not_found(mock_fetch_and_update, client):
 
 
 @patch("backend.blueprints.feeds.fetch_and_update_feed")
-def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds):
+def test_update_feed_failure(mock_fetch_and_update, client,
+                             setup_tabs_and_feeds):
     feed_id = setup_tabs_and_feeds["feed1_id"]
     mock_fetch_and_update.side_effect = Exception("Simulated update error")
 
@@ -603,8 +613,7 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
     assert "error" in response.json
     assert (
         f"An internal error occurred while manually updating feed {feed_id}."
-        in response.json["error"]
-    )
+        in response.json["error"])
     mock_fetch_and_update.assert_called_once_with(feed_id)
 
 
@@ -612,7 +621,8 @@ def test_update_feed_failure(mock_fetch_and_update, client, setup_tabs_and_feeds
 
 
 @patch("backend.blueprints.feeds.fetch_feed")
-def test_update_feed_url_success(mock_fetch_feed, client, setup_tabs_and_feeds):
+def test_update_feed_url_success(mock_fetch_feed, client,
+                                 setup_tabs_and_feeds):
     """Test PUT /api/feeds/<feed_id> successfully updates feed URL and name."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
     new_url = "https://example.com/new-feed.xml"
@@ -635,7 +645,8 @@ def test_update_feed_url_success(mock_fetch_feed, client, setup_tabs_and_feeds):
 
 
 @patch("backend.blueprints.feeds.fetch_feed")
-def test_update_feed_url_fetch_fails(mock_fetch_feed, client, setup_tabs_and_feeds):
+def test_update_feed_url_fetch_fails(mock_fetch_feed, client,
+                                     setup_tabs_and_feeds):
     """Test PUT /api/feeds/<feed_id> when feed fetch fails."""
     feed_id = setup_tabs_and_feeds["feed1_id"]
     new_url = "https://example.com/invalid-feed.xml"
@@ -682,9 +693,8 @@ def test_update_feed_url_duplicate_url(client, setup_tabs_and_feeds):
 
 def test_update_feed_url_not_found(client):
     """Test PUT /api/feeds/<feed_id> when feed is not found."""
-    response = client.put(
-        "/api/feeds/999", json={"url": "https://example.com/new-feed.xml"}
-    )
+    response = client.put("/api/feeds/999",
+                          json={"url": "https://example.com/new-feed.xml"})
 
     assert response.status_code == 404
 
@@ -696,9 +706,8 @@ def test_get_root_path(client):
     """Test GET / (root path) serves index.html."""
     response = client.get("/")
     assert response.status_code == 200
-    assert (
-        response.content_type == "text/html; charset=utf-8"
-    )  # Flask default for send_from_directory
+    assert (response.content_type == "text/html; charset=utf-8"
+            )  # Flask default for send_from_directory
     assert b"<title>SheepVibes</title>" in response.data
 
 
@@ -736,7 +745,8 @@ def test_get_non_existent_static_file(client):
 
 @patch("backend.blueprints.feeds.announcer.announce")
 @patch("backend.blueprints.feeds.update_all_feeds")
-def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
+def test_update_all_feeds_success(mock_update_all_feeds, mock_announce,
+                                  client):
     """Test POST /api/feeds/update-all successfully and announces SSE."""
     # Arrange
     mock_update_all_feeds.return_value = (
@@ -769,7 +779,8 @@ def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
 
 @patch("backend.blueprints.feeds.announcer.announce")
 @patch("backend.blueprints.feeds.update_all_feeds")
-def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce, client):
+def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce,
+                                    client):
     """Test POST /api/feeds/update-all when update_all_feeds raises an exception."""
     # Arrange
     mock_update_all_feeds.side_effect = Exception("Test update error")
@@ -781,7 +792,8 @@ def test_update_all_feeds_exception(mock_update_all_feeds, mock_announce, client
     assert response.status_code == 500
     data = response.get_json()
     assert "error" in data
-    assert "An internal error occurred while updating all feeds." in data["error"]
+    assert "An internal error occurred while updating all feeds." in data[
+        "error"]
 
     # Assert Mocks
     mock_update_all_feeds.assert_called_once()
@@ -830,9 +842,8 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
         client.post(f"/api/items/{item1_id}/read")
 
         # 5. Assert the query IS re-executed on the next call (cache miss).
-        with patch(
-            "backend.extensions.db.session.execute"
-        ) as mock_execute_after_invalidation:
+        with patch("backend.extensions.db.session.execute"
+                   ) as mock_execute_after_invalidation:
             client.get(f"/api/tabs/{tab1_id}/feeds")
             mock_execute_after_invalidation.assert_called()
 
@@ -854,18 +865,19 @@ def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
         client.post("/api/tabs", json={"name": "A New Tab"})
 
         # 5. Assert the next call is a cache miss
-        with patch("backend.models.Tab.query") as mock_tab_query_after_invalidation:
+        with patch("backend.models.Tab.query"
+                   ) as mock_tab_query_after_invalidation:
             mock_tab_query_after_invalidation.order_by.return_value.all.return_value = []
             client.get("/api/tabs")
-            mock_tab_query_after_invalidation.order_by.return_value.all.assert_called_once()
+            mock_tab_query_after_invalidation.order_by.return_value.all.assert_called_once(
+            )
 
 
 # --- Tests for Model Methods ---
 
 
 def test_feed_item_to_dict_serialization(
-    client,
-):  # client fixture ensures app_context and db setup
+        client, ):  # client fixture ensures app_context and db setup
     """
     Tests the to_dict() method of the FeedItem model, focusing on datetime serialization.
     """
@@ -916,12 +928,20 @@ def test_feed_item_to_dict_serialization(
         # EST is UTC-5, PST is UTC-8
         tz_est = datetime.timezone(datetime.timedelta(hours=-5))
         tz_pst = datetime.timezone(datetime.timedelta(hours=-8))
-        dt_aware_published_est = datetime.datetime(
-            2023, 3, 15, 12, 0, 0, tzinfo=tz_est
-        )  # 17:00 UTC
-        dt_aware_fetched_pst = datetime.datetime(
-            2023, 3, 15, 9, 0, 0, tzinfo=tz_pst
-        )  # 17:00 UTC
+        dt_aware_published_est = datetime.datetime(2023,
+                                                   3,
+                                                   15,
+                                                   12,
+                                                   0,
+                                                   0,
+                                                   tzinfo=tz_est)  # 17:00 UTC
+        dt_aware_fetched_pst = datetime.datetime(2023,
+                                                 3,
+                                                 15,
+                                                 9,
+                                                 0,
+                                                 0,
+                                                 tzinfo=tz_pst)  # 17:00 UTC
 
         item_aware = FeedItem(
             feed_id=test_feed.id,
@@ -948,9 +968,13 @@ def test_feed_item_to_dict_serialization(
         db.session.commit()
 
         # Scenario 3: published_time is None, fetched_time is aware UTC
-        dt_aware_fetched_utc = datetime.datetime(
-            2023, 5, 20, 14, 0, 0, tzinfo=datetime.timezone.utc
-        )
+        dt_aware_fetched_utc = datetime.datetime(2023,
+                                                 5,
+                                                 20,
+                                                 14,
+                                                 0,
+                                                 0,
+                                                 tzinfo=datetime.timezone.utc)
         item_none_published = FeedItem(
             feed_id=test_feed.id,
             title="None Published Test",
@@ -979,15 +1003,18 @@ def test_to_iso_z_string_static_method():
 
     # 2. Test with a timezone-aware datetime (not UTC)
     tz_est = datetime.timezone(datetime.timedelta(hours=-5))
-    aware_dt_est = datetime.datetime(
-        2023, 3, 15, 10, 0, 0, tzinfo=tz_est
-    )  # This is 15:00 UTC
+    aware_dt_est = datetime.datetime(2023, 3, 15, 10, 0, 0,
+                                     tzinfo=tz_est)  # This is 15:00 UTC
     assert FeedItem.to_iso_z_string(aware_dt_est) == "2023-03-15T15:00:00Z"
 
     # 3. Test with a timezone-aware UTC datetime
-    aware_dt_utc = datetime.datetime(
-        2023, 5, 20, 14, 30, 0, tzinfo=datetime.timezone.utc
-    )
+    aware_dt_utc = datetime.datetime(2023,
+                                     5,
+                                     20,
+                                     14,
+                                     30,
+                                     0,
+                                     tzinfo=datetime.timezone.utc)
     assert FeedItem.to_iso_z_string(aware_dt_utc) == "2023-05-20T14:30:00Z"
 
     # 4. Test with None input
@@ -997,7 +1024,8 @@ def test_to_iso_z_string_static_method():
 # --- Tests for feed_service functions ---
 
 
-def test_parse_published_time_variations():  # No client fixture needed as it's a pure function
+def test_parse_published_time_variations(
+):  # No client fixture needed as it's a pure function
     """Tests the parse_published_time helper with various entry structures."""
 
     mock_spec = ["published_parsed", "published", "updated", "created", "get"]
@@ -1005,8 +1033,7 @@ def test_parse_published_time_variations():  # No client fixture needed as it's 
     # Case 1: 'published_parsed' available and valid
     entry1 = MagicMock(spec=mock_spec)
     entry1.published_parsed = datetime.datetime(
-        2023, 10, 26, 14, 30, 0, tzinfo=timezone.utc
-    ).utctimetuple()
+        2023, 10, 26, 14, 30, 0, tzinfo=timezone.utc).utctimetuple()
     entry1.published = None
     entry1.updated = None
     entry1.created = None
@@ -1104,8 +1131,7 @@ def test_parse_published_time_variations():  # No client fixture needed as it's 
 
 
 def test_process_feed_with_in_batch_duplicate_guids(
-    client,
-):  # Using client fixture for app_context
+        client, ):  # Using client fixture for app_context
     """
     Tests that process_feed_entries correctly handles entries with duplicate GUIDs
     within the same fetched batch, only adding the first instance.
@@ -1133,16 +1159,29 @@ def test_process_feed_with_in_batch_duplicate_guids(
         # Adjust .get to correctly return explicitly set attributes or the default
         mock_parsed_feed.feed.get = lambda key, default_val=None: (
             getattr(mock_parsed_feed.feed, key)
-            if hasattr(mock_parsed_feed.feed, key)
-            else default_val
-        )
+            if hasattr(mock_parsed_feed.feed, key) else default_val)
 
-        dt_entry1 = datetime.datetime(
-            2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        dt_entry2 = datetime.datetime(
-            2023, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
-        dt_entry3 = datetime.datetime(
-            2023, 1, 1, 12, 10, 0, tzinfo=timezone.utc)
+        dt_entry1 = datetime.datetime(2023,
+                                      1,
+                                      1,
+                                      12,
+                                      0,
+                                      0,
+                                      tzinfo=timezone.utc)
+        dt_entry2 = datetime.datetime(2023,
+                                      1,
+                                      1,
+                                      12,
+                                      5,
+                                      0,
+                                      tzinfo=timezone.utc)
+        dt_entry3 = datetime.datetime(2023,
+                                      1,
+                                      1,
+                                      12,
+                                      10,
+                                      0,
+                                      tzinfo=timezone.utc)
 
         entry1_data = {
             "id": "guid1",
@@ -1192,14 +1231,14 @@ def test_process_feed_with_in_batch_duplicate_guids(
         assert "guid2" in guids_in_db
         assert len(guids_in_db) == 2
 
-        item1_db = FeedItem.query.filter_by(
-            guid="guid1", feed_id=feed_obj.id).first()
+        item1_db = FeedItem.query.filter_by(guid="guid1",
+                                            feed_id=feed_obj.id).first()
         assert item1_db is not None
         assert item1_db.title == "Title 2 (Same GUID)"
         assert item1_db.link == "http://link2.com"
 
-        item2_db = FeedItem.query.filter_by(
-            guid="guid2", feed_id=feed_obj.id).first()
+        item2_db = FeedItem.query.filter_by(guid="guid2",
+                                            feed_id=feed_obj.id).first()
         assert item2_db is not None
         assert item2_db.title == "Title 3"
         assert item2_db.link == "http://link3.com"
@@ -1234,15 +1273,23 @@ def test_process_feed_with_missing_link(client):
         # Adjust .get to correctly return explicitly set attributes or the default
         mock_parsed_feed.feed.get = lambda key, default_val=None: (
             getattr(mock_parsed_feed.feed, key)
-            if hasattr(mock_parsed_feed.feed, key)
-            else default_val
-        )
+            if hasattr(mock_parsed_feed.feed, key) else default_val)
 
         dt_valid = datetime.datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        dt_no_link = datetime.datetime(
-            2023, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
-        dt_empty_link = datetime.datetime(
-            2023, 1, 1, 12, 10, 0, tzinfo=timezone.utc)
+        dt_no_link = datetime.datetime(2023,
+                                       1,
+                                       1,
+                                       12,
+                                       5,
+                                       0,
+                                       tzinfo=timezone.utc)
+        dt_empty_link = datetime.datetime(2023,
+                                          1,
+                                          1,
+                                          12,
+                                          10,
+                                          0,
+                                          tzinfo=timezone.utc)
 
         entry_valid_data = {
             "id": "guid_valid",
@@ -1271,17 +1318,16 @@ def test_process_feed_with_missing_link(client):
         entry_no_link = MagicMock()
         entry_no_link.configure_mock(**entry_no_link_data)
         entry_no_link.get = lambda key, default=None: entry_no_link_data.get(
-            key, default
-        )
+            key, default)
 
         entry_empty_link = MagicMock()
         entry_empty_link.configure_mock(**entry_empty_link_data)
         entry_empty_link.get = lambda key, default=None: entry_empty_link_data.get(
-            key, default
-        )
+            key, default)
 
         mock_parsed_feed.entries = [
-            entry_valid, entry_no_link, entry_empty_link]
+            entry_valid, entry_no_link, entry_empty_link
+        ]
         mock_parsed_feed.bozo = 0
 
         # 3. Call process_feed_entries directly
@@ -1305,10 +1351,8 @@ def test_export_opml_empty(client):
     response = client.get("/api/opml/export")
     assert response.status_code == 200
     assert "application/xml" in response.content_type
-    assert (
-        response.headers["Content-Disposition"]
-        == 'attachment; filename="sheepvibes_feeds.opml"'
-    )
+    assert (response.headers["Content-Disposition"] ==
+            'attachment; filename="sheepvibes_feeds.opml"')
 
     # Parse XML
     tree = ET.fromstring(response.data)
@@ -1334,10 +1378,8 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
     response = client.get("/api/opml/export")
     assert response.status_code == 200
     assert "application/xml" in response.content_type
-    assert (
-        response.headers["Content-Disposition"]
-        == 'attachment; filename="sheepvibes_feeds.opml"'
-    )
+    assert (response.headers["Content-Disposition"] ==
+            'attachment; filename="sheepvibes_feeds.opml"')
 
     tree = ET.fromstring(response.data)
     assert tree.tag == "opml"
@@ -1424,7 +1466,10 @@ def test_import_opml_success(mock_fetch_update, client):
     # Act
     response = client.post(
         "/api/opml/import",
-        data={"file": opml_file, "tab_id": str(tab_id)},
+        data={
+            "file": opml_file,
+            "tab_id": str(tab_id)
+        },
         content_type="multipart/form-data",
     )
 
@@ -1474,9 +1519,9 @@ def test_import_opml_with_duplicates(mock_fetch_update, client):
         db.session.commit()  # Commit tab first to get its ID
         tab_id = tab.id
 
-        existing_feed = Feed(
-            tab_id=tab_id, name="Existing Feed", url="http://feed1.opml.com/rss"
-        )
+        existing_feed = Feed(tab_id=tab_id,
+                             name="Existing Feed",
+                             url="http://feed1.opml.com/rss")
         db.session.add(existing_feed)
         db.session.commit()  # Commit the feed
 
@@ -1493,7 +1538,10 @@ def test_import_opml_with_duplicates(mock_fetch_update, client):
 
     response = client.post(
         "/api/opml/import",
-        data={"file": opml_file, "tab_id": str(tab_id)},
+        data={
+            "file": opml_file,
+            "tab_id": str(tab_id)
+        },
         content_type="multipart/form-data",
     )
 
@@ -1511,8 +1559,8 @@ def test_import_opml_with_duplicates(mock_fetch_update, client):
 
 def test_import_opml_no_file(client):
     """Test POST /api/opml/import without a file."""
-    response = client.post(
-        "/api/opml/import", content_type="multipart/form-data")
+    response = client.post("/api/opml/import",
+                           content_type="multipart/form-data")
     assert response.status_code == 400
     assert "No file part" in response.json["error"]
 
@@ -1520,9 +1568,9 @@ def test_import_opml_no_file(client):
 def test_import_opml_empty_filename(client):
     """Test POST /api/opml/import with an empty filename (simulates no file selected)."""
     opml_file = (io.BytesIO(b"content"), "")  # Empty filename
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
     assert response.status_code == 400
     assert "No file selected" in response.json["error"]
 
@@ -1536,15 +1584,16 @@ def test_import_opml_malformed_xml(client):
 
     opml_content = "<opml><body/><head></opml>"  # Malformed, unclosed tags
     opml_file = (io.BytesIO(opml_content.encode("utf-8")), "malformed.opml")
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
     assert response.status_code == 400
     assert "Malformed OPML file" in response.json["error"]
 
 
 @patch("backend.blueprints.opml.fetch_and_update_feed")
-def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, client):
+def test_import_opml_creates_default_tab_when_none_exist(
+        mock_fetch_update, client):
     """Test import creates a default tab if none exist and imports feeds."""
     mock_fetch_update.return_value = (
         True,
@@ -1564,9 +1613,9 @@ def test_import_opml_creates_default_tab_when_none_exist(mock_fetch_update, clie
                  "test_default_creation.opml")
 
     # Act
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
 
     # Assert
     assert response.status_code == 200
@@ -1626,7 +1675,10 @@ def test_import_opml_specific_tab(mock_fetch_update, client):
 
     response = client.post(
         "/api/opml/import",
-        data={"file": opml_file, "tab_id": str(tab2_id)},
+        data={
+            "file": opml_file,
+            "tab_id": str(tab2_id)
+        },
         content_type="multipart/form-data",
     )
 
@@ -1647,8 +1699,7 @@ def test_import_opml_specific_tab(mock_fetch_update, client):
 
 @patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_default_tab_if_tab_id_not_provided(
-    mock_fetch_update, client
-):  # Added mock_fetch_update
+        mock_fetch_update, client):  # Added mock_fetch_update
     """Test POST /api/opml/import defaults to the first tab if tab_id is not provided."""
     mock_fetch_update.return_value = (
         True,
@@ -1669,9 +1720,9 @@ def test_import_opml_default_tab_if_tab_id_not_provided(
                  "test_default_tab.opml")
 
     # Not providing 'tab_id' in the form data
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
 
     assert response.status_code == 200
     json_data = response.json
@@ -1690,10 +1741,10 @@ def test_import_opml_default_tab_if_tab_id_not_provided(
         mock_fetch_update.assert_any_call(feed_in_default_tab.id)
 
 
-@patch(
-    "backend.blueprints.opml.fetch_and_update_feed"
-)  # Even though no feeds are imported, the setup could change.
-def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client):
+@patch("backend.blueprints.opml.fetch_and_update_feed"
+       )  # Even though no feeds are imported, the setup could change.
+def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused,
+                                               client):
     """Test that an <outline> missing xmlUrl is skipped during import."""
     mock_fetch_update_unused.return_value = (
         True,
@@ -1719,7 +1770,10 @@ def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused, client)
                  "test_missing_xmlurl.opml")
     response = client.post(
         "/api/opml/import",
-        data={"file": opml_file, "tab_id": str(tab_id)},
+        data={
+            "file": opml_file,
+            "tab_id": str(tab_id)
+        },
         content_type="multipart/form-data",
     )
 
@@ -1752,9 +1806,9 @@ def test_import_opml_no_body_tag(mock_fetch_update_unused, client):
 
     opml_content = """<opml version="2.0"><head><title>No Body</title></head></opml>"""
     opml_file = (io.BytesIO(opml_content.encode("utf-8")), "no_body.opml")
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
 
     assert response.status_code == 200  # Should still be a valid request
     json_data = response.json
@@ -1774,21 +1828,23 @@ def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
 
     opml_content = """<opml version="2.0"><head><title>Empty Body</title></head><body></body></opml>"""
     opml_file = (io.BytesIO(opml_content.encode("utf-8")), "empty_body.opml")
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
 
     assert response.status_code == 200
     json_data = response.json
     assert json_data["imported_count"] == 0
     assert json_data["skipped_count"] == 0
     # Updated message for empty body elements (body exists but has no children)
-    assert "No feed entries or folders found in the OPML file." in json_data["message"]
+    assert "No feed entries or folders found in the OPML file." in json_data[
+        "message"]
     mock_fetch_update_unused.assert_not_called()
 
 
 @patch("backend.blueprints.opml.fetch_and_update_feed")
-def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, client):
+def test_import_opml_nested_structure_creates_tabs_and_feeds(
+        mock_fetch_update, client):
     """Tests that nested OPML outlines create new tabs and feeds are correctly assigned."""
     # Simulate successful fetch for each feed, returning a dummy tab_id (1)
     mock_fetch_update.side_effect = [
@@ -1815,9 +1871,9 @@ def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, 
                  "nested_import.opml")
 
     # Act: Import without specifying a tab_id, relying on default tab creation if none exist
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
 
     # Assert
     assert response.status_code == 200
@@ -1834,8 +1890,7 @@ def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, 
         tech_folder_tab = Tab.query.filter_by(name="Tech Folder").first()
         assert tech_folder_tab is not None
         default_tab = Tab.query.filter_by(
-            name="Imported Feeds"
-        ).first()  # For the top-level feed
+            name="Imported Feeds").first()  # For the top-level feed
         assert default_tab is not None
 
         # Verify feeds in "News Folder"
@@ -1863,7 +1918,8 @@ def test_import_opml_nested_structure_creates_tabs_and_feeds(mock_fetch_update, 
 
 
 @patch("backend.blueprints.opml.fetch_and_update_feed")
-def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, client):
+def test_import_opml_nested_folder_name_matches_existing_tab(
+        mock_fetch_update, client):
     """Tests that feeds in a folder are added to an existing tab if names match."""
     mock_fetch_update.return_value = (True, 1, 1)
     with app.app_context():
@@ -1885,9 +1941,9 @@ def test_import_opml_nested_folder_name_matches_existing_tab(mock_fetch_update, 
         io.BytesIO(opml_content.encode("utf-8")),
         "existing_folder_import.opml",
     )
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
 
     assert response.status_code == 200
     json_data = response.json
@@ -1918,9 +1974,9 @@ def test_import_opml_empty_folder(mock_fetch_update_unused, client):
     """
     opml_file = (io.BytesIO(opml_content.encode("utf-8")),
                  "empty_folder_import.opml")
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
 
     assert response.status_code == 200
     json_data = response.json
@@ -1928,9 +1984,8 @@ def test_import_opml_empty_folder(mock_fetch_update_unused, client):
 
     with app.app_context():
         empty_folder_tab = Tab.query.filter_by(name="Empty Folder").first()
-        assert (
-            empty_folder_tab is None
-        )  # Corrected: Empty folders are skipped, no tab created
+        assert (empty_folder_tab is None
+                )  # Corrected: Empty folders are skipped, no tab created
 
         # Check that the default tab for "Top Level Feed E" was created or used
         # If no other tabs existed, "Imported Feeds" would be created.
@@ -1954,8 +2009,7 @@ def test_import_opml_empty_folder(mock_fetch_update_unused, client):
 
 @patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(
-    mock_fetch_update, client
-):
+        mock_fetch_update, client):
     """Tests that a folder <outline> without a title is skipped, and its children go to the current default tab."""
     mock_fetch_update.return_value = (True, 1, 1)
     with app.app_context():  # Ensure a default tab exists or will be created
@@ -1979,7 +2033,10 @@ def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(
     # Import into the specific initial_tab_id to make assertions easier
     response = client.post(
         "/api/opml/import",
-        data={"file": opml_file, "tab_id": str(initial_tab_id)},
+        data={
+            "file": opml_file,
+            "tab_id": str(initial_tab_id)
+        },
         content_type="multipart/form-data",
     )
 
@@ -1994,10 +2051,8 @@ def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(
         initial_tab = db.session.get(Tab, initial_tab_id)
         assert initial_tab is not None
 
-        feeds_in_initial_tab = (
-            Feed.query.filter_by(
-                tab_id=initial_tab_id).order_by(Feed.name).all()
-        )
+        feeds_in_initial_tab = (Feed.query.filter_by(
+            tab_id=initial_tab_id).order_by(Feed.name).all())
         assert len(feeds_in_initial_tab) == 2
         assert feeds_in_initial_tab[0].name == "Feed E"
         assert feeds_in_initial_tab[1].name == "Feed F"
@@ -2009,16 +2064,16 @@ def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(
 
 @patch("backend.blueprints.opml.fetch_and_update_feed")
 def test_import_opml_deletes_empty_default_imported_feeds_tab(
-    mock_fetch_update, client
-):  # Use client fixture for app context
+        mock_fetch_update, client):  # Use client fixture for app context
     """
     Tests that if 'Imported Feeds' is created because no tabs exist,
     but all OPML items go into folders (new tabs), the empty 'Imported Feeds' tab is deleted.
     """
-    mock_fetch_update.return_value = (
-        True, 1, 1)  # Simulate feed fetch success
+    mock_fetch_update.return_value = (True, 1, 1
+                                      )  # Simulate feed fetch success
     # Ensure no tabs exist initially. The `client` fixture already handles db cleanup.
-    with client.application.app_context():  # Use client.application.app_context()
+    with client.application.app_context(
+    ):  # Use client.application.app_context()
         assert Tab.query.count() == 0
 
     opml_content = """<?xml version="1.0" encoding="UTF-8"?>
@@ -2035,9 +2090,9 @@ def test_import_opml_deletes_empty_default_imported_feeds_tab(
         io.BytesIO(opml_content.encode("utf-8")),
         "test_delete_empty_default.opml",
     )
-    response = client.post(
-        "/api/opml/import", data={"file": opml_file}, content_type="multipart/form-data"
-    )
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
 
     assert response.status_code == 200
     data = response.json
@@ -2046,7 +2101,8 @@ def test_import_opml_deletes_empty_default_imported_feeds_tab(
     # The 'tab_name' in response might be "Imported Feeds" (the one that got deleted)
     # The 'tab_id' in response might be the ID of the deleted "Imported Feeds" tab.
 
-    with client.application.app_context():  # Use client.application.app_context()
+    with client.application.app_context(
+    ):  # Use client.application.app_context()
         tabs_after_import = Tab.query.all()
         # Only "My Folder" tab should exist. "Imported Feeds" should have been created and then deleted.
         assert len(tabs_after_import) == 1
@@ -2058,8 +2114,7 @@ def test_import_opml_deletes_empty_default_imported_feeds_tab(
         assert imported_feeds_tab_check is None
 
         feed_in_folder = Feed.query.filter_by(
-            url="http://example.com/folderfeed.xml"
-        ).first()
+            url="http://example.com/folderfeed.xml").first()
         assert feed_in_folder is not None
         assert feed_in_folder.tab.name == "My Folder"  # Associated with the correct tab
 
@@ -2121,9 +2176,8 @@ def test_get_feed_items_pagination_validation(client, setup_tabs_and_feeds):
     # Test limit exceeding maximum (should be capped, not error)
     response4 = client.get(f"/api/feeds/{feed_id}/items?offset=0&limit=200")
     assert response4.status_code == 200
-    assert (
-        len(response4.json) == 2
-    )  # Should return available items, capped to MAX_PAGINATION_LIMIT
+    assert (len(response4.json) == 2
+            )  # Should return available items, capped to MAX_PAGINATION_LIMIT
 
 
 def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
@@ -2146,8 +2200,8 @@ def test_get_feed_items_pagination_limit_capping(client, setup_tabs_and_feeds):
                 title=f"Limit Cap Item {i}",
                 link=f"link_limit_cap_{i}",
                 guid=f"guid_limit_cap_{i}",
-                published_time=base_time
-                - timedelta(minutes=i),  # Newer items have later times
+                published_time=base_time -
+                timedelta(minutes=i),  # Newer items have later times
             )
             db.session.add(item)
         db.session.commit()
@@ -2173,9 +2227,9 @@ def setup_autosave_test_data(client):
         db.session.add(tab)
         db.session.commit()
 
-        feed = Feed(
-            tab_id=tab.id, name="Autosave Feed", url="http://example.com/autosave"
-        )
+        feed = Feed(tab_id=tab.id,
+                    name="Autosave Feed",
+                    url="http://example.com/autosave")
         db.session.add(feed)
         db.session.commit()
         return tab, feed
@@ -2210,8 +2264,7 @@ def test_autosave_opml_mocked(
 
     # Config app
     client.application.config["SQLALCHEMY_DATABASE_URI"] = (
-        "sqlite:////mock/data/sheepvibes.db"
-    )
+        "sqlite:////mock/data/sheepvibes.db")
     client.application.config["PROJECT_ROOT"] = "/mock"
 
     # Act
@@ -2226,15 +2279,14 @@ def test_autosave_opml_mocked(
     assert args[1] == "w"
 
     # Check lock
-    mock_lock.assert_called_once_with(
-        "/mock/data/sheepvibes_backup.opml.lock", timeout=5
-    )
+    mock_lock.assert_called_once_with("/mock/data/sheepvibes_backup.opml.lock",
+                                      timeout=5)
     mock_lock.return_value.__enter__.assert_called_once()
 
     # Check replacement
     mock_replace.assert_called_once_with(
-        "/mock/data/sheepvibes_backup.opml.tmp", "/mock/data/sheepvibes_backup.opml"
-    )
+        "/mock/data/sheepvibes_backup.opml.tmp",
+        "/mock/data/sheepvibes_backup.opml")
 
     # Check data written
     mock_file.write.assert_called_once()
@@ -2243,7 +2295,8 @@ def test_autosave_opml_mocked(
     assert "http://example.com/autosave" in written_data
 
 
-def test_autosave_opml_with_temp_fs(tmp_path, client, setup_autosave_test_data):
+def test_autosave_opml_with_temp_fs(tmp_path, client,
+                                    setup_autosave_test_data):
     """Test autosave_opml with a temporary file system, verifying file creation."""
     from backend.app import autosave_opml
 
@@ -2251,7 +2304,8 @@ def test_autosave_opml_with_temp_fs(tmp_path, client, setup_autosave_test_data):
     # Note: data comes from the fixture (likely in-memory or default DB),
     # but we override the config so autosave_opml writes to our temp path.
     db_path = tmp_path / "sqlite.db"
-    client.application.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    client.application.config[
+        "SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     client.application.config["PROJECT_ROOT"] = str(tmp_path)
 
     # Act
@@ -2262,8 +2316,7 @@ def test_autosave_opml_with_temp_fs(tmp_path, client, setup_autosave_test_data):
     # since SQLALCHEMY_DATABASE_URI points to an absolute path
     backup_file_path = tmp_path / "sheepvibes_backup.opml"
     assert backup_file_path.exists(), (
-        "Backup file should have been created in the DB directory."
-    )
+        "Backup file should have been created in the DB directory.")
 
     written_data = backup_file_path.read_text(encoding="utf-8")
     assert "Autosave Test Tab" in written_data
