@@ -61,7 +61,8 @@ def _sanitize_for_log(text):
     """Sanitizes text for logging to prevent log injection."""
     if not text:
         return ""
-    # Remove control characters and limit length
+    # Escape newlines/carriage returns, then remove non-printable characters
+    text = str(text).replace("\n", "\\n").replace("\r", "\\r")
     return "".join(ch for ch in text if ch.isprintable())[:200]
 
 
@@ -253,11 +254,15 @@ def _process_opml_outlines_iterative(
                 and folder_type_attr in SKIPPED_FOLDER_TYPES
             ):
                 logger.info(
-                    "OPML import: Skipping folder '%s' due to type: %s.",
-                    element_name,
-                    folder_type_attr,
+                    "OPML import: Skipping folder '%s' (type: %s), but processing children under current tab.",
+                    _sanitize_for_log(element_name),
+                    _sanitize_for_log(folder_type_attr),
                 )
-                continue
+                # Don't create a new tab for skipped folder types, but
+                # process their children under the current tab.
+                if child_outlines:
+                    stack.append((list(reversed(child_outlines)),
+                                  current_tab_id, current_tab_name))
 
             elif not xml_url and element_name and child_outlines:
                 try:
@@ -689,13 +694,6 @@ def _get_max_concurrent_fetches():
 MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
 
 # --- Helper Functions ---
-
-
-def _sanitize_for_log(value):
-    """Sanitizes a string for safe logging (prevents log injection)."""
-    if value is None:
-        return "[None]"
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 def _validate_xml_safety(content):
