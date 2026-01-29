@@ -488,8 +488,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                 progress_val = 100
 
             # Only announce if significant progress or first/last
-            should_announce = i == 0 or i == total_to_fetch - \
-                1 or (i + 1) % 5 == 0
+            should_announce = i == 0 or i == total_to_fetch - 1 or (i + 1) % 5 == 0
 
             if should_announce:
                 event_data = {
@@ -543,10 +542,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     if error_resp:
         return None, error_resp
 
-    total_feeds_to_import = _count_feeds_in_opml(root)
     total_outlines = len(root.findall(".//outline"))
-
-    # ... (rest of the function, passing total_feeds_to_import down)
     (
         top_level_target_tab_id,
         top_level_target_tab_name,
