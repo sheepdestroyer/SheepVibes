@@ -19,10 +19,10 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
-import sqlalchemy.exc
 import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
+import sqlalchemy.exc
 from dateutil import parser as date_parser
 from defusedxml.common import (
     DTDForbidden,
@@ -414,8 +414,8 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
         return True, None
     except sqlalchemy.exc.SQLAlchemyError as e:  # pylint: disable=broad-exception-caught
         db.session.rollback()
-        logger.exception("OPML import: Database commit failed for new feeds: %s",
-                         e)
+        logger.exception(
+            "OPML import: Database commit failed for new feeds: %s", e)
         return False, (
             {
                 "error": "Database error during final feed import step."
@@ -511,7 +511,8 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     )
 
     # Batch commit and fetch
-    success, error_resp = _batch_commit_and_fetch_new_feeds(newly_added_feeds_list)
+    success, error_resp = _batch_commit_and_fetch_new_feeds(
+        newly_added_feeds_list)
     if not success:
         return None, error_resp
 

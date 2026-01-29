@@ -778,8 +778,8 @@ def test_update_all_feeds_success(mock_update_all_feeds, mock_announce,
 @patch("backend.feed_service._fetch_feed_content")
 @patch("backend.feed_service.Feed")
 def test_feed_service_update_all_feeds_emits_progress_events(
-    mock_feed_model, mock_fetch_feed_content, mock_process_fetch_result,
-    mock_announce):
+        mock_feed_model, mock_fetch_feed_content, mock_process_fetch_result,
+        mock_announce):
     """Unit test for feed_service.update_all_feeds SSE progress events."""
     from backend import feed_service
 
@@ -803,8 +803,10 @@ def test_feed_service_update_all_feeds_emits_progress_events(
     # Initial status call + per-feed calls + final completion call
     # announcer.announce is called with msg="data: {...}\n\n"
 
-    messages = [json.loads(call.kwargs['msg'].replace('data: ', '').strip())
-                for call in calls if 'msg' in call.kwargs]
+    messages = [
+        json.loads(call.kwargs["msg"].replace("data: ", "").strip())
+        for call in calls if "msg" in call.kwargs
+    ]
 
     # Initial progress event
     assert messages[0]["type"] == "progress"
