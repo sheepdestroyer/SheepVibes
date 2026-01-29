@@ -77,8 +77,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             settingsMenu.classList.add('hidden');
         }
     });
+
+    // Global scroll listener for infinite scroll
+    window.addEventListener('scroll', handleGlobalScroll);
 });
 
+function handleGlobalScroll() {
+    const SCROLL_BUFFER = 100; // Pixels from the bottom
+
+    // Check if the user has scrolled to the bottom of the page
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - SCROLL_BUFFER) {
+        const visibleLists = document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"] ul`);
+        visibleLists.forEach(listElement => {
+            handleLoadMoreItems(listElement);
+        });
+    }
+}
 // --- Core Logic ---
 
 async function initializeTabs() {

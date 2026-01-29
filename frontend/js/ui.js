@@ -127,18 +127,6 @@ export function createFeedWidget(feed, callbacks) {
     itemList.dataset.loading = 'false';
     itemList.dataset.allItemsLoaded = 'false';
 
-    // Infinite scroll
-    if (onLoadMore) {
-        const SCROLL_BUFFER = 20;
-        const SCROLL_THROTTLE_DELAY = 200;
-        itemList.addEventListener('scroll', throttle((e) => {
-            const list = e.target;
-            if (list.scrollTop + list.clientHeight >= list.scrollHeight - SCROLL_BUFFER) {
-                onLoadMore(list);
-            }
-        }, SCROLL_THROTTLE_DELAY));
-    }
-
     // Render Items
     if (feed.items && feed.items.length > 0) {
         const fragment = document.createDocumentFragment();
