@@ -230,3 +230,29 @@ export function showEditFeedModal(feedId, currentUrl, currentName) {
 export function closeEditFeedModal() {
     document.getElementById('edit-feed-modal').classList.remove('is-active');
 }
+
+// --- Progress Bar ---
+
+export function showProgress(message) {
+    const progressContainer = document.getElementById('progress-container');
+    const progressStatus = document.getElementById('progress-status');
+    const progressBar = document.getElementById('progress-bar');
+
+    progressStatus.textContent = message;
+    progressBar.value = 0;
+    progressContainer.classList.remove('hidden');
+}
+
+export function updateProgress(status, value, max) {
+    const progressStatus = document.getElementById('progress-status');
+    const progressBar = document.getElementById('progress-bar');
+
+    progressStatus.textContent = status;
+    progressBar.value = value;
+    progressBar.max = max;
+}
+
+export function hideProgress() {
+    const progressContainer = document.getElementById('progress-container');
+    progressContainer.classList.add('hidden');
+}

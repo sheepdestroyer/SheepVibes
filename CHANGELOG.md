@@ -1,5 +1,14 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-01-29
+
+- **Feat: Robust OPML Import & Feed Refresh Progress**
+  - **Iterative Processing**: Migrated OPML parsing to a stack-based iterative approach in `backend/feed_service.py` to prevent recursion depth issues.
+  - **Weighted Progress**: Implemented a 50/50 continuous progress scale for OPML imports (processing vs. fetching).
+  - **Security (XSS Prevention)**: Hardened `xmlUrl` validation to allow only `http` and `https` schemes.
+  - **SSE Reliability**: Added `progress_complete` signals to all service exit paths and normalized tab ID types in the frontend.
+  - **Code Cleanup**: Removed redundant recursive logic and unused imports from `backend/blueprints/opml.py`.
+
 ## 2026-01-26 (v0.4.0-pre)
 
 - **Architecture: Modularization Overhaul (Backend & Frontend)**
