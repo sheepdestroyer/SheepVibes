@@ -1555,7 +1555,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         try:
             db.session.commit()
-        except Exception:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
             logger.exception(
                 "Error committing feed update (no new items) for %s",
