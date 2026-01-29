@@ -202,11 +202,9 @@ def _process_opml_outlines_iterative(
                 processed_count, total_feeds_to_import, last_announced_percent)
 
             folder_type_attr = outline_element.get("type")
-            title_attr = outline_element.get("title")
-            text_attr = outline_element.get("text")
-            element_name = (
-                title_attr.strip() if title_attr and title_attr.strip() else
-                (text_attr.strip() if text_attr and text_attr.strip() else ""))
+            title = (outline_element.get("title") or "").strip()
+            text = (outline_element.get("text") or "").strip()
+            element_name = title or text
 
             xml_url = outline_element.get("xmlUrl")
             child_outlines = list(outline_element)

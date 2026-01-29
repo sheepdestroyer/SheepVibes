@@ -23,7 +23,6 @@ def test_opml_import_and_feed_refresh_progress(page: Page,
     # Wait for the progress container to hide OR success toast
     page.wait_for_selector("#progress-container.hidden", timeout=30000)
 
-    # Test feed refresh
     # Test feed refresh - ensure settings remains open or re-open
     if not page.is_visible("#refresh-all-feeds-button"):
         page.click("#settings-button")
