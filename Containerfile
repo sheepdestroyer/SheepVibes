@@ -28,7 +28,7 @@ COPY --chown=appuser:appuser backend/ /app/backend/
 COPY --chown=appuser:appuser frontend/ /app/frontend/
 
 # Copy the entrypoint script & Make it script executable
-COPY --chown=appuser:appuser tests/scripts/entrypoint.sh /app/scripts/entrypoint.sh
+COPY --chown=appuser:appuser scripts/entrypoint.sh /app/scripts/entrypoint.sh
 
 # Ensure the data directory exists and that files have correct permissions *before* switching user
 # (The VOLUME instruction itself doesn't create the directory)

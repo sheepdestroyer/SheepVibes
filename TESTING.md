@@ -34,13 +34,10 @@ The backend tests require a running Redis instance for caching checks.
     ```
 
 2.  **Run Pytest**
-    Ensure you are in the `backend` directory with the virtual environment activated. The test suite is configured via `pytest.ini` to automatically connect to Redis on `localhost:6379`.
+    Ensure you are in the project root (not `backend`). The test suite is configured via `pytest.ini` (in `tests/`) to automatically connect to Redis on `localhost:6379`.
     ```bash
-    # From the 'backend' directory
     # From the project root
-    python -m pytest -c tests/pytest.ini
-    # OR
-    python -m pytest tests/
+    python -m pytest -c tests/pytest.ini tests/ -v
     ```
 
 3.  **Stop Redis**
@@ -50,12 +47,12 @@ The backend tests require a running Redis instance for caching checks.
     ```
 
 ### III. Testing with Dev Environment (Podman)
-The project includes a robust development environment managed by `tests/scripts/dev_manager.sh`.
+The project includes a robust development environment managed by `scripts/dev_manager.sh`.
 
 1.  **Start Dev Environment**
     This will build the image, start Redis, and launch the Backend App in **Debug Mode** (Flask development server).
     ```bash
-    ./tests/scripts/dev_manager.sh up
+    ./scripts/dev_manager.sh up
     ```
     - The app runs at `http://localhost:5002` (default).
     - Code changes are hot-reloaded automatically.
@@ -63,7 +60,7 @@ The project includes a robust development environment managed by `tests/scripts/
 2.  **Verify Production Parity**
     To test the application as it runs in production (using Gunicorn), use the `--prod` flag:
     ```bash
-    ./tests/scripts/dev_manager.sh up --prod
+    ./scripts/dev_manager.sh up --prod
     ```
 
 ## Frontend Testing
