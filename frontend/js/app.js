@@ -11,6 +11,9 @@ import {
     hideProgress
 } from './ui.js';
 
+const PROGRESS_FALLBACK_TIMEOUT_MS = 15000;
+let progressFallbackTimeoutId = null;
+
 // State
 const storedTabId = localStorage.getItem('activeTabId');
 let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
@@ -277,11 +280,13 @@ async function handleEditFeedSubmit(e) {
 
 async function handleRefreshAllFeeds() {
     showProgress('Starting feed refresh...');
+    _startProgressFallback();
     try {
         await api.updateAllFeeds();
         // The SSE events will drive the rest of the UI updates.
     } catch (e) {
         showToast('Failed to refresh: ' + e.message, 'error');
+        _clearProgressFallback();
         hideProgress(); // Hide progress bar on failure
     }
 }
@@ -312,6 +317,7 @@ async function handleImportOpmlFileSelect(e) {
     if (activeTabId !== null) formData.append('tab_id', activeTabId);
 
     showProgress('Importing OPML file...');
+    _startProgressFallback();
     try {
         const data = await api.importOpml(formData);
         if (data.imported_count > 0) {
@@ -329,12 +335,14 @@ async function handleImportOpmlFileSelect(e) {
             }
         } else {
             // Backup hide in case of early exit without SSE
+            _clearProgressFallback();
             hideProgress();
             showToast(data.message, 'success');
         }
         // The final success message will be handled by the 'progress_complete' SSE event.
     } catch (err) {
         showToast(err.message, 'error');
+        _clearProgressFallback();
         hideProgress();
     } finally {
         e.target.value = '';
@@ -411,10 +419,13 @@ function initializeSSE() {
 
             // Handle progress updates
             if (data.type === 'progress') {
+                // Any progress event clears/resets the fallback to keep it alive during long operations
+                _startProgressFallback();
                 updateProgress(data.status, data.value, data.max);
                 return;
             }
             if (data.type === 'progress_complete') {
+                _clearProgressFallback();
                 hideProgress();
                 showToast(data.status || 'Operation complete!', 'success');
                 return;

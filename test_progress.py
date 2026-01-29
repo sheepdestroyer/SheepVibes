@@ -1,10 +1,12 @@
+import os
 import re
 
 from playwright.sync_api import Page, expect
 
 
 def test_opml_import_and_feed_refresh_progress(page: Page):
-    page.goto("http://localhost:5000")
+    base_url = os.environ.get("TEST_BASE_URL", "http://localhost:5000")
+    page.goto(base_url)
 
     # Test OPML import
     page.click("#settings-button")

@@ -747,13 +747,9 @@ def test_get_non_existent_static_file(client):
 @patch("backend.blueprints.feeds.update_all_feeds")
 def test_update_all_feeds_success(mock_update_all_feeds, mock_announce,
                                   client):
-    """Test POST /api/feeds/update-all successfully and announces SSE."""
+    """Test POST /api/feeds/update_all success path."""
     # Arrange
-    mock_update_all_feeds.return_value = (
-        5,
-        10,
-        {1, 2},
-    )  # 5 feeds processed, 10 new items, affected tab_ids
+    mock_update_all_feeds.return_value = (1, 1, [1])
     # Act
     response = client.post("/api/feeds/update-all")
 
@@ -761,20 +757,69 @@ def test_update_all_feeds_success(mock_update_all_feeds, mock_announce,
     assert response.status_code == 200
     data = response.get_json()
     assert data["message"] == "All feeds updated successfully."
-    assert data["feeds_processed"] == 5
-    assert data["new_items"] == 10
+    assert data["feeds_processed"] == 1
+    assert data["new_items"] == 1
 
     # Assert Mocks
     mock_update_all_feeds.assert_called_once()
 
     # Assert SSE announcement
     expected_event_data = {
-        "feeds_processed": 5,
-        "new_items": 10,
-        "affected_tab_ids": [1, 2],
+        "feeds_processed": 1,
+        "new_items": 1,
+        "affected_tab_ids": [1],
     }
     expected_sse_msg = f"data: {json.dumps(expected_event_data)}\n\n"
     mock_announce.assert_called_once_with(msg=expected_sse_msg)
+
+
+@patch("backend.feed_service.announcer.announce")
+@patch("backend.feed_service._process_fetch_result")
+@patch("backend.feed_service._fetch_feed_content")
+@patch("backend.feed_service.Feed")
+def test_feed_service_update_all_feeds_emits_progress_events(
+    mock_feed_model, mock_fetch_feed_content, mock_process_fetch_result,
+    mock_announce):
+    """Unit test for feed_service.update_all_feeds SSE progress events."""
+    from backend import feed_service
+
+    # Arrange: mock Feed.query.all to return a small list of feeds
+    mock_feed1 = MagicMock(id=1, url="http://e1.com")
+    mock_feed2 = MagicMock(id=2, url="http://e2.com")
+    mock_feed1.name = "Feed 1"
+    mock_feed2.name = "Feed 2"
+    feeds = [mock_feed1, mock_feed2]
+    mock_feed_model.query.all.return_value = feeds
+
+    # Avoid side effects from fetch/process
+    mock_fetch_feed_content.return_value = MagicMock()
+    mock_process_fetch_result.return_value = (True, 1, 1)
+
+    # Act
+    feed_service.update_all_feeds()
+
+    # Assert
+    calls = mock_announce.call_args_list
+    # Initial status call + per-feed calls + final completion call
+    # announcer.announce is called with msg="data: {...}\n\n"
+
+    messages = [json.loads(call.kwargs['msg'].replace('data: ', '').strip())
+                for call in calls if 'msg' in call.kwargs]
+
+    # Initial progress event
+    assert messages[0]["type"] == "progress"
+    assert messages[0]["value"] == 0
+    assert messages[0]["max"] == len(feeds)
+
+    # Per-feed progress events
+    per_feed_payloads = messages[1:1 + len(feeds)]
+    assert len(per_feed_payloads) == len(feeds)
+    for index, payload in enumerate(per_feed_payloads, start=1):
+        assert payload["value"] == index
+        assert payload["max"] == len(feeds)
+
+    # Final progress_complete event
+    assert messages[-1]["type"] == "progress_complete"
 
 
 @patch("backend.blueprints.feeds.announcer.announce")

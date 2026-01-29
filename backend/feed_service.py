@@ -19,6 +19,7 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
+import sqlalchemy.exc
 import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
@@ -55,12 +56,6 @@ def _count_feeds_in_opml(root):
 # --- OPML Import Configuration ---
 OPML_IMPORT_PROCESSING_WEIGHT = 50  # Percent of total progress
 OPML_IMPORT_FETCHING_WEIGHT = 50  # Percent of total progress
-
-SKIPPED_FOLDER_TYPES = {
-    "UWA",
-    "Webnote",
-    "LinkModule",
-}  # Netvibes specific types to ignore for tab creation
 
 
 def is_valid_feed_url(url):
@@ -277,13 +272,12 @@ def _determine_target_tab(requested_tab_id_str):
                     target_tab_id = newly_created_default_tab.id
                     target_tab_name = newly_created_default_tab.name
                     was_created = True
-                except Exception as e_tab_commit:  # pylint: disable=broad-exception-caught
+                except sqlalchemy.exc.SQLAlchemyError as e_tab_commit:  # pylint: disable=broad-exception-caught
                     db.session.rollback()
-                    logger.error(
+                    logger.exception(
                         "OPML import: Failed to create default tab '%s': %s",
                         default_tab_name_for_creation,
                         e_tab_commit,
-                        exc_info=True,
                     )
                     return (
                         None,
@@ -329,7 +323,7 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name,
                     tab_name,
                     tab_id,
                 )
-        except Exception as e_cleanup:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError as e_cleanup:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.warning(
                 "OPML import: Failed to cleanup empty default tab '%s': %s",
@@ -368,9 +362,7 @@ def _parse_opml_root(opml_content):
         )
 
 
-def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
-                                      total_feeds_to_import,
-                                      processed_feed_count):
+def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
     """Commits new feeds and fetches them, with progress updates."""
     if not newly_added_feeds_list:
         return True, None
@@ -420,11 +412,10 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
                 logger.error("OPML import: Feed '%s' missing ID after commit.",
                              feed_obj.name)
         return True, None
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError as e:  # pylint: disable=broad-exception-caught
         db.session.rollback()
-        logger.error("OPML import: Database commit failed for new feeds: %s",
-                     e,
-                     exc_info=True)
+        logger.exception("OPML import: Database commit failed for new feeds: %s",
+                         e)
         return False, (
             {
                 "error": "Database error during final feed import step."
@@ -451,18 +442,24 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     # Read the entire stream to a variable, so we can parse it multiple times
     try:
         opml_content = opml_file_stream.read()
-    except Exception as e:
-        logger.error("Failed to read OPML file stream: %s", e)
+    except Exception:
+        logger.exception("Failed to read OPML file stream")
         return None, ({"error": "Could not read OPML file stream."}, 400)
 
-    # First pass: parse and count total feeds for progress calculation
+    # Initial progress announcement
+    announcer.announce(
+        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting OPML import...', 'value': 0, 'max': 100})}\n\n"
+    )
+
     total_feeds_to_import = 0
     try:
         # Use a temporary stream to count feeds without consuming the main stream
         count_root = SafeET.fromstring(opml_content)
         total_feeds_to_import = _count_feeds_in_opml(count_root)
     except Exception:
-        pass  # Parsing errors will be handled in the main parsing step
+        # Parsing errors will be handled in the main parsing step
+        logger.debug("Feed count pass failed (will retry in main parse)",
+                     exc_info=True)
 
     # Main processing
     root, error_resp = _parse_opml_root(opml_content)
@@ -514,12 +511,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     )
 
     # Batch commit and fetch
-    success, error_resp = _batch_commit_and_fetch_new_feeds(
-        newly_added_feeds_list,
-        total_feeds_to_import,
-        imported_count_wrapper[0] + skipped_count_wrapper[0] -
-        len(newly_added_feeds_list),
-    )
+    success, error_resp = _batch_commit_and_fetch_new_feeds(newly_added_feeds_list)
     if not success:
         return None, error_resp
 
@@ -963,12 +955,11 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         feed_name = feed_db_obj.name
         try:
             db.session.commit()
-        except Exception:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
             db.session.rollback()
-            logger.error(
+            logger.exception(
                 "Error committing feed update (no entries) for %s",
                 _sanitize_for_log(feed_name),
-                exc_info=True,
             )
             # Still, the fetch itself might be considered a "success" in terms of reachability
         return True, 0, feed_db_obj.tab_id
@@ -979,14 +970,13 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         return True, new_items, feed_db_obj.tab_id
     except Exception:  # pylint: disable=broad-exception-caught
         # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
-        feed_name = feed_db_obj.name
+        feed_name = feed_db_obj.id
         feed_id = feed_db_obj.id
         db.session.rollback()
-        logger.error(
+        logger.exception(
             "An unexpected error occurred during entry processing for feed '%s' (ID: %s)",
             _sanitize_for_log(feed_name),
             feed_id,
-            exc_info=True,
         )
         return False, 0, feed_db_obj.tab_id
 
@@ -1080,9 +1070,7 @@ def fetch_feed(feed_url):
         return parsed_feed
 
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.error("Error fetching feed %s",
-                     _sanitize_for_log(feed_url),
-                     exc_info=True)
+        logger.exception("Error fetching feed %s", _sanitize_for_log(feed_url))
         return None
 
 
@@ -1305,12 +1293,11 @@ def _save_items_to_db(feed_db_obj, items_to_add):
             _sanitize_for_log(str(e)),
         )
         committed_count = _save_items_individually(feed_db_obj, items_to_add)
-    except Exception:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
         db.session.rollback()
-        logger.error(
+        logger.exception(
             "Generic error committing new items for feed %s",
             _sanitize_for_log(feed_db_obj.name),
-            exc_info=True,
         )
         return 0
 
@@ -1324,11 +1311,10 @@ def _save_items_individually(feed_db_obj, items_to_add):
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         db.session.add(feed_db_obj)
         db.session.commit()
-    except Exception:  # pylint: disable=broad-exception-caught
-        logger.error(
+    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+        logger.exception(
             "Error updating last_updated_time for feed '%s' after batch failure",
             _sanitize_for_log(feed_db_obj.name),
-            exc_info=True,
         )
         db.session.rollback()  # Rollback if updating last_updated_time fails
 
@@ -1350,12 +1336,11 @@ def _save_items_individually(feed_db_obj, items_to_add):
                 _sanitize_for_log(item.guid),
                 _sanitize_for_log(str(ie)),
             )
-        except Exception:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
             db.session.rollback()
-            logger.error(
+            logger.exception(
                 "Generic error adding item '%s'",
                 _sanitize_for_log(item.title[:100]),
-                exc_info=True,
             )
 
     if count > 0:
@@ -1416,12 +1401,11 @@ def _enforce_feed_limit(feed_db_obj):
         )
         try:
             db.session.commit()
-        except Exception:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
             db.session.rollback()
-            logger.error(
+            logger.exception(
                 "Error committing eviction for feed '%s'",
                 _sanitize_for_log(feed_db_obj.name),
-                exc_info=True,
             )
 
 
@@ -1450,12 +1434,11 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     # This ensures they are preserved even if the batch insert of new items fails later.
     try:
         db.session.commit()
-    except Exception:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
         db.session.rollback()
-        logger.error(
+        logger.exception(
             "Error committing metadata/existing items for feed %s",
             feed_db_obj.name,
-            exc_info=True,
         )
         # It's safer to stop processing this feed to avoid potential inconsistencies
         # if the metadata/update commit failed.
