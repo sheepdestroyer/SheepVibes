@@ -483,8 +483,9 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         total_feeds_to_import = _count_feeds_in_opml(root)
     except Exception:
         # Parsing errors will be handled in the main parsing step below.
-        logger.debug("Initial feed count pass failed, will retry in main parse.",
-                     exc_info=True)
+        logger.debug(
+            "Initial feed count pass failed, will retry in main parse.",
+            exc_info=True)
 
     # Main processing
     if root is None:
