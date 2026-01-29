@@ -20,9 +20,10 @@ def test_opml_import_and_feed_refresh_progress(page: Page):
     page.set_input_files('input[type="file"]', str(opml_path))
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
-        re.compile(r"(Importing|Processing|Starting|Fetching)"))
-    expect(page.locator("#progress-bar")).to_have_attribute(
-        "value", re.compile(r"\d+"))
+        re.compile(r"(Importing|Processing|Starting|Fetching)")
+    )
+    expect(page.locator("#progress-bar")
+           ).to_have_attribute("value", re.compile(r"\d+"))
     # Wait for the progress container to hide OR success toast
     page.wait_for_selector("#progress-container.hidden", timeout=30000)
 
@@ -32,7 +33,8 @@ def test_opml_import_and_feed_refresh_progress(page: Page):
     page.click("#refresh-all-feeds-button")
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
-        re.compile(r"(Starting|Checking)"))
-    expect(page.locator("#progress-bar")).to_have_attribute(
-        "value", re.compile(r"\d+"))
+        re.compile(r"(Starting|Checking)")
+    )
+    expect(page.locator("#progress-bar")
+           ).to_have_attribute("value", re.compile(r"\d+"))
     page.wait_for_selector("#progress-container.hidden", timeout=10000)
