@@ -12,11 +12,11 @@ flake8 backend/ --max-line-length=120
 ### I. Setup for Local Testing
 1.  Navigate to the backend directory. Install the necessary development dependencies within a Python virtual environment, including `pytest`:
     ```bash
-    cd backend
+    # From the project root
     python -m venv venv
     source venv/bin/activate
     pip install --upgrade pip
-    pip install -r requirements.txt -r requirements-dev.txt
+    pip install -r backend/requirements.txt -r backend/requirements-dev.txt
     ```
 
 
