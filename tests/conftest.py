@@ -9,8 +9,8 @@ from backend.app import app, db
 os.environ["TESTING"] = "true"
 
 
-@pytest.fixture(scope="session")
-def tests_root():
+@pytest.fixture(scope="session", name="tests_root")
+def fixture_tests_root():
     """Return the root path of the tests directory."""
     return Path(__file__).parent.resolve()
 
@@ -19,7 +19,9 @@ def tests_root():
 def opml_file_path(tests_root):
     """Return the path to the test OPML file, ensuring it exists."""
     path = tests_root.joinpath("test_feeds.opml")
-    assert path.is_file(), f"Test data file not found at: {path}"
+    # Using specific exception instead of assert for production code safety, though this is test code.
+    if not path.is_file():
+        raise FileNotFoundError(f"Test data file not found at: {path}")
     return path
 
 

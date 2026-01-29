@@ -1,5 +1,7 @@
 import os
 import re
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -12,6 +14,13 @@ from playwright.sync_api import Page, expect
 )
 def test_opml_import_and_feed_refresh_progress(page: Page, opml_file_path: Path):
     base_url = os.environ.get("TEST_BASE_URL", "http://localhost:5000")
+    
+    # Check if the server is running
+    try:
+        urllib.request.urlopen(base_url, timeout=1).close()
+    except (urllib.error.URLError, ConnectionRefusedError, OSError):
+        pytest.skip(f"Server at {base_url} is not running. Skipping E2E test.")
+
     page.goto(base_url)
 
     # Test OPML import
