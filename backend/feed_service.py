@@ -117,7 +117,7 @@ def _calculate_and_announce_progress(
             "value": progress_val,
             "max": 100,
         }
-        announcer.announce(msg=f"data: {json.dumps(event_data)}\\n\\n")
+        announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
         return current_percent
     return last_announced_percent
 
@@ -159,7 +159,10 @@ def _process_opml_feed_node(
         imported_count_wrapper[0] += 1
         affected_tab_ids_set.add(current_tab_id)
     except sqlalchemy.exc.SQLAlchemyError:
-        logger.exception("OPML import: Error preparing feed '%s'", feed_name)
+        logger.exception(
+            "OPML import: Error preparing feed '%s'",
+            _sanitize_for_log(feed_name),
+        )
         skipped_count_wrapper[0] += 1
 
 
@@ -219,8 +222,7 @@ def _process_opml_outlines_iterative(
         while outline_elements:
             outline_element = outline_elements.pop()
 
-            processed_count = imported_count_wrapper[0] + \
-                skipped_count_wrapper[0]
+            processed_count = imported_count_wrapper[0] + skipped_count_wrapper[0]
 
             last_announced_percent = _calculate_and_announce_progress(
                 processed_count, total_feeds_to_import, last_announced_percent
@@ -315,7 +317,7 @@ def _determine_target_tab(requested_tab_id_str):
         except ValueError:
             logger.warning(
                 "OPML import: Invalid tab_id format '%s'. Will use default logic.",
-                requested_tab_id_str,
+                _sanitize_for_log(requested_tab_id_str),
             )
 
     if not target_tab_id:
@@ -431,7 +433,7 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
             db.session.rollback()
             logger.warning(
                 "OPML import: Failed to cleanup empty default tab '%s': %s",
-                tab_name,
+                _sanitize_for_log(tab_name),
                 e_cleanup,
             )
 
@@ -486,8 +488,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                 progress_val = 100
 
             # Only announce if significant progress or first/last
-            should_announce = i == 0 or i == total_to_fetch - \
-                1 or (i + 1) % 5 == 0
+            should_announce = i == 0 or i == total_to_fetch - 1 or (i + 1) % 5 == 0
 
             if should_announce:
                 event_data = {
@@ -509,7 +510,8 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                     )
             else:
                 logger.error(
-                    "OPML import: Feed '%s' missing ID after commit.", feed_obj.name
+                    "OPML import: Feed '%s' missing ID after commit.",
+                    _sanitize_for_log(feed_obj.name),
                 )
         return True, None
     except sqlalchemy.exc.SQLAlchemyError:
@@ -1541,7 +1543,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
         db.session.rollback()
         logger.exception(
             "Error committing metadata/existing items for feed %s",
-            feed_db_obj.name,
+            _sanitize_for_log(feed_db_obj.name),
         )
         # It's safer to stop processing this feed to avoid potential inconsistencies
         # if the metadata/update commit failed.
@@ -1556,10 +1558,9 @@ def process_feed_entries(feed_db_obj, parsed_feed):
             db.session.commit()
         except Exception:  # pylint: disable=broad-exception-caught
             db.session.rollback()
-            logger.error(
+            logger.exception(
                 "Error committing feed update (no new items) for %s",
-                feed_db_obj.name,
-                exc_info=True,
+                _sanitize_for_log(feed_db_obj.name),
             )
         return 0
 
@@ -1637,7 +1638,7 @@ def update_all_feeds():
             except Exception:  # pylint: disable=broad-exception-caught
                 logger.exception(
                     "Critical error processing future for feed %s (%s)",
-                    feed_obj.name,
+                    _sanitize_for_log(feed_obj.name),
                     feed_obj.id,
                 )
 

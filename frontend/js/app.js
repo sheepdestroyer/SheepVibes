@@ -22,6 +22,24 @@ let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
 
+// --- Progress Fallback Helpers ---
+
+function _startProgressFallback() {
+    _clearProgressFallback();
+    progressFallbackTimeoutId = setTimeout(() => {
+        console.warn('Progress SSE timeout reached. Hiding progress bar.');
+        hideProgress();
+        progressFallbackTimeoutId = null;
+    }, PROGRESS_FALLBACK_TIMEOUT_MS);
+}
+
+function _clearProgressFallback() {
+    if (progressFallbackTimeoutId) {
+        clearTimeout(progressFallbackTimeoutId);
+        progressFallbackTimeoutId = null;
+    }
+}
+
 // --- Initialization ---
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -456,16 +474,4 @@ function initializeSSE() {
     };
 }
 
-function _startProgressFallback() {
-    _clearProgressFallback();
-    progressFallbackTimeoutId = setTimeout(() => {
-        hideProgress();
-    }, PROGRESS_FALLBACK_TIMEOUT_MS);
-}
 
-function _clearProgressFallback() {
-    if (progressFallbackTimeoutId) {
-        clearTimeout(progressFallbackTimeoutId);
-        progressFallbackTimeoutId = null;
-    }
-}
