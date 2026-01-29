@@ -488,7 +488,8 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                 progress_val = 100
 
             # Only announce if significant progress or first/last
-            should_announce = i == 0 or i == total_to_fetch - 1 or (i + 1) % 5 == 0
+            should_announce = i == 0 or i == total_to_fetch - \
+                1 or (i + 1) % 5 == 0
 
             if should_announce:
                 event_data = {
