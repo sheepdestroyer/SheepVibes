@@ -476,19 +476,21 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     # Initial progress announcement
 
     total_feeds_to_import = 0
+    root = None
     try:
-        # Use a temporary stream to count feeds without consuming the main stream
-        count_root = SafeET.fromstring(opml_content)
-        total_feeds_to_import = _count_feeds_in_opml(count_root)
+        # Attempt to parse once to get both the root and the feed count.
+        root = SafeET.fromstring(opml_content)
+        total_feeds_to_import = _count_feeds_in_opml(root)
     except Exception:
-        # Parsing errors will be handled in the main parsing step
-        logger.debug("Feed count pass failed (will retry in main parse)",
+        # Parsing errors will be handled in the main parsing step below.
+        logger.debug("Initial feed count pass failed, will retry in main parse.",
                      exc_info=True)
 
     # Main processing
-    root, error_resp = _parse_opml_root(opml_content)
-    if error_resp:
-        return None, error_resp
+    if root is None:
+        root, error_resp = _parse_opml_root(opml_content)
+        if error_resp:
+            return None, error_resp
 
     # ... (rest of the function, passing total_feeds_to_import down)
     (
@@ -503,13 +505,17 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     opml_body = root.find("body")
     if opml_body is None:
         logger.warning("OPML import: No <body> element found.")
-        return {
+        result = {
             "message": "No feeds found in OPML (missing body).",
             "imported_count": 0,
             "skipped_count": 0,
             "tab_id": top_level_target_tab_id,
             "tab_name": top_level_target_tab_name,
-        }, None
+        }
+        announcer.announce(
+            msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+        )
+        return result, None
 
     imported_count_wrapper = [0]
     skipped_count_wrapper = [0]
@@ -554,13 +560,17 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     if not opml_body.findall("outline") and not newly_added_feeds_list:
         logger.info(
             "OPML import: No <outline> elements found in the OPML body.")
-        return {
+        result = {
             "message": "No feed entries or folders found in the OPML file.",
             "imported_count": 0,
             "skipped_count": 0,
             "tab_id": top_level_target_tab_id,
             "tab_name": top_level_target_tab_name,
-        }, None
+        }
+        announcer.announce(
+            msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+        )
+        return result, None
 
     imported_final_count = imported_count_wrapper[0]
     skipped_final_count = skipped_count_wrapper[0]

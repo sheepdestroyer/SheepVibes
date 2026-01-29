@@ -18,6 +18,8 @@ def test_opml_import_and_feed_refresh_progress(page: Page,
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
         re.compile(r"(Importing|Processing|Starting|Fetching)"))
+    expect(page.locator("#progress-bar")).to_have_attribute(
+        "value", re.compile(r"\d+"))
     # Wait for the progress container to hide OR success toast
     page.wait_for_selector("#progress-container.hidden", timeout=30000)
 
