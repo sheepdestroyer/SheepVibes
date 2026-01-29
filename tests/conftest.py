@@ -15,6 +15,14 @@ def tests_root():
     return Path(__file__).parent.resolve()
 
 
+@pytest.fixture
+def opml_file_path(tests_root):
+    """Return the path to the test OPML file, ensuring it exists."""
+    path = tests_root.joinpath("test_feeds.opml")
+    assert path.is_file(), f"Test data file not found at: {path}"
+    return path
+
+
 EXAMPLE_COM_IP = "93.184.216.34"
 
 
