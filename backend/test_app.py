@@ -739,7 +739,7 @@ def test_get_non_existent_static_file(client):
 def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
     """Test POST /api/feeds/update_all success path."""
     # Arrange
-    mock_update_all_feeds.return_value = (1, 1, [1])
+    mock_update_all_feeds.return_value = (1, 1, {1})
     # Act
     response = client.post("/api/feeds/update-all")
 
