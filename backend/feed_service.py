@@ -178,6 +178,7 @@ def _get_or_create_nested_tab(folder_name):
     try:
         db.session.flush()  # Flush to get the ID
         nested.commit()  # Commit savepoint
+        invalidate_tabs_cache()
     except sqlalchemy.exc.IntegrityError:
         nested.rollback()  # Rollback only to savepoint
         # Remove the failed object from session identity map to prevent re-flush issues

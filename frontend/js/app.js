@@ -319,10 +319,10 @@ async function handleImportOpmlFileSelect(e) {
     _startProgressFallback();
     try {
         const data = await api.importOpml(formData);
+        // Always re-initialize tabs, as new (empty) tabs might have been created.
+        await initializeTabs();
+
         if (data.imported_count > 0) {
-            // The progress SSEs will handle the UI updates, but we need to reload the tabs
-            // to show new tabs and unread counts.
-            await initializeTabs();
             const tabsToReload = new Set(data.affected_tab_ids || []);
             if (data.tab_id) {
                 tabsToReload.add(data.tab_id);
@@ -332,13 +332,9 @@ async function handleImportOpmlFileSelect(e) {
                     await reloadTab(tabId);
                 }
             }
-        } else {
-            // Backup hide in case of early exit without SSE
-            _clearProgressFallback();
-            hideProgress();
-            showToast(data.message, 'success');
         }
-        // The final success message will be handled by the 'progress_complete' SSE event.
+        // The 'progress_complete' SSE event is the single source of truth for hiding the
+        // progress bar and showing the final status.
     } catch (err) {
         showToast(err.message, 'error');
         _clearProgressFallback();
