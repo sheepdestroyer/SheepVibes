@@ -10,7 +10,6 @@ import ipaddress
 import json
 import logging  # Standard logging
 import os
-import re
 import socket
 import ssl
 import urllib.request
@@ -19,7 +18,6 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
-import defusedxml.ElementTree as ET
 import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
@@ -303,7 +301,7 @@ def _determine_target_tab(requested_tab_id_str):
                     target_tab_id = newly_created_default_tab.id
                     target_tab_name = newly_created_default_tab.name
                     was_created = True
-                except sqlalchemy.exc.SQLAlchemyError as e_tab_commit:  # pylint: disable=broad-exception-caught
+                except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
                     db.session.rollback()
                     logger.exception(
                         "OPML import: Failed to create default tab '%s'",
@@ -367,7 +365,7 @@ def _parse_opml_root(opml_content):
     try:
         root = SafeET.fromstring(opml_content)
         return root, None
-    except ET.ParseError as e:
+    except SafeET.ParseError as e:
         logger.error("OPML import failed: Malformed XML. Error: %s",
                      e,
                      exc_info=True)
@@ -442,7 +440,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                 logger.error("OPML import: Feed '%s' missing ID after commit.",
                              feed_obj.name)
         return True, None
-    except sqlalchemy.exc.SQLAlchemyError as e:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
         db.session.rollback()
         logger.exception("OPML import: Database commit failed for new feeds")
         return False, (
