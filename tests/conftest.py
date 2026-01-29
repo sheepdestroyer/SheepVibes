@@ -9,7 +9,7 @@ from backend.app import app, db
 os.environ["TESTING"] = "true"
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def tests_root():
     """Return the root path of the tests directory."""
     return Path(__file__).parent.resolve()
