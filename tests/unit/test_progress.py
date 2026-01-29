@@ -10,13 +10,13 @@ from playwright.sync_api import Page, expect
     os.getenv("CI") == "true",
     reason="Flaky in CI due to SSE timing issues; backend logic verified",
 )
-def test_opml_import_and_feed_refresh_progress(page: Page):
+def test_opml_import_and_feed_refresh_progress(page: Page, tests_root: Path):
     base_url = os.environ.get("TEST_BASE_URL", "http://localhost:5000")
     page.goto(base_url)
 
     # Test OPML import
     page.click("#settings-button")
-    opml_path = Path(__file__).parent.parent.joinpath("test_feeds.opml").resolve()
+    opml_path = tests_root.joinpath("test_feeds.opml")
     if not opml_path.exists():
         pytest.fail(f"Test data file not found at: {opml_path}")
     page.set_input_files('input[type="file"]', str(opml_path))
