@@ -29,7 +29,7 @@ def test_get_max_concurrent_fetches_explicit_below_cap():
 
 
 def test_explicit_worker_limit_respects_cap():
-    """Verify that an explicit environment variable is capped at WORKER_FETCH_CAP."""
+    """Verify that an explicit environment variable that exceeds the cap is correctly restricted to WORKER_FETCH_CAP."""
     with patch.dict(os.environ, {"FEED_FETCH_MAX_WORKERS": "50"}):
         # Reloading module or re-calling logic if it was cached
         # Since it's a constant in the module, we need to test the helper directly

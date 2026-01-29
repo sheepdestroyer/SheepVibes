@@ -18,13 +18,13 @@ from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
 import defusedxml.sax
-import feedparser
-from dateutil import parser as date_parser
 from defusedxml.common import (
     DTDForbidden,
     EntitiesForbidden,
     ExternalReferenceForbidden,
 )
+import feedparser
+from dateutil import parser as date_parser
 from sqlalchemy.exc import IntegrityError
 
 # Import database models from the new models.py
@@ -76,8 +76,9 @@ MAX_CONCURRENT_FETCHES = _get_max_concurrent_fetches()
 
 def _sanitize_for_log(value):
     """Sanitizes a string for safe logging (prevents log injection)."""
-    if value is None:
-        return "[None]"
+    if not value:
+        return "[Empty/None]"
+    # Ensure it's a string and replace control characters
     return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
@@ -109,7 +110,9 @@ def _validate_xml_safety(content):
         logger.error("XML Security Violation detected: %s",
                      _sanitize_for_log(str(e)))
         return False
-    except (SAXParseException, UnicodeError) as e:
+    except (SAXParseException, UnicodeError):
+        # We catch UnicodeError because malformed encodings can sometimes
+        # be used to bypass security filters or cause parser crashes.
         # SECURITY HARDENING: Fail closed on malformed XML.
         # If defusedxml cannot parse it, we do not bypass to feedparser.
         # This prevents attackers from constructing payloads that defusedxml chokes on
@@ -216,15 +219,22 @@ def validate_and_resolve_url(url):
 
 def _is_safe_ip(ip):
     """Checks if an IP address is safe (not private, loopback, etc.)."""
-    return not (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
+    # Block private, loopback, and other non-public IP ranges to prevent SSRF
+    return not any([
+        ip.is_private,
+        ip.is_loopback,
+        ip.is_link_local,
+        ip.is_reserved,
+        ip.is_multicast,
+        ip.is_unspecified,
+    ])
 
 
 class SafeHTTPSConnection(http.client.HTTPSConnection):
     """
-    Custom HTTPSConnection that connects to a specific 'safe_ip'
+    HTTPSConnection that forces the use of a pre-resolved safe IP
     but uses the original hostname for SNI and SSL validation.
-    Prevents DNS Rebinding (TOCTOU) on HTTPS.
+    Designed to prevent DNS rebinding attacks (TOCTOU).
 
     This class ensures that the IP address validated in the check phase
     is the EXACT same IP address used for the connection, preventing
@@ -267,8 +277,8 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
 
 class SafeHTTPConnection(http.client.HTTPConnection):
     """
-    Custom HTTPConnection that connects to a specific 'safe_ip'.
-    Prevents DNS Rebinding (TOCTOU) on HTTP.
+    HTTPConnection that forces the use of a pre-resolved safe IP.
+    Designed to prevent DNS rebinding attacks (TOCTOU).
     """
 
     def __init__(
