@@ -385,9 +385,6 @@ def _determine_target_tab(requested_tab_id_str):
                             ),
                         )
                 except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
-                    # For generic errors, we might still want to rollback the nested first?
-                    # Or full rollback?
-                    # If commit failed, transaction is invalid.
                     db.session.rollback()
                     logger.exception(
                         "OPML import: Failed to create default tab '%s'",
@@ -540,9 +537,6 @@ def _invalidate_import_caches(affected_tab_ids_set):
 
 def import_opml(opml_file_stream, requested_tab_id_str):
     """Imports feeds from an OPML file, sending progress via SSE."""
-    # Read the entire stream to a variable, so we can parse it multiple times
-    # Main processing
-    # Pass stream directly to parser
     root, error_resp = _parse_opml_root(opml_file_stream)
     if error_resp:
         return None, error_resp
