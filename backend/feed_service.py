@@ -429,8 +429,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
         return True, None
     except sqlalchemy.exc.SQLAlchemyError as e:  # pylint: disable=broad-exception-caught
         db.session.rollback()
-        logger.exception(
-            "OPML import: Database commit failed for new feeds")
+        logger.exception("OPML import: Database commit failed for new feeds")
         return False, (
             {
                 "error": "Database error during final feed import step."
@@ -462,7 +461,6 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         return None, ({"error": "Could not read OPML file stream."}, 400)
 
     # Initial progress announcement
-
 
     total_feeds_to_import = 0
     try:
