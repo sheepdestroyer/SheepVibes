@@ -219,8 +219,7 @@ def _process_opml_outlines_iterative(
         while outline_elements:
             outline_element = outline_elements.pop()
 
-            processed_count = imported_count_wrapper[0] + \
-                skipped_count_wrapper[0]
+            processed_count = imported_count_wrapper[0] + skipped_count_wrapper[0]
 
             last_announced_percent = _calculate_and_announce_progress(
                 processed_count, total_feeds_to_import, last_announced_percent
@@ -283,8 +282,7 @@ def _process_opml_outlines_iterative(
                      current_tab_id, current_tab_name)
                 )
             else:
-                if not xml_url:
-                    skipped_count_wrapper[0] += 1
+                skipped_count_wrapper[0] += 1
 
 
 def _determine_target_tab(requested_tab_id_str):
@@ -487,8 +485,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                 progress_val = 100
 
             # Only announce if significant progress or first/last
-            should_announce = i == 0 or i == total_to_fetch - \
-                1 or (i + 1) % 5 == 0
+            should_announce = i == 0 or i == total_to_fetch - 1 or (i + 1) % 5 == 0
 
             if should_announce:
                 event_data = {
