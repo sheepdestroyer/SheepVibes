@@ -59,11 +59,26 @@ OPML_IMPORT_PROCESSING_WEIGHT = 50  # Percent of total progress
 OPML_IMPORT_FETCHING_WEIGHT = 50  # Percent of total progress
 
 
+def validate_link_structure(url, schemes=("http", "https")):
+    """
+    Validates a URL structure for legitimate schemes and network location.
+    Returns the cleaned URL if valid, or None if invalid.
+    """
+    if not url:
+        return None
+    cleaned = url.strip()
+    try:
+        parsed = urlparse(cleaned)
+        if parsed.scheme.lower() in schemes and parsed.netloc:
+            return cleaned
+        return None
+    except Exception:
+        return None
+
+
 def is_valid_feed_url(url):
     """Checks if a URL is a valid feed URL (http/https only)."""
-    if not url:
-        return False
-    return url.lower().startswith(("http://", "https://"))
+    return bool(validate_link_structure(url))
 
 
 def _calculate_and_announce_progress(processed_count, total_feeds_to_import,
@@ -1107,7 +1122,14 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
         feed_db_obj.name = new_title
 
     raw_site_link = parsed_feed.feed.get("link")
-    new_site_link = raw_site_link.strip() if raw_site_link else None
+    new_site_link = validate_link_structure(raw_site_link)
+    if not new_site_link and raw_site_link:
+        logger.warning(
+            "Feed '%s': Ignored potentially unsafe site_link: %s",
+            _sanitize_for_log(feed_db_obj.name),
+            _sanitize_for_log(raw_site_link),
+        )
+
     if new_site_link and new_site_link != feed_db_obj.site_link:
         logger.info(
             "Updating feed site_link for '%s' from '%s' to '%s'",
@@ -1159,7 +1181,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                        _sanitize_for_log(feed_db_obj.name))
 
     for entry, parsed_published in entries_with_dates:
-        entry_link = entry.get("link")
+        raw_link = entry.get("link")
+        entry_link = validate_link_structure(raw_link)
 
         if not entry_link:
             logger.warning(
@@ -1544,12 +1567,11 @@ def update_all_feeds():
                     total_new_items += new_items
                     if new_items > 0:
                         affected_tab_ids.add(tab_id)
-            except Exception:
-                logger.error(
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.exception(
                     "Critical error processing future for feed %s (%s)",
                     feed_obj.name,
                     feed_obj.id,
-                    exc_info=True,
                 )
 
     logger.info(

@@ -455,3 +455,17 @@ function initializeSSE() {
         console.error('SSE connection failed:', err);
     };
 }
+
+function _startProgressFallback() {
+    _clearProgressFallback();
+    progressFallbackTimeoutId = setTimeout(() => {
+        hideProgress();
+    }, PROGRESS_FALLBACK_TIMEOUT_MS);
+}
+
+function _clearProgressFallback() {
+    if (progressFallbackTimeoutId) {
+        clearTimeout(progressFallbackTimeoutId);
+        progressFallbackTimeoutId = null;
+    }
+}
