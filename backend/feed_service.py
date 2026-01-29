@@ -559,7 +559,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
 
     # Final 'complete' message for SSE
     announcer.announce(
-        msg=f'data: {json.dumps({"type": "progress_complete", "status": result["message"]})}\n\n'
+        msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
     )
 
     return result, None
@@ -1500,7 +1500,7 @@ def update_all_feeds():
     logger.info("Starting update process for %d feeds (Parallelized).",
                 total_feeds)
     announcer.announce(
-        msg=f'data: {json.dumps({"type": "progress", "status": "Starting feed refresh...", "value": 0, "max": total_feeds})}\n\n'
+        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"
     )
 
     actual_workers = min(MAX_CONCURRENT_FETCHES,
@@ -1517,7 +1517,7 @@ def update_all_feeds():
             processed_count += 1
             status_msg = f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
             announcer.announce(
-                msg=f'data: {json.dumps({"type": "progress", "status": status_msg, "value": processed_count, "max": total_feeds})}\n\n'
+                msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"
             )
 
             try:
