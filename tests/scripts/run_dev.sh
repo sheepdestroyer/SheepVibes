@@ -4,7 +4,7 @@
 # Get the directory where the script resides
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 # Navigate to the backend directory
-cd "$SCRIPT_DIR/../backend" || exit 1
+cd "$SCRIPT_DIR/../../backend" || exit 1
 
 # Check for virtual environment and activate it
 VENV_DIR="venv"

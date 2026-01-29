@@ -16,7 +16,7 @@ def test_opml_import_and_feed_refresh_progress(page: Page):
 
     # Test OPML import
     page.click("#settings-button")
-    opml_path = Path(__file__).parent.joinpath("test_feeds.opml").resolve()
+    opml_path = Path(__file__).parent.parent.joinpath("test_feeds.opml").resolve()
     page.set_input_files('input[type="file"]', str(opml_path))
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(

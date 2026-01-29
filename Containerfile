@@ -28,7 +28,7 @@ COPY --chown=appuser:appuser backend/ /app/backend/
 COPY --chown=appuser:appuser frontend/ /app/frontend/
 
 # Copy the entrypoint script & Make it script executable
-COPY --chown=appuser:appuser scripts/entrypoint.sh /app/scripts/entrypoint.sh
+COPY --chown=appuser:appuser tests/scripts/entrypoint.sh /app/scripts/entrypoint.sh
 
 # Ensure the data directory exists and that files have correct permissions *before* switching user
 # (The VOLUME instruction itself doesn't create the directory)
@@ -48,7 +48,7 @@ ENV DATABASE_PATH=/app/data/sheepvibes.db \
     FLASK_APP=backend.app \
     PYTHONPATH=/app \
     FLASK_RUN_HOST=0.0.0.0
-    # Note: FLASK_DEBUG should be 0 or unset for production
+# Note: FLASK_DEBUG should be 0 or unset for production
 
 # Run the entrypoint script which handles migrations and starts the app
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]

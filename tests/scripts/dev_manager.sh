@@ -135,7 +135,7 @@ do_up() {
         fi
         
         local PROJECT_ROOT
-        PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+        PROJECT_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
         (cd "$PROJECT_ROOT" && "$CMD" build $BUILD_FLAGS -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else

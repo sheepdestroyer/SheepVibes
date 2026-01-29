@@ -12,8 +12,8 @@ CONTAINER_CMD="podman"
 
 # Get the directory where the script resides
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-# Project root is one level up from the scripts directory
-PROJECT_ROOT="$SCRIPT_DIR/.."
+# Project root is two levels up from the scripts directory
+PROJECT_ROOT="$SCRIPT_DIR/../.."
 
 echo "--- Building new image ($IMAGE_NAME) ---"
 
