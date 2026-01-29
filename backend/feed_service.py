@@ -160,7 +160,15 @@ def _get_or_create_nested_tab(folder_name):
     new_order = (max_order or -1) + 1
     new_folder_tab = Tab(name=folder_name, order=new_order)
     db.session.add(new_folder_tab)
-    db.session.flush()  # Flush to get the ID
+    try:
+        db.session.flush()  # Flush to get the ID
+    except sqlalchemy.exc.IntegrityError:
+        db.session.rollback()
+        # Another process created this tab; fetch it
+        existing_tab = Tab.query.filter_by(name=folder_name).first()
+        if existing_tab:
+            return existing_tab.id, existing_tab.name
+        raise  # Re-raise if still not found
     return new_folder_tab.id, new_folder_tab.name
 
 
@@ -475,23 +483,12 @@ def import_opml(opml_file_stream, requested_tab_id_str):
 
     # Initial progress announcement
 
-    total_feeds_to_import = 0
-    root = None
-    try:
-        # Attempt to parse once to get both the root and the feed count.
-        root = SafeET.fromstring(opml_content)
-        total_feeds_to_import = _count_feeds_in_opml(root)
-    except Exception:
-        # Parsing errors will be handled in the main parsing step below.
-        logger.debug(
-            "Initial feed count pass failed, will retry in main parse.",
-            exc_info=True)
-
     # Main processing
-    if root is None:
-        root, error_resp = _parse_opml_root(opml_content)
-        if error_resp:
-            return None, error_resp
+    root, error_resp = _parse_opml_root(opml_content)
+    if error_resp:
+        return None, error_resp
+
+    total_feeds_to_import = _count_feeds_in_opml(root)
 
     # ... (rest of the function, passing total_feeds_to_import down)
     (
