@@ -1,6 +1,8 @@
 import os
 import re
+import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -10,14 +12,24 @@ from playwright.sync_api import Page, expect
     os.getenv("CI") == "true",
     reason="Flaky in CI due to SSE timing issues; backend logic verified",
 )
-def test_opml_import_and_feed_refresh_progress(page: Page):
+def test_opml_import_and_feed_refresh_progress(page: Page, opml_file_path: Path):
     base_url = os.environ.get("TEST_BASE_URL", "http://localhost:5000")
+
+    # Check if the server is running
+    parsed = urlparse(base_url)
+    if parsed.scheme not in {"http", "https"}:
+        pytest.skip(f"Unsupported scheme for TEST_BASE_URL: {parsed.scheme}")
+
+    try:
+        urllib.request.urlopen(base_url, timeout=1).close()
+    except OSError:
+        pytest.skip(f"Server at {base_url} is not running. Skipping E2E test.")
+
     page.goto(base_url)
 
     # Test OPML import
     page.click("#settings-button")
-    opml_path = Path(__file__).parent.joinpath("test_feeds.opml").resolve()
-    page.set_input_files('input[type="file"]', str(opml_path))
+    page.set_input_files('input[type="file"]', str(opml_file_path))
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
         re.compile(r"(Importing|Processing|Starting|Fetching)")

@@ -198,6 +198,31 @@ if not app.config.get("TESTING"):
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
 
+# --- Security Headers ---
+
+
+@app.after_request
+def add_security_headers(response):
+    """Adds security headers to every response."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Content Security Policy:
+    # - default-src 'self': Only allow resources from the same origin by default.
+    # - img-src 'self' data: https:; Allow images from same origin, data URIs, and any HTTPS source (for RSS feed images).
+    # - style-src 'self' 'unsafe-inline': Allow local styles and inline styles (required for vanilla JS frontend).
+    # - script-src 'self': Only allow local scripts.
+    # - connect-src 'self': Only allow XHR/Fetch/WebSockets to same origin.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
+        "connect-src 'self'"
+    )
+    return response
+
+
 # --- Error Handlers ---
 
 
