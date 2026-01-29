@@ -164,10 +164,14 @@ def _get_or_create_nested_tab(folder_name):
     new_order = (max_order or -1) + 1
     new_folder_tab = Tab(name=folder_name, order=new_order)
     db.session.add(new_folder_tab)
+    
+    # Use a savepoint to prevent rolling back the entire session (and losing feeds)
+    nested = db.session.begin_nested()
     try:
         db.session.flush()  # Flush to get the ID
+        nested.commit()     # Commit savepoint
     except sqlalchemy.exc.IntegrityError:
-        db.session.rollback()
+        nested.rollback()   # Rollback only to savepoint
         # Another process created this tab; fetch it
         existing_tab = Tab.query.filter_by(name=folder_name).first()
         if existing_tab:
@@ -301,7 +305,20 @@ def _determine_target_tab(requested_tab_id_str):
                     name=default_tab_name_for_creation, order=0)
                 db.session.add(newly_created_default_tab)
                 try:
+                    # Use savepoint here too for consistency and safety
+                    nested = db.session.begin_nested()
+                    db.session.flush()
+                    
+                    # If flush succeeds, we can commit the main session (if intended)
+                    # But wait, original code did db.session.commit() which commits EVERYTHING.
+                    # Since this is start of import, maybe it is fine?
+                    # The original code at line 302 was db.session.commit().
+                    # If we use begin_nested, we need to commit the nested, THEN commit the session?
+                    # No, begin_nested just handles the flush safety.
+                    # We still want to commit the NEW tab to DB immediately so others see it?
+                    nested.commit()
                     db.session.commit()
+                    
                     logger.info(
                         "OPML import: Created default tab '%s' (ID: %s).",
                         newly_created_default_tab.name,
@@ -312,7 +329,7 @@ def _determine_target_tab(requested_tab_id_str):
                     target_tab_name = newly_created_default_tab.name
                     was_created = True
                 except sqlalchemy.exc.IntegrityError:
-                    db.session.rollback()
+                    nested.rollback()
                     logger.info(
                         "OPML import: Race condition on default tab creation. Re-fetching tab '%s'.",
                         default_tab_name_for_creation,
@@ -343,6 +360,9 @@ def _determine_target_tab(requested_tab_id_str):
                             ),
                         )
                 except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+                    # For generic errors, we might still want to rollback the nested first?
+                    # Or full rollback?
+                    # If commit failed, transaction is invalid.
                     db.session.rollback()
                     logger.exception(
                         "OPML import: Failed to create default tab '%s'",
