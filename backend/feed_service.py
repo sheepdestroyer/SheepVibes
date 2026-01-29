@@ -158,7 +158,7 @@ def _process_opml_feed_node(
         all_existing_feed_urls_set.add(xml_url)
         imported_count_wrapper[0] += 1
         affected_tab_ids_set.add(current_tab_id)
-    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:
         logger.exception("OPML import: Error preparing feed '%s'", feed_name)
         skipped_count_wrapper[0] += 1
 
@@ -383,7 +383,7 @@ def _determine_target_tab(requested_tab_id_str):
                                 500,
                             ),
                         )
-                except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+                except sqlalchemy.exc.SQLAlchemyError:
                     db.session.rollback()
                     logger.exception(
                         "OPML import: Failed to create default tab '%s'",
@@ -427,7 +427,7 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
                     tab_name,
                     tab_id,
                 )
-        except sqlalchemy.exc.SQLAlchemyError as e_cleanup:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError as e_cleanup:
             db.session.rollback()
             logger.warning(
                 "OPML import: Failed to cleanup empty default tab '%s': %s",
@@ -512,7 +512,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                     "OPML import: Feed '%s' missing ID after commit.", feed_obj.name
                 )
         return True, None
-    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
         logger.exception("OPML import: Database commit failed for new feeds")
         return False, (
@@ -1036,7 +1036,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         feed_name = feed_db_obj.name
         try:
             db.session.commit()
-        except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
             logger.exception(
                 "Error committing feed update (no entries) for %s",
@@ -1388,7 +1388,7 @@ def _save_items_to_db(feed_db_obj, items_to_add):
             _sanitize_for_log(str(e)),
         )
         committed_count = _save_items_individually(feed_db_obj, items_to_add)
-    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
         logger.exception(
             "Generic error committing new items for feed %s",
@@ -1406,7 +1406,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         db.session.add(feed_db_obj)
         db.session.commit()
-    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:
         logger.exception(
             "Error updating last_updated_time for feed '%s' after batch failure",
             _sanitize_for_log(feed_db_obj.name),
@@ -1433,7 +1433,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
                 _sanitize_for_log(item.guid),
                 _sanitize_for_log(str(ie)),
             )
-        except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
             logger.exception(
                 "Generic error adding item '%s'",
@@ -1504,7 +1504,7 @@ def _enforce_feed_limit(feed_db_obj):
         )
         try:
             db.session.commit()
-        except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+        except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
             logger.exception(
                 "Error committing eviction for feed '%s'",
@@ -1537,7 +1537,7 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     # This ensures they are preserved even if the batch insert of new items fails later.
     try:
         db.session.commit()
-    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
         logger.exception(
             "Error committing metadata/existing items for feed %s",

@@ -432,7 +432,7 @@ function initializeSSE() {
                 allTabs = await api.getTabs();
                 renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
-                const affectedIds = (data.affected_tab_ids || []).map(id => parseInt(id, 10));
+                const affectedIds = data.affected_tab_ids || [];
                 affectedIds.forEach(id => {
                     loadedTabs.delete(id);
                 });
