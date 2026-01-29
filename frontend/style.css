@@ -373,7 +373,7 @@ header h1 {
         /* Single column on very small screens */
         grid-template-columns: 1fr;
     }
-
+}
 
 /* Modal Styles */
 .modal {
