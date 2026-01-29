@@ -1,4 +1,5 @@
 """Blueprint for OPML import and export operations."""
+
 import logging
 import os
 import xml.etree.ElementTree as ET  # nosec B405
@@ -66,8 +67,6 @@ def _generate_opml_string(tabs=None):
     tab_count = sum(1 for tab in tabs if tab.feeds)
 
     return opml_string, tab_count, feed_count
-
-
 
 
 def _validate_opml_file_request():
