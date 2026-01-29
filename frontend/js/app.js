@@ -104,7 +104,6 @@ function toggleWidgetsVisibility() {
     const widgets = feedGrid.querySelectorAll('.feed-widget');
 
     // Hide all first
-    // Hide all first
     widgets.forEach(widget => {
         if (widget.dataset.tabId == activeTabId) {
             widget.style.display = 'block';
