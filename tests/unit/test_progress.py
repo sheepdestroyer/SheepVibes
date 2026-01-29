@@ -18,7 +18,7 @@ def test_opml_import_and_feed_refresh_progress(page: Page, opml_file_path: Path)
     # Check if the server is running
     try:
         urllib.request.urlopen(base_url, timeout=1).close()
-    except (urllib.error.URLError, ConnectionRefusedError, OSError):
+    except OSError:
         pytest.skip(f"Server at {base_url} is not running. Skipping E2E test.")
 
     page.goto(base_url)
