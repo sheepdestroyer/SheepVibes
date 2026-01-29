@@ -57,6 +57,15 @@ OPML_IMPORT_PROCESSING_WEIGHT = 50  # Percent of total progress
 OPML_IMPORT_FETCHING_WEIGHT = 50  # Percent of total progress
 
 
+
+def _sanitize_for_log(text):
+    """Sanitizes text for logging to prevent log injection."""
+    if not text:
+        return ""
+    # Remove control characters and limit length
+    return "".join(ch for ch in text if ch.isprintable())[:200]
+
+
 def validate_link_structure(url, schemes=("http", "https")):
     """
     Validates a URL structure for legitimate schemes and network location.
@@ -127,8 +136,8 @@ def _process_opml_feed_node(
     if not is_valid_feed_url(xml_url):
         logger.warning(
             "OPML import: Skipping feed '%s' with invalid URL scheme: %s",
-            feed_name,
-            xml_url,
+            _sanitize_for_log(feed_name),
+            _sanitize_for_log(xml_url),
         )
         skipped_count_wrapper[0] += 1
         return
@@ -136,7 +145,7 @@ def _process_opml_feed_node(
     if xml_url in all_existing_feed_urls_set:
         logger.info(
             "OPML import: Feed with URL '%s' already exists. Skipping.",
-            xml_url,
+            _sanitize_for_log(xml_url),
         )
         skipped_count_wrapper[0] += 1
         return
@@ -243,11 +252,18 @@ def _process_opml_outlines_iterative(
                 continue
 
             elif not xml_url and element_name and child_outlines:
-                nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
-                    element_name)
-                # Push children to stack
-                stack.append((list(reversed(child_outlines)), nested_tab_id,
-                              nested_tab_name))
+                try:
+                    nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
+                        element_name)
+                    # Push children to stack
+                    stack.append((list(reversed(child_outlines)), nested_tab_id,
+                                  nested_tab_name))
+                except sqlalchemy.exc.SQLAlchemyError:
+                    logger.exception(
+                        "OPML import: DB error creating tab for folder '%s'. Skipping folder.",
+                        _sanitize_for_log(element_name),
+                    )
+                    continue
             elif not xml_url and not element_name and child_outlines:
                 stack.append((list(reversed(child_outlines)), current_tab_id,
                               current_tab_name))
@@ -415,10 +431,12 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name,
             )
 
 
-def _parse_opml_root(opml_content):
-    """Parses the OPML content and returns the root element."""
+def _parse_opml_root(opml_stream):
+    """Parses the OPML stream and returns the root element."""
     try:
-        root = SafeET.fromstring(opml_content)
+        # Use parse() directly on stream for better encoding handling
+        tree = SafeET.parse(opml_stream)
+        root = tree.getroot()
         return root, None
     except SafeET.ParseError as e:
         logger.error("OPML import failed: Malformed XML. Error: %s",
@@ -522,16 +540,9 @@ def _invalidate_import_caches(affected_tab_ids_set):
 def import_opml(opml_file_stream, requested_tab_id_str):
     """Imports feeds from an OPML file, sending progress via SSE."""
     # Read the entire stream to a variable, so we can parse it multiple times
-    try:
-        opml_content = opml_file_stream.read()
-    except IOError:
-        logger.exception("Failed to read OPML file stream")
-        return None, ({"error": "Could not read OPML file stream."}, 400)
-
-    # Initial progress announcement
-
     # Main processing
-    root, error_resp = _parse_opml_root(opml_content)
+    # Pass stream directly to parser
+    root, error_resp = _parse_opml_root(opml_file_stream)
     if error_resp:
         return None, error_resp
 
