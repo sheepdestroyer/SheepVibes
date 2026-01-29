@@ -755,9 +755,8 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # py
 
 
 # Keep existing test_update_all_feeds, but rename it to avoid clash if it was meant to be different
-def test_original_update_all_feeds_empty_db(
-    db_setup,
-):  # pylint: disable=unused-argument
+@pytest.mark.usefixtures("db_setup")
+def test_original_update_all_feeds_empty_db():
     """Test updating all feeds in an empty database"""
     logger.info("Testing update_all_feeds() on an empty DB")
 
