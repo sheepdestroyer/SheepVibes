@@ -1,20 +1,22 @@
 import os
 import re
+from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page, expect
 
 
-@pytest.mark.skip(
+@pytest.mark.skipif(
+    os.getenv("CI") == "true",
     reason="Flaky in CI due to SSE timing issues; backend logic verified")
-def test_opml_import_and_feed_refresh_progress(page: Page,
-                                               test_server):  # noqa: ARG001
+def test_opml_import_and_feed_refresh_progress(page: Page):
     base_url = os.environ.get("TEST_BASE_URL", "http://localhost:5000")
     page.goto(base_url)
 
     # Test OPML import
     page.click("#settings-button")
-    page.set_input_files('input[type="file"]', "test_feeds.opml")
+    opml_path = Path(__file__).parent.joinpath("test_feeds.opml").resolve()
+    page.set_input_files('input[type="file"]', str(opml_path))
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
         re.compile(r"(Importing|Processing|Starting|Fetching)"))

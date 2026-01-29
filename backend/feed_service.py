@@ -148,7 +148,7 @@ def _process_opml_feed_node(
         all_existing_feed_urls_set.add(xml_url)
         imported_count_wrapper[0] += 1
         affected_tab_ids_set.add(current_tab_id)
-    except Exception:  # pylint: disable=broad-exception-caught
+    except sqlalchemy.exc.SQLAlchemyError:  # pylint: disable=broad-exception-caught
         logger.exception("OPML import: Error preparing feed '%s'", feed_name)
         skipped_count_wrapper[0] += 1
 
@@ -530,7 +530,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     # Read the entire stream to a variable, so we can parse it multiple times
     try:
         opml_content = opml_file_stream.read()
-    except Exception:
+    except IOError:
         logger.exception("Failed to read OPML file stream")
         return None, ({"error": "Could not read OPML file stream."}, 400)
 
