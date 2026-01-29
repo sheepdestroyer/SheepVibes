@@ -559,7 +559,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
 
     # Final 'complete' message for SSE
     announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+        msg=f'data: {json.dumps({"type": "progress_complete", "status": result["message"]})}\n\n'
     )
 
     return result, None
@@ -1493,13 +1493,14 @@ def update_all_feeds():
     all_feeds = Feed.query.all()
     total_feeds = len(all_feeds)
     processed_count = 0
+    successful_count = 0
     total_new_items = 0
     affected_tab_ids = set()
 
     logger.info("Starting update process for %d feeds (Parallelized).",
                 total_feeds)
     announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"
+        msg=f'data: {json.dumps({"type": "progress", "status": "Starting feed refresh...", "value": 0, "max": total_feeds})}\n\n'
     )
 
     actual_workers = min(MAX_CONCURRENT_FETCHES,
@@ -1516,7 +1517,7 @@ def update_all_feeds():
             processed_count += 1
             status_msg = f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
             announcer.announce(
-                msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"
+                msg=f'data: {json.dumps({"type": "progress", "status": status_msg, "value": processed_count, "max": total_feeds})}\n\n'
             )
 
             try:
@@ -1524,6 +1525,7 @@ def update_all_feeds():
                 success, new_items, tab_id = _process_fetch_result(
                     feed_obj, parsed_feed)
                 if success:
+                    successful_count += 1
                     total_new_items += new_items
                     if new_items > 0:
                         affected_tab_ids.add(tab_id)
@@ -1536,12 +1538,13 @@ def update_all_feeds():
                 )
 
     logger.info(
-        "Finished updating feeds. Processed: %d, New Items: %s",
-        processed_count,
+        "Finished updating feeds. Successful: %d/%d, New Items: %s",
+        successful_count,
+        total_feeds,
         total_new_items,
     )
     # Final 'complete' message
     announcer.announce(
         msg=f"data: {json.dumps({'type': 'progress_complete', 'status': 'Refresh complete.'})}\n\n"
     )
-    return processed_count, total_new_items, affected_tab_ids
+    return successful_count, total_new_items, affected_tab_ids

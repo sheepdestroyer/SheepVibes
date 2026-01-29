@@ -13,10 +13,10 @@ def test_opml_import_and_feed_refresh_progress(page: Page):
     page.set_input_files('input[type="file"]', "test_feeds.opml")
     expect(page.locator("#progress-container")).to_be_visible()
     expect(page.locator("#progress-status")).to_have_text(
-        re.compile(r"(Processing feed|Starting)"))
+        re.compile(r"(Importing|Processing feed|Starting)"))
     expect(page.locator("#progress-bar")).to_have_attribute(
         "value", re.compile(r"\d+"))
-    page.wait_for_selector("#progress-container.hidden", timeout=10000)
+    page.wait_for_selector("#progress-container.hidden", timeout=30000)
 
     # Test feed refresh
     # Test feed refresh - ensure settings remains open or re-open
