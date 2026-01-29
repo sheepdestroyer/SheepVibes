@@ -4,3 +4,10 @@ DEFAULT_PAGINATION_LIMIT = 10
 UPDATE_INTERVAL_MINUTES_DEFAULT = 15
 OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT = 60
 DEFAULT_OPML_IMPORT_TAB_NAME = "Imported Feeds"
+SKIPPED_FOLDER_TYPES = {
+    "netvibes-specific",
+    "hidden",
+    "UWA",
+    "Webnote",
+    "LinkModule",
+}
