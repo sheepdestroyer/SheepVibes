@@ -10,10 +10,12 @@ import ipaddress
 import json
 import logging  # Standard logging
 import os
+import logging
+import re
 import socket
 import ssl
 import urllib.request
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
@@ -65,6 +67,87 @@ def is_valid_feed_url(url):
     return url.lower().startswith(("http://", "https://"))
 
 
+def _calculate_and_announce_progress(
+        processed_count,
+        total_feeds_to_import,
+        last_announced_percent):
+    """Calculates progress and announces it if significant change occurred."""
+    if total_feeds_to_import > 0:
+        progress_val = (processed_count * OPML_IMPORT_PROCESSING_WEIGHT
+                        ) // total_feeds_to_import
+    else:
+        progress_val = OPML_IMPORT_PROCESSING_WEIGHT
+
+    current_percent = progress_val
+    should_announce = (processed_count == 0
+                       or processed_count >= total_feeds_to_import
+                       or (current_percent != last_announced_percent
+                           and current_percent % 5 == 0)
+                       or processed_count % 20 == 0)
+
+    if should_announce:
+        status_msg = f"Processing feed {processed_count}/{total_feeds_to_import}..."
+        event_data = {
+            "type": "progress",
+            "status": status_msg,
+            "value": progress_val,
+            "max": 100,
+        }
+        announcer.announce(msg=f"data: {json.dumps(event_data)}\\n\\n")
+        return current_percent
+    return last_announced_percent
+
+
+def _process_opml_feed_node(xml_url, feed_name, current_tab_id,
+                            all_existing_feed_urls_set, newly_added_feeds_list,
+                            imported_count_wrapper, skipped_count_wrapper,
+                            affected_tab_ids_set):
+    """Processes a single feed node from the OPML."""
+    # XSS Prevention: Validate URL scheme
+    if not is_valid_feed_url(xml_url):
+        logger.warning(
+            "OPML import: Skipping feed '%s' with invalid URL scheme: %s",
+            feed_name,
+            xml_url,
+        )
+        skipped_count_wrapper[0] += 1
+        return
+
+    if xml_url in all_existing_feed_urls_set:
+        logger.info(
+            "OPML import: Feed with URL '%s' already exists. Skipping.",
+            xml_url,
+        )
+        skipped_count_wrapper[0] += 1
+        return
+
+    try:
+        new_feed = Feed(tab_id=current_tab_id, name=feed_name, url=xml_url)
+        db.session.add(new_feed)
+        newly_added_feeds_list.append(new_feed)
+        all_existing_feed_urls_set.add(xml_url)
+        imported_count_wrapper[0] += 1
+        affected_tab_ids_set.add(current_tab_id)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("OPML import: Error preparing feed '%s'", feed_name)
+        skipped_count_wrapper[0] += 1
+
+
+def _get_or_create_nested_tab(folder_name):
+    """Finds an existing tab by name or creates a new one."""
+    existing_tab = Tab.query.filter_by(name=folder_name).first()
+
+    if existing_tab:
+        return existing_tab.id, existing_tab.name
+
+    max_order = db.session.query(db.func.max(Tab.order)).scalar()
+    new_order = (max_order or -1) + 1
+    new_folder_tab = Tab(name=folder_name, order=new_order)
+    db.session.add(new_folder_tab)
+    db.session.flush()  # Flush to get the ID
+    return new_folder_tab.id, new_folder_tab.name
+
+
 def _process_opml_outlines_iterative(
     initial_outline_elements,
     top_level_tab_id,
@@ -91,33 +174,8 @@ def _process_opml_outlines_iterative(
             processed_count = imported_count_wrapper[
                 0] + skipped_count_wrapper[0]
 
-            # Phase 1 value: 0 to OPML_IMPORT_PROCESSING_WEIGHT
-            if total_feeds_to_import > 0:
-                progress_val = (processed_count * OPML_IMPORT_PROCESSING_WEIGHT
-                                ) // total_feeds_to_import
-            else:
-                progress_val = OPML_IMPORT_PROCESSING_WEIGHT
-
-            current_percent = progress_val
-
-            should_announce = (processed_count == 0
-                               or processed_count >= total_feeds_to_import
-                               or (current_percent != last_announced_percent
-                                   and current_percent % 5 == 0)
-                               or processed_count % 20 == 0)
-
-            if should_announce:
-                status_msg = (
-                    f"Processing feed {processed_count}/{total_feeds_to_import}..."
-                )
-                event_data = {
-                    "type": "progress",
-                    "status": status_msg,
-                    "value": progress_val,
-                    "max": 100,
-                }
-                announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
-                last_announced_percent = current_percent
+            last_announced_percent = _calculate_and_announce_progress(
+                processed_count, total_feeds_to_import, last_announced_percent)
 
             folder_type_attr = outline_element.get("type")
             title_attr = outline_element.get("title")
@@ -131,38 +189,12 @@ def _process_opml_outlines_iterative(
 
             if xml_url:  # It's a feed
                 feed_name = element_name if element_name else xml_url
-
-                # XSS Prevention: Validate URL scheme
-                if not is_valid_feed_url(xml_url):
-                    logger.warning(
-                        "OPML import: Skipping feed '%s' with invalid URL scheme: %s",
-                        feed_name,
-                        xml_url,
-                    )
-                    skipped_count_wrapper[0] += 1
-                    continue
-
-                if xml_url in all_existing_feed_urls_set:
-                    logger.info(
-                        "OPML import: Feed with URL '%s' already exists. Skipping.",
-                        xml_url,
-                    )
-                    skipped_count_wrapper[0] += 1
-                    continue
-
-                try:
-                    new_feed = Feed(tab_id=current_tab_id,
-                                    name=feed_name,
-                                    url=xml_url)
-                    db.session.add(new_feed)
-                    newly_added_feeds_list.append(new_feed)
-                    all_existing_feed_urls_set.add(xml_url)
-                    imported_count_wrapper[0] += 1
-                    affected_tab_ids_set.add(current_tab_id)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logger.exception("OPML import: Error preparing feed '%s'",
-                                     feed_name)
-                    skipped_count_wrapper[0] += 1
+                _process_opml_feed_node(xml_url, feed_name, current_tab_id,
+                                        all_existing_feed_urls_set,
+                                        newly_added_feeds_list,
+                                        imported_count_wrapper,
+                                        skipped_count_wrapper,
+                                        affected_tab_ids_set)
 
             elif (not xml_url and element_name and folder_type_attr
                   and folder_type_attr in SKIPPED_FOLDER_TYPES):
@@ -174,32 +206,9 @@ def _process_opml_outlines_iterative(
                 continue
 
             elif not xml_url and element_name and child_outlines:
-                folder_name = element_name
-                existing_tab = Tab.query.filter_by(name=folder_name).first()
-
-                if existing_tab:
-                    nested_tab_id = existing_tab.id
-                    nested_tab_name = existing_tab.name
-                else:
-                    max_order = db.session.query(db.func.max(
-                        Tab.order)).scalar()
-                    new_order = (max_order or -1) + 1
-                    new_folder_tab = Tab(name=folder_name, order=new_order)
-                    db.session.add(new_folder_tab)
-                    try:
-                        db.session.flush()
-                        invalidate_tabs_cache()
-                        nested_tab_id = new_folder_tab.id
-                        nested_tab_name = new_folder_tab.name
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        db.session.rollback()
-                        logger.exception(
-                            "OPML import: Failed to create tab '%s'.",
-                            folder_name,
-                        )
-                        skipped_count_wrapper[0] += len(child_outlines)
-                        continue
-
+                nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
+                    element_name)
+                # Push children to stack
                 stack.append((list(reversed(child_outlines)), nested_tab_id,
                               nested_tab_name))
             elif not xml_url and not element_name and child_outlines:

@@ -2,13 +2,12 @@
 
 import logging
 import os
-import xml.etree.ElementTree as ET  # nosec B405
+import xml.etree.ElementTree as ET
 
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.orm import selectinload
 
-from ..extensions import db  # pylint: disable=unused-import
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab
 
