@@ -256,3 +256,11 @@ export function hideProgress() {
     const progressContainer = document.getElementById('progress-container');
     progressContainer.classList.add('hidden');
 }
+
+export function updateProgressBarPosition() {
+    const header = document.querySelector('header');
+    const progressContainer = document.getElementById('progress-container');
+    if (header && progressContainer) {
+        progressContainer.style.top = `${header.offsetHeight}px`;
+    }
+}

@@ -8,7 +8,8 @@ import {
     appendItemsToFeedWidget,
     showProgress,
     updateProgress,
-    hideProgress
+    hideProgress,
+    updateProgressBarPosition
 } from './ui.js';
 
 const PROGRESS_FALLBACK_TIMEOUT_MS = 15000;
@@ -43,6 +44,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial load
     await initializeTabs();
     initializeSSE();
+    updateProgressBarPosition();
+
+    // Resize listener for progress bar positioning
+    window.addEventListener('resize', updateProgressBarPosition);
 
     // Close settings on click outside
     document.addEventListener('click', (event) => {
