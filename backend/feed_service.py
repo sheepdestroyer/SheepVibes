@@ -53,11 +53,21 @@ def _count_feeds_in_opml(root):
 
 
 # --- OPML Import Configuration ---
+OPML_IMPORT_PROCESSING_WEIGHT = 50  # Percent of total progress
+OPML_IMPORT_FETCHING_WEIGHT = 50    # Percent of total progress
+
 SKIPPED_FOLDER_TYPES = {
     "UWA",
     "Webnote",
     "LinkModule",
 }  # Netvibes specific types to ignore for tab creation
+
+
+def is_valid_feed_url(url):
+    """Checks if a URL is a valid feed URL (http/https only)."""
+    if not url:
+        return False
+    return url.lower().startswith(("http://", "https://"))
 
 
 def _process_opml_outlines_iterative(
@@ -83,14 +93,16 @@ def _process_opml_outlines_iterative(
         while outline_elements:
             outline_element = outline_elements.pop()
 
-            processed_count = imported_count_wrapper[
-                0] + skipped_count_wrapper[0]
+            processed_count = (imported_count_wrapper[0] +
+                               skipped_count_wrapper[0])
 
-            # Phase 1 value: 0 to 50
+            # Phase 1 value: 0 to OPML_IMPORT_PROCESSING_WEIGHT
             if total_feeds_to_import > 0:
-                progress_val = (processed_count * 50) // total_feeds_to_import
+                progress_val = (processed_count *
+                                OPML_IMPORT_PROCESSING_WEIGHT
+                                ) // total_feeds_to_import
             else:
-                progress_val = 50
+                progress_val = OPML_IMPORT_PROCESSING_WEIGHT
 
             current_percent = progress_val
 
@@ -127,7 +139,7 @@ def _process_opml_outlines_iterative(
                 feed_name = element_name if element_name else xml_url
 
                 # XSS Prevention: Validate URL scheme
-                if not xml_url.lower().startswith(("http://", "https://")):
+                if not is_valid_feed_url(xml_url):
                     logger.warning(
                         "OPML import: Skipping feed '%s' with invalid URL scheme: %s",
                         feed_name,
@@ -153,7 +165,7 @@ def _process_opml_outlines_iterative(
                     all_existing_feed_urls_set.add(xml_url)
                     imported_count_wrapper[0] += 1
                     affected_tab_ids_set.add(current_tab_id)
-                except Exception:
+                except Exception:  # pylint: disable=broad-exception-caught
                     logger.exception("OPML import: Error preparing feed '%s'",
                                      feed_name)
                     skipped_count_wrapper[0] += 1
@@ -185,7 +197,7 @@ def _process_opml_outlines_iterative(
                         invalidate_tabs_cache()
                         nested_tab_id = new_folder_tab.id
                         nested_tab_name = new_folder_tab.name
-                    except Exception:
+                    except Exception:  # pylint: disable=broad-exception-caught
                         db.session.rollback()
                         logger.exception(
                             "OPML import: Failed to create tab '%s'.",
@@ -266,7 +278,7 @@ def _determine_target_tab(requested_tab_id_str):
                     target_tab_id = newly_created_default_tab.id
                     target_tab_name = newly_created_default_tab.name
                     was_created = True
-                except Exception as e_tab_commit:
+                except Exception as e_tab_commit:  # pylint: disable=broad-exception-caught
                     db.session.rollback()
                     logger.error(
                         "OPML import: Failed to create default tab '%s': %s",
@@ -318,7 +330,7 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name,
                     tab_name,
                     tab_id,
                 )
-        except Exception as e_cleanup:
+        except Exception as e_cleanup:  # pylint: disable=broad-exception-caught
             db.session.rollback()
             logger.warning(
                 "OPML import: Failed to cleanup empty default tab '%s': %s",
@@ -342,7 +354,7 @@ def _parse_opml_root(opml_content):
             },
             400,
         )
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(
             "OPML import failed: Could not parse file stream. Error: %s",
             e,
@@ -374,10 +386,10 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
         total_to_fetch = len(newly_added_feeds_list)
         for i, feed_obj in enumerate(newly_added_feeds_list):
             status_msg = f"Fetching new feed {i + 1}/{total_to_fetch}: {feed_obj.name}"
-
-            # Phase 2 value: 50 to 100
+            # Phase 2 value: Processing Weight to 100
             if total_to_fetch > 0:
-                progress_val = 50 + ((i + 1) * 50 // total_to_fetch)
+                progress_val = OPML_IMPORT_PROCESSING_WEIGHT + (
+                    (i + 1) * OPML_IMPORT_FETCHING_WEIGHT // total_to_fetch)
             else:
                 progress_val = 100
 
@@ -397,7 +409,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
             if feed_obj.id:
                 try:
                     fetch_and_update_feed(feed_obj.id)
-                except Exception as fetch_e:
+                except Exception as fetch_e:  # pylint: disable=broad-exception-caught
                     logger.error(
                         "OPML import: Error fetching for new feed %s (ID: %s): %s",
                         feed_obj.name,
@@ -409,7 +421,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list,
                 logger.error("OPML import: Feed '%s' missing ID after commit.",
                              feed_obj.name)
         return True, None
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         db.session.rollback()
         logger.error("OPML import: Database commit failed for new feeds: %s",
                      e,
