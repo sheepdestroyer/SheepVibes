@@ -89,14 +89,14 @@ def is_valid_feed_url(url):
 
 
 def _calculate_and_announce_progress(
-    processed_count, total_feeds_to_import, last_announced_percent
+    processed_count, total_count, last_announced_percent
 ):
     """Calculates progress and announces it if significant change occurred."""
-    if total_feeds_to_import > 0:
-        # Cap progress value, as processed_count can exceed total_feeds_to_import.
+    if total_count > 0:
+        # Cap progress value, as processed_count can exceed total_count.
         progress_val = min(
             OPML_IMPORT_PROCESSING_WEIGHT,
-            (processed_count * OPML_IMPORT_PROCESSING_WEIGHT) // total_feeds_to_import,
+            (processed_count * OPML_IMPORT_PROCESSING_WEIGHT) // total_count,
         )
     else:
         progress_val = OPML_IMPORT_PROCESSING_WEIGHT
@@ -104,7 +104,7 @@ def _calculate_and_announce_progress(
     current_percent = progress_val
     should_announce = (
         processed_count == 0
-        or processed_count >= total_feeds_to_import
+        or processed_count >= total_count
         or (current_percent != last_announced_percent and current_percent % 5 == 0)
         or processed_count % 20 == 0
     )
@@ -206,7 +206,7 @@ def _process_opml_outlines_iterative(
     imported_count_wrapper,
     skipped_count_wrapper,
     affected_tab_ids_set,
-    total_feeds_to_import,
+    total_outlines,
 ):
     """Iteratively processes OPML outline elements with weighted progress updates."""
     # Phase 1: Processing (0-50%)
@@ -216,17 +216,16 @@ def _process_opml_outlines_iterative(
     ]
     last_announced_percent = -1
 
+    processed_outline_count = 0
     while stack:
         outline_elements, current_tab_id, current_tab_name = stack.pop()
 
         while outline_elements:
             outline_element = outline_elements.pop()
-
-            processed_count = imported_count_wrapper[0] + \
-                skipped_count_wrapper[0]
+            processed_outline_count += 1
 
             last_announced_percent = _calculate_and_announce_progress(
-                processed_count, total_feeds_to_import, last_announced_percent
+                processed_outline_count, total_outlines, last_announced_percent
             )
 
             folder_type_attr = outline_element.get("type")
@@ -545,6 +544,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         return None, error_resp
 
     total_feeds_to_import = _count_feeds_in_opml(root)
+    total_outlines = len(root.findall(".//outline"))
 
     # ... (rest of the function, passing total_feeds_to_import down)
     (
@@ -591,7 +591,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         imported_count_wrapper,
         skipped_count_wrapper,
         affected_tab_ids_set,
-        total_feeds_to_import,
+        total_outlines,
     )
 
     # Batch commit and fetch
