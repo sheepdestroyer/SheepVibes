@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import SQLAlchemyError
 
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab
@@ -130,6 +131,9 @@ def export_opml():
     """
     try:
         opml_string, tab_count, feed_count = _generate_opml_string()
+    except SQLAlchemyError:
+        logger.exception("Database error during OPML generation for export")
+        return jsonify({"error": "Database error during OPML generation"}), 500
     except Exception:  # pylint: disable=broad-exception-caught
         # Catch unexpected errors during OPML generation
         logger.exception("Error during OPML generation for export")

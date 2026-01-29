@@ -172,6 +172,9 @@ def _get_or_create_nested_tab(folder_name):
         nested.commit()  # Commit savepoint
     except sqlalchemy.exc.IntegrityError:
         nested.rollback()  # Rollback only to savepoint
+        # Remove the failed object from session identity map to prevent re-flush issues
+        db.session.expunge(new_folder_tab)
+        
         # Another process created this tab; fetch it
         existing_tab = Tab.query.filter_by(name=folder_name).first()
         if existing_tab:
@@ -305,20 +308,10 @@ def _determine_target_tab(requested_tab_id_str):
                     name=default_tab_name_for_creation, order=0)
                 db.session.add(newly_created_default_tab)
                 try:
-                    # Use savepoint here too for consistency and safety
-                    nested = db.session.begin_nested()
-                    db.session.flush()
-
-                    # If flush succeeds, we can commit the main session (if intended)
-                    # But wait, original code did db.session.commit() which commits EVERYTHING.
-                    # Since this is start of import, maybe it is fine?
-                    # The original code at line 302 was db.session.commit().
-                    # If we use begin_nested, we need to commit the nested, THEN commit the session?
-                    # No, begin_nested just handles the flush safety.
-                    # We still want to commit the NEW tab to DB immediately so others see it?
-                    nested.commit()
+                    # Since this is the start of the import, we can safely commit the new tab
+                    # without worrying about partial feed state (none exists yet).
                     db.session.commit()
-
+                    
                     logger.info(
                         "OPML import: Created default tab '%s' (ID: %s).",
                         newly_created_default_tab.name,
@@ -329,7 +322,8 @@ def _determine_target_tab(requested_tab_id_str):
                     target_tab_name = newly_created_default_tab.name
                     was_created = True
                 except sqlalchemy.exc.IntegrityError:
-                    nested.rollback()
+                    db.session.rollback()
+                    # No need to expunge here as rollback clears the session
                     logger.info(
                         "OPML import: Race condition on default tab creation. Re-fetching tab '%s'.",
                         default_tab_name_for_creation,
