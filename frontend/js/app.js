@@ -1,4 +1,5 @@
 import { api, API_BASE_URL } from './api.js';
+import { throttle } from './utils.js';
 import {
     showToast,
     createFeedWidget,
@@ -21,6 +22,8 @@ let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
 let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
+const SCROLL_BUFFER = 100; // Pixels from the bottom
+let isGlobalScrollLoading = false;
 
 // --- Progress Fallback Helpers ---
 
@@ -79,18 +82,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Global scroll listener for infinite scroll
-    window.addEventListener('scroll', handleGlobalScroll);
+    // Global scroll listener for infinite scroll
+    window.addEventListener('scroll', throttle(handleGlobalScroll, 200));
 });
 
-function handleGlobalScroll() {
-    const SCROLL_BUFFER = 100; // Pixels from the bottom
+async function handleGlobalScroll() {
+    if (isGlobalScrollLoading) return;
 
     // Check if the user has scrolled to the bottom of the page
-if ((window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - SCROLL_BUFFER) {
-        const visibleLists = document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"] ul`);
-        visibleLists.forEach(listElement => {
-            handleLoadMoreItems(listElement);
-        });
+    if ((window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - SCROLL_BUFFER) {
+        isGlobalScrollLoading = true;
+        try {
+            const visibleLists = document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"] ul`);
+            const promises = Array.from(visibleLists).map(listElement => handleLoadMoreItems(listElement));
+            await Promise.all(promises);
+        } catch (error) {
+            console.error('Error in global scroll handler:', error);
+        } finally {
+            isGlobalScrollLoading = false;
+        }
     }
 }
 // --- Core Logic ---
