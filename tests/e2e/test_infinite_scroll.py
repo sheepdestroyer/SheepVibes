@@ -15,12 +15,9 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     base_url = os.environ.get("TEST_BASE_URL", "http://localhost:5000")
 
     # 1. Setup: Verify server is running
-    parsed = urlparse(base_url)
-    if parsed.scheme not in {"http", "https"}:
-        pytest.skip(f"Unsupported scheme for TEST_BASE_URL: {parsed.scheme}")
     try:
-        urllib.request.urlopen(base_url, timeout=1).close()
-    except OSError:
+        page.goto(base_url, timeout=5000)
+    except Exception:
         pytest.skip(f"Server at {base_url} is not running. Skipping E2E test.")
 
     # 2. Setup: Import feeds to ensure we have content
@@ -51,8 +48,13 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     # We use a composite selector or just count li elements with links
     initial_items = page.locator(item_selector).count()
 
-    # Scroll to bottom
-    page.evaluate("window.scrollTo(0, document.scrollingElement.scrollHeight)")
+    # Scroll the feed widget's list element to the bottom
+    # We target the specific list inside the widget
+    page.evaluate(f'''
+        const list = document.querySelector("{item_selector}").closest("ul");
+        list.scrollTop = list.scrollHeight;
+        list.dispatchEvent(new Event('scroll'));
+    ''')
 
     # 5. Verification: Wait for more items to load
     try:

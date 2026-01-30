@@ -22,9 +22,9 @@ let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
 let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
-const SCROLL_THROTTLE_DELAY = 200; // Milliseconds
-const SCROLL_BUFFER = 100; // Pixels from the bottom
-let isGlobalScrollLoading = false;
+// const SCROLL_THROTTLE_DELAY = 200; // Moved to ui.js or implicit
+// const SCROLL_BUFFER = 100; // Moved to ui.js or implicit
+// let isGlobalScrollLoading = false; // Removed in favor of per-widget locking
 
 // --- Progress Fallback Helpers ---
 
@@ -82,43 +82,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Global scroll listener for infinite scroll
-    // Throttling applied: 200ms delay
-    window.addEventListener('scroll', throttle(onWindowScroll, SCROLL_THROTTLE_DELAY));
-
-    // Initial check for tall viewports (or if content is short)
-    onWindowScroll();
 });
-
-async function onWindowScroll() {
-    // Use a global flag to prevent concurrent loads, which is cleaner than querying the DOM.
-    if (isGlobalScrollLoading) {
-        return;
-    }
-
-    // Check if the user has scrolled to the bottom of the page
-    if ((document.scrollingElement.scrollTop + document.scrollingElement.clientHeight) < document.scrollingElement.scrollHeight - SCROLL_BUFFER) {
-        return;
-    }
-
-    const visibleLists = document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"] ul`);
-    // Filter out lists that are already fully loaded to avoid unnecessary work.
-    const listsToLoad = Array.from(visibleLists).filter(list => list.dataset.allItemsLoaded !== 'true');
-
-    if (listsToLoad.length === 0) {
-        return;
-    }
-
-    isGlobalScrollLoading = true;
-    try {
-        const promises = listsToLoad.map(listElement => handleLoadMoreItems(listElement));
-        await Promise.all(promises);
-    } catch (error) {
-        console.error('Error in global scroll handler:', error);
-    } finally {
-        isGlobalScrollLoading = false;
-    }
-}
+// Global scroll listener removed in favor of per-widget scrolling
+// See ui.js for the scroll event listener implementation on feed widgets.
 // --- Core Logic ---
 
 async function initializeTabs() {

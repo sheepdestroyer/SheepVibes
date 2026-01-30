@@ -141,6 +141,18 @@ export function createFeedWidget(feed, callbacks) {
         itemList.innerHTML = '<li>No items found for this feed.</li>';
     }
 
+    // Infinite Scroll: Per-widget implementation
+    // We listen for scroll events on this specific list element.
+    const SCROLL_BUFFER = 50; // Pixels from bottom to trigger load
+    const SCROLL_THROTTLE = 200; // ms
+
+    itemList.addEventListener('scroll', throttle(() => {
+        // Check if scrolled near bottom
+        if (itemList.scrollTop + itemList.clientHeight >= itemList.scrollHeight - SCROLL_BUFFER) {
+            onLoadMore(itemList);
+        }
+    }, SCROLL_THROTTLE));
+
     return widget;
 }
 
