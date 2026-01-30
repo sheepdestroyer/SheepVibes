@@ -48,13 +48,13 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
 
     # Scroll the feed widget's list element to the bottom
     # Use timeout longer than throttle delay (200ms) to ensure the throttle window has passed
-    page.evaluate(f'''
+    page.evaluate(f"""
         const list = document.querySelector("{item_selector}").closest("ul");
         list.scrollTop = list.scrollHeight;
         setTimeout(() => {{
             list.dispatchEvent(new Event('scroll'));
         }}, 300);
-    ''')
+    """)
 
     # Wait for the API call to complete and new items to render
     page.wait_for_timeout(3000)
