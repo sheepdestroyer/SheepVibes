@@ -22,6 +22,7 @@ let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
 let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
+const SCROLL_THROTTLE_DELAY = 200; // Milliseconds
 const SCROLL_BUFFER = 100; // Pixels from the bottom
 let isGlobalScrollLoading = false;
 
@@ -82,9 +83,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Global scroll listener for infinite scroll
-    // Global scroll listener for infinite scroll
     // Throttling applied: 200ms delay
-    window.addEventListener('scroll', throttle(onWindowScroll, 200));
+    window.addEventListener('scroll', throttle(onWindowScroll, SCROLL_THROTTLE_DELAY));
 });
 
 async function onWindowScroll() {
