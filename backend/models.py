@@ -47,7 +47,7 @@ class Tab(db.Model):
             unread_count = (
                 db.session.query(db.func.count(FeedItem.id))
                 .join(Feed)
-.filter(Feed.tab_id == self.id, ~FeedItem.is_read)
+                .filter(Feed.tab_id == self.id, ~FeedItem.is_read)
                 .scalar()
                 or 0
             )
