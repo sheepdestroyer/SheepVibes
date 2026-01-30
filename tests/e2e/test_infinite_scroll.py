@@ -52,7 +52,7 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     initial_items = page.locator(item_selector).count()
 
     # Scroll to bottom
-    page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+    page.evaluate("window.scrollTo(0, document.scrollingElement.scrollHeight)")
 
     # 5. Verification: Wait for more items to load
     try:

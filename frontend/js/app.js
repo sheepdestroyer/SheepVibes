@@ -97,7 +97,7 @@ async function onWindowScroll() {
     }
 
     // Check if the user has scrolled to the bottom of the page
-    if ((window.innerHeight + window.scrollY) < document.documentElement.scrollHeight - SCROLL_BUFFER) {
+    if ((window.innerHeight + window.scrollY) < document.scrollingElement.scrollHeight - SCROLL_BUFFER) {
         return;
     }
 
