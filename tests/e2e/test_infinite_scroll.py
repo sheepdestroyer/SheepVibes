@@ -56,9 +56,6 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
         }}, 300);
     """)
 
-    # Wait for the API call to complete and new items to render
-    page.wait_for_timeout(3000)
-
     # 5. Verification: Wait for more items to load
     try:
         expect(page.locator(item_selector)).not_to_have_count(

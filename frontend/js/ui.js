@@ -1,6 +1,6 @@
 import { formatDate, throttle } from './utils.js';
 
-const SCROLL_BUFFER = 50; // Pixels from bottom to trigger load
+const SCROLL_BUFFER = 200; // Pixels from bottom to trigger load
 const SCROLL_THROTTLE = 200; // ms
 
 
