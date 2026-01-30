@@ -12,11 +12,11 @@ flake8 backend/ --max-line-length=120
 ### I. Setup for Local Testing
 1.  Navigate to the backend directory. Install the necessary development dependencies within a Python virtual environment, including `pytest`:
     ```bash
-    cd backend
+    # From the project root
     python -m venv venv
     source venv/bin/activate
     pip install --upgrade pip
-    pip install -r requirements.txt -r requirements-dev.txt
+    pip install -r backend/requirements.txt -r backend/requirements-dev.txt
     ```
 
 
@@ -34,10 +34,10 @@ The backend tests require a running Redis instance for caching checks.
     ```
 
 2.  **Run Pytest**
-    Ensure you are in the `backend` directory with the virtual environment activated. The test suite is configured via `pytest.ini` to automatically connect to Redis on `localhost:6379`.
+    Ensure you are in the project root (not `backend`). The test suite is configured via `pytest.ini` (in `tests/`) to automatically connect to Redis on `localhost:6379`.
     ```bash
-    # From the 'backend' directory
-    python -m pytest -v
+    # From the project root
+    python -m pytest -c tests/pytest.ini tests/ -v
     ```
 
 3.  **Stop Redis**

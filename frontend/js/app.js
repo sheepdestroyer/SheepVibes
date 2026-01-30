@@ -5,8 +5,15 @@ import {
     renderTabs,
     showEditFeedModal,
     closeEditFeedModal,
-    appendItemsToFeedWidget
+    appendItemsToFeedWidget,
+    showProgress,
+    updateProgress,
+    hideProgress,
+    updateProgressBarPosition
 } from './ui.js';
+
+const PROGRESS_FALLBACK_TIMEOUT_MS = 15000;
+let progressFallbackTimeoutId = null;
 
 // State
 const storedTabId = localStorage.getItem('activeTabId');
@@ -14,6 +21,24 @@ let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
 let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
+
+// --- Progress Fallback Helpers ---
+
+function _startProgressFallback() {
+    _clearProgressFallback();
+    progressFallbackTimeoutId = setTimeout(() => {
+        console.warn('Progress SSE timeout reached. Hiding progress bar.');
+        hideProgress();
+        progressFallbackTimeoutId = null;
+    }, PROGRESS_FALLBACK_TIMEOUT_MS);
+}
+
+function _clearProgressFallback() {
+    if (progressFallbackTimeoutId) {
+        clearTimeout(progressFallbackTimeoutId);
+        progressFallbackTimeoutId = null;
+    }
+}
 
 // --- Initialization ---
 
@@ -37,6 +62,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial load
     await initializeTabs();
     initializeSSE();
+    updateProgressBarPosition();
+
+    // Resize listener for progress bar positioning
+    window.addEventListener('resize', updateProgressBarPosition);
 
     // Close settings on click outside
     document.addEventListener('click', (event) => {
@@ -97,7 +126,6 @@ function toggleWidgetsVisibility() {
     const feedGrid = document.getElementById('feed-grid');
     const widgets = feedGrid.querySelectorAll('.feed-widget');
 
-    // Hide all first
     // Hide all first
     widgets.forEach(widget => {
         if (widget.dataset.tabId == activeTabId) {
@@ -273,11 +301,15 @@ async function handleEditFeedSubmit(e) {
 }
 
 async function handleRefreshAllFeeds() {
+    showProgress('Starting feed refresh...');
+    _startProgressFallback();
     try {
         await api.updateAllFeeds();
-        showToast('Refresh triggered. Updates will appear shortly.', 'success');
+        // The SSE events will drive the rest of the UI updates.
     } catch (e) {
         showToast('Failed to refresh: ' + e.message, 'error');
+        _clearProgressFallback();
+        hideProgress(); // Hide progress bar on failure
     }
 }
 
@@ -306,28 +338,30 @@ async function handleImportOpmlFileSelect(e) {
     formData.append('file', file);
     if (activeTabId !== null) formData.append('tab_id', activeTabId);
 
+    showProgress('Importing OPML file...');
+    _startProgressFallback();
     try {
         const data = await api.importOpml(formData);
-        showToast(data.message, 'success');
-        if (data.imported_count > 0) {
-            // Re-fetch tab data to update names and unread counts on all tab buttons.
-            await initializeTabs();
+        // Always re-initialize tabs, as new (empty) tabs might have been created.
+        await initializeTabs();
 
-            // Use the `affected_tab_ids` from the backend to perform a more targeted refresh.
+        if (data.imported_count > 0) {
             const tabsToReload = new Set(data.affected_tab_ids || []);
-            if (data.tab_id) { // The default tab for loose feeds might also be affected.
+            if (data.tab_id) {
                 tabsToReload.add(data.tab_id);
             }
-
             for (const tabId of tabsToReload) {
-                // If the tab is currently cached/loaded, refresh it.
                 if (loadedTabs.has(tabId)) {
                     await reloadTab(tabId);
                 }
             }
         }
+        // The 'progress_complete' SSE event is the single source of truth for hiding the
+        // progress bar and showing the final status.
     } catch (err) {
         showToast(err.message, 'error');
+        _clearProgressFallback();
+        hideProgress();
     } finally {
         e.target.value = '';
     }
@@ -400,27 +434,34 @@ function initializeSSE() {
     eventSource.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
+
+            // Handle progress updates
+            if (data.type === 'progress') {
+                // Any progress event clears/resets the fallback to keep it alive during long operations
+                _startProgressFallback();
+                updateProgress(data.status, data.value, data.max);
+                return;
+            }
+            if (data.type === 'progress_complete') {
+                _clearProgressFallback();
+                hideProgress();
+                showToast(data.status || 'Operation complete!', 'success');
+                return;
+            }
+
+            // Handle new items notification
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
+                allTabs = await api.getTabs();
+                renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
-                // Fetch latest tab metadata for unread counts
-                try {
-                    allTabs = await api.getTabs();
-                    renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
+                const affectedIds = data.affected_tab_ids || [];
+                affectedIds.forEach(id => {
+                    loadedTabs.delete(id);
+                });
 
-                    // Targeted refresh: mark affected tabs as stale
-                    const affectedIds = data.affected_tab_ids || [];
-                    affectedIds.forEach(id => {
-                        const numericId = parseInt(id, 10);
-                        loadedTabs.delete(numericId);
-                    });
-
-                    // If active tab is affected, reload it immediately
-                    if (activeTabId && affectedIds.some(id => parseInt(id, 10) === activeTabId)) {
-                        await reloadTab(activeTabId);
-                    }
-                } catch (apiErr) {
-                    console.error('Failed to refresh data after SSE:', apiErr);
+                if (activeTabId && affectedIds.includes(activeTabId)) {
+                    await reloadTab(activeTabId);
                 }
             }
         } catch (e) {
@@ -432,3 +473,5 @@ function initializeSSE() {
         console.error('SSE connection failed:', err);
     };
 }
+
+

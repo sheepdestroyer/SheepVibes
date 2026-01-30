@@ -48,7 +48,7 @@ ENV DATABASE_PATH=/app/data/sheepvibes.db \
     FLASK_APP=backend.app \
     PYTHONPATH=/app \
     FLASK_RUN_HOST=0.0.0.0
-    # Note: FLASK_DEBUG should be 0 or unset for production
+# Note: FLASK_DEBUG should be 0 or unset for production
 
 # Run the entrypoint script which handles migrations and starts the app
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]

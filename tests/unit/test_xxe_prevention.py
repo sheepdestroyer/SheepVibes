@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from . import feed_service
+from backend import feed_service
 
 
 @pytest.fixture(autouse=True)
@@ -31,8 +31,7 @@ def test_fetch_feed_blocks_external_dtd(mock_network, caplog):
 
     # Ensure a warning was logged about blocking unsafe XML.
     warning_records = [
-        record for record in caplog.records
-        if record.levelno == logging.WARNING
+        record for record in caplog.records if record.levelno == logging.WARNING
     ]
     assert warning_records, "Expected a WARNING log entry when unsafe XML is blocked"
 
@@ -48,7 +47,8 @@ def test_fetch_feed_blocks_external_dtd(mock_network, caplog):
     # In the log string, we expect to see literal backslashes.
     assert (
         "http://example.com/ext_dtd.xml\\nwith\\nnewline\\rand\\rcarriagereturn"
-        in combined)
+        in combined
+    )
 
 
 # Helper to create a malicious XML string
@@ -191,12 +191,15 @@ def test_fetch_feed_redirect_security(mock_network, mocker):
     # Check for SafeHTTPHandler/SafeHTTPSHandler
     has_safe_con_handler = any(
         isinstance(h, (feed_service.SafeHTTPHandler,
-                       feed_service.SafeHTTPSHandler)) for h in handlers)
+                   feed_service.SafeHTTPSHandler))
+        for h in handlers
+    )
     assert has_safe_con_handler, "SafeHTTPHandler or SafeHTTPSHandler should be used"
 
     # Check for SafeRedirectHandler
     has_redirect_handler = any(
-        isinstance(h, feed_service.SafeRedirectHandler) for h in handlers)
+        isinstance(h, feed_service.SafeRedirectHandler) for h in handlers
+    )
     assert has_redirect_handler, "SafeRedirectHandler should be used"
 
 
