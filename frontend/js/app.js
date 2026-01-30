@@ -81,13 +81,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             settingsMenu.classList.add('hidden');
         }
     });
-
-    // Global scroll listener for infinite scroll
-    // Throttling applied: 200ms delay
-    window.addEventListener('scroll', throttle(onWindowScroll, SCROLL_THROTTLE_DELAY));
-
-    // Initial check for tall viewports (or if content is short)
-    onWindowScroll();
 });
 
 async function onWindowScroll() {

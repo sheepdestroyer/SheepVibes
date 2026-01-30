@@ -46,8 +46,12 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     # We use a composite selector or just count li elements with links
     initial_items = page.locator(item_selector).count()
 
-    # Scroll to bottom
-    page.evaluate("window.scrollTo(0, document.scrollingElement.scrollHeight)")
+    # Scroll the feed widget's list element to the bottom
+    page.evaluate(f'''
+        const list = document.querySelector("{item_selector}").closest("ul");
+        list.scrollTop = list.scrollHeight;
+        list.dispatchEvent(new Event('scroll'));
+    ''')
 
     # 5. Verification: Wait for more items to load
     try:

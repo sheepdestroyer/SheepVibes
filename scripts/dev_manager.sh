@@ -169,6 +169,7 @@ do_up() {
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
         -e CACHE_REDIS_URL="$REDIS_URL_INTERNAL" \
         -e FLASK_DEBUG="$DEBUG_VAL" \
+        -e CORS_ALLOWED_ORIGINS="http://localhost:${HOST_PORT},http://127.0.0.1:${HOST_PORT}" \
         -v "${VOLUME_NAME}:/app/data:Z" \
         "$APP_IMAGE_NAME"
 
