@@ -31,7 +31,7 @@ def get_tabs():
     # Calculate unread counts for all tabs in a single query to avoid N+1
     unread_counts_query = (
         db.session.query(Feed.tab_id, func.count(FeedItem.id))
-        .join(FeedItem, Feed.id == FeedItem.feed_id)
+        .join(Feed.items)
         .filter(FeedItem.is_read == False)
         .group_by(Feed.tab_id)
     )
