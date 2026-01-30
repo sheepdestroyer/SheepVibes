@@ -1,5 +1,9 @@
 import { formatDate, throttle } from './utils.js';
 
+const SCROLL_BUFFER = 50; // Pixels from bottom to trigger load
+const SCROLL_THROTTLE = 200; // ms
+
+
 // --- Toast Notification ---
 
 export function showToast(message, type = 'info', duration = 3000) {
@@ -126,6 +130,18 @@ export function createFeedWidget(feed, callbacks) {
     itemList.dataset.tabId = feed.tab_id;
     itemList.dataset.loading = 'false';
     itemList.dataset.allItemsLoaded = 'false';
+
+    // Infinite Scroll: Per-widget implementation
+    itemList.addEventListener('scroll', throttle(() => {
+        // Check if scrolled near bottom
+        if (itemList.scrollTop + itemList.clientHeight >= itemList.scrollHeight - SCROLL_BUFFER) {
+            onLoadMore(itemList);
+        }
+    }, SCROLL_THROTTLE));
+
+    // Programmatically trigger a scroll event to handle cases where the initial
+    // content is not enough to make the list scrollable.
+    itemList.dispatchEvent(new Event('scroll'));
 
     // Render Items
     if (feed.items && feed.items.length > 0) {

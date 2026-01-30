@@ -1,7 +1,5 @@
 import os
-import urllib.request
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -49,12 +47,11 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     initial_items = page.locator(item_selector).count()
 
     # Scroll the feed widget's list element to the bottom
-    # We target the specific list inside the widget
-    page.evaluate(f"""
+    page.evaluate(f'''
         const list = document.querySelector("{item_selector}").closest("ul");
         list.scrollTop = list.scrollHeight;
         list.dispatchEvent(new Event('scroll'));
-    """)
+    ''')
 
     # 5. Verification: Wait for more items to load
     try:
