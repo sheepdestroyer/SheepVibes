@@ -139,10 +139,6 @@ export function createFeedWidget(feed, callbacks) {
         }
     }, SCROLL_THROTTLE));
 
-    // Programmatically trigger a scroll event to handle cases where the initial
-    // content is not enough to make the list scrollable.
-    itemList.dispatchEvent(new Event('scroll'));
-
     // Render Items
     if (feed.items && feed.items.length > 0) {
         const fragment = document.createDocumentFragment();
@@ -157,6 +153,12 @@ export function createFeedWidget(feed, callbacks) {
         itemList.innerHTML = '<li>No items found for this feed.</li>';
     }
 
+    // Programmatically trigger a scroll event to handle cases where the initial
+    // content is not enough to make the list scrollable.
+    // Dispatch AFTER rendering so we check the actual content height.
+    setTimeout(() => {
+        itemList.dispatchEvent(new Event('scroll'));
+    }, 0);
 
     return widget;
 }
