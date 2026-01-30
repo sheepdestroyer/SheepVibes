@@ -217,6 +217,33 @@ def internal_error(error):
     return jsonify({"error": "An internal server error occurred"}), 500
 
 
+@app.after_request
+def add_security_headers(response):
+    """
+    Add security headers to all responses.
+    """
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Content Security Policy (CSP)
+    # - default-src 'self': Only allow resources from the same origin by default.
+    # - img-src 'self' data: https: : Allow images from same origin, data URIs, and any HTTPS source (for feed images).
+    # - style-src 'self' 'unsafe-inline': Allow styles from same origin and inline styles (frontend uses inline styles).
+    # - script-src 'self': Allow scripts from same origin.
+    # - connect-src 'self': Allow AJAX/Fetch to same origin.
+    csp = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+
+    return response
+
+
 # --- Static and Stream Routes ---
 
 FRONTEND_FOLDER = os.path.abspath(
