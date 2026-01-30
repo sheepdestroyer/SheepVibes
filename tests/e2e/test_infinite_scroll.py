@@ -1,7 +1,5 @@
 import os
-import urllib.request
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -15,12 +13,9 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     base_url = os.environ.get("TEST_BASE_URL", "http://localhost:5000")
 
     # 1. Setup: Verify server is running
-    parsed = urlparse(base_url)
-    if parsed.scheme not in {"http", "https"}:
-        pytest.skip(f"Unsupported scheme for TEST_BASE_URL: {parsed.scheme}")
     try:
-        urllib.request.urlopen(base_url, timeout=1).close()
-    except OSError:
+        page.goto(base_url, timeout=5000)
+    except Exception:
         pytest.skip(f"Server at {base_url} is not running. Skipping E2E test.")
 
     # 2. Setup: Import feeds to ensure we have content
