@@ -31,16 +31,13 @@ def get_tabs():
     # Calculate unread counts for all tabs in a single query to avoid N+1
     unread_counts_query = (
         db.session.query(Feed.tab_id, func.count(FeedItem.id))
-        .join(Feed.items)
+        .join(FeedItem, Feed.id == FeedItem.feed_id)
         .filter(FeedItem.is_read == False)
         .group_by(Feed.tab_id)
     )
     unread_counts = dict(unread_counts_query.all())
 
-    return jsonify(
-        [tab.to_dict(unread_count=unread_counts.get(tab.id, 0))
-         for tab in tabs]
-    )
+    return jsonify([tab.to_dict(unread_count=unread_counts.get(tab.id, 0)) for tab in tabs])
 
 
 @tabs_bp.route("", methods=["POST"])
