@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Global scroll listener for infinite scroll
-    window.addEventListener('scroll', handleGlobalScroll);
+    window.addEventListener('scroll', throttle(handleGlobalScroll, 200));
 });
 
 function handleGlobalScroll() {
