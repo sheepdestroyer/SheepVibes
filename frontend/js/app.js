@@ -1,5 +1,5 @@
-import { api, API_BASE_URL } from './api.js';
 import { throttle } from './utils.js';
+import { api, API_BASE_URL } from './api.js';
 import {
     showToast,
     createFeedWidget,
@@ -84,10 +84,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Global scroll listener for infinite scroll
     // Global scroll listener for infinite scroll
     // Throttling applied: 200ms delay
-    window.addEventListener('scroll', throttle(handleGlobalScroll, 200));
+    window.addEventListener('scroll', throttle(onWindowScroll, 200));
 });
 
-async function handleGlobalScroll() {
+async function onWindowScroll() {
     if (isGlobalScrollLoading) return;
 
     // Check if the user has scrolled to the bottom of the page
