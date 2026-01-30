@@ -24,7 +24,6 @@ const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
 const SCROLL_THROTTLE_DELAY = 200; // Milliseconds
 const SCROLL_BUFFER = 100; // Pixels from the bottom
-let isGlobalScrollLoading = false;
 
 // --- Progress Fallback Helpers ---
 
@@ -88,20 +87,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function onWindowScroll() {
-    if (isGlobalScrollLoading) return;
-
     // Check if the user has scrolled to the bottom of the page
-    if ((window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - SCROLL_BUFFER) {
-        isGlobalScrollLoading = true;
-        try {
-            const visibleLists = document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"] ul`);
-            const promises = Array.from(visibleLists).map(listElement => handleLoadMoreItems(listElement));
-            await Promise.all(promises);
-        } catch (error) {
-            console.error('Error in global scroll handler:', error);
-        } finally {
-            isGlobalScrollLoading = false;
-        }
+    if ((window.innerHeight + window.scrollY) < document.documentElement.scrollHeight - SCROLL_BUFFER) {
+        return;
+    }
+
+    const visibleLists = document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"] ul`);
+    const isAnyListLoading = Array.from(visibleLists).some(list => list.dataset.loading === 'true');
+
+    if (isAnyListLoading) {
+        return;
+    }
+
+    try {
+        const promises = Array.from(visibleLists).map(listElement => handleLoadMoreItems(listElement));
+        await Promise.all(promises);
+    } catch (error) {
+        console.error('Error in global scroll handler:', error);
     }
 }
 // --- Core Logic ---
