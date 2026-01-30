@@ -1,27 +1,30 @@
 import pytest
+
 from backend.app import app
+
 
 @pytest.fixture
 def client():
-    app.config['TESTING'] = True
+    app.config["TESTING"] = True
     with app.test_client() as client:
         yield client
 
+
 def test_security_headers_present(client):
-    response = client.get('/')
+    response = client.get("/")
     headers = response.headers
 
     # Check for X-Content-Type-Options
-    assert headers.get('X-Content-Type-Options') == 'nosniff'
+    assert headers.get("X-Content-Type-Options") == "nosniff"
 
     # Check for X-Frame-Options
-    assert headers.get('X-Frame-Options') == 'SAMEORIGIN'
+    assert headers.get("X-Frame-Options") == "SAMEORIGIN"
 
     # Check for Referrer-Policy
-    assert headers.get('Referrer-Policy') == 'strict-origin-when-cross-origin'
+    assert headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
 
     # Check for Content-Security-Policy
-    csp = headers.get('Content-Security-Policy')
+    csp = headers.get("Content-Security-Policy")
     assert csp is not None
     assert "default-src 'self'" in csp
     assert "img-src 'self' data: https:" in csp
