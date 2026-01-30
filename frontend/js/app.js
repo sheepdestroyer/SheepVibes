@@ -83,6 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Global scroll listener for infinite scroll
     // Global scroll listener for infinite scroll
+    // Throttling applied: 200ms delay
     window.addEventListener('scroll', throttle(handleGlobalScroll, 200));
 });
 
