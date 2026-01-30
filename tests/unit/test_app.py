@@ -740,7 +740,7 @@ def test_get_non_existent_static_file(client):
 @patch("backend.blueprints.feeds.announcer.announce")
 @patch("backend.blueprints.feeds.update_all_feeds")
 def test_update_all_feeds_success(mock_update_all_feeds, mock_announce, client):
-    """Test POST /api/feeds/update_all success path."""
+    """Test POST /api/feeds/update-all successfully and announces SSE."""
     # Arrange
     mock_update_all_feeds.return_value = (1, 1, {1})
     # Act
