@@ -42,7 +42,7 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
 
     # Reload page to ensure clean state and fresh render of feeds
     page.reload()
-    
+
     # Wait for the feed widget to populate
     item_selector = ".feed-widget li.read, .feed-widget li.unread"
     page.wait_for_selector(item_selector, timeout=10000)
