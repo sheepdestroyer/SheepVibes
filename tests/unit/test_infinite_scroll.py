@@ -1,8 +1,8 @@
 import os
 import re
+import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
-import urllib.request
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -36,10 +36,10 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     # Ensure settings menu is open (it might have closed or stayed open depending on UI)
     if not page.is_visible("#refresh-all-feeds-button"):
         page.click("#settings-button")
-        
+
     page.click("#refresh-all-feeds-button")
     page.wait_for_selector("#progress-container.hidden", timeout=30000)
-    
+
     # Reload page to ensure clean state and fresh render of feeds
     page.reload()
 
@@ -48,15 +48,18 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     # We use a composite selector or just count li elements with links
     item_selector = ".feed-widget li.read, .feed-widget li.unread"
     initial_items = page.locator(item_selector).count()
-    
+
     # Scroll to bottom
     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
 
     # 5. Verification: Wait for more items to load
     try:
-        expect(page.locator(item_selector)).not_to_have_count(initial_items, timeout=10000)
+        expect(page.locator(item_selector)).not_to_have_count(
+            initial_items, timeout=10000
+        )
     except AssertionError:
-        print(f"Warning: Item count did not increase. Initial: {initial_items}")
+        print(
+            f"Warning: Item count did not increase. Initial: {initial_items}")
         raise
 
     # Verify new count is greater
