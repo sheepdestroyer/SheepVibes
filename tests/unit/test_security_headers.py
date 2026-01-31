@@ -1,5 +1,6 @@
 import pytest
 
+
 def test_security_headers_present(client):
     """Test that security headers are present in the response."""
     response = client.get("/")
@@ -12,7 +13,8 @@ def test_security_headers_present(client):
     assert response.headers.get("X-Content-Type-Options") == "nosniff"
 
     # Check for Referrer-Policy
-    assert response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+    assert response.headers.get(
+        "Referrer-Policy") == "strict-origin-when-cross-origin"
 
     # Check for Content-Security-Policy
     csp = response.headers.get("Content-Security-Policy")
