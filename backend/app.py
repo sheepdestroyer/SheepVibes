@@ -245,6 +245,29 @@ def stream():
     return Response(announcer.listen(), mimetype="text/event-stream")
 
 
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to every response."""
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Content Security Policy (CSP)
+    # script-src 'self': Only allow scripts from the same origin (no CDNs, no inline unless unsafe-inline)
+    # style-src 'self' 'unsafe-inline': Allow local styles and inline styles (required for frontend JS style manipulation)
+    # img-src 'self' data: https: : Allow images from same origin, data URIs, and any HTTPS source (for RSS feeds)
+    # connect-src 'self': Only allow XHR/Fetch to same origin
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    return response
+
+
 if __name__ == "__main__":
     # Start the Flask development server for local testing.
     is_debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
