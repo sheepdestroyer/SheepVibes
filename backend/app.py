@@ -224,6 +224,38 @@ FRONTEND_FOLDER = os.path.abspath(
 )
 
 
+@app.after_request
+def add_security_headers(response):
+    """
+    Adds security headers to all responses.
+    """
+    # Content Security Policy (CSP)
+    # default-src 'self': Only allow resources from the same origin by default.
+    # img-src 'self' data: https:: Allow images from same origin, data URIs, and any HTTPS source (for RSS feeds).
+    # script-src 'self': Only allow scripts from the same origin.
+    # style-src 'self' 'unsafe-inline': Allow styles from same origin and inline styles (required for frontend dynamic styling).
+    # connect-src 'self': Only allow connection (XHR, WebSocket, EventSource) to same origin.
+    csp = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+
+    # Prevent MIME sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # Control referrer information
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    return response
+
+
 @app.route("/")
 def serve_index():
     """Serves the main index.html file."""
