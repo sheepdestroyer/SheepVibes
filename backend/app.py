@@ -104,6 +104,32 @@ db.init_app(app)
 migrate = Migrate(app, db)
 cache.init_app(app)
 
+
+@app.after_request
+def add_security_headers(response):
+    """Adds security headers to all responses."""
+    # Content-Security-Policy
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Prevent clickjacking
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+
+    # Strict Referrer Policy
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    return response
+
+
 # Register Blueprints
 app.register_blueprint(opml_bp)
 app.register_blueprint(tabs_bp)
