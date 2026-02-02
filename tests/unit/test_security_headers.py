@@ -1,11 +1,14 @@
 import pytest
+
 from backend.app import app
+
 
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
     with app.test_client() as client:
         yield client
+
 
 def test_security_headers_present(client):
     """Test that essential security headers are present in the response."""
