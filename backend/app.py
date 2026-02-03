@@ -198,6 +198,34 @@ if not app.config.get("TESTING"):
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
 
+# --- Security Headers ---
+
+
+@app.after_request
+def add_security_headers(response):
+    """
+    Add security headers to all responses.
+    """
+    # Sentinel: Defense in Depth - Security Headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "interest-cohort=()"
+
+    # CSP: Allow self, data: images, and https: images. Scripts/Styles self only (plus unsafe-inline for styles).
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self';"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    return response
+
+
 # --- Error Handlers ---
 
 
