@@ -198,6 +198,42 @@ if not app.config.get("TESTING"):
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
 
+# --- Security Headers ---
+
+
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    # Prevent MIME sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # Control referrer information
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Disable FLoC / interest cohort
+    response.headers["Permissions-Policy"] = "interest-cohort=()"
+
+    # Content Security Policy
+    # default-src 'self': Only load content from own origin by default
+    # img-src 'self' data: https:: Allow images from own origin, data URIs (base64), and HTTPS external sources (for RSS feed images)
+    # script-src 'self': Only allow scripts from own origin
+    # style-src 'self' 'unsafe-inline': Allow styles from own origin and inline styles (needed for JS dynamic styling)
+    # connect-src 'self': Allow fetch/XHR/SSE to own origin
+    csp = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+
+    return response
+
+
 # --- Error Handlers ---
 
 
