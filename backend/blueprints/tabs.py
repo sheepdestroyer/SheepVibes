@@ -39,7 +39,9 @@ def get_tabs():
 
     counts_map = dict(unread_counts)
 
-    return jsonify([tab.to_dict(unread_count=counts_map.get(tab.id, 0)) for tab in tabs])
+    return jsonify(
+        [tab.to_dict(unread_count=counts_map.get(tab.id, 0)) for tab in tabs]
+    )
 
 
 @tabs_bp.route("", methods=["POST"])
