@@ -42,7 +42,8 @@ def get_tabs():
     unread_counts_map = {tab_id: count for tab_id, count in unread_counts}
 
     return jsonify(
-        [tab.to_dict(unread_count=unread_counts_map.get(tab.id, 0)) for tab in tabs]
+        [tab.to_dict(unread_count=unread_counts_map.get(tab.id, 0))
+         for tab in tabs]
     )
 
 
