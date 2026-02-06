@@ -245,6 +245,26 @@ def stream():
     return Response(announcer.listen(), mimetype="text/event-stream")
 
 
+@app.after_request
+def add_security_headers(response):
+    """
+    Add security headers to all responses.
+    """
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "interest-cohort=()"
+    return response
+
+
 if __name__ == "__main__":
     # Start the Flask development server for local testing.
     is_debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
