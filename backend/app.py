@@ -198,6 +198,39 @@ if not app.config.get("TESTING"):
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
 
+# --- Security Headers ---
+
+
+@app.after_request
+def add_security_headers(response):
+    """
+    Injects security headers into every response.
+    """
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "interest-cohort=()"
+
+    # Content Security Policy (CSP)
+    # script-src 'self': Only allow scripts from the same origin (no CDNs, no inline scripts unless nonce/hash used, but we use 'self')
+    # style-src 'self' 'unsafe-inline': Allow local styles and inline styles (frontend uses them)
+    # img-src 'self' data: https: : Allow images from self, data URIs, and any HTTPS source (for RSS feed images)
+    # connect-src 'self': Allow XHR/WebSockets/SSE to self
+    # object-src 'none': Block <object>, <embed>, <applet>
+    # base-uri 'self': Restrict <base> tag to self
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    return response
+
+
 # --- Error Handlers ---
 
 
