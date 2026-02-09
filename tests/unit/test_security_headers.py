@@ -1,7 +1,10 @@
-import pytest
 import os
+
+import pytest
+
 from backend.app import app
 from backend.extensions import db
+
 
 @pytest.fixture
 def client():
@@ -19,6 +22,7 @@ def client():
     with app.app_context():
         db.session.remove()
         db.drop_all()
+
 
 def test_security_headers_presence_root(client):
     """Test that security headers are present on the root endpoint."""
@@ -51,6 +55,7 @@ def test_security_headers_presence_root(client):
     assert "script-src 'self'" in csp
     assert "connect-src 'self'" in csp
     assert "style-src 'self' 'unsafe-inline'" in csp
+
 
 def test_security_headers_presence_api(client):
     """Test that security headers are present on API endpoints."""
