@@ -1,5 +1,11 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-02-09
+
+- **Security: Hardening & Defense in Depth**
+  - **HTTP Headers**: Implemented strict security headers (`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`) via Flask middleware to mitigate XSS, Clickjacking, and MIME sniffing attacks.
+  - **Testing**: Added regression tests (`tests/unit/test_security_headers.py`) to enforce header presence on all responses.
+
 ## 2026-01-29
 
 - **Feat: Robust OPML Import & Feed Refresh Progress**
