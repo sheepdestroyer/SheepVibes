@@ -217,6 +217,39 @@ def internal_error(error):
     return jsonify({"error": "An internal server error occurred"}), 500
 
 
+@app.after_request
+def add_security_headers(response):
+    """
+    Adds security headers to every response to improve application security.
+    """
+    # X-Content-Type-Options: nosniff
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # X-Frame-Options: SAMEORIGIN
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+
+    # X-XSS-Protection: 1; mode=block
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # Content-Security-Policy
+    csp = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+
+    # Referrer-Policy: strict-origin-when-cross-origin
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Permissions-Policy: interest-cohort=()
+    response.headers["Permissions-Policy"] = "interest-cohort=()"
+
+    return response
+
+
 # --- Static and Stream Routes ---
 
 FRONTEND_FOLDER = os.path.abspath(
