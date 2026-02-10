@@ -1457,31 +1457,20 @@ def _save_items_individually(feed_db_obj, items_to_add):
 
 
 def _enforce_feed_limit(feed_db_obj):
-    """Enforces MAX_ITEMS_PER_FEED by evicting oldest items."""
-    current_count = db.session.query(FeedItem).filter_by(
-        feed_id=feed_db_obj.id).count()
-    if current_count <= MAX_ITEMS_PER_FEED:
-        return
+    """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
 
-    num_to_delete = current_count - MAX_ITEMS_PER_FEED
-    # Use a subquery construct for efficient deletion.
-    # Note: SQLite has limitations with simultaneous read/write in subqueries for DELETE.
-    # We fetch IDs first which is safer across DBs for this logic.
-    # Actually, the previous implementation was:
-    # oldest_ids = query.limit().all() -> delete(id.in_(oldest_ids))
-    # Qodo said: "Consider converting to a scalar subquery...".
-    # Let's clean up the implementation to use a subquery construct properly.
-    # The previous code was:
-    # oldest_ids = ( ... .limit(num_to_delete) )  <-- This is a Query object
-    # .filter(FeedItem.id.in_(oldest_ids))
-    # It failed to call .all() or .subquery()! It passed the raw Query object to in_().
-    # THAT is the bug/inefficiency.
-
+    Optimization: Identify items to evict by offsetting from the newest items,
+    avoiding a separate COUNT(*) query.
+    """
+    # We want to keep the newest MAX_ITEMS_PER_FEED items.
+    # Anything beyond that (ordered by newest first) should be evicted.
+    # We use offset() to skip the newest items and select the rest.
     oldest_ids = (
         db.session.query(FeedItem.id)
         .filter_by(feed_id=feed_db_obj.id)
-        .order_by(FeedItem.published_time.asc(), FeedItem.fetched_time.asc())
-        .limit(num_to_delete)
+        # Order by newest first
+        .order_by(FeedItem.published_time.desc(), FeedItem.fetched_time.desc())
+        .offset(MAX_ITEMS_PER_FEED)
         .all()
     )
 
