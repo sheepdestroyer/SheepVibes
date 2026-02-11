@@ -1,5 +1,7 @@
 import pytest
+
 from backend.app import app
+
 
 @pytest.fixture
 def client():
@@ -12,6 +14,7 @@ def client():
     with app.test_client() as client:
         yield client
 
+
 def test_security_headers_present(client):
     """Test that all required security headers are present in the response."""
     response = client.get("/")
@@ -20,7 +23,9 @@ def test_security_headers_present(client):
     headers = response.headers
 
     # Check for Content-Security-Policy
-    assert "Content-Security-Policy" in headers, "Content-Security-Policy header missing"
+    assert "Content-Security-Policy" in headers, (
+        "Content-Security-Policy header missing"
+    )
     csp = headers["Content-Security-Policy"]
     assert "default-src 'self'" in csp
 
