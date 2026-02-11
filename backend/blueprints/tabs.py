@@ -27,7 +27,20 @@ def get_tabs():
         A JSON response containing a list of tab objects.
     """
     tabs = Tab.query.order_by(Tab.order).all()
-    return jsonify([tab.to_dict() for tab in tabs])
+
+    # Pre-calculate unread counts for all tabs in a single query
+    # to avoid N+1 N+1 queries when calling to_dict().
+    unread_counts = dict(
+        db.session.query(Feed.tab_id, func.count(FeedItem.id))
+        .join(FeedItem, Feed.id == FeedItem.feed_id)
+        .filter(FeedItem.is_read == False)
+        .group_by(Feed.tab_id)
+        .all()
+    )
+
+    return jsonify(
+        [tab.to_dict(unread_count=unread_counts.get(tab.id, 0)) for tab in tabs]
+    )
 
 
 @tabs_bp.route("", methods=["POST"])
