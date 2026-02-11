@@ -217,6 +217,44 @@ def internal_error(error):
     return jsonify({"error": "An internal server error occurred"}), 500
 
 
+# --- Security Headers ---
+
+
+@app.after_request
+def add_security_headers(response):
+    """
+    Add security headers to all responses to protect against common vulnerabilities.
+    """
+    # Content Security Policy (CSP)
+    # default-src 'self': Only allow resources from the same origin by default.
+    # script-src 'self': Only allow scripts from the same origin.
+    # style-src 'self' 'unsafe-inline': Allow local styles and inline styles (common in JS apps).
+    # img-src * data:: Allow images from any source (for feed images/favicons) and data URIs.
+    # connect-src 'self': Allow XHR/WebSockets/SSE only to same origin.
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src * data:; "
+        "connect-src 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+
+    # X-Content-Type-Options: Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # X-Frame-Options: Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # Referrer-Policy: Control referrer information
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Permissions-Policy: Disable FLoC/Topics tracking
+    response.headers["Permissions-Policy"] = "interest-cohort=()"
+
+    return response
+
+
 # --- Static and Stream Routes ---
 
 FRONTEND_FOLDER = os.path.abspath(
