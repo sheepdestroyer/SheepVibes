@@ -1,6 +1,7 @@
-
 import pytest
-from backend.models import Tab, Feed, FeedItem, db
+
+from backend.models import Feed, FeedItem, Tab, db
+
 
 def test_get_tabs_unread_counts(client):
     """Test GET /api/tabs returns correct unread counts with optimized query."""
@@ -37,10 +38,10 @@ def test_get_tabs_unread_counts(client):
     # Assert
     assert response.status_code == 200
     data = response.json
-    data.sort(key=lambda x: x['order'])
+    data.sort(key=lambda x: x["order"])
 
-    assert data[0]['name'] == "Tab 1"
-    assert data[0]['unread_count'] == 3
+    assert data[0]["name"] == "Tab 1"
+    assert data[0]["unread_count"] == 3
 
-    assert data[1]['name'] == "Tab 2"
-    assert data[1]['unread_count'] == 0
+    assert data[1]["name"] == "Tab 2"
+    assert data[1]["unread_count"] == 0
