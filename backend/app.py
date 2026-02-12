@@ -245,6 +245,49 @@ def stream():
     return Response(announcer.listen(), mimetype="text/event-stream")
 
 
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    # 1. X-Content-Type-Options: nosniff
+    # Prevents MIME-sniffing.
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # 2. X-Frame-Options: SAMEORIGIN
+    # Prevents clickjacking by ensuring the site can only be framed by the same origin.
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+
+    # 3. Referrer-Policy: strict-origin-when-cross-origin
+    # Controls how much referrer information is sent.
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # 4. Permissions-Policy: interest-cohort=()
+    # Explicitly disables FLoC (Federated Learning of Cohorts).
+    response.headers["Permissions-Policy"] = "interest-cohort=()"
+
+    # 5. Content-Security-Policy (CSP)
+    # A powerful header to prevent XSS and other injections.
+    # We allow:
+    # - default-src 'self': Only allow resources from the same origin by default.
+    # - script-src 'self': Only allow scripts from the same origin.
+    # - style-src 'self' 'unsafe-inline': Allow styles from same origin and inline styles (needed for JS DOM manipulation).
+    # - img-src * data: : Allow images from ANYWHERE (essential for RSS feeds) and data URIs.
+    # - connect-src 'self': Restrict XHR/WebSocket/SSE to same origin.
+    # - object-src 'none': Block all plugins (Flash, etc.).
+    # - frame-ancestors 'self': Allow framing only by same origin (modern X-Frame-Options).
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src * data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'self';"
+    )
+    response.headers["Content-Security-Policy"] = csp
+
+    return response
+
+
 if __name__ == "__main__":
     # Start the Flask development server for local testing.
     is_debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
