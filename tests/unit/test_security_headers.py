@@ -1,5 +1,6 @@
 import pytest
 
+
 def test_security_headers_present(client):
     """
     Test that the application sets the necessary security headers on responses.
@@ -24,7 +25,8 @@ def test_security_headers_present(client):
     # 3. Referrer-Policy: strict-origin-when-cross-origin
     # Controls how much referrer information (URL) is sent with requests.
     # 'strict-origin-when-cross-origin' sends full URL for same-origin, but only origin for cross-origin HTTPS.
-    assert response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+    assert response.headers.get(
+        "Referrer-Policy") == "strict-origin-when-cross-origin"
 
     # 4. Permissions-Policy: interest-cohort=()
     # explicitly disables FLoC (Federated Learning of Cohorts) tracking.
