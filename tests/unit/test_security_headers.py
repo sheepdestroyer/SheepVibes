@@ -1,5 +1,6 @@
 import pytest
 
+
 def test_security_headers(client):
     """Test that security headers are present in the response."""
     response = client.get("/")
