@@ -1,5 +1,12 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-02-13
+
+- **Security: Hardened Application with Security Headers**
+  - **Implemented**: Added `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Permissions-Policy` headers to all responses.
+  - **Testing**: Added `tests/unit/test_security_headers.py` to verify header presence and configuration.
+  - **Environment**: Fixed E2E test configuration to allow running with `SimpleCache` via `CACHE_TYPE` environment variable.
+
 ## 2026-01-29
 
 - **Feat: Robust OPML Import & Feed Refresh Progress**

@@ -91,7 +91,7 @@ else:
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 
     # --- Cache Configuration for non-testing ---
-    app.config["CACHE_TYPE"] = "RedisCache"
+    app.config["CACHE_TYPE"] = os.environ.get("CACHE_TYPE", "RedisCache")
     app.config["CACHE_REDIS_URL"] = os.environ.get(
         "CACHE_REDIS_URL", "redis://localhost:6379/0"
     )
@@ -215,6 +215,27 @@ def internal_error(error):
     # Rollback the session in case the error was database-related
     db.session.rollback()
     return jsonify({"error": "An internal server error occurred"}), 500
+
+
+# --- Security Headers ---
+
+
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: *; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'self'"
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
 # --- Static and Stream Routes ---

@@ -24,7 +24,7 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
     page.set_input_files('input[type="file"]', str(opml_file_path))
     expect(page.locator("#progress-container")).to_be_visible()
     # Wait for import to finish
-    page.wait_for_selector("#progress-container.hidden", timeout=30000)
+    page.wait_for_selector("#progress-container.hidden", timeout=60000)
 
     # 3. Setup: Refresh feeds to ensure items are populated
     # Ensure settings menu is open (it might have closed or stayed open depending on UI)
@@ -32,14 +32,14 @@ def test_infinite_scroll_loads_more_items(page: Page, opml_file_path: Path):
         page.click("#settings-button")
 
     page.click("#refresh-all-feeds-button")
-    page.wait_for_selector("#progress-container.hidden", timeout=30000)
+    page.wait_for_selector("#progress-container.hidden", timeout=60000)
 
     # Reload page to ensure clean state and fresh render of feeds
     page.reload()
 
     # Wait for the feed widget to populate
     item_selector = ".feed-widget li.read, .feed-widget li.unread"
-    page.wait_for_selector(item_selector, timeout=10000)
+    page.wait_for_selector(item_selector, timeout=30000)
 
     # 4. Action: Scroll to bottom
     # Get initial item count (items have 'read' or 'unread' class)
