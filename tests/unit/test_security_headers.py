@@ -1,5 +1,7 @@
 import pytest
+
 from backend.app import app
+
 
 def test_security_headers_present():
     """Verify that essential security headers are present in responses."""
@@ -17,10 +19,12 @@ def test_security_headers_present():
         assert "img-src * data:" in csp or "img-src 'self' data: *" in csp
 
         # X-Content-Type-Options
-        assert response.headers.get("X-Content-Type-Options") == "nosniff", "X-Content-Type-Options header is missing or incorrect"
+        assert response.headers.get("X-Content-Type-Options") == "nosniff", (
+            "X-Content-Type-Options header is missing or incorrect")
 
         # X-Frame-Options
-        assert response.headers.get("X-Frame-Options") == "SAMEORIGIN", "X-Frame-Options header is missing or incorrect"
+        assert response.headers.get("X-Frame-Options") == "SAMEORIGIN", (
+            "X-Frame-Options header is missing or incorrect")
 
         # Referrer-Policy
         referrer = response.headers.get("Referrer-Policy")
