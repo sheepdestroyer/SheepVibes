@@ -1,6 +1,8 @@
 from sqlalchemy import event
+
 from backend.app import db
-from backend.models import Tab, Feed, FeedItem
+from backend.models import Feed, FeedItem, Tab
+
 
 def test_get_tabs_query_count(client):
     """
@@ -12,24 +14,32 @@ def test_get_tabs_query_count(client):
     for i in range(num_tabs):
         tab = Tab(name=f"Tab {i}", order=i)
         db.session.add(tab)
-        db.session.flush() # flush to get ID
+        db.session.flush()  # flush to get ID
 
         # Add a feed to each tab
-        feed = Feed(tab_id=tab.id, name=f"Feed {i}", url=f"http://example.com/{i}")
+        feed = Feed(tab_id=tab.id,
+                    name=f"Feed {i}",
+                    url=f"http://example.com/{i}")
         db.session.add(feed)
         db.session.flush()
 
         # Add an item to each feed
-        item = FeedItem(feed_id=feed.id, title=f"Item {i}", link=f"http://example.com/{i}/item", guid=f"guid-{i}")
+        item = FeedItem(
+            feed_id=feed.id,
+            title=f"Item {i}",
+            link=f"http://example.com/{i}/item",
+            guid=f"guid-{i}",
+        )
         db.session.add(item)
 
     db.session.commit()
 
     # Count queries
-    query_count = [0] # use list to allow modification in closure
+    query_count = [0]  # use list to allow modification in closure
 
     # Define listener
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    def before_cursor_execute(conn, cursor, statement, parameters, context,
+                              executemany):
         query_count[0] += 1
 
     event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
@@ -45,7 +55,8 @@ def test_get_tabs_query_count(client):
         # N+1 would be 6 queries
 
         # Assert optimization
-        assert query_count[0] <= 2, f"Expected <= 2 queries, but got {query_count[0]}"
+        assert query_count[
+            0] <= 2, f"Expected <= 2 queries, but got {query_count[0]}"
 
     finally:
         # Remove listener to avoid affecting other tests
