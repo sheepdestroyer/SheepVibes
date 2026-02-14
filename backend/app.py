@@ -198,6 +198,48 @@ if not app.config.get("TESTING"):
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
 
+# --- Security Headers ---
+
+
+@app.after_request
+def add_security_headers(response):
+    """
+    Add security headers to all responses.
+    """
+    # Content Security Policy (CSP)
+    # default-src 'self': Only allow resources from the same origin by default.
+    # img-src * data:: Allow images from any source (for feeds) and data URIs.
+    # script-src 'self': Only allow scripts from the same origin.
+    # style-src 'self' 'unsafe-inline': Allow styles from same origin and inline styles (required for current frontend).
+    # connect-src 'self': Allow XHR/WebSockets to same origin.
+    # object-src 'none': Block plugins (Flash, Java, etc.).
+    # frame-ancestors 'self': Allow framing only by the same origin (prevents Clickjacking).
+    csp = (
+        "default-src 'self'; "
+        "img-src * data:; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'self'"
+    )
+    response.headers['Content-Security-Policy'] = csp
+
+    # X-Content-Type-Options: nosniff
+    # Prevents MIME-sniffing.
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # X-Frame-Options: SAMEORIGIN
+    # Prevents Clickjacking (redundant with CSP frame-ancestors but good for older browsers).
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+
+    # Referrer-Policy: strict-origin-when-cross-origin
+    # Controls how much referrer information is sent.
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    return response
+
+
 # --- Error Handlers ---
 
 
