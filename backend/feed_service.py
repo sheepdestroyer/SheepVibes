@@ -225,6 +225,7 @@ def _process_folder_node(
             _sanitize_for_log(element_name),
             _sanitize_for_log(folder_type_attr),
         )
+        state.skipped_count += 1
         return
 
     if element_name and child_outlines:
@@ -1479,6 +1480,10 @@ def _enforce_feed_limit(feed_db_obj):
 
     Optimization: Identify items to evict by offsetting from the newest items,
     avoiding a separate COUNT(*) query.
+
+    Note: This deletes at most EVICTION_LIMIT_PER_RUN items per invocation.
+    For massively overgrown feeds, multiple runs will be required to fully
+    enforce the limit (eventual consistency).
     """
     # We want to keep the newest MAX_ITEMS_PER_FEED items.
     # Anything beyond that (ordered by newest first) should be evicted.
