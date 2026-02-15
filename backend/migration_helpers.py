@@ -15,7 +15,7 @@ def constraint_exists(table_name,
 
     :param table_name: The name of the table.
     :param constraint_name: The name of the constraint to check.
-    :param type_: The type of constraint (e.g., "unique", "foreignkey").
+    :param type_: The type of constraint (e.g., "unique", "foreignkey", "check", "primary").
     :param schema: The schema name (optional).
     :return: True if it exists, False otherwise.
     """
@@ -66,8 +66,8 @@ def safe_drop_constraint(table_name,
 
     if not constraint_exists(table_name, constraint_name, type_,
                              schema=schema):
-        logger.info("Constraint %s not found on %s, skipping drop.",
-                    constraint_name, table_name)
+        logger.debug("Constraint %s not found on %s, skipping drop.",
+                     constraint_name, table_name)
         return
 
     # If we reach here, we should attempt to drop the constraint.
