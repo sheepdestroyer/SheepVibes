@@ -202,17 +202,15 @@ if not app.config.get("TESTING"):
 
 # --- Security Headers ---
 
-CSP_POLICY = (
-    "default-src 'self'; "
-    "img-src * data:; "
-    "script-src 'self'; "
-    "style-src 'self' 'unsafe-inline'; "
-    "connect-src 'self'; "
-    "object-src 'none'; "
-    "base-uri 'self'; "
-    "form-action 'self'; "
-    "frame-ancestors 'self'"
-)
+CSP_POLICY = ("default-src 'self'; "
+              "img-src * data:; "
+              "script-src 'self'; "
+              "style-src 'self' 'unsafe-inline'; "
+              "connect-src 'self'; "
+              "object-src 'none'; "
+              "base-uri 'self'; "
+              "form-action 'self'; "
+              "frame-ancestors 'self'")
 
 PERMISSIONS_POLICY = (
     "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"

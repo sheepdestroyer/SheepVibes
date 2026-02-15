@@ -10,8 +10,7 @@ def test_security_headers_present():
         # Content-Security-Policy
         csp = response.headers.get("Content-Security-Policy")
         assert csp is not None, "Content-Security-Policy header is missing"
-        assert csp == CSP_POLICY, (
-            f"Content-Security-Policy header mismatch. Got: {csp}")
+        assert csp == CSP_POLICY, f"Content-Security-Policy header mismatch. Got: {csp}"
 
         # X-Content-Type-Options
         assert response.headers.get("X-Content-Type-Options") == "nosniff", (
