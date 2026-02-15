@@ -221,24 +221,22 @@ def add_security_headers(response):
            "connect-src 'self'; "
            "object-src 'none'; "
            "frame-ancestors 'self'")
-    response.headers.setdefault("Content-Security-Policy", csp)
+    response.headers["Content-Security-Policy"] = csp
 
     # X-Content-Type-Options: nosniff
     # Prevents MIME-sniffing.
-    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers["X-Content-Type-Options"] = "nosniff"
 
     # X-Frame-Options: SAMEORIGIN
     # Prevents Clickjacking (redundant with CSP frame-ancestors but good for older browsers).
-    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
 
     # Referrer-Policy: strict-origin-when-cross-origin
     # Controls how much referrer information is sent.
-    response.headers.setdefault("Referrer-Policy",
-                                "strict-origin-when-cross-origin")
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
     # Permissions-Policy: Disable features not needed by the app for added security.
-    response.headers.setdefault("Permissions-Policy",
-                                "microphone=(), camera=(), geolocation=()")
+    response.headers["Permissions-Policy"] = "microphone=(), camera=(), geolocation=()"
 
     return response
 
