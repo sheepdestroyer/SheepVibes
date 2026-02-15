@@ -541,6 +541,7 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: d
 
     mock_response = MagicMock()
     mock_response.read.return_value = b"<rss></rss>"
+    mock_response.getheader.return_value = None  # Mock headers
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
     mock_build_opener.return_value.open.return_value = mock_response
@@ -627,7 +628,7 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disa
 
     m_fetch = mocker.patch("backend.feed_service.fetch_feed")
 
-    def fake_fetch_feed(url):
+    def fake_fetch_feed(url, etag=None, last_modified=None):
         if url == "http://feedA.url":
             return mock_feed_data1
         if url == "http://feedB.url":

@@ -87,6 +87,8 @@ class Feed(db.Model):
     last_updated_time = db.Column(
         db.DateTime, default=lambda: datetime.datetime.now(
             timezone.utc))  # Last time feed was successfully fetched
+    etag = db.Column(db.String(255), nullable=True)  # ETag header from last fetch
+    last_modified = db.Column(db.String(255), nullable=True)  # Last-Modified header from last fetch
     # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
     # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
     # lazy='dynamic' allows for further querying on the relationship.
