@@ -6,5 +6,7 @@ ContainerName=sheepvibes-redis
 Image=docker.io/redis:latest
 Pod=sheepvibespod.pod
 Volume=sheepvibes-redis.volume:/data
+
+[Service]
 Restart=on-failure
 TimeoutStartSec=90
