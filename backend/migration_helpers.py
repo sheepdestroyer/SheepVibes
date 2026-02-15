@@ -32,7 +32,7 @@ def constraint_exists(table_name,
         "foreignkey": inspector.get_foreign_keys,
         "check": inspector.get_check_constraints,
     }
-    
+
     getter = inspector_methods.get(type_)
     if not getter:
         raise ValueError(f"Unsupported constraint type: {type_}")
@@ -68,16 +68,22 @@ def safe_drop_constraint(table_name,
         if batch_op:
             batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
         else:
-            with op.batch_alter_table(table_name, schema=schema) as batch_op_new:
-                batch_op_new.drop_constraint(constraint_name, type_=type_, **kwargs)
+            with op.batch_alter_table(table_name,
+                                      schema=schema) as batch_op_new:
+                batch_op_new.drop_constraint(constraint_name,
+                                             type_=type_,
+                                             **kwargs)
         return
 
     if constraint_exists(table_name, constraint_name, type_, schema=schema):
         if batch_op:
             batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
         else:
-            with op.batch_alter_table(table_name, schema=schema) as batch_op_new:
-                batch_op_new.drop_constraint(constraint_name, type_=type_, **kwargs)
+            with op.batch_alter_table(table_name,
+                                      schema=schema) as batch_op_new:
+                batch_op_new.drop_constraint(constraint_name,
+                                             type_=type_,
+                                             **kwargs)
         logger.info("Dropped constraint %s from %s", constraint_name,
                     table_name)
     else:
