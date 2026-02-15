@@ -207,8 +207,10 @@ def add_security_headers(response):
     # Content Security Policy (CSP)
     # default-src 'self': Only allow resources from the same origin by default.
     # img-src * data:: Allow images from any source (for feeds) and data URIs.
+    # TODO: Consider proxying images through backend to allow tightening this to 'self'.
     # script-src 'self': Only allow scripts from the same origin.
     # style-src 'self' 'unsafe-inline': Allow styles from same origin and inline styles (required for current frontend).
+    # TODO: Refactor frontend to remove inline styles and 'unsafe-inline' for better security.
     # connect-src 'self': Allow XHR/WebSockets to same origin.
     # object-src 'none': Block plugins (Flash, Java, etc.).
     # frame-ancestors 'self': Allow framing only by the same origin (prevents Clickjacking).
