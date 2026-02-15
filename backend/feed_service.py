@@ -115,12 +115,10 @@ def _calculate_and_announce_progress(processed_count, total_count,
         progress_val = OPML_IMPORT_PROCESSING_WEIGHT
 
     current_percent = progress_val
-    should_announce = (
-        processed_count == 0
-        or processed_count >= total_count
-        or (current_percent != last_announced_percent and current_percent % 5 == 0)
-        or processed_count % 20 == 0
-    )
+    should_announce = (processed_count == 0 or processed_count >= total_count
+                       or (current_percent != last_announced_percent
+                           and current_percent % 5 == 0)
+                       or processed_count % 20 == 0)
 
     if should_announce:
         status_msg = f"Processing OPML... ({processed_count} outlines analyzed)"
@@ -648,13 +646,19 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     skipped_final_count = state.skipped_count
 
     result = {
-        "message": f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
+        "message":
+        f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
         f"Tab: {top_level_target_tab_name}.",
-        "imported_count": imported_final_count,
-        "skipped_count": skipped_final_count,
-        "tab_id": top_level_target_tab_id,
-        "tab_name": top_level_target_tab_name,
-        "affected_tab_ids": list(affected_tab_ids_set),
+        "imported_count":
+        imported_final_count,
+        "skipped_count":
+        skipped_final_count,
+        "tab_id":
+        top_level_target_tab_id,
+        "tab_name":
+        top_level_target_tab_name,
+        "affected_tab_ids":
+        list(affected_tab_ids_set),
     }
 
     # Final 'complete' message for SSE
@@ -838,14 +842,8 @@ def validate_and_resolve_url(url):
 
 def _is_safe_ip(ip):
     """Checks if an IP address is safe (not private, loopback, etc.)."""
-    return not (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
 
 
 class SafeHTTPSConnection(http.client.HTTPSConnection):
