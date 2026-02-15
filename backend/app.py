@@ -233,10 +233,12 @@ def add_security_headers(response):
 
     # Referrer-Policy: strict-origin-when-cross-origin
     # Controls how much referrer information is sent.
-    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Referrer-Policy",
+                                "strict-origin-when-cross-origin")
 
     # Permissions-Policy: Disable features not needed by the app for added security.
-    response.headers.setdefault("Permissions-Policy", "microphone=(), camera=(), geolocation=()")
+    response.headers.setdefault("Permissions-Policy",
+                                "microphone=(), camera=(), geolocation=()")
 
     return response
 
