@@ -1,9 +1,10 @@
 import io
 import logging
 
+from sqlalchemy import func
+
 from backend.app import app
 from backend.models import Feed, Tab, db
-from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +92,8 @@ def test_import_nested_opml(client, mocker):
         assert sub_tech_tab is not None
 
         # Verify affected_tab_ids
-        assert {tech_tab.id, sub_tech_tab.id, result["tab_id"]}.issubset(
-            set(result["affected_tab_ids"]))
+        assert {tech_tab.id, sub_tech_tab.id,
+                result["tab_id"]}.issubset(set(result["affected_tab_ids"]))
 
         # Check feeds
         hn_feed = Feed.query.filter_by(
@@ -131,7 +132,8 @@ def test_opml_import_skips_skipped_folder_types(client, mocker):
 </opml>
 """.encode("utf-8")
 
-    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety",
+                 return_value=True)
     mocker.patch("backend.feed_service.fetch_and_update_feed")
 
     data = {"file": (io.BytesIO(opml_content), "skipped_folder.opml")}
@@ -163,7 +165,8 @@ def test_opml_import_skips_invalid_feed_urls(client, mocker):
 </opml>
 """
 
-    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety",
+                 return_value=True)
     # Ensure feeds are treated as invalid regardless of the specific URL-checking logic.
     mocker.patch("backend.feed_service.is_valid_feed_url", return_value=False)
 
@@ -212,7 +215,8 @@ def test_opml_import_skips_duplicate_feed_urls(client, mocker):
 </opml>
 """
 
-    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety",
+                 return_value=True)
     # Let URL validation pass so duplicates are the only reason for skipping.
     mocker.patch("backend.feed_service.is_valid_feed_url", return_value=True)
     mocker.patch("backend.feed_service.fetch_and_update_feed")
@@ -234,11 +238,8 @@ def test_opml_import_skips_duplicate_feed_urls(client, mocker):
 
     with app.app_context():
         # Confirm that we still only have one feed per URL overall.
-        feeds_by_url = (
-            Feed.query.with_entities(Feed.url, func.count(Feed.id))
-            .group_by(Feed.url)
-            .all()
-        )
+        feeds_by_url = (Feed.query.with_entities(Feed.url, func.count(
+            Feed.id)).group_by(Feed.url).all())
 
         counts = {url: count for url, count in feeds_by_url}
         assert counts["https://example.com/existing.xml"] == 1
@@ -257,7 +258,8 @@ def test_opml_import_folder_only_no_outlines(client, mocker):
 </opml>
 """
 
-    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety",
+                 return_value=True)
 
     data = {"file": (io.BytesIO(opml_content), "folders_only.opml")}
     response = client.post(
@@ -284,7 +286,8 @@ def test_opml_import_no_outline_elements(client, mocker):
 </opml>
 """
 
-    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety",
+                 return_value=True)
 
     data = {"file": (io.BytesIO(opml_content), "no_outlines.opml")}
     response = client.post(
