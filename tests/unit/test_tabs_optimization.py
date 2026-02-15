@@ -35,6 +35,7 @@ def test_get_tabs_query_count_constant(client):
     # Helper to count queries
     def get_query_count():
         from backend.extensions import cache
+
         cache.clear()
 
         query_count = [0]
@@ -107,8 +108,7 @@ def test_tab_to_dict_optimization(client):
     try:
         result = tab.to_dict(unread_count=123)
     finally:
-        event.remove(db.engine, "before_cursor_execute",
-                     before_cursor_execute)
+        event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
 
     # The override should be passed through to the serialized dict
     assert result["unread_count"] == 123
