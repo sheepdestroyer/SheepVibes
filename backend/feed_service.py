@@ -1457,40 +1457,30 @@ def _save_items_individually(feed_db_obj, items_to_add):
 def _enforce_feed_limit(feed_db_obj):
     """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
 
-
-
-
-
     Optimization: Identify items to evict by offsetting from the newest items,
-
-
     avoiding a separate COUNT(*) query.
-
-
     """
-
     # We want to keep the newest MAX_ITEMS_PER_FEED items.
-
     # Anything beyond that (ordered by newest first) should be evicted.
-
     # We use offset() to skip the newest items and select the rest.
 
     # Fetch IDs to evict first. This avoids "subquery in DELETE" issues (which can
-
     # lock tables in SQLite) and improves compatibility.
-
     # Note: nullslast() is used to ensure consistent ordering (NULLs as oldest).
-
     # We also sort by ID desc as a tie-breaker for deterministic eviction.
-
     # .limit(-1) is required for SQLite to support OFFSET without an explicit limit.
-
-    ids_to_evict_rows = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+    ids_to_evict_rows = (
+        db.session.query(FeedItem.id)
+        .filter_by(feed_id=feed_db_obj.id)
+        .order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
             FeedItem.id.desc(),
-    ).limit(-1).offset(MAX_ITEMS_PER_FEED).all())
+        )
+        .limit(-1)
+        .offset(MAX_ITEMS_PER_FEED)
+        .all()
+    )
 
     if not ids_to_evict_rows:
         return
@@ -1498,16 +1488,15 @@ def _enforce_feed_limit(feed_db_obj):
     ids_to_evict = [r.id for r in ids_to_evict_rows]
 
     # Chunk the deletions to avoid hitting SQLite's parameter limit (default 999)
-
     chunk_size = 500
-
     deleted_count = 0
-
     for i in range(0, len(ids_to_evict), chunk_size):
-        chunk = ids_to_evict[i:i + chunk_size]
-
-        deleted_count += (db.session.query(FeedItem).filter(
-            FeedItem.id.in_(chunk)).delete(synchronize_session=False))
+        chunk = ids_to_evict[i : i + chunk_size]
+        deleted_count += (
+            db.session.query(FeedItem)
+            .filter(FeedItem.id.in_(chunk))
+            .delete(synchronize_session=False)
+        )
 
     if deleted_count > 0:
         logger.info(
@@ -1515,13 +1504,10 @@ def _enforce_feed_limit(feed_db_obj):
             deleted_count,
             _sanitize_for_log(feed_db_obj.name),
         )
-
         try:
             db.session.commit()
-
         except sqlalchemy.exc.SQLAlchemyError:
             db.session.rollback()
-
             logger.exception(
                 "Error committing eviction for feed '%s'",
                 _sanitize_for_log(feed_db_obj.name),
