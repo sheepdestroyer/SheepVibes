@@ -252,8 +252,8 @@ def _process_single_outline_node(
             )
             return
     elif not xml_url and not element_name and child_outlines:
-        stack.append((list(reversed(child_outlines)), current_tab_id,
-                      current_tab_name))
+        stack.append(
+            (list(reversed(child_outlines)), current_tab_id, current_tab_name))
     else:
         skipped_count_wrapper[0] += 1
 
