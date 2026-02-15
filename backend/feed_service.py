@@ -1456,7 +1456,9 @@ def _enforce_feed_limit(feed_db_obj):
     # Use a subquery to avoid loading all IDs into memory.
     # Note: nullslast() is required to ensure consistent behavior (treating NULLs as oldest)
     # across PostgreSQL (where DESC puts NULLs first) and SQLite (where DESC puts NULLs last).
-    # While it might impact index usage in SQLite, correctness is prioritized.
+    # .limit(-1) is used to satisfy SQLite's requirement that OFFSET needs a LIMIT clause.
+    # This pattern works in SQLite and PostgreSQL (where -1 means no limit), but may require
+    # adjustment for MySQL/MariaDB (which use a large number for no limit).
     subquery = (
         db.session.query(
             FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
