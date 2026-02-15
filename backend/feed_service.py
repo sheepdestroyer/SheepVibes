@@ -88,9 +88,8 @@ def is_valid_feed_url(url):
     return bool(validate_link_structure(url))
 
 
-def _calculate_and_announce_progress(
-    processed_count, total_count, last_announced_percent
-):
+def _calculate_and_announce_progress(processed_count, total_count,
+                                     last_announced_percent):
     """Calculates progress and announces it if significant change occurred."""
     if total_count > 0:
         # Cap progress value, as processed_count can exceed total_count.
@@ -102,12 +101,10 @@ def _calculate_and_announce_progress(
         progress_val = OPML_IMPORT_PROCESSING_WEIGHT
 
     current_percent = progress_val
-    should_announce = (
-        processed_count == 0
-        or processed_count >= total_count
-        or (current_percent != last_announced_percent and current_percent % 5 == 0)
-        or processed_count % 20 == 0
-    )
+    should_announce = (processed_count == 0 or processed_count >= total_count
+                       or (current_percent != last_announced_percent
+                           and current_percent % 5 == 0)
+                       or processed_count % 20 == 0)
 
     if should_announce:
         status_msg = f"Processing OPML... ({processed_count} outlines analyzed)"
@@ -210,10 +207,8 @@ def _process_opml_outlines_iterative(
 ):
     """Iteratively processes OPML outline elements with weighted progress updates."""
     # Phase 1: Processing (0-50%)
-    stack = [
-        (list(reversed(initial_outline_elements)),
-         top_level_tab_id, top_level_tab_name)
-    ]
+    stack = [(list(reversed(initial_outline_elements)), top_level_tab_id,
+              top_level_tab_name)]
     last_announced_percent = -1
 
     processed_outline_count = 0
@@ -225,8 +220,8 @@ def _process_opml_outlines_iterative(
             processed_outline_count += 1
 
             last_announced_percent = _calculate_and_announce_progress(
-                processed_outline_count, total_outlines, last_announced_percent
-            )
+                processed_outline_count, total_outlines,
+                last_announced_percent)
 
             folder_type_attr = outline_element.get("type")
             title = (outline_element.get("title") or "").strip()
@@ -249,12 +244,8 @@ def _process_opml_outlines_iterative(
                     affected_tab_ids_set,
                 )
 
-            elif (
-                not xml_url
-                and element_name
-                and folder_type_attr
-                and folder_type_attr in SKIPPED_FOLDER_TYPES
-            ):
+            elif (not xml_url and element_name and folder_type_attr
+                  and folder_type_attr in SKIPPED_FOLDER_TYPES):
                 logger.info(
                     "OPML import: Skipping folder '%s' and its children (type: %s).",
                     _sanitize_for_log(element_name),
@@ -266,13 +257,10 @@ def _process_opml_outlines_iterative(
             elif not xml_url and element_name and child_outlines:
                 try:
                     nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
-                        element_name
-                    )
+                        element_name)
                     # Push children to stack
-                    stack.append(
-                        (list(reversed(child_outlines)),
-                         nested_tab_id, nested_tab_name)
-                    )
+                    stack.append((list(reversed(child_outlines)),
+                                  nested_tab_id, nested_tab_name))
                 except sqlalchemy.exc.SQLAlchemyError:
                     logger.exception(
                         "OPML import: DB error creating tab for folder '%s'. Skipping folder.",
@@ -280,10 +268,8 @@ def _process_opml_outlines_iterative(
                     )
                     continue
             elif not xml_url and not element_name and child_outlines:
-                stack.append(
-                    (list(reversed(child_outlines)),
-                     current_tab_id, current_tab_name)
-                )
+                stack.append((list(reversed(child_outlines)), current_tab_id,
+                              current_tab_name))
             else:
                 skipped_count_wrapper[0] += 1
 
@@ -331,15 +317,13 @@ def _determine_target_tab(requested_tab_id_str):
             )
             default_tab_name_for_creation = DEFAULT_OPML_IMPORT_TAB_NAME
             temp_tab_check = Tab.query.filter_by(
-                name=default_tab_name_for_creation
-            ).first()
+                name=default_tab_name_for_creation).first()
             if temp_tab_check:
                 target_tab_id = temp_tab_check.id
                 target_tab_name = temp_tab_check.name
             else:
                 newly_created_default_tab = Tab(
-                    name=default_tab_name_for_creation, order=0
-                )
+                    name=default_tab_name_for_creation, order=0)
                 db.session.add(newly_created_default_tab)
                 try:
                     # Since this is the start of the import, we can safely commit the new tab
@@ -364,8 +348,7 @@ def _determine_target_tab(requested_tab_id_str):
                     )
                     # Another process likely created it. Fetch it.
                     refetched_tab = Tab.query.filter_by(
-                        name=default_tab_name_for_creation
-                    ).first()
+                        name=default_tab_name_for_creation).first()
                     if refetched_tab:
                         target_tab_id = refetched_tab.id
                         target_tab_name = refetched_tab.name
@@ -381,7 +364,10 @@ def _determine_target_tab(requested_tab_id_str):
                             None,
                             False,
                             (
-                                {"error": "Failed to create a default tab for import."},
+                                {
+                                    "error":
+                                    "Failed to create a default tab for import."
+                                },
                                 500,
                             ),
                         )
@@ -396,7 +382,10 @@ def _determine_target_tab(requested_tab_id_str):
                         None,
                         False,
                         (
-                            {"error": "Failed to create a default tab for import."},
+                            {
+                                "error":
+                                "Failed to create a default tab for import."
+                            },
                             500,
                         ),
                     )
@@ -409,13 +398,16 @@ def _determine_target_tab(requested_tab_id_str):
             None,
             None,
             False,
-            ({"error": "Failed to determine a target tab for import."}, 500),
+            ({
+                "error": "Failed to determine a target tab for import."
+            }, 500),
         )
 
     return target_tab_id, target_tab_name, was_created, None
 
 
-def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
+def _cleanup_empty_default_tab(was_created, tab_id, tab_name,
+                               affected_tab_ids):
     """Cleans up the default tab if it was created for this import but remains empty."""
     if was_created and tab_id not in affected_tab_ids:
         try:
@@ -446,10 +438,13 @@ def _parse_opml_root(opml_stream):
         root = tree.getroot()
         return root, None
     except SafeET.ParseError as e:
-        logger.error(
-            "OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
+        logger.error("OPML import failed: Malformed XML. Error: %s",
+                     e,
+                     exc_info=True)
         return None, (
-            {"error": "Malformed OPML file. Please check the file format."},
+            {
+                "error": "Malformed OPML file. Please check the file format."
+            },
             400,
         )
     except Exception as e:  # pylint: disable=broad-exception-caught
@@ -459,7 +454,10 @@ def _parse_opml_root(opml_stream):
             exc_info=True,
         )
         return None, (
-            {"error": "Could not parse OPML file. Please check the file format."},
+            {
+                "error":
+                "Could not parse OPML file. Please check the file format."
+            },
             400,
         )
 
@@ -482,14 +480,13 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
             # Phase 2 value: Processing Weight to 100
             if total_to_fetch > 0:
                 progress_val = OPML_IMPORT_PROCESSING_WEIGHT + (
-                    (i + 1) * OPML_IMPORT_FETCHING_WEIGHT // total_to_fetch
-                )
+                    (i + 1) * OPML_IMPORT_FETCHING_WEIGHT // total_to_fetch)
             else:
                 progress_val = 100
 
             # Only announce if significant progress or first/last
-            should_announce = i == 0 or i == total_to_fetch - \
-                1 or (i + 1) % 5 == 0
+            should_announce = i == 0 or i == total_to_fetch - 1 or (i +
+                                                                    1) % 5 == 0
 
             if should_announce:
                 event_data = {
@@ -519,7 +516,9 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
         db.session.rollback()
         logger.exception("OPML import: Database commit failed for new feeds")
         return False, (
-            {"error": "Database error during final feed import step."},
+            {
+                "error": "Database error during final feed import step."
+            },
             500,
         )
 
@@ -627,13 +626,19 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     skipped_final_count = skipped_count_wrapper[0]
 
     result = {
-        "message": f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
+        "message":
+        f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
         f"Tab: {top_level_target_tab_name}.",
-        "imported_count": imported_final_count,
-        "skipped_count": skipped_final_count,
-        "tab_id": top_level_target_tab_id,
-        "tab_name": top_level_target_tab_name,
-        "affected_tab_ids": list(affected_tab_ids_set),
+        "imported_count":
+        imported_final_count,
+        "skipped_count":
+        skipped_final_count,
+        "tab_id":
+        top_level_target_tab_id,
+        "tab_name":
+        top_level_target_tab_name,
+        "affected_tab_ids":
+        list(affected_tab_ids_set),
     }
 
     # Final 'complete' message for SSE
@@ -759,7 +764,8 @@ def parse_published_time(entry):
             parsed_dt = None
 
     if isinstance(parsed_dt, datetime.datetime):
-        if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(parsed_dt) is None:
+        if parsed_dt.tzinfo is None or parsed_dt.tzinfo.utcoffset(
+                parsed_dt) is None:
             return parsed_dt.replace(tzinfo=timezone.utc)
         return parsed_dt.astimezone(timezone.utc)
 
@@ -819,14 +825,8 @@ def validate_and_resolve_url(url):
 
 def _is_safe_ip(ip):
     """Checks if an IP address is safe (not private, loopback, etc.)."""
-    return not (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
 
 
 class SafeHTTPSConnection(http.client.HTTPSConnection):
@@ -857,9 +857,8 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
         # Logic adapted from http.client.HTTPSConnection.connect
 
         # 1. Establish TCP connection to the SAFE IP
-        self.sock = socket.create_connection(
-            (self.safe_ip, self.port), self.timeout, self.source_address
-        )
+        self.sock = socket.create_connection((self.safe_ip, self.port),
+                                             self.timeout, self.source_address)
 
         if self._tunnel_host:
             self._tunnel()
@@ -895,9 +894,8 @@ class SafeHTTPConnection(http.client.HTTPConnection):
 
     def connect(self):
         # Override connect to force connection to self.safe_ip
-        self.sock = socket.create_connection(
-            (self.safe_ip, self.port), self.timeout, self.source_address
-        )
+        self.sock = socket.create_connection((self.safe_ip, self.port),
+                                             self.timeout, self.source_address)
 
 
 class SafeHTTPHandler(urllib.request.HTTPHandler):
@@ -961,16 +959,15 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         # Resolve and validate the NEW url
         safe_ip, _ = validate_and_resolve_url(absolute_newurl)
         if not safe_ip:
-            logger.warning(
-                "Blocked unsafe redirect to: %s", _sanitize_for_log(
-                    absolute_newurl)
-            )
-            raise urllib.error.HTTPError(
-                absolute_newurl, code, "Blocked unsafe redirect", headers, fp
-            )
+            logger.warning("Blocked unsafe redirect to: %s",
+                           _sanitize_for_log(absolute_newurl))
+            raise urllib.error.HTTPError(absolute_newurl, code,
+                                         "Blocked unsafe redirect", headers,
+                                         fp)
 
         # Create the new request
-        new_req = super().redirect_request(req, fp, code, msg, headers, absolute_newurl)
+        new_req = super().redirect_request(req, fp, code, msg, headers,
+                                           absolute_newurl)
 
         # PIN THE IP: Attach the resolved safe_ip to the new request
         # This allows SafeHTTPSHandler (and HTTP logic) to use the validated IP
@@ -999,9 +996,8 @@ def _fetch_feed_content(feed_url):
         parsed_feed = fetch_feed(feed_url)
         return parsed_feed
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception(
-            "Error in fetch thread for feed %s", _sanitize_for_log(feed_url)
-        )
+        logger.exception("Error in fetch thread for feed %s",
+                         _sanitize_for_log(feed_url))
         return None
 
 
@@ -1080,9 +1076,8 @@ def fetch_feed(feed_url):
         redirect_handler = SafeRedirectHandler()
 
         # Build opener with all handlers
-        opener = urllib.request.build_opener(
-            http_handler, https_handler, redirect_handler
-        )
+        opener = urllib.request.build_opener(http_handler, https_handler,
+                                             redirect_handler)
 
         req = urllib.request.Request(
             feed_url,
@@ -1137,8 +1132,8 @@ def fetch_feed(feed_url):
         if not _validate_xml_safety(content):
             # Sanitize URL for logging to prevent log injection
             safe_log_url = _sanitize_for_log(feed_url)
-            logger.warning(
-                "Feed rejected due to security violation: %s", safe_log_url)
+            logger.warning("Feed rejected due to security violation: %s",
+                           safe_log_url)
             return None
 
         parsed_feed = feedparser.parse(content)
@@ -1204,12 +1199,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
     # Optimization: Query only necessary columns to avoid loading full objects
     # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (
-        db.session.query(FeedItem.id, FeedItem.guid,
-                         FeedItem.link, FeedItem.title)
-        .filter_by(feed_id=feed_db_obj.id)
-        .all()
-    )
+    items_tuple = (db.session.query(
+        FeedItem.id, FeedItem.guid, FeedItem.link,
+        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
 
     # Create lookup maps
     existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
@@ -1236,10 +1228,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         entries_with_dates.sort(key=lambda x: x[1], reverse=True)
     except Exception:  # pylint: disable=broad-exception-caught
         # If sorting fails, proceed with original order.
-        logger.warning(
-            "Failed to sort entries for feed %s", _sanitize_for_log(
-                feed_db_obj.name)
-        )
+        logger.warning("Failed to sort entries for feed %s",
+                       _sanitize_for_log(feed_db_obj.name))
 
     for entry, parsed_published in entries_with_dates:
         raw_link = entry.get("link")
@@ -1288,9 +1278,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
         # Check batch duplicates
         if _is_batch_duplicate(
-            db_guid,
-            batch_processed_guids,
-            feed_db_obj.name,
+                db_guid,
+                batch_processed_guids,
+                feed_db_obj.name,
         ):
             continue
 
@@ -1305,13 +1295,13 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                 link=entry_link,
                 published_time=parsed_published,
                 guid=db_guid,
-            )
-        )
+            ))
 
     return items_to_add
 
 
-def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link):
+def _update_existing_item(feed_db_obj, existing_item_data, entry_title,
+                          entry_link):
     """Updates an existing item if title or link changed.
 
     Args:
@@ -1337,9 +1327,9 @@ def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_li
             _sanitize_for_log(existing_title),
             _sanitize_for_log(feed_db_obj.name),
         )
-        db.session.query(FeedItem).filter(FeedItem.id == existing_item_data.id).update(
-            updates, synchronize_session=False
-        )
+        db.session.query(FeedItem).filter(
+            FeedItem.id == existing_item_data.id).update(
+                updates, synchronize_session=False)
 
 
 def _is_batch_duplicate(db_guid, batch_guids, feed_name):
@@ -1420,10 +1410,8 @@ def _save_items_individually(feed_db_obj, items_to_add):
             db.session.add(item)
             db.session.commit()
             count += 1
-            logger.debug(
-                "Individually added item: %s", _sanitize_for_log(
-                    item.title[:50])
-            )
+            logger.debug("Individually added item: %s",
+                         _sanitize_for_log(item.title[:50]))
         except IntegrityError as ie:
             db.session.rollback()
             logger.error(
@@ -1466,13 +1454,12 @@ def _enforce_feed_limit(feed_db_obj):
     # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
     oldest_ids = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
+        db.session.query(FeedItem.id).filter_by(feed_id=feed_db_obj.id)
         # Order by newest first
-        .order_by(FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc().nullslast())
-        .offset(MAX_ITEMS_PER_FEED)
-        .all()
-    )
+        .order_by(
+            FeedItem.published_time.desc().nullslast(),
+            FeedItem.fetched_time.desc().nullslast(),
+        ).offset(MAX_ITEMS_PER_FEED).all())
 
     # Flatten the list of tuples
     oldest_ids_list = [r.id for r in oldest_ids]
@@ -1480,11 +1467,8 @@ def _enforce_feed_limit(feed_db_obj):
     if not oldest_ids_list:
         return
 
-    deleted_count = (
-        db.session.query(FeedItem)
-        .filter(FeedItem.id.in_(oldest_ids_list))
-        .delete(synchronize_session=False)
-    )
+    deleted_count = (db.session.query(FeedItem).filter(
+        FeedItem.id.in_(oldest_ids_list)).delete(synchronize_session=False))
 
     if deleted_count > 0:
         logger.info(
@@ -1592,17 +1576,19 @@ def update_all_feeds():
     total_new_items = 0
     affected_tab_ids = set()
 
-    logger.info(
-        "Starting update process for %d feeds (Parallelized).", total_feeds)
+    logger.info("Starting update process for %d feeds (Parallelized).",
+                total_feeds)
     announcer.announce(
         msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"
     )
 
     actual_workers = min(MAX_CONCURRENT_FETCHES,
                          total_feeds) if all_feeds else 1
-    with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=actual_workers) as executor:
         future_to_feed = {
-            executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds
+            executor.submit(_fetch_feed_content, feed.url): feed
+            for feed in all_feeds
         }
 
         for future in concurrent.futures.as_completed(future_to_feed):
@@ -1616,8 +1602,7 @@ def update_all_feeds():
             try:
                 parsed_feed = future.result()
                 success, new_items, tab_id = _process_fetch_result(
-                    feed_obj, parsed_feed
-                )
+                    feed_obj, parsed_feed)
                 if success:
                     successful_count += 1
                     total_new_items += new_items
