@@ -53,10 +53,10 @@ logger = logging.getLogger(__name__)
 class OpmlImportState:
     """Holds the shared state for OPML processing."""
 
-    stack: list
-    all_existing_feed_urls_set: set
-    newly_added_feeds_list: list
-    affected_tab_ids_set: set
+    stack: list[tuple[list, int, str]]
+    all_existing_feed_urls_set: set[str]
+    newly_added_feeds_list: list[Feed]
+    affected_tab_ids_set: set[int]
     imported_count: int = 0
     skipped_count: int = 0
 
