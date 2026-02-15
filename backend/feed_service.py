@@ -1452,8 +1452,6 @@ def _enforce_feed_limit(feed_db_obj):
     """
     # We want to keep the newest MAX_ITEMS_PER_FEED items.
     # Anything beyond that (ordered by newest first) should be evicted.
-    # We want to keep the newest MAX_ITEMS_PER_FEED items.
-    # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
 
     # Fetch IDs to evict first. This avoids "subquery in DELETE" issues (which can
