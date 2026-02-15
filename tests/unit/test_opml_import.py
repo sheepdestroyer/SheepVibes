@@ -79,6 +79,7 @@ def test_import_nested_opml(client, mocker):
     assert response.status_code == 200
     result = response.get_json()
     assert result["imported_count"] == 3
+    assert result["skipped_count"] == 0
 
     with app.app_context():
         # Check tabs
@@ -87,6 +88,10 @@ def test_import_nested_opml(client, mocker):
 
         sub_tech_tab = Tab.query.filter_by(name="Sub Tech Folder").first()
         assert sub_tech_tab is not None
+
+        # Verify affected_tab_ids
+        assert {tech_tab.id, sub_tech_tab.id, result["tab_id"]}.issubset(
+            set(result["affected_tab_ids"]))
 
         # Check feeds
         hn_feed = Feed.query.filter_by(

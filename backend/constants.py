@@ -7,6 +7,8 @@ OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT = 60
 MAX_ITEMS_PER_FEED = 100
 # Chunk size for batched delete operations to avoid SQLite parameter limits
 DELETE_CHUNK_SIZE = 500
+# Maximum number of items to scan for eviction per run to avoid OOM
+EVICTION_LIMIT_PER_RUN = 1000
 DEFAULT_OPML_IMPORT_TAB_NAME = "Imported Feeds"
 SKIPPED_FOLDER_TYPES = {
     "netvibes-specific",

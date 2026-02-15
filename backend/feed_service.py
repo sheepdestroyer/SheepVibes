@@ -39,6 +39,7 @@ from .cache_utils import (
 from .constants import (
     DEFAULT_OPML_IMPORT_TAB_NAME,
     DELETE_CHUNK_SIZE,
+    EVICTION_LIMIT_PER_RUN,
     MAX_ITEMS_PER_FEED,
     SKIPPED_FOLDER_TYPES,
 )
@@ -1484,16 +1485,22 @@ def _enforce_feed_limit(feed_db_obj):
     # We use offset() to skip the newest items and select the rest.
 
     # Fetch IDs to evict.
-    # We use .limit(1000) instead of .limit(-1) or .limit(None) to:
+    # We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
     # 1. Provide a bounded result set, avoiding OOM on massive feeds.
     # 2. Avoid SQLite-specific LIMIT -1 behavior.
-    # This means we only delete up to 1000 items per update, which acts as eventual consistency.
-    ids_to_evict_rows = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+    # This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
+    ids_to_evict_rows = (
+        db.session.query(FeedItem.id)
+        .filter_by(feed_id=feed_db_obj.id)
+        .order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
             FeedItem.id.desc(),
-    ).offset(MAX_ITEMS_PER_FEED).limit(1000).all())
+        )
+        .offset(MAX_ITEMS_PER_FEED)
+        .limit(EVICTION_LIMIT_PER_RUN)
+        .all()
+    )
 
     if not ids_to_evict_rows:
         return
