@@ -1469,18 +1469,12 @@ def _enforce_feed_limit(feed_db_obj):
     # Note: nullslast() is used to ensure consistent ordering (NULLs as oldest).
     # We also sort by ID desc as a tie-breaker for deterministic eviction.
     # .limit(-1) is required for SQLite to support OFFSET without an explicit limit.
-    ids_to_evict_rows = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
-        .order_by(
+    ids_to_evict_rows = (db.session.query(
+        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
             FeedItem.id.desc(),
-        )
-        .limit(-1)
-        .offset(MAX_ITEMS_PER_FEED)
-        .all()
-    )
+    ).limit(-1).offset(MAX_ITEMS_PER_FEED).all())
 
     if not ids_to_evict_rows:
         return
@@ -1491,12 +1485,9 @@ def _enforce_feed_limit(feed_db_obj):
     chunk_size = 500
     deleted_count = 0
     for i in range(0, len(ids_to_evict), chunk_size):
-        chunk = ids_to_evict[i : i + chunk_size]
-        deleted_count += (
-            db.session.query(FeedItem)
-            .filter(FeedItem.id.in_(chunk))
-            .delete(synchronize_session=False)
-        )
+        chunk = ids_to_evict[i:i + chunk_size]
+        deleted_count += (db.session.query(FeedItem).filter(
+            FeedItem.id.in_(chunk)).delete(synchronize_session=False))
 
     if deleted_count > 0:
         logger.info(
