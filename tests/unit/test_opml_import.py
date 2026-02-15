@@ -90,8 +90,8 @@ def test_import_nested_opml(client, mocker):
         assert sub_tech_tab is not None
 
         # Verify affected_tab_ids
-        assert {tech_tab.id, sub_tech_tab.id, result["tab_id"]}.issubset(
-            set(result["affected_tab_ids"]))
+        assert {tech_tab.id, sub_tech_tab.id,
+                result["tab_id"]}.issubset(set(result["affected_tab_ids"]))
 
         # Check feeds
         hn_feed = Feed.query.filter_by(
