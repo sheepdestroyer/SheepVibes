@@ -239,6 +239,11 @@ def add_security_headers(response):
     response.headers[
         "Permissions-Policy"] = "microphone=(), camera=(), geolocation=()"
 
+    # HTTP Strict Transport Security (HSTS)
+    # Enforce HTTPS for all future connections to this domain.
+    if request.is_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
     return response
 
 
