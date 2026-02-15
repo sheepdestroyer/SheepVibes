@@ -185,4 +185,5 @@ def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
         result = tab.to_dict()
 
     assert result["unread_count"] == 0
-    assert qc[0] <= 1, f"Expected at most one unread aggregate query, got {qc[0]}"
+    assert qc[
+        0] <= 1, f"Expected at most one unread aggregate query, got {qc[0]}"
