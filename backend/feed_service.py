@@ -15,7 +15,9 @@ import ssl
 import urllib.request
 from dataclasses import dataclass
 from datetime import timezone  # Specifically import timezone
+from typing import Any
 from urllib.parse import urljoin, urlparse
+from xml.etree.ElementTree import Element
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
@@ -37,6 +39,7 @@ from .cache_utils import (
 )
 from .constants import (
     DEFAULT_OPML_IMPORT_TAB_NAME,
+    DELETE_CHUNK_SIZE,
     MAX_ITEMS_PER_FEED,
     SKIPPED_FOLDER_TYPES,
 )
@@ -49,11 +52,15 @@ from .sse import announcer
 logger = logging.getLogger(__name__)
 
 
+# Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
+OpmlStackItem = tuple[list[Element], int, str]
+
+
 @dataclass
 class OpmlImportState:
     """Holds the shared state for OPML processing."""
 
-    stack: list[tuple[list, int, str]]
+    stack: list[OpmlStackItem]
     all_existing_feed_urls_set: set[str]
     newly_added_feeds_list: list[Feed]
     affected_tab_ids_set: set[int]
@@ -204,39 +211,27 @@ def _get_or_create_nested_tab(folder_name):
     return new_folder_tab.id, new_folder_tab.name
 
 
-def _process_single_outline_node(
-    outline_element,
+def _process_folder_node(
+    element_name,
+    folder_type_attr,
+    child_outlines,
     current_tab_id,
     current_tab_name,
     state: OpmlImportState,
 ):
-    """Processes a single OPML outline node, creating feeds or pushing folders to stack."""
-    folder_type_attr = outline_element.get("type")
-    title = (outline_element.get("title") or "").strip()
-    text = (outline_element.get("text") or "").strip()
-    element_name = title or text
-
-    xml_url = outline_element.get("xmlUrl")
-    child_outlines = list(outline_element)
-
-    if xml_url:  # It's a feed
-        feed_name = element_name if element_name else xml_url
-        _process_opml_feed_node(xml_url, feed_name, current_tab_id, state)
-
-    elif not xml_url and folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
+    """Processes a folder node (non-feed outline) from the OPML."""
+    if folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
         logger.info(
             "OPML import: Skipping folder '%s' and its children (type: %s).",
             _sanitize_for_log(element_name),
             _sanitize_for_log(folder_type_attr),
         )
-        # Skip the entire branch including children for safety.
         return
 
-    elif not xml_url and element_name and child_outlines:
+    if element_name and child_outlines:
         try:
             nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
                 element_name)
-            # Push children to stack
             state.stack.append((list(reversed(child_outlines)), nested_tab_id,
                                 nested_tab_name))
         except sqlalchemy.exc.SQLAlchemyError:
@@ -244,12 +239,40 @@ def _process_single_outline_node(
                 "OPML import: DB error creating tab for folder '%s'. Skipping folder.",
                 _sanitize_for_log(element_name),
             )
-            return
-    elif not xml_url and not element_name and child_outlines:
+        return
+
+    if not element_name and child_outlines:
         state.stack.append(
             (list(reversed(child_outlines)), current_tab_id, current_tab_name))
+        return
+
+    state.skipped_count += 1
+
+
+def _process_single_outline_node(
+    outline_element,
+    current_tab_id,
+    current_tab_name,
+    state: OpmlImportState,
+):
+    """Processes a single OPML outline node, creating feeds or pushing folders to stack."""
+    xml_url = outline_element.get("xmlUrl")
+    title = (outline_element.get("title") or "").strip()
+    text = (outline_element.get("text") or "").strip()
+    element_name = title or text
+
+    if xml_url:
+        feed_name = element_name if element_name else xml_url
+        _process_opml_feed_node(xml_url, feed_name, current_tab_id, state)
     else:
-        state.skipped_count += 1
+        _process_folder_node(
+            element_name,
+            outline_element.get("type"),
+            list(outline_element),
+            current_tab_id,
+            current_tab_name,
+            state,
+        )
 
 
 def _process_opml_outlines_iterative(
@@ -1482,7 +1505,7 @@ def _enforce_feed_limit(feed_db_obj):
     ids_to_evict = [r.id for r in ids_to_evict_rows]
 
     # Chunk the deletions to avoid hitting SQLite's parameter limit (default 999)
-    chunk_size = 500
+    chunk_size = DELETE_CHUNK_SIZE
     deleted_count = 0
     for i in range(0, len(ids_to_evict), chunk_size):
         chunk = ids_to_evict[i:i + chunk_size]
