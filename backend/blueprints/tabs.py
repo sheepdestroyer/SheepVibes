@@ -195,7 +195,8 @@ def get_feeds_for_tab(tab_id):
 
     # Get limit for items from query string, default to DEFAULT_FEED_ITEMS_LIMIT.
     limit = request.args.get("limit", DEFAULT_FEED_ITEMS_LIMIT, type=int)
-    limit = min(limit, MAX_PAGINATION_LIMIT)
+    # Clamp limit to a sensible range to avoid surprising behavior with negative values.
+    limit = max(1, min(limit, MAX_PAGINATION_LIMIT))
 
     # Query 1: Get all feeds for the given tab.
     feeds = Feed.query.filter_by(tab_id=tab_id).all()
