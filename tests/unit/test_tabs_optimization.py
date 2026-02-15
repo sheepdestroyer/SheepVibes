@@ -121,16 +121,20 @@ def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
     feed = Feed(name="Feed for DB lookup",
                 url="http://example.com/db",
                 tab=tab)
-    unread_item = FeedItem(title="Unread",
-                           link="http://example.com/u",
-                           feed=feed,
-                           is_read=False,
-                           guid="guid-u")
-    read_item = FeedItem(title="Read",
-                         link="http://example.com/r",
-                         feed=feed,
-                         is_read=True,
-                         guid="guid-r")
+    unread_item = FeedItem(
+        title="Unread",
+        link="http://example.com/u",
+        feed=feed,
+        is_read=False,
+        guid="guid-u",
+    )
+    read_item = FeedItem(
+        title="Read",
+        link="http://example.com/r",
+        feed=feed,
+        is_read=True,
+        guid="guid-r",
+    )
 
     db.session.add(tab)
     db.session.add(feed)
@@ -153,8 +157,8 @@ def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
         event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
 
     assert result["unread_count"] == 1
-    assert query_count[
-        0] == 1, f"Expected a single unread aggregate query, got {query_count[0]}"
+    assert query_count[0] == 1, (
+        f"Expected a single unread aggregate query, got {query_count[0]}")
 
 
 def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
@@ -166,16 +170,20 @@ def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
     feed = Feed(name="Feed with no unread",
                 url="http://example.com/zero",
                 tab=tab)
-    read_item_1 = FeedItem(title="Read 1",
-                           link="http://example.com/r1",
-                           feed=feed,
-                           is_read=True,
-                           guid="guid-r1")
-    read_item_2 = FeedItem(title="Read 2",
-                           link="http://example.com/r2",
-                           feed=feed,
-                           is_read=True,
-                           guid="guid-r2")
+    read_item_1 = FeedItem(
+        title="Read 1",
+        link="http://example.com/r1",
+        feed=feed,
+        is_read=True,
+        guid="guid-r1",
+    )
+    read_item_2 = FeedItem(
+        title="Read 2",
+        link="http://example.com/r2",
+        feed=feed,
+        is_read=True,
+        guid="guid-r2",
+    )
 
     db.session.add(tab)
     db.session.add(feed)
@@ -198,5 +206,5 @@ def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
         event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
 
     assert result["unread_count"] == 0
-    assert query_count[
-        0] <= 1, f"Expected at most one unread aggregate query, got {query_count[0]}"
+    assert query_count[0] <= 1, (
+        f"Expected at most one unread aggregate query, got {query_count[0]}")
