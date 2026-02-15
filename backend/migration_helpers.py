@@ -42,41 +42,114 @@ def constraint_exists(table_name,
 
 
 def safe_drop_constraint(table_name,
+
+
                          constraint_name,
+
+
                          type_="unique",
+
+
                          batch_op=None,
-                         **kwargs):
+
+
+                         schema=None):
+
+
     """
+
+
     Drops a constraint only if it exists.
 
+
+
+
+
     :param table_name: The name of the table.
+
+
     :param constraint_name: The name of the constraint to drop. If None, the operation is a no-op.
+
+
     :param type_: The type of constraint (e.g., "unique", "foreignkey", "check", "primary").
+
+
     :param batch_op: Optional existing batch operation context.
-    :param kwargs: Additional arguments to pass to op.drop_constraint.
+
+
+    :param schema: The schema name (optional).
+
+
     """
-    schema = kwargs.pop("schema", None)
+
 
     if constraint_name is None:
+
+
         logger.warning(
+
+
             "Attempted to safe_drop_constraint with None name on table %s. This is a no-op; callers must provide an explicit constraint name.",
+
+
             table_name,
+
+
         )
+
+
         return
+
+
+
+
 
     if not constraint_exists(table_name, constraint_name, type_,
+
+
                              schema=schema):
+
+
         logger.debug("Constraint %s not found on %s, skipping drop.",
+
+
                      constraint_name, table_name)
+
+
         return
 
-    # If we reach here, we should attempt to drop the constraint.
-    if batch_op:
-        batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
-    else:
-        with op.batch_alter_table(table_name, schema=schema) as batch_op_new:
-            batch_op_new.drop_constraint(constraint_name,
-                                         type_=type_,
-                                         **kwargs)
 
-    logger.info("Dropped constraint %s from %s", constraint_name, table_name)
+
+
+
+    # If we reach here, we should attempt to drop the constraint.
+
+
+    if batch_op:
+
+
+        batch_op.drop_constraint(constraint_name, type_=type_)
+
+
+    else:
+
+
+        with op.batch_alter_table(table_name,
+
+
+                                  schema=schema) as batch_op_new:
+
+
+            batch_op_new.drop_constraint(constraint_name,
+
+
+                                         type_=type_)
+
+
+
+
+
+    logger.info("Dropped constraint %s from %s", constraint_name,
+
+
+                table_name)
