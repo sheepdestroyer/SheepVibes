@@ -1226,7 +1226,6 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     """Identifies new items to add and updates existing ones."""
     items_to_add = []
     batch_processed_guids = set()
-    batch_processed_links = set()
 
     # Optimization: Query only necessary columns to avoid loading full objects
     # item[1] is guid, item[2] is link, item[3] is title
@@ -1317,7 +1316,6 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
         if db_guid:
             batch_processed_guids.add(db_guid)
-        batch_processed_links.add(entry_link)
 
         items_to_add.append(
             FeedItem(

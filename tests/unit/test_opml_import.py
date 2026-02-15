@@ -91,13 +91,16 @@ def test_import_nested_opml(client, mocker):
         # Check feeds
         hn_feed = Feed.query.filter_by(
             url="https://news.ycombinator.com/rss").first()
+        assert hn_feed is not None
         assert hn_feed.tab_id == tech_tab.id
 
         lobsters_feed = Feed.query.filter_by(
             url="https://lobste.rs/rss").first()
+        assert lobsters_feed is not None
         assert lobsters_feed.tab_id == sub_tech_tab.id
 
         root_feed = Feed.query.filter_by(
             url="https://root.example.com/rss").first()
+        assert root_feed is not None
         # Root feed should be in the default import tab or top level tab
         assert root_feed.tab_id == result["tab_id"]
