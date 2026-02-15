@@ -6,6 +6,18 @@ export const API_BASE_URL =
     '';
 
 /**
+ * Helper to get cookie value by name.
+ * @param {string} name
+ * @returns {string|null}
+ */
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+}
+
+/**
  * Fetches data from the specified API endpoint.
  * Handles JSON parsing, error reporting, and different response types.
  * @param {string} url - The API endpoint URL.
@@ -13,6 +25,15 @@ export const API_BASE_URL =
  * @returns {Promise<object|null>} A promise resolving to the JSON data, {success: true} for successful non-JSON responses, or null on failure.
  */
 export async function fetchData(url, options = {}, responseType = 'json') {
+    // Add CSRF token for mutation requests
+    if (options.method && ['POST', 'PUT', 'DELETE'].includes(options.method.toUpperCase())) {
+        const csrfToken = getCookie('csrf_token');
+        if (csrfToken) {
+            options.headers = options.headers || {};
+            options.headers['X-CSRFToken'] = csrfToken;
+        }
+    }
+
     try {
         const response = await fetch(`${API_BASE_URL}${url}`, options);
         if (!response.ok) {

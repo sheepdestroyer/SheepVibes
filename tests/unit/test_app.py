@@ -23,6 +23,7 @@ def client():
     """Configures the Flask app for testing and provides a test client."""
     # Base test config
     app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
     app.config["PROPAGATE_EXCEPTIONS"] = False
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 

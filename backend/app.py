@@ -7,6 +7,7 @@ from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .blueprints.feeds import feeds_bp, items_bp
@@ -37,6 +38,10 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config["PROJECT_ROOT"] = os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".."))
 
+# Security Configuration
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
+csrf = CSRFProtect(app)
+
 # Configure CORS with specific allowed origins
 allowed_origins_str = os.environ.get(
     "CORS_ALLOWED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080")
@@ -51,6 +56,7 @@ CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["TESTING"] = True  # Ensure it's explicitly True in app.config
+    app.config["WTF_CSRF_ENABLED"] = False  # Disable CSRF for tests
     app.config["CACHE_TYPE"] = (
         "SimpleCache"  # Use SimpleCache for tests, no Redis needed
     )
@@ -270,6 +276,19 @@ def add_security_headers(response):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains")
 
+    return response
+
+
+@app.after_request
+def set_csrf_cookie(response):
+    """Sets the CSRF token cookie for the frontend."""
+    if app.config.get("WTF_CSRF_ENABLED", True):
+        response.set_cookie(
+            "csrf_token",
+            generate_csrf(),
+            httponly=False,
+            samesite="Strict"
+        )
     return response
 
 
