@@ -36,6 +36,7 @@ from .cache_utils import (
 )
 from .constants import (
     DEFAULT_OPML_IMPORT_TAB_NAME,
+    MAX_ITEMS_PER_FEED,
     SKIPPED_FOLDER_TYPES,
 )
 
@@ -648,9 +649,6 @@ def import_opml(opml_file_stream, requested_tab_id_str):
 
     return result, None
 
-
-# Maximum number of items to keep per feed for cache eviction
-MAX_ITEMS_PER_FEED = 100
 
 MAX_FEED_RESPONSE_BYTES = 10 * 1024 * 1024  # 10MB cap for feed responses
 
@@ -1457,12 +1455,20 @@ def _enforce_feed_limit(feed_db_obj):
     # Fetch IDs to evict first. This avoids "subquery in DELETE" issues (which can
     # lock tables in SQLite) and improves compatibility.
     # Note: nullslast() is used to ensure consistent ordering (NULLs as oldest).
+    # We also sort by ID desc as a tie-breaker for deterministic eviction.
     # .limit(-1) is required for SQLite to support OFFSET without an explicit limit.
-    ids_to_evict_rows = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+    ids_to_evict_rows = (
+        db.session.query(FeedItem.id)
+        .filter_by(feed_id=feed_db_obj.id)
+        .order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
-    ).limit(-1).offset(MAX_ITEMS_PER_FEED).all())
+            FeedItem.id.desc(),
+        )
+        .limit(-1)
+        .offset(MAX_ITEMS_PER_FEED)
+        .all()
+    )
 
     if not ids_to_evict_rows:
         return
