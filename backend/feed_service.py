@@ -1458,15 +1458,12 @@ def _enforce_feed_limit(feed_db_obj):
     # across PostgreSQL (where DESC puts NULLs first) and SQLite (where DESC puts NULLs last).
     # While it might impact index usage in SQLite, correctness is prioritized.
     subquery = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
-        .order_by(
-            FeedItem.published_time.desc().nullslast(),
-            FeedItem.fetched_time.desc().nullslast(),
-        )
-        .limit(-1)  # Required for SQLite to support OFFSET
-        .offset(MAX_ITEMS_PER_FEED)
-    )
+        db.session.query(
+            FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+                FeedItem.published_time.desc().nullslast(),
+                FeedItem.fetched_time.desc().nullslast(),
+        ).limit(-1)  # Required for SQLite to support OFFSET
+        .offset(MAX_ITEMS_PER_FEED))
 
     deleted_count = (db.session.query(FeedItem).filter(
         FeedItem.id.in_(subquery)).delete(synchronize_session=False))
