@@ -56,9 +56,9 @@ class OpmlImportState:
     stack: list
     all_existing_feed_urls_set: set
     newly_added_feeds_list: list
-    imported_count_wrapper: list[int]
-    skipped_count_wrapper: list[int]
     affected_tab_ids_set: set
+    imported_count: int = 0
+    skipped_count: int = 0
 
 
 def _count_feeds_in_opml(root):
@@ -115,10 +115,12 @@ def _calculate_and_announce_progress(processed_count, total_count,
         progress_val = OPML_IMPORT_PROCESSING_WEIGHT
 
     current_percent = progress_val
-    should_announce = (processed_count == 0 or processed_count >= total_count
-                       or (current_percent != last_announced_percent
-                           and current_percent % 5 == 0)
-                       or processed_count % 20 == 0)
+    should_announce = (
+        processed_count == 0
+        or processed_count >= total_count
+        or (current_percent != last_announced_percent and current_percent % 5 == 0)
+        or processed_count % 20 == 0
+    )
 
     if should_announce:
         status_msg = f"Processing OPML... ({processed_count} outlines analyzed)"
@@ -147,7 +149,7 @@ def _process_opml_feed_node(
             _sanitize_for_log(feed_name),
             _sanitize_for_log(xml_url),
         )
-        state.skipped_count_wrapper[0] += 1
+        state.skipped_count += 1
         return
 
     if xml_url in state.all_existing_feed_urls_set:
@@ -155,7 +157,7 @@ def _process_opml_feed_node(
             "OPML import: Feed with URL '%s' already exists. Skipping.",
             _sanitize_for_log(xml_url),
         )
-        state.skipped_count_wrapper[0] += 1
+        state.skipped_count += 1
         return
 
     try:
@@ -163,14 +165,14 @@ def _process_opml_feed_node(
         db.session.add(new_feed)
         state.newly_added_feeds_list.append(new_feed)
         state.all_existing_feed_urls_set.add(xml_url)
-        state.imported_count_wrapper[0] += 1
+        state.imported_count += 1
         state.affected_tab_ids_set.add(current_tab_id)
     except sqlalchemy.exc.SQLAlchemyError:
         logger.exception(
             "OPML import: Error preparing feed '%s'",
             _sanitize_for_log(feed_name),
         )
-        state.skipped_count_wrapper[0] += 1
+        state.skipped_count += 1
 
 
 def _get_or_create_nested_tab(folder_name):
@@ -250,7 +252,7 @@ def _process_single_outline_node(
         state.stack.append(
             (list(reversed(child_outlines)), current_tab_id, current_tab_name))
     else:
-        state.skipped_count_wrapper[0] += 1
+        state.skipped_count += 1
 
 
 def _process_opml_outlines_iterative(
@@ -259,8 +261,6 @@ def _process_opml_outlines_iterative(
     top_level_tab_name,
     all_existing_feed_urls_set,
     newly_added_feeds_list,
-    imported_count_wrapper,
-    skipped_count_wrapper,
     affected_tab_ids_set,
     total_outlines,
 ):
@@ -275,8 +275,6 @@ def _process_opml_outlines_iterative(
         stack=stack,
         all_existing_feed_urls_set=all_existing_feed_urls_set,
         newly_added_feeds_list=newly_added_feeds_list,
-        imported_count_wrapper=imported_count_wrapper,
-        skipped_count_wrapper=skipped_count_wrapper,
         affected_tab_ids_set=affected_tab_ids_set,
     )
     last_announced_percent = -1
@@ -299,6 +297,7 @@ def _process_opml_outlines_iterative(
                 current_tab_name,
                 state,
             )
+    return state
 
 
 def _determine_target_tab(requested_tab_id_str):
@@ -594,8 +593,6 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         )
         return result, None
 
-    imported_count_wrapper = [0]
-    skipped_count_wrapper = [0]
     affected_tab_ids_set = set()
     newly_added_feeds_list = []
     all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
@@ -605,14 +602,12 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting OPML import...', 'value': 0, 'max': 100})}\n\n"
     )
 
-    _process_opml_outlines_iterative(
+    state = _process_opml_outlines_iterative(
         list(opml_body),
         top_level_target_tab_id,
         top_level_target_tab_name,
         all_existing_feed_urls_set,
         newly_added_feeds_list,
-        imported_count_wrapper,
-        skipped_count_wrapper,
         affected_tab_ids_set,
         total_outlines,
     )
@@ -649,23 +644,17 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         )
         return result, None
 
-    imported_final_count = imported_count_wrapper[0]
-    skipped_final_count = skipped_count_wrapper[0]
+    imported_final_count = state.imported_count
+    skipped_final_count = state.skipped_count
 
     result = {
-        "message":
-        f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
+        "message": f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
         f"Tab: {top_level_target_tab_name}.",
-        "imported_count":
-        imported_final_count,
-        "skipped_count":
-        skipped_final_count,
-        "tab_id":
-        top_level_target_tab_id,
-        "tab_name":
-        top_level_target_tab_name,
-        "affected_tab_ids":
-        list(affected_tab_ids_set),
+        "imported_count": imported_final_count,
+        "skipped_count": skipped_final_count,
+        "tab_id": top_level_target_tab_id,
+        "tab_name": top_level_target_tab_name,
+        "affected_tab_ids": list(affected_tab_ids_set),
     }
 
     # Final 'complete' message for SSE
@@ -849,8 +838,14 @@ def validate_and_resolve_url(url):
 
 def _is_safe_ip(ip):
     """Checks if an IP address is safe (not private, loopback, etc.)."""
-    return not (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
 
 
 class SafeHTTPSConnection(http.client.HTTPSConnection):
