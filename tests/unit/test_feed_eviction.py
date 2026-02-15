@@ -1,8 +1,6 @@
 import datetime
 from datetime import timezone
 
-import pytest
-
 from backend.app import app
 from backend.constants import EVICTION_LIMIT_PER_RUN, MAX_ITEMS_PER_FEED
 from backend.feed_service import _enforce_feed_limit

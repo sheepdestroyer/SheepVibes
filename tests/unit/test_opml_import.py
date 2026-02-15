@@ -307,3 +307,31 @@ def test_opml_import_no_outline_elements(client, mocker):
     # No outlines present; nothing imported or skipped.
     assert result["imported_count"] == 0
     assert result["skipped_count"] == 0
+
+
+def test_import_malformed_opml(client):
+    """Test importing a malformed OPML yields a parse error response."""
+    malformed_opml = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <opml version="1.0">
+        <head>
+            <title>Broken OPML</title>
+        </head>
+        <body>
+            <outline text="Tech Folder">
+                <!-- Missing closing tags to make XML malformed -->
+    """
+
+    data = {
+        "file": (io.BytesIO(malformed_opml), "malformed.opml"),
+    }
+
+    response = client.post(
+        "/api/opml/import",
+        data=data,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+
+    payload = response.get_json()
+    assert "Malformed OPML file" in payload.get("error", "")
