@@ -212,21 +212,22 @@ CSP_POLICY = ("default-src 'self'; "
               "form-action 'self'; "
               "frame-ancestors 'self'")
 
-PERMISSIONS_POLICY = ", ".join(sorted([
-    "accelerometer=()",
-    "autoplay=()",
-    "camera=()",
-    "display-capture=()",
-    "fullscreen=()",
-    "geolocation=()",
-    "gyroscope=()",
-    "magnetometer=()",
-    "microphone=()",
-    "midi=()",
-    "payment=()",
-    "usb=()",
-    "xr-spatial-tracking=()",
-]))
+PERMISSIONS_POLICY = ", ".join(
+    sorted([
+        "accelerometer=()",
+        "autoplay=()",
+        "camera=()",
+        "display-capture=()",
+        "fullscreen=()",
+        "geolocation=()",
+        "gyroscope=()",
+        "magnetometer=()",
+        "microphone=()",
+        "midi=()",
+        "payment=()",
+        "usb=()",
+        "xr-spatial-tracking=()",
+    ]))
 
 
 @app.after_request
