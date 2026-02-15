@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 
 import sqlalchemy as sa
 from alembic import op
@@ -8,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 def constraint_exists(table_name,
                       constraint_name,
-                      type_="unique",
+                      type_: Literal["unique", "foreignkey", "check",
+                                     "primary"] = "unique",
                       schema=None):
     """
     Checks if a named constraint exists on a table.
@@ -43,7 +45,8 @@ def constraint_exists(table_name,
 
 def safe_drop_constraint(table_name,
                          constraint_name,
-                         type_="unique",
+                         type_: Literal["unique", "foreignkey", "check",
+                                        "primary"] = "unique",
                          batch_op=None,
                          schema=None):
     """
