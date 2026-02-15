@@ -28,10 +28,9 @@ def get_tabs():
     """
     tabs = Tab.query.order_by(Tab.order).all()
 
-    if not tabs:
-        return jsonify([])
-
     tab_ids = [tab.id for tab in tabs]
+    if not tab_ids:
+        return jsonify([])
 
     # Pre-calculate unread counts for all tabs in a single query to avoid N+1
     unread_counts_query = (db.session.query(Feed.tab_id, func.count(
@@ -196,8 +195,7 @@ def get_feeds_for_tab(tab_id):
 
     # Get limit for items from query string, default to DEFAULT_FEED_ITEMS_LIMIT.
     limit = request.args.get("limit", DEFAULT_FEED_ITEMS_LIMIT, type=int)
-    if limit > MAX_PAGINATION_LIMIT:
-        limit = MAX_PAGINATION_LIMIT
+    limit = min(limit, MAX_PAGINATION_LIMIT)
 
     # Query 1: Get all feeds for the given tab.
     feeds = Feed.query.filter_by(tab_id=tab_id).all()
