@@ -72,10 +72,7 @@ def safe_drop_constraint(table_name,
     if batch_op:
         batch_op.drop_constraint(constraint_name, type_=type_)
     else:
-        with op.batch_alter_table(table_name,
-                                  schema=schema) as batch_op_new:
-            batch_op_new.drop_constraint(constraint_name,
-                                         type_=type_)
+        with op.batch_alter_table(table_name, schema=schema) as batch_op_new:
+            batch_op_new.drop_constraint(constraint_name, type_=type_)
 
-    logger.info("Dropped constraint %s from %s", constraint_name,
-                table_name)
+    logger.info("Dropped constraint %s from %s", constraint_name, table_name)
