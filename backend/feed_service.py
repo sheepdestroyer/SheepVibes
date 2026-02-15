@@ -13,6 +13,7 @@ import os
 import socket
 import ssl
 import urllib.request
+from dataclasses import dataclass
 from datetime import timezone  # Specifically import timezone
 from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
@@ -46,6 +47,18 @@ from .sse import announcer
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class OpmlImportState:
+    """Holds the shared state for OPML processing."""
+
+    stack: list
+    all_existing_feed_urls_set: set
+    newly_added_feeds_list: list
+    imported_count_wrapper: list[int]
+    skipped_count_wrapper: list[int]
+    affected_tab_ids_set: set
 
 
 def _count_feeds_in_opml(root):
@@ -124,11 +137,7 @@ def _process_opml_feed_node(
     xml_url,
     feed_name,
     current_tab_id,
-    all_existing_feed_urls_set,
-    newly_added_feeds_list,
-    imported_count_wrapper,
-    skipped_count_wrapper,
-    affected_tab_ids_set,
+    state: OpmlImportState,
 ):
     """Processes a single feed node from the OPML."""
     # XSS Prevention: Validate URL scheme
@@ -138,30 +147,30 @@ def _process_opml_feed_node(
             _sanitize_for_log(feed_name),
             _sanitize_for_log(xml_url),
         )
-        skipped_count_wrapper[0] += 1
+        state.skipped_count_wrapper[0] += 1
         return
 
-    if xml_url in all_existing_feed_urls_set:
+    if xml_url in state.all_existing_feed_urls_set:
         logger.info(
             "OPML import: Feed with URL '%s' already exists. Skipping.",
             _sanitize_for_log(xml_url),
         )
-        skipped_count_wrapper[0] += 1
+        state.skipped_count_wrapper[0] += 1
         return
 
     try:
         new_feed = Feed(tab_id=current_tab_id, name=feed_name, url=xml_url)
         db.session.add(new_feed)
-        newly_added_feeds_list.append(new_feed)
-        all_existing_feed_urls_set.add(xml_url)
-        imported_count_wrapper[0] += 1
-        affected_tab_ids_set.add(current_tab_id)
+        state.newly_added_feeds_list.append(new_feed)
+        state.all_existing_feed_urls_set.add(xml_url)
+        state.imported_count_wrapper[0] += 1
+        state.affected_tab_ids_set.add(current_tab_id)
     except sqlalchemy.exc.SQLAlchemyError:
         logger.exception(
             "OPML import: Error preparing feed '%s'",
             _sanitize_for_log(feed_name),
         )
-        skipped_count_wrapper[0] += 1
+        state.skipped_count_wrapper[0] += 1
 
 
 def _get_or_create_nested_tab(folder_name):
@@ -199,12 +208,7 @@ def _process_single_outline_node(
     outline_element,
     current_tab_id,
     current_tab_name,
-    stack,
-    all_existing_feed_urls_set,
-    newly_added_feeds_list,
-    imported_count_wrapper,
-    skipped_count_wrapper,
-    affected_tab_ids_set,
+    state: OpmlImportState,
 ):
     """Processes a single OPML outline node, creating feeds or pushing folders to stack."""
     folder_type_attr = outline_element.get("type")
@@ -217,16 +221,7 @@ def _process_single_outline_node(
 
     if xml_url:  # It's a feed
         feed_name = element_name if element_name else xml_url
-        _process_opml_feed_node(
-            xml_url,
-            feed_name,
-            current_tab_id,
-            all_existing_feed_urls_set,
-            newly_added_feeds_list,
-            imported_count_wrapper,
-            skipped_count_wrapper,
-            affected_tab_ids_set,
-        )
+        _process_opml_feed_node(xml_url, feed_name, current_tab_id, state)
 
     elif (not xml_url and element_name and folder_type_attr
           and folder_type_attr in SKIPPED_FOLDER_TYPES):
@@ -243,8 +238,8 @@ def _process_single_outline_node(
             nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
                 element_name)
             # Push children to stack
-            stack.append((list(reversed(child_outlines)), nested_tab_id,
-                          nested_tab_name))
+            state.stack.append((list(reversed(child_outlines)), nested_tab_id,
+                                nested_tab_name))
         except sqlalchemy.exc.SQLAlchemyError:
             logger.exception(
                 "OPML import: DB error creating tab for folder '%s'. Skipping folder.",
@@ -252,10 +247,10 @@ def _process_single_outline_node(
             )
             return
     elif not xml_url and not element_name and child_outlines:
-        stack.append(
-            (list(reversed(child_outlines)), current_tab_id, current_tab_name))
+        state.stack.append((list(reversed(child_outlines)), current_tab_id,
+                            current_tab_name))
     else:
-        skipped_count_wrapper[0] += 1
+        state.skipped_count_wrapper[0] += 1
 
 
 def _process_opml_outlines_iterative(
@@ -271,13 +266,24 @@ def _process_opml_outlines_iterative(
 ):
     """Iteratively processes OPML outline elements with weighted progress updates."""
     # Phase 1: Processing (0-50%)
-    stack = [(list(reversed(initial_outline_elements)), top_level_tab_id,
-              top_level_tab_name)]
+    stack = [(
+        list(reversed(initial_outline_elements)),
+        top_level_tab_id,
+        top_level_tab_name,
+    )]
+    state = OpmlImportState(
+        stack=stack,
+        all_existing_feed_urls_set=all_existing_feed_urls_set,
+        newly_added_feeds_list=newly_added_feeds_list,
+        imported_count_wrapper=imported_count_wrapper,
+        skipped_count_wrapper=skipped_count_wrapper,
+        affected_tab_ids_set=affected_tab_ids_set,
+    )
     last_announced_percent = -1
 
     processed_outline_count = 0
-    while stack:
-        outline_elements, current_tab_id, current_tab_name = stack.pop()
+    while state.stack:
+        outline_elements, current_tab_id, current_tab_name = state.stack.pop()
 
         while outline_elements:
             outline_element = outline_elements.pop()
@@ -291,12 +297,7 @@ def _process_opml_outlines_iterative(
                 outline_element,
                 current_tab_id,
                 current_tab_name,
-                stack,
-                all_existing_feed_urls_set,
-                newly_added_feeds_list,
-                imported_count_wrapper,
-                skipped_count_wrapper,
-                affected_tab_ids_set,
+                state,
             )
 
 
