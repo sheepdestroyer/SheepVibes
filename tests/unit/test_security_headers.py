@@ -1,18 +1,4 @@
-from backend.app import app
-
-EXPECTED_CSP = ("default-src 'self'; "
-                "img-src * data:; "
-                "script-src 'self'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "connect-src 'self'; "
-                "object-src 'none'; "
-                "base-uri 'self'; "
-                "form-action 'self'; "
-                "frame-ancestors 'self'")
-
-EXPECTED_PERMISSIONS_POLICY = (
-    "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
-)
+from backend.app import CSP_POLICY, PERMISSIONS_POLICY, app
 
 
 def test_security_headers_present():
@@ -24,7 +10,7 @@ def test_security_headers_present():
         # Content-Security-Policy
         csp = response.headers.get("Content-Security-Policy")
         assert csp is not None, "Content-Security-Policy header is missing"
-        assert csp == EXPECTED_CSP, (
+        assert csp == CSP_POLICY, (
             f"Content-Security-Policy header mismatch. Got: {csp}")
 
         # X-Content-Type-Options
@@ -43,7 +29,7 @@ def test_security_headers_present():
         # Permissions-Policy
         permissions = response.headers.get("Permissions-Policy")
         assert permissions is not None, "Permissions-Policy header is missing"
-        assert permissions == EXPECTED_PERMISSIONS_POLICY, (
+        assert permissions == PERMISSIONS_POLICY, (
             f"Permissions-Policy header mismatch. Got: {permissions}")
 
 
