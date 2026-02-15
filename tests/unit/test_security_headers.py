@@ -1,5 +1,17 @@
 from backend.app import app
 
+EXPECTED_CSP = (
+    "default-src 'self'; "
+    "img-src * data:; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "frame-ancestors 'self'"
+)
+
+EXPECTED_PERMISSIONS_POLICY = "microphone=(), camera=(), geolocation=()"
+
 
 def test_security_headers_present():
     """Verify that essential security headers are present in responses."""
@@ -10,13 +22,7 @@ def test_security_headers_present():
         # Content-Security-Policy
         csp = response.headers.get("Content-Security-Policy")
         assert csp is not None, "Content-Security-Policy header is missing"
-        assert "default-src 'self'" in csp
-        assert "img-src * data:" in csp
-        assert "script-src 'self'" in csp
-        assert "style-src 'self' 'unsafe-inline'" in csp
-        assert "connect-src 'self'" in csp
-        assert "object-src 'none'" in csp
-        assert "frame-ancestors 'self'" in csp
+        assert csp == EXPECTED_CSP, f"Content-Security-Policy header mismatch. Got: {csp}"
 
         # X-Content-Type-Options
         assert response.headers.get("X-Content-Type-Options") == "nosniff", (
@@ -34,6 +40,25 @@ def test_security_headers_present():
         # Permissions-Policy
         permissions = response.headers.get("Permissions-Policy")
         assert permissions is not None, "Permissions-Policy header is missing"
-        assert "microphone=()" in permissions
-        assert "camera=()" in permissions
-        assert "geolocation=()" in permissions
+        assert permissions == EXPECTED_PERMISSIONS_POLICY, (
+            f"Permissions-Policy header mismatch. Got: {permissions}"
+        )
+
+
+def test_hsts_header_on_secure_request():
+    """Verify HSTS header is present on HTTPS requests."""
+    with app.test_client() as client:
+        # Simulate a secure request by setting the base_url scheme
+        response = client.get("/non-existent-path-for-security-test", base_url="https://localhost")
+        hsts = response.headers.get("Strict-Transport-Security")
+        assert hsts is not None, "Strict-Transport-Security header is missing on secure request"
+        assert "max-age=31536000" in hsts
+        assert "includeSubDomains" in hsts
+
+
+def test_hsts_header_not_on_insecure_request():
+    """Verify HSTS header is NOT present on HTTP requests."""
+    with app.test_client() as client:
+        response = client.get("/non-existent-path-for-security-test", base_url="http://localhost")
+        hsts = response.headers.get("Strict-Transport-Security")
+        assert hsts is None, "Strict-Transport-Security header should not be present on insecure request"
