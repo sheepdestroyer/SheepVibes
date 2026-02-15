@@ -54,6 +54,19 @@ def test_eviction_under_limit(client):
         assert count == MAX_ITEMS_PER_FEED - 1
 
 
+def test_eviction_at_limit(client):
+    """Test that no items are evicted when exactly at the limit."""
+    with app.app_context():
+        feed = create_feed_with_tab()
+
+        create_dummy_items(feed.id, MAX_ITEMS_PER_FEED)
+
+        _enforce_feed_limit(feed)
+
+        count = FeedItem.query.filter_by(feed_id=feed.id).count()
+        assert count == MAX_ITEMS_PER_FEED
+
+
 def test_eviction_over_limit_within_cap(client):
     """Test eviction when over limit but within single run cap."""
     with app.app_context():
