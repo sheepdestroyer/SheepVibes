@@ -14,21 +14,18 @@ def test_get_tabs_query_count_constant(client):
     def create_tabs(start_index, count):
         for i in range(start_index, start_index + count):
             tab = Tab(name=f"Tab {i}", order=i)
-            db.session.add(tab)
-            db.session.flush()
-
-            feed = Feed(tab_id=tab.id,
-                        name=f"Feed {i}",
-                        url=f"http://example.com/{i}")
-            db.session.add(feed)
-            db.session.flush()
-
+            # Use relationship assignment
+            feed = Feed(name=f"Feed {i}",
+                        url=f"http://example.com/{i}",
+                        tab=tab)
             item = FeedItem(
-                feed_id=feed.id,
                 title=f"Item {i}",
                 link=f"http://example.com/{i}/item",
                 guid=f"guid-{i}",
+                feed=feed,
             )
+            db.session.add(tab)
+            db.session.add(feed)
             db.session.add(item)
         db.session.commit()
 
@@ -79,9 +76,6 @@ def test_tab_to_dict_optimization(client):
 
     # Build a tab with a related feed and item
     tab = Tab(name="Tab for to_dict", order=100)
-    # Using constructor arguments for relationships if supported,
-    # otherwise setting attributes or ids.
-    # Assuming db.relationship backrefs allow passing parent object.
     feed = Feed(name="Feed 1", url="http://example.com/feed-1", tab=tab)
     item = FeedItem(title="Item 1",
                     link="http://example.com/item-1",
@@ -116,3 +110,93 @@ def test_tab_to_dict_optimization(client):
     # to_dict should not need to hit the DB just to compute unread_count.
     # It accesses self.id, self.name, self.order which are already loaded.
     assert query_count[0] == 0
+
+
+def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
+    """
+    When no unread_count override is supplied, Tab.to_dict should issue a single
+    aggregate query to compute the unread count.
+    """
+    tab = Tab(name="Tab for DB lookup", order=10)
+    feed = Feed(name="Feed for DB lookup",
+                url="http://example.com/db",
+                tab=tab)
+    unread_item = FeedItem(title="Unread",
+                           link="http://example.com/u",
+                           feed=feed,
+                           is_read=False,
+                           guid="guid-u")
+    read_item = FeedItem(title="Read",
+                         link="http://example.com/r",
+                         feed=feed,
+                         is_read=True,
+                         guid="guid-r")
+
+    db.session.add(tab)
+    db.session.add(feed)
+    db.session.add(unread_item)
+    db.session.add(read_item)
+    db.session.commit()
+
+    db.session.refresh(tab)
+
+    query_count = [0]
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context,
+                              executemany):
+        query_count[0] += 1
+
+    event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        result = tab.to_dict()
+    finally:
+        event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
+
+    assert result["unread_count"] == 1
+    assert query_count[
+        0] == 1, f"Expected a single unread aggregate query, got {query_count[0]}"
+
+
+def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
+    """
+    When a tab has no unread items, Tab.to_dict without an override should
+    return unread_count == 0 and still use at most a single aggregate query.
+    """
+    tab = Tab(name="Tab with no unread", order=20)
+    feed = Feed(name="Feed with no unread",
+                url="http://example.com/zero",
+                tab=tab)
+    read_item_1 = FeedItem(title="Read 1",
+                           link="http://example.com/r1",
+                           feed=feed,
+                           is_read=True,
+                           guid="guid-r1")
+    read_item_2 = FeedItem(title="Read 2",
+                           link="http://example.com/r2",
+                           feed=feed,
+                           is_read=True,
+                           guid="guid-r2")
+
+    db.session.add(tab)
+    db.session.add(feed)
+    db.session.add(read_item_1)
+    db.session.add(read_item_2)
+    db.session.commit()
+
+    db.session.refresh(tab)
+
+    query_count = [0]
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context,
+                              executemany):
+        query_count[0] += 1
+
+    event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        result = tab.to_dict()
+    finally:
+        event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
+
+    assert result["unread_count"] == 0
+    assert query_count[
+        0] <= 1, f"Expected at most one unread aggregate query, got {query_count[0]}"
