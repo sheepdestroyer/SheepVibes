@@ -7,11 +7,12 @@ from alembic import op
 logger = logging.getLogger(__name__)
 
 
-def constraint_exists(table_name,
-                      constraint_name,
-                      type_: Literal["unique", "foreignkey", "check",
-                                     "primary"] = "unique",
-                      schema=None):
+def constraint_exists(
+    table_name,
+    constraint_name,
+    type_: Literal["unique", "foreignkey", "check", "primary"] = "unique",
+    schema=None,
+):
     """
     Checks if a named constraint exists on a table.
 
@@ -43,12 +44,13 @@ def constraint_exists(table_name,
     return any(c.get("name") == constraint_name for c in constraints)
 
 
-def safe_drop_constraint(table_name,
-                         constraint_name,
-                         type_: Literal["unique", "foreignkey", "check",
-                                        "primary"] = "unique",
-                         batch_op=None,
-                         schema=None):
+def safe_drop_constraint(
+    table_name,
+    constraint_name,
+    type_: Literal["unique", "foreignkey", "check", "primary"] = "unique",
+    batch_op=None,
+    schema=None,
+):
     """
     Drops a constraint only if it exists.
 
