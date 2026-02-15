@@ -1030,7 +1030,9 @@ def _fetch_feed_content(feed_url, etag=None, last_modified=None):
         fetching or parsing failed.
     """
     try:
-        parsed_feed = fetch_feed(feed_url, etag=etag, last_modified=last_modified)
+        parsed_feed = fetch_feed(feed_url,
+                                 etag=etag,
+                                 last_modified=last_modified)
         return parsed_feed
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error in fetch thread for feed %s",
@@ -1084,7 +1086,8 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         # Save conditional GET headers if present
         if hasattr(parsed_feed, "http_etag") and parsed_feed.http_etag:
             feed_db_obj.etag = parsed_feed.http_etag
-        if hasattr(parsed_feed, "http_last_modified") and parsed_feed.http_last_modified:
+        if (hasattr(parsed_feed, "http_last_modified")
+                and parsed_feed.http_last_modified):
             feed_db_obj.last_modified = parsed_feed.http_last_modified
 
         # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
@@ -1105,18 +1108,23 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
 
         # Save conditional GET headers if present
         updates = False
-        if hasattr(parsed_feed, "http_etag") and parsed_feed.http_etag != feed_db_obj.etag:
+        if (hasattr(parsed_feed, "http_etag")
+                and parsed_feed.http_etag != feed_db_obj.etag):
             feed_db_obj.etag = parsed_feed.http_etag
             updates = True
-        if hasattr(parsed_feed, "http_last_modified") and parsed_feed.http_last_modified != feed_db_obj.last_modified:
+        if (hasattr(parsed_feed, "http_last_modified") and
+                parsed_feed.http_last_modified != feed_db_obj.last_modified):
             feed_db_obj.last_modified = parsed_feed.http_last_modified
             updates = True
 
         if updates:
-             try:
+            try:
                 db.session.commit()
-             except sqlalchemy.exc.SQLAlchemyError:
-                 logger.warning("Failed to save ETag/Last-Modified for %s", _sanitize_for_log(feed_db_obj.name))
+            except sqlalchemy.exc.SQLAlchemyError:
+                logger.warning(
+                    "Failed to save ETag/Last-Modified for %s",
+                    _sanitize_for_log(feed_db_obj.name),
+                )
 
         return True, new_items, feed_db_obj.tab_id
     except Exception:  # pylint: disable=broad-exception-caught
@@ -1234,9 +1242,12 @@ def fetch_feed(feed_url, etag=None, last_modified=None):
 
     except urllib.error.HTTPError as e:
         if e.code == 304:
-            logger.info("Feed %s not modified (304).", _sanitize_for_log(feed_url))
-            return feedparser.FeedParserDict(status=304, debug_message="Not Modified")
-        logger.warning("HTTP Error fetching feed %s: %s", _sanitize_for_log(feed_url), e)
+            logger.info("Feed %s not modified (304).",
+                        _sanitize_for_log(feed_url))
+            return feedparser.FeedParserDict(status=304,
+                                             debug_message="Not Modified")
+        logger.warning("HTTP Error fetching feed %s: %s",
+                       _sanitize_for_log(feed_url), e)
         return None
 
     except Exception:  # pylint: disable=broad-exception-caught
@@ -1660,7 +1671,9 @@ def fetch_and_update_feed(feed_id):
         return False, 0, None
 
     # fetch_feed already handles errors and returns None, but logic here checks return
-    parsed_feed = _fetch_feed_content(feed.url, etag=feed.etag, last_modified=feed.last_modified)
+    parsed_feed = _fetch_feed_content(feed.url,
+                                      etag=feed.etag,
+                                      last_modified=feed.last_modified)
 
     # Delegate processing to helper
     return _process_fetch_result(feed, parsed_feed)
@@ -1690,7 +1703,13 @@ def update_all_feeds():
     with concurrent.futures.ThreadPoolExecutor(
             max_workers=actual_workers) as executor:
         future_to_feed = {
-            executor.submit(_fetch_feed_content, feed.url, etag=feed.etag, last_modified=feed.last_modified): feed
+            executor.submit(
+                _fetch_feed_content,
+                feed.url,
+                etag=feed.etag,
+                last_modified=feed.last_modified,
+            ):
+            feed
             for feed in all_feeds
         }
 

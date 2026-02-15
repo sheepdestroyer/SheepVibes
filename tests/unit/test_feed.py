@@ -123,13 +123,18 @@ def test_parse_published_time():
     assert dt1.tzinfo == datetime.timezone.utc
 
     # Scenario 2: Valid 'published' string
-    entry2 = MockFeedEntry(
-        title="Entry 2", link="http://example.com/2", published="2024-02-20T12:00:00Z"
-    )
+    entry2 = MockFeedEntry(title="Entry 2",
+                           link="http://example.com/2",
+                           published="2024-02-20T12:00:00Z")
     dt2 = feed_service.parse_published_time(entry2)
     assert dt2 is not None
-    assert dt2 == datetime.datetime(
-        2024, 2, 20, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    assert dt2 == datetime.datetime(2024,
+                                    2,
+                                    20,
+                                    12,
+                                    0,
+                                    0,
+                                    tzinfo=datetime.timezone.utc)
 
     # Scenario 3: Valid 'updated' string
     entry3 = MockFeedEntry(
@@ -140,18 +145,28 @@ def test_parse_published_time():
     dt3 = feed_service.parse_published_time(entry3)
     assert dt3 is not None
     # Expected: 2024-03-10 13:45:30 UTC
-    assert dt3 == datetime.datetime(
-        2024, 3, 10, 13, 45, 30, tzinfo=datetime.timezone.utc
-    )
+    assert dt3 == datetime.datetime(2024,
+                                    3,
+                                    10,
+                                    13,
+                                    45,
+                                    30,
+                                    tzinfo=datetime.timezone.utc)
 
     # Scenario 4: Valid 'created' string
     entry4 = MockFeedEntry(
-        title="Entry 4", link="http://example.com/4", created="2024-04-05 08:00:00"
-    )  # Assuming naive is UTC
+        title="Entry 4",
+        link="http://example.com/4",
+        created="2024-04-05 08:00:00")  # Assuming naive is UTC
     dt4 = feed_service.parse_published_time(entry4)
     assert dt4 is not None
-    assert dt4 == datetime.datetime(
-        2024, 4, 5, 8, 0, 0, tzinfo=datetime.timezone.utc)
+    assert dt4 == datetime.datetime(2024,
+                                    4,
+                                    5,
+                                    8,
+                                    0,
+                                    0,
+                                    tzinfo=datetime.timezone.utc)
 
     # Scenario 5: Valid 'dc:date' string (from RDF feeds)
     entry5 = MockFeedEntry(
@@ -161,8 +176,13 @@ def test_parse_published_time():
     )
     dt5 = feed_service.parse_published_time(entry5)
     assert dt5 is not None
-    assert dt5 == datetime.datetime(
-        2024, 5, 1, 18, 0, 0, tzinfo=datetime.timezone.utc)
+    assert dt5 == datetime.datetime(2024,
+                                    5,
+                                    1,
+                                    18,
+                                    0,
+                                    0,
+                                    tzinfo=datetime.timezone.utc)
 
     # Scenario 6: No date information - should fallback to current time
     entry6 = MockFeedEntry(title="Entry 6", link="http://example.com/6")
@@ -174,9 +194,9 @@ def test_parse_published_time():
     assert dt6.tzinfo == datetime.timezone.utc
 
     # Scenario 7: Invalid date string
-    entry7 = MockFeedEntry(
-        title="Entry 7", link="http://example.com/7", published="not a date"
-    )
+    entry7 = MockFeedEntry(title="Entry 7",
+                           link="http://example.com/7",
+                           published="not a date")
     before_fallback_invalid = datetime.datetime.now(datetime.timezone.utc)
     dt7 = feed_service.parse_published_time(entry7)
     after_fallback_invalid = datetime.datetime.now(datetime.timezone.utc)
@@ -208,9 +228,8 @@ def test_kernel_org_scenario(db_setup, mocker):  # pylint: disable=unused-argume
         guid="kernel.guid.3",
         published="2024-01-03T10:00:00Z",
     )
-    mock_feed_data = MockParsedFeed(
-        feed_title="Kernel Updates", entries=[entry1, entry2, entry3]
-    )
+    mock_feed_data = MockParsedFeed(feed_title="Kernel Updates",
+                                    entries=[entry1, entry2, entry3])
     mocker.patch("backend.feed_service.feedparser.parse",
                  return_value=mock_feed_data)
 
@@ -218,9 +237,9 @@ def test_kernel_org_scenario(db_setup, mocker):  # pylint: disable=unused-argume
     tab = Tab(name="Tech", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(
-        name="Kernel Org Feed", url="http://dummy.kernel.org/feed", tab_id=tab.id
-    )
+    feed_obj = Feed(name="Kernel Org Feed",
+                    url="http://dummy.kernel.org/feed",
+                    tab_id=tab.id)
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -229,8 +248,7 @@ def test_kernel_org_scenario(db_setup, mocker):  # pylint: disable=unused-argume
         feed_obj, mock_feed_data)
 
     assert new_items_count == 3, (
-        "Should add 3 items. GUID uniqueness should override shared links."
-    )
+        "Should add 3 items. GUID uniqueness should override shared links.")
 
     items_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
     assert len(items_in_db) == 3
@@ -261,17 +279,17 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):  # pylint: disabl
         published="2024-01-03T10:00:00Z",
     )
 
-    mock_feed_data = MockParsedFeed(
-        feed_title="HN Mock Feed", entries=[entry1, entry2, entry3]
-    )
+    mock_feed_data = MockParsedFeed(feed_title="HN Mock Feed",
+                                    entries=[entry1, entry2, entry3])
     mocker.patch("backend.feed_service.feedparser.parse",
                  return_value=mock_feed_data)
 
     tab = Tab(name="News", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(
-        name="HN Feed", url="http://dummy.hn.org/feed", tab_id=tab.id)
+    feed_obj = Feed(name="HN Feed",
+                    url="http://dummy.hn.org/feed",
+                    tab_id=tab.id)
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -280,10 +298,8 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):  # pylint: disabl
     assert new_items_count == 3
 
     # Sort items in DB by link for deterministic assertions
-    items_in_db = (
-        FeedItem.query.filter_by(
-            feed_id=feed_obj.id).order_by(FeedItem.link).all()
-    )
+    items_in_db = (FeedItem.query.filter_by(feed_id=feed_obj.id).order_by(
+        FeedItem.link).all())
     assert len(items_in_db) == 3
 
     # Items where guid was same as link should have the link in db_guid
@@ -313,18 +329,17 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: dis
         published="2024-01-01T10:05:00Z",
     )  # Link-as-ID, same link
 
-    mock_feed_data = MockParsedFeed(
-        feed_title="Duplicate Link Feed", entries=[entry1, entry2]
-    )
+    mock_feed_data = MockParsedFeed(feed_title="Duplicate Link Feed",
+                                    entries=[entry1, entry2])
     mocker.patch("backend.feed_service.feedparser.parse",
                  return_value=mock_feed_data)
 
     tab = Tab(name="General", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(
-        name="Test Feed DupLinks", url="http://dummy.duplinks.org/feed", tab_id=tab.id
-    )
+    feed_obj = Feed(name="Test Feed DupLinks",
+                    url="http://dummy.duplinks.org/feed",
+                    tab_id=tab.id)
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -332,15 +347,13 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: dis
     new_items_count1 = feed_service.process_feed_entries(
         feed_obj, mock_feed_data)
     assert new_items_count1 == 1, (
-        "Should only add one item due to link deduplication in batch"
-    )
+        "Should only add one item due to link deduplication in batch")
 
     item_in_db = FeedItem.query.filter_by(feed_id=feed_obj.id).one()
     # Now that we sort newest-first, Story A Duplicate wins
     assert item_in_db.title == "Story A Duplicate"
-    assert (
-        item_in_db.guid == "http://example.com/story"
-    )  # Stored as link because guid was same as link
+    assert (item_in_db.guid == "http://example.com/story"
+            )  # Stored as link because guid was same as link
 
     # Simulate fetching again - should not add any new items
     # The existing item has link "http://example.com/story" and guid "http://example.com/story".
@@ -349,8 +362,7 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: dis
     new_items_count2 = feed_service.process_feed_entries(
         feed_obj, mock_feed_data)
     assert new_items_count2 == 0, (
-        "Should not add any items on second fetch due to existing link"
-    )
+        "Should not add any items on second fetch due to existing link")
     assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 1
 
 
@@ -360,7 +372,8 @@ def test_existing_item_link_update_with_same_guid(db_setup, mocker):  # pylint: 
     db.session.add(tab)
     db.session.commit()
     feed_obj = Feed(name="Update Feed",
-                    url="http://update.com/rss", tab_id=tab.id)
+                    url="http://update.com/rss",
+                    tab_id=tab.id)
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -417,9 +430,8 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):  # p
         guid="http://feed1.com/item2",
         published="2024-01-01T11:00:00Z",
     )  # Link-as-ID
-    mock_feed1_data = MockParsedFeed(
-        feed_title="Feed 1", entries=[entry_f1_1, entry_f1_2]
-    )
+    mock_feed1_data = MockParsedFeed(feed_title="Feed 1",
+                                     entries=[entry_f1_1, entry_f1_2])
 
     # Feed 2
     entry_f2_1 = MockFeedEntry(
@@ -442,8 +454,7 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):  # p
     )  # Link-as-ID, same link as F1S2
     # but different feed.
     mock_feed2_data = MockParsedFeed(
-        feed_title="Feed 2", entries=[entry_f2_1, entry_f2_2, entry_f2_3]
-    )
+        feed_title="Feed 2", entries=[entry_f2_1, entry_f2_2, entry_f2_3])
 
     m_parse = mocker.patch("backend.feed_service.feedparser.parse")
 
@@ -462,11 +473,8 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):  # p
     assert count1 == 2
 
     # Assert using set or sorted list for order-independence
-    f1_items = (
-        FeedItem.query.filter_by(feed_id=feed1_obj.id)
-        .order_by(FeedItem.published_time)
-        .all()
-    )
+    f1_items = (FeedItem.query.filter_by(feed_id=feed1_obj.id).order_by(
+        FeedItem.published_time).all())
     assert f1_items[0].guid == "global.guid.1"
     assert f1_items[1].guid == "http://feed1.com/item2"
 
@@ -483,11 +491,8 @@ def test_per_feed_guid_uniqueness_and_null_guid_behavior(db_setup, mocker):  # p
     )
 
     # Check items in Feed 2
-    f2_items = (
-        FeedItem.query.filter_by(feed_id=feed2_obj.id)
-        .order_by(FeedItem.published_time)
-        .all()
-    )
+    f2_items = (FeedItem.query.filter_by(feed_id=feed2_obj.id).order_by(
+        FeedItem.published_time).all())
     assert len(f2_items) == 3
 
     # entry_f2_1
@@ -512,13 +517,12 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: d
     db.session.add(tab)
     db.session.commit()
 
-    feed_obj = Feed(
-        name="TestTimestampFeed", url="http://dummy.timestamp/rss", tab_id=tab.id
-    )
+    feed_obj = Feed(name="TestTimestampFeed",
+                    url="http://dummy.timestamp/rss",
+                    tab_id=tab.id)
     # Create initial_time as naive UTC to match DB retrieval behavior
     initial_time_aware = datetime.datetime.now(
-        datetime.timezone.utc
-    ) - datetime.timedelta(days=1)
+        datetime.timezone.utc) - datetime.timedelta(days=1)
     initial_time_naive = initial_time_aware.replace(tzinfo=None)
 
     # Mock socket.getaddrinfo is handled by mock_dns fixture
@@ -555,8 +559,7 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: d
     db.session.refresh(feed_obj)  # Reload from DB
     # feed_obj.last_updated_time is naive (from DB), initial_time_naive is naive
     assert feed_obj.last_updated_time > initial_time_naive, (
-        "last_updated_time should update for empty feed"
-    )
+        "last_updated_time should update for empty feed")
 
     # Scenario 2: Fetch successful, entries exist, but they are all duplicates (0 new items)
     entry_old = MockFeedEntry(
@@ -573,29 +576,24 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: d
             link=entry_old.link,
             guid=entry_old.id,
             published_time=feed_service.parse_published_time(entry_old),
-        )
-    )  # Changed entry_old.guid to entry_old.id
+        ))  # Changed entry_old.guid to entry_old.id
     db.session.commit()
 
     time_before_second_update_aware = datetime.datetime.now(
         datetime.timezone.utc)
     time_before_second_update_naive = time_before_second_update_aware.replace(
-        tzinfo=None
-    )
+        tzinfo=None)
 
     # Set last_updated_time to an earlier point (use aware for consistency with how service sets it)
     feed_obj.last_updated_time = time_before_second_update_aware - datetime.timedelta(
-        minutes=10
-    )
+        minutes=10)
     db.session.commit()
     db.session.refresh(feed_obj)  # Ensure it's read back as naive
 
-    mock_duplicate_feed = MockParsedFeed(
-        feed_title="Duplicate Feed", entries=[entry_old]
-    )
-    mocker.patch(
-        "backend.feed_service.feedparser.parse", return_value=mock_duplicate_feed
-    )
+    mock_duplicate_feed = MockParsedFeed(feed_title="Duplicate Feed",
+                                         entries=[entry_old])
+    mocker.patch("backend.feed_service.feedparser.parse",
+                 return_value=mock_duplicate_feed)
 
     # Re-mock urlopen for the second call (not strictly needed if same mock used, but good practice)
     mock_response.read.return_value = b"<rss>content</rss>"
@@ -605,8 +603,7 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: d
     assert new_items == 0
     db.session.refresh(feed_obj)
     assert feed_obj.last_updated_time > time_before_second_update_naive, (
-        "last_updated_time should update even if 0 new items"
-    )
+        "last_updated_time should update even if 0 new items")
 
 
 def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disable=unused-argument
@@ -616,8 +613,7 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disa
     # Mock feedparser.parse to return some basic feeds
     # Mock feedparser.parse output objects
     mock_feed_data1 = MockParsedFeed(
-        "Feed A", [MockFeedEntry("A1", "http://a.com/1", "gA1")]
-    )
+        "Feed A", [MockFeedEntry("A1", "http://a.com/1", "gA1")])
     mock_feed_data2 = MockParsedFeed(
         "Feed B",
         [
@@ -669,9 +665,9 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # py
     db.session.add(tab)
     db.session.commit()
 
-    feed_obj = Feed(
-        name="Fallback Test Feed", url="http://fallback.com/rss", tab_id=tab.id
-    )
+    feed_obj = Feed(name="Fallback Test Feed",
+                    url="http://fallback.com/rss",
+                    tab_id=tab.id)
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -688,15 +684,14 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # py
         guid="fb-guid2",
         published="2024-03-02T10:00:00Z",
     )
-    mock_feed_data = MockParsedFeed(
-        feed_title="Fallback Data", entries=[entry1, entry2]
-    )
+    mock_feed_data = MockParsedFeed(feed_title="Fallback Data",
+                                    entries=[entry1, entry2])
 
     # Spy on loggers
     warning_spy = mocker.spy(feed_service.logger, "warning")
     error_spy = mocker.spy(
-        feed_service.logger, "error"
-    )  # To check no individual errors for valid items
+        feed_service.logger,
+        "error")  # To check no individual errors for valid items
 
     # Mock db.session.commit: first call (batch) fails, subsequent calls (individual) succeed.
     # Handle commit for updating feed's last_updated_time as well.
@@ -710,9 +705,8 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # py
     # 5. Individual insert item 2 (succeeds)
     mock_commit.side_effect = [
         None,  # Commit for metadata/existing items (NEW)
-        IntegrityError(
-            "Mocked Batch IntegrityError", params=None, orig=None
-        ),  # Batch item insert fails
+        IntegrityError("Mocked Batch IntegrityError", params=None,
+                       orig=None),  # Batch item insert fails
         None,  # Commit for feed.last_updated_time
         None,  # Individual commit for item 1
         None,  # Individual commit for item 2
@@ -748,11 +742,9 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # py
     # Check that there are NO "Failed to individually add item" errors for these valid items
     individual_error_found = any(
         "Failed to individually add item" in call.args[0]
-        for call in error_spy.call_args_list
-    )
+        for call in error_spy.call_args_list)
     assert not individual_error_found, (
-        "Should not log errors for individually added valid items"
-    )
+        "Should not log errors for individually added valid items")
 
 
 # Keep existing test_update_all_feeds, but rename it to avoid clash if it was meant to be different
@@ -762,8 +754,8 @@ def test_original_update_all_feeds_empty_db():
     logger.info("Testing update_all_feeds() on an empty DB")
 
     feeds_updated, new_items, _ = feed_service.update_all_feeds()
-    logger.info("Updated %s feeds, added %s new items",
-                feeds_updated, new_items)
+    logger.info("Updated %s feeds, added %s new items", feeds_updated,
+                new_items)
 
     assert feeds_updated == 0
     assert new_items == 0
@@ -779,9 +771,9 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):  # pylint: disa
     db.session.add(tab)
     db.session.commit()
 
-    feed_obj = Feed(
-        name="Eviction Test Feed", url="http://eviction.com/rss", tab_id=tab.id
-    )
+    feed_obj = Feed(name="Eviction Test Feed",
+                    url="http://eviction.com/rss",
+                    tab_id=tab.id)
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -789,8 +781,8 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):  # pylint: disa
     for i in range(110):
         # Stagger published times to have a clear order
         pub_time = datetime.datetime(
-            2024, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
-        ) + datetime.timedelta(minutes=i)
+            2024, 1, 1, 0, 0, 0,
+            tzinfo=datetime.timezone.utc) + datetime.timedelta(minutes=i)
         item = FeedItem(
             feed_id=feed_obj.id,
             title=f"Old Item {i}",
@@ -801,26 +793,24 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):  # pylint: disa
         db.session.add(item)
     db.session.commit()
 
-    assert db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).count() == 110, (
-        "Pre-condition: Feed should have 110 items"
-    )
+    assert db.session.query(FeedItem).filter_by(
+        feed_id=feed_obj.id).count() == 110, (
+            "Pre-condition: Feed should have 110 items")
 
     # 2. Prepare a new feed fetch that adds 5 more items
     new_entries = []
     for i in range(5):
-        pub_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
-            minutes=i
-        )
+        pub_time = datetime.datetime.now(
+            datetime.timezone.utc) + datetime.timedelta(minutes=i)
         new_entries.append(
             MockFeedEntry(
                 title=f"New Item {i}",
                 link=f"http://eviction.com/new{i}",
                 guid=f"new-guid{i}",
                 published=pub_time.isoformat(),
-            )
-        )
-    mock_feed_data = MockParsedFeed(
-        feed_title="Eviction Data", entries=new_entries)
+            ))
+    mock_feed_data = MockParsedFeed(feed_title="Eviction Data",
+                                    entries=new_entries)
 
     # 3. Call process_feed_entries, which should add new items AND trigger eviction
     new_items_count = feed_service.process_feed_entries(
@@ -829,39 +819,30 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):  # pylint: disa
     assert new_items_count == 5, "Should add the 5 new items"
 
     # 4. Verify the total number of items is now back down to the limit (100)
-    final_item_count = db.session.query(
-        FeedItem).filter_by(feed_id=feed_obj.id).count()
+    final_item_count = db.session.query(FeedItem).filter_by(
+        feed_id=feed_obj.id).count()
     assert final_item_count == 100, "Feed should have exactly 100 items after eviction"
 
     # 5. Verify that the items that remain are the newest ones
-    oldest_remaining_item = (
-        db.session.query(FeedItem)
-        .filter_by(feed_id=feed_obj.id)
-        .order_by(FeedItem.published_time.asc())
-        .first()
-    )
-    newest_remaining_item = (
-        db.session.query(FeedItem)
-        .filter_by(feed_id=feed_obj.id)
-        .order_by(FeedItem.published_time.desc())
-        .first()
-    )
+    oldest_remaining_item = (db.session.query(FeedItem).filter_by(
+        feed_id=feed_obj.id).order_by(FeedItem.published_time.asc()).first())
+    newest_remaining_item = (db.session.query(FeedItem).filter_by(
+        feed_id=feed_obj.id).order_by(FeedItem.published_time.desc()).first())
 
     # Check that some old items remain
     assert "Old Item" in oldest_remaining_item.title
-    assert (
-        "New Item" in newest_remaining_item.title
-    )  # Check that the new items are present
+    assert ("New Item" in newest_remaining_item.title
+            )  # Check that the new items are present
 
     # The titles of the first 15 old items (0-14) should have been deleted (110 + 5 - 100 = 15)
     deleted_item_titles = {f"Old Item {i}" for i in range(15)}
     remaining_titles = {
         item.title
-        for item in db.session.query(FeedItem).filter_by(feed_id=feed_obj.id).all()
+        for item in db.session.query(FeedItem).filter_by(
+            feed_id=feed_obj.id).all()
     }
     assert not deleted_item_titles.intersection(remaining_titles), (
-        "The oldest 15 items should have been deleted"
-    )
+        "The oldest 15 items should have been deleted")
 
 
 @pytest.mark.parametrize(
@@ -897,9 +878,8 @@ def test_fetch_feed_toctou_prevention_http(mocker):
     # 1. Mock DNS resolution to return a safe IP
     mock_getaddrinfo = mocker.patch("backend.feed_service.socket.getaddrinfo")
     safe_ip = "93.184.216.34"  # example.com
-    mock_getaddrinfo.return_value = [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (safe_ip, 80))
-    ]
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6,
+                                      "", (safe_ip, 80))]
 
     # 2. Mock build_opener().open (HTTP uses build_opener now)
     mock_build_opener = mocker.patch(
@@ -908,8 +888,7 @@ def test_fetch_feed_toctou_prevention_http(mocker):
 
     mock_response = MagicMock()
     mock_response.read.return_value = (
-        b"<rss><channel><title>Test</title></channel></rss>"
-    )
+        b"<rss><channel><title>Test</title></channel></rss>")
     mock_response.__enter__.return_value = mock_response  # Context manager support
     mock_open.return_value = mock_response
 
@@ -927,12 +906,11 @@ def test_fetch_feed_toctou_prevention_http(mocker):
 
     # For HTTP, we now use SafeHTTPHandler which uses the IP internally, so the URL remains the same
     assert req_obj.full_url == url
-    assert (
-        req_obj.get_header("Host") is None
-    )  # Host header is not manually set if URL is not rewritten
+    assert (req_obj.get_header("Host")
+            is None)  # Host header is not manually set if URL is not rewritten
 
     # Verify SafeHTTPHandler was used
     args, _ = mock_build_opener.call_args
-    has_safe_handler = any(isinstance(
-        h, feed_service.SafeHTTPHandler) for h in args)
+    has_safe_handler = any(
+        isinstance(h, feed_service.SafeHTTPHandler) for h in args)
     assert has_safe_handler, "SafeHTTPHandler should be used for HTTP requests"
