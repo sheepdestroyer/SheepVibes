@@ -32,21 +32,14 @@ def upgrade():
                              type_="unique",
                              batch_op=batch_op)
 
-                # We need to drop the old global unique constraint on 'guid'.
-
-                # Since it was unnamed in the initial migration, SQLite/Alembic might struggle.
-
-                # In batch mode, we explicitly omit it from the new table definition
-
-                # by calling drop_constraint with columns=['guid'].
-
-                try:
-
-                    batch_op.drop_constraint(None, type_="unique")
-
-                except Exception as e:
-
-                    logger.warning("Could not drop unnamed unique constraint on guid: %s", e)
+        # We need to drop the old global unique constraint on 'guid'.
+        # Since it was unnamed in the initial migration, SQLite/Alembic might struggle.
+        # In batch mode, we explicitly omit it from the new table definition
+        # by calling drop_constraint with columns=['guid'].
+        try:
+            batch_op.drop_constraint(None, type_="unique")
+        except Exception as e:
+            logger.warning("Could not drop unnamed unique constraint on guid: %s", e)
 
         batch_op.create_unique_constraint("uq_feed_items_feed_id_guid",
                                           ["feed_id", "guid"])
