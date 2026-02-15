@@ -52,7 +52,7 @@ from .sse import announcer
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element
+    from xml.etree.ElementTree import Element  # skipcq: BAN-B405
 
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
 OpmlStackItem = tuple[list["Element"], int, str]
