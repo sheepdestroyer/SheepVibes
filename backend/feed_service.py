@@ -15,8 +15,8 @@ import ssl
 import urllib.request
 from dataclasses import dataclass
 from datetime import timezone  # Specifically import timezone
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin, urlparse
-from xml.etree.ElementTree import Element
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
@@ -51,8 +51,11 @@ from .sse import announcer
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import Element
+
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
-OpmlStackItem = tuple[list[Element], int, str]
+OpmlStackItem = tuple[list["Element"], int, str]
 
 
 @dataclass
