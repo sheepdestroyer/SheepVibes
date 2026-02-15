@@ -241,7 +241,7 @@ def test_opml_import_skips_duplicate_feed_urls(client, mocker):
         feeds_by_url = (Feed.query.with_entities(Feed.url, func.count(
             Feed.id)).group_by(Feed.url).all())
 
-        counts = {url: count for url, count in feeds_by_url}
+        counts = dict(feeds_by_url)
         assert counts["https://example.com/existing.xml"] == 1
         assert counts["https://example.com/new.xml"] == 1
 
