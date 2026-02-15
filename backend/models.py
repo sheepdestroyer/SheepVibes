@@ -109,7 +109,8 @@ class Feed(db.Model):
             # Calculate unread count for this specific feed
             unread_count = (db.session.query(db.func.count(
                 FeedItem.id)).filter(FeedItem.feed_id == self.id,
-                                     FeedItem.is_read.is_(False)).scalar() or 0)
+                                     FeedItem.is_read.is_(False)).scalar()
+                or 0)
 
         return {
             "id":

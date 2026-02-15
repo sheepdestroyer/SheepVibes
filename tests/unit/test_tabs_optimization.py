@@ -62,6 +62,5 @@ def test_get_tabs_query_count_constant(client):
 
     # Assert constant queries
     # It should be exactly the same, but <= is safe for optimization check
-    assert count_n <= count_1, (
-        f"Query count increased from {count_1} to {count_n}!")
+    assert count_n <= count_1, f"Query count increased from {count_1} to {count_n}!"
     assert count_n <= 2, f"Expected <= 2 queries, got {count_n}"
