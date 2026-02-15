@@ -485,8 +485,7 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                 progress_val = 100
 
             # Only announce if significant progress or first/last
-            should_announce = i == 0 or i == total_to_fetch - 1 or (i +
-                                                                    1) % 5 == 0
+            should_announce = i == 0 or i == total_to_fetch - 1 or (i + 1) % 5 == 0
 
             if should_announce:
                 event_data = {
@@ -626,19 +625,13 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     skipped_final_count = skipped_count_wrapper[0]
 
     result = {
-        "message":
-        f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
+        "message": f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
         f"Tab: {top_level_target_tab_name}.",
-        "imported_count":
-        imported_final_count,
-        "skipped_count":
-        skipped_final_count,
-        "tab_id":
-        top_level_target_tab_id,
-        "tab_name":
-        top_level_target_tab_name,
-        "affected_tab_ids":
-        list(affected_tab_ids_set),
+        "imported_count": imported_final_count,
+        "skipped_count": skipped_final_count,
+        "tab_id": top_level_target_tab_id,
+        "tab_name": top_level_target_tab_name,
+        "affected_tab_ids": list(affected_tab_ids_set),
     }
 
     # Final 'complete' message for SSE
@@ -1454,11 +1447,18 @@ def _enforce_feed_limit(feed_db_obj):
     # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
     # Use a subquery to avoid loading all IDs into memory.
-    subquery = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+    # Note: nullslast() is required to ensure consistent behavior (treating NULLs as oldest)
+    # across PostgreSQL (where DESC puts NULLs first) and SQLite (where DESC puts NULLs last).
+    # While it might impact index usage in SQLite, correctness is prioritized.
+    subquery = (
+        db.session.query(FeedItem.id)
+        .filter_by(feed_id=feed_db_obj.id)
+        .order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
-    ).offset(MAX_ITEMS_PER_FEED))
+        )
+        .offset(MAX_ITEMS_PER_FEED)
+    )
 
     deleted_count = (db.session.query(FeedItem).filter(
         FeedItem.id.in_(subquery)).delete(synchronize_session=False))
