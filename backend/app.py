@@ -212,9 +212,14 @@ CSP_POLICY = ("default-src 'self'; "
               "form-action 'self'; "
               "frame-ancestors 'self'")
 
-PERMISSIONS_POLICY = (
-    "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
-)
+PERMISSIONS_POLICY = ", ".join([
+    "microphone=()",
+    "camera=()",
+    "geolocation=()",
+    "payment=()",
+    "usb=()",
+    "fullscreen=()",
+])
 
 
 @app.after_request
