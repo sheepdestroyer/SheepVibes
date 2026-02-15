@@ -7,6 +7,7 @@ from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_migrate import Migrate
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .blueprints.feeds import feeds_bp, items_bp
 from .blueprints.opml import autosave_opml, opml_bp
@@ -30,6 +31,11 @@ logger = logging.getLogger("sheepvibes")
 
 # Initialize Flask application
 app = Flask(__name__)
+# Apply ProxyFix to handle headers from reverse proxies (e.g. X-Forwarded-Proto) correctly
+# This ensures request.is_secure is accurate for HSTS.
+app.wsgi_app = ProxyFix(
+    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+)
 app.config["PROJECT_ROOT"] = os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".."))
 
