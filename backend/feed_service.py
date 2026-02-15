@@ -1452,38 +1452,29 @@ def _enforce_feed_limit(feed_db_obj):
     """
     # We want to keep the newest MAX_ITEMS_PER_FEED items.
     # Anything beyond that (ordered by newest first) should be evicted.
-        # We want to keep the newest MAX_ITEMS_PER_FEED items.
+    # We want to keep the newest MAX_ITEMS_PER_FEED items.
     # We want to keep the newest MAX_ITEMS_PER_FEED items.
     # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
-    
+
     # Fetch IDs to evict first. This avoids "subquery in DELETE" issues (which can
     # lock tables in SQLite) and improves compatibility.
     # Note: nullslast() is used to ensure consistent ordering (NULLs as oldest).
     # .limit(-1) is required for SQLite to support OFFSET without an explicit limit.
-    ids_to_evict_rows = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
-        .order_by(
+    ids_to_evict_rows = (db.session.query(
+        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
-        )
-        .limit(-1)
-        .offset(MAX_ITEMS_PER_FEED)
-        .all()
-    )
+    ).limit(-1).offset(MAX_ITEMS_PER_FEED).all())
 
     if not ids_to_evict_rows:
         return
 
     ids_to_evict = [r.id for r in ids_to_evict_rows]
 
-    deleted_count = (
-        db.session.query(FeedItem)
-        .filter(FeedItem.id.in_(ids_to_evict))
-        .delete(synchronize_session=False)
-    )
-    
+    deleted_count = (db.session.query(FeedItem).filter(
+        FeedItem.id.in_(ids_to_evict)).delete(synchronize_session=False))
+
     if deleted_count > 0:
         logger.info(
             "Evicted %s oldest items from feed '%s'.",
