@@ -156,6 +156,11 @@ def test_opml_import_skips_skipped_folder_types(client, mocker):
         skipped_tab = Tab.query.filter_by(name="Skipped Folder").first()
         assert skipped_tab is None or not skipped_tab.feeds
 
+        # Assert that the feed in the skipped folder was not created
+        skipped_feed = Feed.query.filter_by(
+            url="https://example.com/should-not-import.xml").first()
+        assert skipped_feed is None
+
 
 def test_opml_import_skips_invalid_feed_urls(client, mocker):
     """Test that feeds with invalid URLs are skipped."""
