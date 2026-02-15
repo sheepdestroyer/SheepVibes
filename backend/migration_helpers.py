@@ -64,9 +64,7 @@ def safe_drop_constraint(table_name,
         )
         return
 
-    if not constraint_exists(table_name,
-                             constraint_name,
-                             type_,
+    if not constraint_exists(table_name, constraint_name, type_,
                              schema=schema):
         logger.info("Constraint %s not found on %s, skipping drop.",
                     constraint_name, table_name)
