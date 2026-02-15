@@ -1,7 +1,25 @@
+from contextlib import contextmanager
+
 from sqlalchemy import event
 
 from backend.app import db
 from backend.models import Feed, FeedItem, Tab
+
+
+@contextmanager
+def count_queries():
+    """Context manager to count SQL queries executed within the block."""
+    query_count = [0]
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context,
+                              executemany):
+        query_count[0] += 1
+
+    event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield query_count
+    finally:
+        event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
 
 
 def test_get_tabs_query_count_constant(client):
@@ -35,20 +53,10 @@ def test_get_tabs_query_count_constant(client):
 
         cache.clear()
 
-        query_count = [0]
-
-        def before_cursor_execute(conn, cursor, statement, parameters, context,
-                                  executemany):
-            query_count[0] += 1
-
-        event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
-        try:
+        with count_queries() as qc:
             response = client.get("/api/tabs")
             assert response.status_code == 200
-        finally:
-            event.remove(db.engine, "before_cursor_execute",
-                         before_cursor_execute)
-        return query_count[0]
+        return qc[0]
 
     # Phase 1: 1 Tab
     create_tabs(0, 1)
@@ -91,25 +99,15 @@ def test_tab_to_dict_optimization(client):
     # resulting from expire_on_commit=True (default)
     db.session.refresh(tab)
 
-    # Count SQL queries executed during to_dict with an unread_count override
-    query_count = [0]
-
-    def before_cursor_execute(conn, cursor, statement, parameters, context,
-                              executemany):
-        query_count[0] += 1
-
-    event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
-    try:
+    with count_queries() as qc:
         result = tab.to_dict(unread_count=123)
-    finally:
-        event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
 
     # The override should be passed through to the serialized dict
     assert result["unread_count"] == 123
 
     # to_dict should not need to hit the DB just to compute unread_count.
     # It accesses self.id, self.name, self.order which are already loaded.
-    assert query_count[0] == 0
+    assert qc[0] == 0
 
 
 def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
@@ -144,21 +142,11 @@ def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
 
     db.session.refresh(tab)
 
-    query_count = [0]
-
-    def before_cursor_execute(conn, cursor, statement, parameters, context,
-                              executemany):
-        query_count[0] += 1
-
-    event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
-    try:
+    with count_queries() as qc:
         result = tab.to_dict()
-    finally:
-        event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
 
     assert result["unread_count"] == 1
-    assert query_count[0] == 1, (
-        f"Expected a single unread aggregate query, got {query_count[0]}")
+    assert qc[0] == 1, f"Expected a single unread aggregate query, got {qc[0]}"
 
 
 def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
@@ -193,18 +181,8 @@ def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
 
     db.session.refresh(tab)
 
-    query_count = [0]
-
-    def before_cursor_execute(conn, cursor, statement, parameters, context,
-                              executemany):
-        query_count[0] += 1
-
-    event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
-    try:
+    with count_queries() as qc:
         result = tab.to_dict()
-    finally:
-        event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
 
     assert result["unread_count"] == 0
-    assert query_count[0] <= 1, (
-        f"Expected at most one unread aggregate query, got {query_count[0]}")
+    assert qc[0] <= 1, f"Expected at most one unread aggregate query, got {qc[0]}"
