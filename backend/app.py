@@ -283,12 +283,10 @@ def add_security_headers(response):
 def set_csrf_cookie(response):
     """Sets the CSRF token cookie for the frontend."""
     if app.config.get("WTF_CSRF_ENABLED", True):
-        response.set_cookie(
-            "csrf_token",
-            generate_csrf(),
-            httponly=False,
-            samesite="Strict"
-        )
+        response.set_cookie("csrf_token",
+                            generate_csrf(),
+                            httponly=False,
+                            samesite="Strict")
     return response
 
 

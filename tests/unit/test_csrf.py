@@ -1,5 +1,7 @@
 import pytest
+
 from backend.app import app, db
+
 
 @pytest.fixture
 def csrf_client():
@@ -50,7 +52,7 @@ def test_csrf_valid_token(csrf_client):
     response = csrf_client.post(
         "/api/tabs",
         json={"name": "Valid Token Tab"},
-        headers={"X-CSRFToken": csrf_token}
+        headers={"X-CSRFToken": csrf_token},
     )
     assert response.status_code == 201
     assert response.json["name"] == "Valid Token Tab"
@@ -64,7 +66,7 @@ def test_csrf_invalid_token(csrf_client):
     response = csrf_client.post(
         "/api/tabs",
         json={"name": "Invalid Token Tab"},
-        headers={"X-CSRFToken": "fake-token"}
+        headers={"X-CSRFToken": "fake-token"},
     )
     assert response.status_code == 400
     assert "The CSRF token is invalid" in response.get_data(as_text=True)
