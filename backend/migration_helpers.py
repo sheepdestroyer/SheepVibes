@@ -22,21 +22,22 @@ def constraint_exists(table_name,
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
-    if type_ == "unique":
-        constraints = inspector.get_unique_constraints(table_name,
-                                                       schema=schema)
-    elif type_ == "foreignkey":
-        constraints = inspector.get_foreign_keys(table_name, schema=schema)
-    elif type_ == "check":
-        constraints = inspector.get_check_constraints(table_name,
-                                                      schema=schema)
-    elif type_ == "primary":
+    if type_ == "primary":
         # Primary key is usually one per table, but return format is dict
         pk = inspector.get_pk_constraint(table_name, schema=schema)
         return pk and pk.get("name") == constraint_name
-    else:
+
+    inspector_methods = {
+        "unique": inspector.get_unique_constraints,
+        "foreignkey": inspector.get_foreign_keys,
+        "check": inspector.get_check_constraints,
+    }
+    
+    getter = inspector_methods.get(type_)
+    if not getter:
         raise ValueError(f"Unsupported constraint type: {type_}")
 
+    constraints = getter(table_name, schema=schema)
     for c in constraints:
         if c.get("name") == constraint_name:
             return True
@@ -46,6 +47,7 @@ def constraint_exists(table_name,
 def safe_drop_constraint(table_name,
                          constraint_name,
                          type_="unique",
+                         batch_op=None,
                          **kwargs):
     """
     Drops a constraint only if it exists.
@@ -53,6 +55,7 @@ def safe_drop_constraint(table_name,
     :param table_name: The name of the table.
     :param constraint_name: The name of the constraint to drop.
     :param type_: The type of constraint.
+    :param batch_op: Optional existing batch operation context.
     :param kwargs: Additional arguments to pass to op.drop_constraint.
     """
     schema = kwargs.pop("schema", None)
@@ -62,16 +65,19 @@ def safe_drop_constraint(table_name,
             "Attempted to safe_drop_constraint with None name on table %s. Skipping check, letting Alembic handle it (likely will fail if not handled by batch).",
             table_name,
         )
-        # In batch mode, dropping None (unnamed) is sometimes valid if columns are provided,
-        # but safe_drop is mostly for named constraints.
-        # We'll just try it if the user insists, but really this helper is for named constraints.
-        with op.batch_alter_table(table_name, schema=schema) as batch_op:
+        if batch_op:
             batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
+        else:
+            with op.batch_alter_table(table_name, schema=schema) as batch_op_new:
+                batch_op_new.drop_constraint(constraint_name, type_=type_, **kwargs)
         return
 
     if constraint_exists(table_name, constraint_name, type_, schema=schema):
-        with op.batch_alter_table(table_name, schema=schema) as batch_op:
+        if batch_op:
             batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
+        else:
+            with op.batch_alter_table(table_name, schema=schema) as batch_op_new:
+                batch_op_new.drop_constraint(constraint_name, type_=type_, **kwargs)
         logger.info("Dropped constraint %s from %s", constraint_name,
                     table_name)
     else:

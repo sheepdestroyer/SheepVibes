@@ -9,7 +9,7 @@ Create Date: 2026-01-26 02:19:13.414286
 import sqlalchemy as sa
 from alembic import op
 
-from backend.migration_helpers import constraint_exists
+from backend.migration_helpers import safe_drop_constraint
 
 # revision identifiers, used by Alembic.
 revision = "14d8ad95ac2e"
@@ -23,10 +23,7 @@ def upgrade():
 
     with op.batch_alter_table("feed_items", schema=None) as batch_op:
         # Drop the named constraint safely if it exists (handles re-runs or different states)
-        if constraint_exists("feed_items",
-                             "uq_feed_items_guid",
-                             type_="unique"):
-            batch_op.drop_constraint("uq_feed_items_guid", type_="unique")
+        safe_drop_constraint("feed_items", "uq_feed_items_guid", type_="unique", batch_op=batch_op)
 
         # We need to drop the old global unique constraint on 'guid'.
         # Since it was unnamed in the initial migration, SQLite/Alembic might struggle.
