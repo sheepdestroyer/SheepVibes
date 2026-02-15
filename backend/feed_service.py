@@ -1454,21 +1454,14 @@ def _enforce_feed_limit(feed_db_obj):
     # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
     # Use a subquery to avoid loading all IDs into memory.
-    subquery = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
-        .order_by(
+    subquery = (db.session.query(
+        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
-        )
-        .offset(MAX_ITEMS_PER_FEED)
-    )
+    ).offset(MAX_ITEMS_PER_FEED))
 
-    deleted_count = (
-        db.session.query(FeedItem)
-        .filter(FeedItem.id.in_(subquery))
-        .delete(synchronize_session=False)
-    )
+    deleted_count = (db.session.query(FeedItem).filter(
+        FeedItem.id.in_(subquery)).delete(synchronize_session=False))
 
     if deleted_count > 0:
         logger.info(
