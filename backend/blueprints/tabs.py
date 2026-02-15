@@ -31,7 +31,7 @@ def get_tabs():
     # Pre-calculate unread counts for all tabs in a single query to avoid N+1
     unread_counts_query = (db.session.query(Feed.tab_id, func.count(
         FeedItem.id)).join(FeedItem, Feed.id == FeedItem.feed_id).filter(
-            FeedItem.is_read == False).group_by(Feed.tab_id))
+            FeedItem.is_read.is_(False)).group_by(Feed.tab_id))
     unread_counts = dict(unread_counts_query.all())
 
     return jsonify([
@@ -202,7 +202,7 @@ def get_feeds_for_tab(tab_id):
     unread_counts_query = (db.session.query(
         FeedItem.feed_id, func.count(FeedItem.id)).filter(
             FeedItem.feed_id.in_(feed_ids),
-            FeedItem.is_read == False).group_by(FeedItem.feed_id))
+            FeedItem.is_read.is_(False)).group_by(FeedItem.feed_id))
     unread_counts = dict(unread_counts_query.all())
 
     # Query 3: Get the top N items for ALL those feeds in a single, efficient query.
