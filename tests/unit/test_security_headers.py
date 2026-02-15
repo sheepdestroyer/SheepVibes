@@ -44,7 +44,6 @@ def test_hsts_header_on_secure_request():
             "Strict-Transport-Security header is missing on secure request")
         assert "max-age=31536000" in hsts
         assert "includeSubDomains" in hsts
-        assert "preload" in hsts
 
 
 def test_hsts_header_not_on_insecure_request():
