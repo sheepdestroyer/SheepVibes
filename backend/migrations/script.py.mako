@@ -7,6 +7,7 @@ Create Date: ${create_date}
 """
 from alembic import op
 import sqlalchemy as sa
+from backend.migration_helpers import safe_drop_constraint, constraint_exists
 ${imports if imports else ""}
 
 # revision identifiers, used by Alembic.

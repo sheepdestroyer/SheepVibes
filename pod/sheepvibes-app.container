@@ -14,5 +14,7 @@ Environment=FLASK_APP=backend.app
 Environment=PYTHONPATH=/app
 Environment=UPDATE_INTERVAL_MINUTES=15
 Environment=FLASK_RUN_HOST=0.0.0.0
+
+[Service]
 Restart=on-failure
 TimeoutStartSec=180
