@@ -202,6 +202,22 @@ if not app.config.get("TESTING"):
 
 # --- Security Headers ---
 
+CSP_POLICY = (
+    "default-src 'self'; "
+    "img-src * data:; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'self'"
+)
+
+PERMISSIONS_POLICY = (
+    "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
+)
+
 
 @app.after_request
 def add_security_headers(response):
@@ -217,17 +233,10 @@ def add_security_headers(response):
     # TODO(#298): Refactor frontend to remove inline styles and 'unsafe-inline' for better security.
     # connect-src 'self': Allow XHR/WebSockets to same origin.
     # object-src 'none': Block plugins (Flash, Java, etc.).
+    # base-uri 'self': Prevents injection of <base> tag.
+    # form-action 'self': Restricts form submissions to same origin.
     # frame-ancestors 'self': Allow framing only by the same origin (prevents Clickjacking).
-    csp = ("default-src 'self'; "
-           "img-src * data:; "
-           "script-src 'self'; "
-           "style-src 'self' 'unsafe-inline'; "
-           "connect-src 'self'; "
-           "object-src 'none'; "
-           "base-uri 'self'; "
-           "form-action 'self'; "
-           "frame-ancestors 'self'")
-    response.headers["Content-Security-Policy"] = csp
+    response.headers["Content-Security-Policy"] = CSP_POLICY
 
     # X-Content-Type-Options: nosniff
     # Prevents MIME-sniffing.
@@ -242,9 +251,7 @@ def add_security_headers(response):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
     # Permissions-Policy: Disable features not needed by the app for added security.
-    response.headers["Permissions-Policy"] = (
-        "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
-    )
+    response.headers["Permissions-Policy"] = PERMISSIONS_POLICY
 
     # HTTP Strict Transport Security (HSTS)
     # Enforce HTTPS for all future connections to this domain.
