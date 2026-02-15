@@ -333,7 +333,8 @@ def test_opml_import_anonymous_folder_with_feeds(client, mocker):
     </opml>
     """
 
-    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety",
+                 return_value=True)
     mocker.patch("backend.feed_service.fetch_and_update_feed")
     mocker.patch(
         "backend.feed_service.validate_and_resolve_url",
