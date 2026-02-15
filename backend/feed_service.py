@@ -195,6 +195,69 @@ def _get_or_create_nested_tab(folder_name):
     return new_folder_tab.id, new_folder_tab.name
 
 
+def _process_single_outline_node(
+    outline_element,
+    current_tab_id,
+    current_tab_name,
+    stack,
+    all_existing_feed_urls_set,
+    newly_added_feeds_list,
+    imported_count_wrapper,
+    skipped_count_wrapper,
+    affected_tab_ids_set,
+):
+    """Processes a single OPML outline node, creating feeds or pushing folders to stack."""
+    folder_type_attr = outline_element.get("type")
+    title = (outline_element.get("title") or "").strip()
+    text = (outline_element.get("text") or "").strip()
+    element_name = title or text
+
+    xml_url = outline_element.get("xmlUrl")
+    child_outlines = list(outline_element)
+
+    if xml_url:  # It's a feed
+        feed_name = element_name if element_name else xml_url
+        _process_opml_feed_node(
+            xml_url,
+            feed_name,
+            current_tab_id,
+            all_existing_feed_urls_set,
+            newly_added_feeds_list,
+            imported_count_wrapper,
+            skipped_count_wrapper,
+            affected_tab_ids_set,
+        )
+
+    elif (not xml_url and element_name and folder_type_attr
+          and folder_type_attr in SKIPPED_FOLDER_TYPES):
+        logger.info(
+            "OPML import: Skipping folder '%s' and its children (type: %s).",
+            _sanitize_for_log(element_name),
+            _sanitize_for_log(folder_type_attr),
+        )
+        # Skip the entire branch including children for safety.
+        return
+
+    elif not xml_url and element_name and child_outlines:
+        try:
+            nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
+                element_name)
+            # Push children to stack
+            stack.append((list(reversed(child_outlines)), nested_tab_id,
+                          nested_tab_name))
+        except sqlalchemy.exc.SQLAlchemyError:
+            logger.exception(
+                "OPML import: DB error creating tab for folder '%s'. Skipping folder.",
+                _sanitize_for_log(element_name),
+            )
+            return
+    elif not xml_url and not element_name and child_outlines:
+        stack.append((list(reversed(child_outlines)), current_tab_id,
+                      current_tab_name))
+    else:
+        skipped_count_wrapper[0] += 1
+
+
 def _process_opml_outlines_iterative(
     initial_outline_elements,
     top_level_tab_id,
@@ -224,55 +287,17 @@ def _process_opml_outlines_iterative(
                 processed_outline_count, total_outlines,
                 last_announced_percent)
 
-            folder_type_attr = outline_element.get("type")
-            title = (outline_element.get("title") or "").strip()
-            text = (outline_element.get("text") or "").strip()
-            element_name = title or text
-
-            xml_url = outline_element.get("xmlUrl")
-            child_outlines = list(outline_element)
-
-            if xml_url:  # It's a feed
-                feed_name = element_name if element_name else xml_url
-                _process_opml_feed_node(
-                    xml_url,
-                    feed_name,
-                    current_tab_id,
-                    all_existing_feed_urls_set,
-                    newly_added_feeds_list,
-                    imported_count_wrapper,
-                    skipped_count_wrapper,
-                    affected_tab_ids_set,
-                )
-
-            elif (not xml_url and element_name and folder_type_attr
-                  and folder_type_attr in SKIPPED_FOLDER_TYPES):
-                logger.info(
-                    "OPML import: Skipping folder '%s' and its children (type: %s).",
-                    _sanitize_for_log(element_name),
-                    _sanitize_for_log(folder_type_attr),
-                )
-                # Skip the entire branch including children for safety.
-                continue
-
-            elif not xml_url and element_name and child_outlines:
-                try:
-                    nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
-                        element_name)
-                    # Push children to stack
-                    stack.append((list(reversed(child_outlines)),
-                                  nested_tab_id, nested_tab_name))
-                except sqlalchemy.exc.SQLAlchemyError:
-                    logger.exception(
-                        "OPML import: DB error creating tab for folder '%s'. Skipping folder.",
-                        _sanitize_for_log(element_name),
-                    )
-                    continue
-            elif not xml_url and not element_name and child_outlines:
-                stack.append((list(reversed(child_outlines)), current_tab_id,
-                              current_tab_name))
-            else:
-                skipped_count_wrapper[0] += 1
+            _process_single_outline_node(
+                outline_element,
+                current_tab_id,
+                current_tab_name,
+                stack,
+                all_existing_feed_urls_set,
+                newly_added_feeds_list,
+                imported_count_wrapper,
+                skipped_count_wrapper,
+                affected_tab_ids_set,
+            )
 
 
 def _determine_target_tab(requested_tab_id_str):
