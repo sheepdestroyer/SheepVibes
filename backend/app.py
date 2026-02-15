@@ -234,7 +234,8 @@ def add_security_headers(response):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
     # Permissions-Policy: Disable features not needed by the app for added security.
-    response.headers["Permissions-Policy"] = "microphone=(), camera=(), geolocation=()"
+    response.headers[
+        "Permissions-Policy"] = "microphone=(), camera=(), geolocation=()"
 
     return response
 
