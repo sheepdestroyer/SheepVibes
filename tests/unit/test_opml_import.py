@@ -151,6 +151,11 @@ def test_opml_import_skips_skipped_folder_types(client, mocker):
     # The subtree under the skipped folder should be counted as skipped.
     assert result["skipped_count"] >= 1
 
+    with app.app_context():
+        # Assert that the skipped folder did not result in a tab with feeds
+        skipped_tab = Tab.query.filter_by(name="Skipped Folder").first()
+        assert skipped_tab is None or not skipped_tab.feeds
+
 
 def test_opml_import_skips_invalid_feed_urls(client, mocker):
     """Test that feeds with invalid URLs are skipped."""
