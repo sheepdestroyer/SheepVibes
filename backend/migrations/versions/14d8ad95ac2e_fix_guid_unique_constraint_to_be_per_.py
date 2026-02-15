@@ -6,9 +6,10 @@ Create Date: 2026-01-26 02:19:13.414286
 
 """
 
+import logging
+
 import sqlalchemy as sa
 from alembic import op
-import logging
 
 from backend.migration_helpers import safe_drop_constraint
 
@@ -38,7 +39,8 @@ def upgrade():
         try:
             batch_op.drop_constraint(None, type_="unique", columns=["guid"])
         except Exception as e:
-            logger.warning("Could not drop unnamed unique constraint on guid: %s", e)
+            logger.warning(
+                "Could not drop unnamed unique constraint on guid: %s", e)
 
         batch_op.create_unique_constraint("uq_feed_items_feed_id_guid",
                                           ["feed_id", "guid"])
