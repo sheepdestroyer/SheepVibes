@@ -68,10 +68,10 @@ def downgrade():
         # we should safely try to drop both the old ("..._items_...") and the new ("..._item_...") name
         # to make the downgrade robust regardless of which version of the upgrade was run.
         safe_drop_constraint(
-            "feed_items", "uq_feed_item_feed_id_guid", type_=\"unique\", batch_op=batch_op
+            "feed_items", "uq_feed_item_feed_id_guid", type_="unique", batch_op=batch_op
         )
         safe_drop_constraint(
-            "feed_items", "uq_feed_items_feed_id_guid", type_=\"unique\", batch_op=batch_op
+            "feed_items", "uq_feed_items_feed_id_guid", type_="unique", batch_op=batch_op
         )
 
         # Re-create the original simple unique constraint on 'guid' that was removed in the upgrade.
