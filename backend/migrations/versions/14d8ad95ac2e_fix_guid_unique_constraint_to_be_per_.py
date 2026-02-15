@@ -37,12 +37,12 @@ def upgrade():
         # In batch mode, we explicitly omit it from the new table definition
         # by calling drop_constraint with columns=['guid'].
         try:
-            batch_op.drop_constraint(None, type_="unique")
+            batch_op.drop_constraint(None, type_="unique", columns=["guid"])
         except Exception as e:
             logger.warning(
                 "Could not drop unnamed unique constraint on guid: %s", e)
 
-        batch_op.create_unique_constraint("uq_feed_items_feed_id_guid",
+        batch_op.create_unique_constraint("uq_feed_item_feed_id_guid",
                                           ["feed_id", "guid"])
         batch_op.create_index(
             "ix_feed_items_feed_id_published_fetched_time",
@@ -63,6 +63,6 @@ def downgrade():
 
     with op.batch_alter_table("feed_items", schema=None) as batch_op:
         batch_op.drop_index("ix_feed_items_feed_id_published_fetched_time")
-        batch_op.drop_constraint("uq_feed_items_feed_id_guid", type_="unique")
+        batch_op.drop_constraint("uq_feed_item_feed_id_guid", type_="unique")
 
     # ### end Alembic commands ###
