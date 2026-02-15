@@ -38,10 +38,7 @@ def constraint_exists(table_name,
         raise ValueError(f"Unsupported constraint type: {type_}")
 
     constraints = getter(table_name, schema=schema)
-    for c in constraints:
-        if c.get("name") == constraint_name:
-            return True
-    return False
+    return any(c.get("name") == constraint_name for c in constraints)
 
 
 def safe_drop_constraint(table_name,
@@ -65,27 +62,24 @@ def safe_drop_constraint(table_name,
             "Attempted to safe_drop_constraint with None name on table %s. Skipping check, letting Alembic handle it (likely will fail if not handled by batch).",
             table_name,
         )
-        if batch_op:
-            batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
-        else:
-            with op.batch_alter_table(table_name,
-                                      schema=schema) as batch_op_new:
-                batch_op_new.drop_constraint(constraint_name,
-                                             type_=type_,
-                                             **kwargs)
-        return
-
-    if constraint_exists(table_name, constraint_name, type_, schema=schema):
-        if batch_op:
-            batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
-        else:
-            with op.batch_alter_table(table_name,
-                                      schema=schema) as batch_op_new:
-                batch_op_new.drop_constraint(constraint_name,
-                                             type_=type_,
-                                             **kwargs)
-        logger.info("Dropped constraint %s from %s", constraint_name,
-                    table_name)
-    else:
+    elif not constraint_exists(table_name,
+                               constraint_name,
+                               type_,
+                               schema=schema):
         logger.info("Constraint %s not found on %s, skipping drop.",
                     constraint_name, table_name)
+        return
+
+    # If we reach here, we should attempt to drop the constraint.
+    if batch_op:
+        batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
+    else:
+        with op.batch_alter_table(table_name,
+                                  schema=schema) as batch_op_new:
+            batch_op_new.drop_constraint(constraint_name,
+                                         type_=type_,
+                                         **kwargs)
+
+    if constraint_name is not None:
+        logger.info("Dropped constraint %s from %s", constraint_name,
+                    table_name)
