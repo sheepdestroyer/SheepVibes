@@ -1469,7 +1469,7 @@ def _enforce_feed_limit(feed_db_obj):
         db.session.query(FeedItem.id)
         .filter_by(feed_id=feed_db_obj.id)
         # Order by newest first
-        .order_by(FeedItem.published_time.desc(), FeedItem.fetched_time.desc())
+        .order_by(FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc().nullslast())
         .offset(MAX_ITEMS_PER_FEED)
         .all()
     )
