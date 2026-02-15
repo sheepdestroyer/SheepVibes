@@ -23,7 +23,8 @@ def test_security_headers_present():
         # Referrer-Policy
         referrer = response.headers.get("Referrer-Policy")
         assert referrer is not None, "Referrer-Policy header is missing"
-        assert "strict-origin-when-cross-origin" in referrer
+        assert referrer == "strict-origin-when-cross-origin", (
+            "Referrer-Policy header is missing or incorrect")
 
         # Permissions-Policy
         permissions = response.headers.get("Permissions-Policy")
@@ -43,6 +44,7 @@ def test_hsts_header_on_secure_request():
             "Strict-Transport-Security header is missing on secure request")
         assert "max-age=31536000" in hsts
         assert "includeSubDomains" in hsts
+        assert "preload" in hsts
 
 
 def test_hsts_header_not_on_insecure_request():
