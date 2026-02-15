@@ -210,7 +210,7 @@ def add_security_headers(response):
     """
     # Content Security Policy (CSP)
     # default-src 'self': Only allow resources from the same origin by default.
-    # img-src * data:: Allow images from any source (for feeds) and data URIs.
+    # img-src * data: Allow images from any source (for feeds) and data URIs.
     # TODO(#299): Consider proxying images through backend to allow tightening this to 'self'.
     # script-src 'self': Only allow scripts from the same origin.
     # style-src 'self' 'unsafe-inline': Allow styles from same origin and inline styles (required for current frontend).
