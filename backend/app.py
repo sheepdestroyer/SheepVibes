@@ -242,8 +242,9 @@ def add_security_headers(response):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
     # Permissions-Policy: Disable features not needed by the app for added security.
-    response.headers[
-        "Permissions-Policy"] = "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
+    response.headers["Permissions-Policy"] = (
+        "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
+    )
 
     # HTTP Strict Transport Security (HSTS)
     # Enforce HTTPS for all future connections to this domain.

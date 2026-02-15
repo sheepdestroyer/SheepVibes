@@ -1,26 +1,18 @@
 from backend.app import app
 
-EXPECTED_CSP = (
+EXPECTED_CSP = ("default-src 'self'; "
+                "img-src * data:; "
+                "script-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "connect-src 'self'; "
+                "object-src 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self'; "
+                "frame-ancestors 'self'")
 
-    "default-src 'self'; "
-
-    "img-src * data:; "
-
-    "script-src 'self'; "
-
-    "style-src 'self' 'unsafe-inline'; "
-
-    "connect-src 'self'; "
-
-    "object-src 'none'; "
-
-    "base-uri 'self'; "
-
-    "form-action 'self'; "
-    "frame-ancestors 'self'"
+EXPECTED_PERMISSIONS_POLICY = (
+    "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
 )
-
-EXPECTED_PERMISSIONS_POLICY = "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
 
 
 def test_security_headers_present():
