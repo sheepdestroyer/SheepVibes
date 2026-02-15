@@ -62,10 +62,8 @@ def safe_drop_constraint(table_name,
             "Attempted to safe_drop_constraint with None name on table %s. Skipping check, letting Alembic handle it (likely will fail if not handled by batch).",
             table_name,
         )
-    elif not constraint_exists(table_name,
-                               constraint_name,
-                               type_,
-                               schema=schema):
+    elif not constraint_exists(
+            table_name, constraint_name, type_, schema=schema):
         logger.info("Constraint %s not found on %s, skipping drop.",
                     constraint_name, table_name)
         return
@@ -74,8 +72,7 @@ def safe_drop_constraint(table_name,
     if batch_op:
         batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
     else:
-        with op.batch_alter_table(table_name,
-                                  schema=schema) as batch_op_new:
+        with op.batch_alter_table(table_name, schema=schema) as batch_op_new:
             batch_op_new.drop_constraint(constraint_name,
                                          type_=type_,
                                          **kwargs)
