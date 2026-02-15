@@ -63,6 +63,18 @@ def downgrade():
 
     with op.batch_alter_table("feed_items", schema=None) as batch_op:
         batch_op.drop_index("ix_feed_items_feed_id_published_fetched_time")
-        batch_op.drop_constraint("uq_feed_item_feed_id_guid", type_="unique")
+        
+        # Drop the composite unique constraint. Since the name was corrected in this commit,
+        # we should safely try to drop both the old ("..._items_...") and the new ("..._item_...") name
+        # to make the downgrade robust regardless of which version of the upgrade was run.
+        safe_drop_constraint(
+            "feed_items", "uq_feed_item_feed_id_guid", type_=\"unique\", batch_op=batch_op
+        )
+        safe_drop_constraint(
+            "feed_items", "uq_feed_items_feed_id_guid", type_=\"unique\", batch_op=batch_op
+        )
+
+        # Re-create the original simple unique constraint on 'guid' that was removed in the upgrade.
+        batch_op.create_unique_constraint("uq_feed_items_guid", ["guid"])
 
     # ### end Alembic commands ###
