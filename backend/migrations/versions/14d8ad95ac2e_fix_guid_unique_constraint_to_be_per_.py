@@ -41,7 +41,7 @@ def upgrade():
             logger.warning(
                 "Could not drop unnamed unique constraint on guid: %s", e)
 
-        batch_op.create_unique_constraint("uq_feed_item_feed_id_guid",
+        batch_op.create_unique_constraint("uq_feed_items_feed_id_guid",
                                           ["feed_id", "guid"])
         batch_op.create_index(
             "ix_feed_items_feed_id_published_fetched_time",
