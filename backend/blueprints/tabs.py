@@ -9,7 +9,7 @@ from ..cache_utils import (
     make_tab_feeds_cache_key,
     make_tabs_cache_key,
 )
-from ..constants import DEFAULT_FEED_ITEMS_LIMIT
+from ..constants import DEFAULT_FEED_ITEMS_LIMIT, MAX_PAGINATION_LIMIT
 from ..extensions import cache, db
 from ..models import Feed, FeedItem, Tab
 
@@ -28,9 +28,15 @@ def get_tabs():
     """
     tabs = Tab.query.order_by(Tab.order).all()
 
+    if not tabs:
+        return jsonify([])
+
+    tab_ids = [tab.id for tab in tabs]
+
     # Pre-calculate unread counts for all tabs in a single query to avoid N+1
     unread_counts_query = (db.session.query(Feed.tab_id, func.count(
         FeedItem.id)).join(FeedItem, Feed.id == FeedItem.feed_id).filter(
+            Feed.tab_id.in_(tab_ids),
             FeedItem.is_read.is_(False)).group_by(Feed.tab_id))
     unread_counts = dict(unread_counts_query.all())
 
@@ -72,7 +78,7 @@ def create_tab():
         invalidate_tabs_cache()
         logger.info("Created new tab '%s' with id %s.", new_tab.name,
                     new_tab.id)
-        return jsonify(new_tab.to_dict()), 201  # Created
+        return jsonify(new_tab.to_dict(unread_count=0)), 201  # Created
     except IntegrityError:
         db.session.rollback()
         logger.warning("Attempted to create a tab with a duplicate name '%s'",
@@ -190,6 +196,8 @@ def get_feeds_for_tab(tab_id):
 
     # Get limit for items from query string, default to DEFAULT_FEED_ITEMS_LIMIT.
     limit = request.args.get("limit", DEFAULT_FEED_ITEMS_LIMIT, type=int)
+    if limit > MAX_PAGINATION_LIMIT:
+        limit = MAX_PAGINATION_LIMIT
 
     # Query 1: Get all feeds for the given tab.
     feeds = Feed.query.filter_by(tab_id=tab_id).all()

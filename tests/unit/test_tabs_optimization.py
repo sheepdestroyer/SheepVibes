@@ -34,6 +34,9 @@ def test_get_tabs_query_count_constant(client):
 
     # Helper to count queries
     def get_query_count():
+        from backend.extensions import cache
+        cache.clear()
+
         query_count = [0]
 
         def before_cursor_execute(conn, cursor, statement, parameters, context,
@@ -64,3 +67,52 @@ def test_get_tabs_query_count_constant(client):
     # It should be exactly the same, but <= is safe for optimization check
     assert count_n <= count_1, f"Query count increased from {count_1} to {count_n}!"
     assert count_n <= 2, f"Expected <= 2 queries, got {count_n}"
+
+
+def test_tab_to_dict_optimization(client):
+    """
+    Verify Tab.to_dict respects the unread_count override and does not issue
+    an extra unread-count query when the override is provided.
+    """
+    # client fixture ensures app context and db structure
+
+    # Build a tab with a related feed and item
+    tab = Tab(name="Tab for to_dict", order=100)
+    # Using constructor arguments for relationships if supported,
+    # otherwise setting attributes or ids.
+    # Assuming db.relationship backrefs allow passing parent object.
+    feed = Feed(name="Feed 1", url="http://example.com/feed-1", tab=tab)
+    item = FeedItem(title="Item 1",
+                    link="http://example.com/item-1",
+                    feed=feed,
+                    guid="guid-to-dict")
+
+    db.session.add(tab)
+    db.session.add(feed)
+    db.session.add(item)
+    db.session.commit()
+
+    # Ensure tab attributes are loaded so access in to_dict doesn't trigger a refresh query
+    # resulting from expire_on_commit=True (default)
+    db.session.refresh(tab)
+
+    # Count SQL queries executed during to_dict with an unread_count override
+    query_count = [0]
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context,
+                              executemany):
+        query_count[0] += 1
+
+    event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        result = tab.to_dict(unread_count=123)
+    finally:
+        event.remove(db.engine, "before_cursor_execute",
+                     before_cursor_execute)
+
+    # The override should be passed through to the serialized dict
+    assert result["unread_count"] == 123
+
+    # to_dict should not need to hit the DB just to compute unread_count.
+    # It accesses self.id, self.name, self.order which are already loaded.
+    assert query_count[0] == 0
