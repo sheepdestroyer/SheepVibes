@@ -73,12 +73,12 @@ def safe_drop_constraint(table_name,
     # If we reach here, we should attempt to drop the constraint.
     if batch_op:
         batch_op.drop_constraint(constraint_name, type_=type_, **kwargs)
-    else:
-        with op.batch_alter_table(table_name, schema=schema) as batch_op_new:
-            batch_op_new.drop_constraint(constraint_name,
-                                         type_=type_,
-                                         **kwargs)
-
-    if constraint_name is not None:
+        else:
+            with op.batch_alter_table(table_name,
+                                      schema=schema) as batch_op_new:
+                batch_op_new.drop_constraint(constraint_name,
+                                             type_=type_,
+                                             **kwargs)
+    
         logger.info("Dropped constraint %s from %s", constraint_name,
                     table_name)
