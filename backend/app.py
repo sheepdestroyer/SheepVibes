@@ -224,6 +224,8 @@ def add_security_headers(response):
            "style-src 'self' 'unsafe-inline'; "
            "connect-src 'self'; "
            "object-src 'none'; "
+           "base-uri 'self'; "
+           "form-action 'self'; "
            "frame-ancestors 'self'")
     response.headers["Content-Security-Policy"] = csp
 
@@ -241,7 +243,7 @@ def add_security_headers(response):
 
     # Permissions-Policy: Disable features not needed by the app for added security.
     response.headers[
-        "Permissions-Policy"] = "microphone=(), camera=(), geolocation=()"
+        "Permissions-Policy"] = "microphone=(), camera=(), geolocation=(), payment=(), usb=(), fullscreen=()"
 
     # HTTP Strict Transport Security (HSTS)
     # Enforce HTTPS for all future connections to this domain.
