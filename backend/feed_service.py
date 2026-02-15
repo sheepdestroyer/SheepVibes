@@ -51,7 +51,6 @@ from .sse import announcer
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
-
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
 OpmlStackItem = tuple[list[Element], int, str]
 

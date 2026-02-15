@@ -59,37 +59,45 @@ def test_import_nested_opml(client, mocker):
         </body>
     </opml>
     """
-    
+
     # Mock network calls to avoid actual fetching
     mocker.patch("backend.feed_service.fetch_and_update_feed")
     # Mock URL validation to ensure feeds are accepted
-    mocker.patch("backend.feed_service.validate_and_resolve_url", return_value=("127.0.0.1", "example.com"))
+    mocker.patch(
+        "backend.feed_service.validate_and_resolve_url",
+        return_value=("127.0.0.1", "example.com"),
+    )
     # Mock _validate_xml_safety to always return True for test content
-    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
-
+    mocker.patch("backend.feed_service._validate_xml_safety",
+                 return_value=True)
 
     data = {"file": (io.BytesIO(opml_content), "nested.opml")}
-    response = client.post("/api/opml/import", data=data, content_type="multipart/form-data")
-    
+    response = client.post("/api/opml/import",
+                           data=data,
+                           content_type="multipart/form-data")
+
     assert response.status_code == 200
     result = response.get_json()
     assert result["imported_count"] == 3
-    
+
     with app.app_context():
         # Check tabs
         tech_tab = Tab.query.filter_by(name="Tech Folder").first()
         assert tech_tab is not None
-        
+
         sub_tech_tab = Tab.query.filter_by(name="Sub Tech Folder").first()
         assert sub_tech_tab is not None
-        
+
         # Check feeds
-        hn_feed = Feed.query.filter_by(url="https://news.ycombinator.com/rss").first()
+        hn_feed = Feed.query.filter_by(
+            url="https://news.ycombinator.com/rss").first()
         assert hn_feed.tab_id == tech_tab.id
-        
-        lobsters_feed = Feed.query.filter_by(url="https://lobste.rs/rss").first()
+
+        lobsters_feed = Feed.query.filter_by(
+            url="https://lobste.rs/rss").first()
         assert lobsters_feed.tab_id == sub_tech_tab.id
-        
-        root_feed = Feed.query.filter_by(url="https://root.example.com/rss").first()
+
+        root_feed = Feed.query.filter_by(
+            url="https://root.example.com/rss").first()
         # Root feed should be in the default import tab or top level tab
         assert root_feed.tab_id == result["tab_id"]
