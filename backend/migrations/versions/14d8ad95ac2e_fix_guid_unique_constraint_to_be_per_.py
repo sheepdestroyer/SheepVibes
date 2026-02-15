@@ -8,7 +8,6 @@ Create Date: 2026-01-26 02:19:13.414286
 
 import logging
 
-import sqlalchemy as sa
 from alembic import op
 
 from backend.migration_helpers import safe_drop_constraint
