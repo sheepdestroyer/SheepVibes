@@ -50,8 +50,8 @@ def safe_drop_constraint(table_name,
     Drops a constraint only if it exists.
 
     :param table_name: The name of the table.
-    :param constraint_name: The name of the constraint to drop.
-    :param type_: The type of constraint.
+    :param constraint_name: The name of the constraint to drop. If None, the operation is a no-op.
+    :param type_: The type of constraint (e.g., "unique", "foreignkey", "check", "primary").
     :param batch_op: Optional existing batch operation context.
     :param kwargs: Additional arguments to pass to op.drop_constraint.
     """
@@ -59,11 +59,15 @@ def safe_drop_constraint(table_name,
 
     if constraint_name is None:
         logger.warning(
-            "Attempted to safe_drop_constraint with None name on table %s. Skipping check, letting Alembic handle it (likely will fail if not handled by batch).",
+            "Attempted to safe_drop_constraint with None name on table %s. This is a no-op; callers must provide an explicit constraint name.",
             table_name,
         )
-    elif not constraint_exists(
-            table_name, constraint_name, type_, schema=schema):
+        return
+
+    if not constraint_exists(table_name,
+                             constraint_name,
+                             type_,
+                             schema=schema):
         logger.info("Constraint %s not found on %s, skipping drop.",
                     constraint_name, table_name)
         return
