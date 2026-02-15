@@ -314,6 +314,53 @@ def test_opml_import_no_outline_elements(client, mocker):
     assert result["skipped_count"] == 0
 
 
+def test_opml_import_anonymous_folder_with_feeds(client, mocker):
+    """
+    Test importing an OPML where a folder has no title/text attribute
+    but contains child feeds. This should exercise the anonymous-folder
+    branch where the current tab is reused instead of creating a new one.
+    """
+    opml_content = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <opml version="1.0">
+        <head>
+            <title>Anonymous Folder With Feed</title>
+        </head>
+        <body>
+            <outline>
+                <outline text="Feed A" xmlUrl="https://example.com/a.xml" />
+            </outline>
+        </body>
+    </opml>
+    """
+
+    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
+    mocker.patch("backend.feed_service.fetch_and_update_feed")
+    mocker.patch(
+        "backend.feed_service.validate_and_resolve_url",
+        return_value=("127.0.0.1", "example.com"),
+    )
+
+    data = {"file": (io.BytesIO(opml_content), "anonymous_folder.opml")}
+    response = client.post(
+        "/api/opml/import",
+        data=data,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()
+
+    assert result["imported_count"] == 1
+    # The anonymous folder is transparent, so it shouldn't be counted as skipped
+    assert result["skipped_count"] == 0
+
+    with app.app_context():
+        feed = Feed.query.filter_by(url="https://example.com/a.xml").first()
+        assert feed is not None
+        # Should be in the top level tab (result["tab_id"])
+        assert feed.tab_id == result["tab_id"]
+
+
 def test_import_malformed_opml(client):
     """Test importing a malformed OPML yields a parse error response."""
     malformed_opml = b"""<?xml version="1.0" encoding="UTF-8"?>
