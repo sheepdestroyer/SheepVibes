@@ -10,7 +10,7 @@ from ..constants import (
     DEFAULT_PAGINATION_LIMIT,
     MAX_PAGINATION_LIMIT,
 )
-from ..extensions import db
+from ..extensions import db, limiter
 from ..feed_service import (
     fetch_and_update_feed,
     fetch_feed,
@@ -27,6 +27,7 @@ items_bp = Blueprint("items", __name__, url_prefix="/api/items")
 
 
 @feeds_bp.route("", methods=["POST"])
+@limiter.limit("10 per minute")
 def add_feed():
     """Adds a new feed to a specified tab (or the default tab)."""
     data = request.get_json()
@@ -175,6 +176,7 @@ def delete_feed(feed_id):
 
 
 @feeds_bp.route("/<int:feed_id>", methods=["PUT"])
+@limiter.limit("10 per minute")
 def update_feed_url(feed_id):
     """Updates a feed's URL and name.
 
@@ -296,6 +298,7 @@ def update_feed_url(feed_id):
 
 
 @feeds_bp.route("/update-all", methods=["POST"])
+@limiter.limit("5 per minute")
 def api_update_all_feeds():
     """Triggers an update for all feeds in the system.
 

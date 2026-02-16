@@ -9,6 +9,7 @@ from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
+from ..extensions import limiter
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab
 
@@ -104,6 +105,7 @@ def _validate_opml_file_request():
 
 
 @opml_bp.route("/import", methods=["POST"])
+@limiter.limit("5 per hour")
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
     opml_file, error_resp = _validate_opml_file_request()
@@ -124,6 +126,7 @@ def import_opml():
 
 
 @opml_bp.route("/export", methods=["GET"])
+@limiter.limit("10 per hour")
 def export_opml():
     """Exports all feeds as an OPML file.
 

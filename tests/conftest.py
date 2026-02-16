@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from backend.app import app, db
+from backend.extensions import limiter
 
 os.environ["TESTING"] = "true"
 
@@ -43,6 +44,7 @@ def client():
     app.config["TESTING"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    limiter.enabled = False  # Explicitly disable limiter for tests using this fixture
 
     with app.test_client() as client, app.app_context():
         db.create_all()

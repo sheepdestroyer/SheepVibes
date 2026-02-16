@@ -10,7 +10,7 @@ import pytest
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
-from backend.app import app, cache  # Import the app and cache instance
+from backend.app import app, cache, limiter  # Import the app and cache instance
 from backend.feed_service import (  # For new tests
     parse_published_time,
     process_feed_entries,
@@ -66,6 +66,7 @@ def client():
     # Re-initialize extensions with the updated app config
     db.init_app(app)
     cache.init_app(app)
+    limiter.enabled = False  # Explicitly disable limiter for these tests
 
     with app.app_context():  # Ensure app context for create_all and drop_all
         db.create_all()  # Ensure tables are created for each test
