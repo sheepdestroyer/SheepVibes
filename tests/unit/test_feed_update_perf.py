@@ -1,34 +1,40 @@
-
-import pytest
 import datetime
 import logging
+
+import pytest
 from sqlalchemy import event
-from backend.app import app
-from backend.models import db, Feed, FeedItem, Tab
+
 from backend import feed_service
+from backend.app import app
+from backend.models import Feed, FeedItem, Tab, db
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("perf_test")
 
+
 class MockFeedEntry(dict):
     """Mocks a feedparser entry."""
+
     def __init__(self, title, link, guid=None, **kwargs):
         super().__init__()
-        self['title'] = title
-        self['link'] = link
-        self['id'] = guid
-        self['published_parsed'] = kwargs.get('published_parsed')
-        self['published'] = kwargs.get('published')
+        self["title"] = title
+        self["link"] = link
+        self["id"] = guid
+        self["published_parsed"] = kwargs.get("published_parsed")
+        self["published"] = kwargs.get("published")
 
     @property
     def guid(self):
-        return self.get('id')
+        return self.get("id")
+
 
 class MockParsedFeed:
+
     def __init__(self, entries):
         self.feed = {"title": "Test Feed"}
         self.entries = entries
+
 
 @pytest.fixture
 def db_session():
@@ -42,6 +48,7 @@ def db_session():
         yield db.session
         db.session.remove()
         db.drop_all()
+
 
 def test_feed_update_query_optimization(db_session):
     """
@@ -62,13 +69,14 @@ def test_feed_update_query_optimization(db_session):
     items = []
     base_time = datetime.datetime.now(datetime.timezone.utc)
     for i in range(100):
-        items.append(FeedItem(
-            feed_id=feed.id,
-            title=f"Item {i}",
-            link=f"http://perf.com/item{i}",
-            guid=f"guid-{i}",
-            published_time=base_time - datetime.timedelta(minutes=i)
-        ))
+        items.append(
+            FeedItem(
+                feed_id=feed.id,
+                title=f"Item {i}",
+                link=f"http://perf.com/item{i}",
+                guid=f"guid-{i}",
+                published_time=base_time - datetime.timedelta(minutes=i),
+            ))
     db_session.add_all(items)
     db_session.commit()
 
@@ -76,36 +84,42 @@ def test_feed_update_query_optimization(db_session):
     entries = []
     # Existing items 0-4 (5 items)
     for i in range(5):
-        entries.append(MockFeedEntry(
-            title=f"Item {i}",
-            link=f"http://perf.com/item{i}",
-            guid=f"guid-{i}",
-            published=(base_time - datetime.timedelta(minutes=i)).isoformat()
-        ))
+        entries.append(
+            MockFeedEntry(
+                title=f"Item {i}",
+                link=f"http://perf.com/item{i}",
+                guid=f"guid-{i}",
+                published=(base_time -
+                           datetime.timedelta(minutes=i)).isoformat(),
+            ))
     # New item
-    entries.append(MockFeedEntry(
-        title="New Item",
-        link="http://perf.com/new",
-        guid="guid-new",
-        published=base_time.isoformat()
-    ))
+    entries.append(
+        MockFeedEntry(
+            title="New Item",
+            link="http://perf.com/new",
+            guid="guid-new",
+            published=base_time.isoformat(),
+        ))
 
     # New item without GUID (tests synthetic GUID path)
-    entries.append(MockFeedEntry(
-        title="No GUID Item",
-        link="http://perf.com/noguid",
-        guid=None, # feedparser 'id' is None
-        published=base_time.isoformat()
-    ))
+    entries.append(
+        MockFeedEntry(
+            title="No GUID Item",
+            link="http://perf.com/noguid",
+            guid=None,  # feedparser 'id' is None
+            published=base_time.isoformat(),
+        ))
 
     parsed_feed = MockParsedFeed(entries)
 
     # 3. Capture SQL
     queries = []
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context,
+                              executemany):
         # Filter for the relevant query on feed_items
         if "SELECT feed_items.id" in statement and "FROM feed_items" in statement:
-             queries.append(statement)
+            queries.append(statement)
 
     event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
 
@@ -129,4 +143,6 @@ def test_feed_update_query_optimization(db_session):
         else:
             logger.info("Query does not contain optimization filters.")
 
-    assert found_optimized_query, "Did not detect optimized query with GUID/Link filters. It seems to be fetching all items."
+    assert found_optimized_query, (
+        "Did not detect optimized query with GUID/Link filters. It seems to be fetching all items."
+    )

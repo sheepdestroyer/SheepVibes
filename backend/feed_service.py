@@ -1269,16 +1269,13 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     # Optimization: Query ONLY items that might conflict with incoming entries.
     # Instead of loading ALL items for the feed, we filter by the GUIDs and Links we just saw.
     query = db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title
-    ).filter(FeedItem.feed_id == feed_db_obj.id)
+        FeedItem.id, FeedItem.guid, FeedItem.link,
+        FeedItem.title).filter(FeedItem.feed_id == feed_db_obj.id)
 
     if potential_guids or potential_links:
         query = query.filter(
-            db.or_(
-                FeedItem.guid.in_(potential_guids),
-                FeedItem.link.in_(potential_links)
-            )
-        )
+            db.or_(FeedItem.guid.in_(potential_guids),
+                   FeedItem.link.in_(potential_links)))
     else:
         # If no valid entries to check, we won't match anything useful.
         # But we must return an empty list if there are no keys to check against.
