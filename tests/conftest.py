@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from backend.app import app, db
+from backend.extensions import limiter
 
 os.environ["TESTING"] = "true"
 
@@ -32,9 +33,8 @@ EXAMPLE_COM_IP = "93.184.216.34"
 def mock_dns(mocker):
     """Mock socket.getaddrinfo to prevent DNS resolution errors during tests."""
     mock_getaddrinfo = mocker.patch("backend.feed_service.socket.getaddrinfo")
-    mock_getaddrinfo.return_value = [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (EXAMPLE_COM_IP, 80))
-    ]
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6,
+                                      "", (EXAMPLE_COM_IP, 80))]
     return mock_getaddrinfo
 
 
@@ -43,6 +43,7 @@ def client():
     app.config["TESTING"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    limiter.enabled = False  # Explicitly disable limiter for tests using this fixture
 
     with app.test_client() as client, app.app_context():
         db.create_all()

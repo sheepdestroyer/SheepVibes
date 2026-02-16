@@ -17,7 +17,7 @@ from .constants import (
     OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT,
     UPDATE_INTERVAL_MINUTES_DEFAULT,
 )
-from .extensions import cache, db, scheduler
+from .extensions import cache, db, limiter, scheduler
 from .feed_service import update_all_feeds
 from .sse import announcer
 
@@ -51,11 +51,13 @@ CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["TESTING"] = True  # Ensure it's explicitly True in app.config
+    app.config["RATELIMIT_ENABLED"] = False  # Disable rate limiting for tests
     app.config["CACHE_TYPE"] = (
         "SimpleCache"  # Use SimpleCache for tests, no Redis needed
     )
     logger.info(
-        "TESTING mode: Using in-memory SQLite database and SimpleCache.")
+        "TESTING mode: Using in-memory SQLite database, SimpleCache, and no rate limiting."
+    )
 else:
     # Existing database configuration logic
     default_db_path_in_container = "/app/data/sheepvibes.db"
@@ -97,6 +99,8 @@ else:
     app.config["CACHE_TYPE"] = "RedisCache"
     app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL",
                                                    "redis://localhost:6379/0")
+    # Share Redis connection for rate limiter
+    app.config["RATELIMIT_STORAGE_URI"] = app.config["CACHE_REDIS_URL"]
 
 # Disable modification tracking
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -105,6 +109,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 migrate = Migrate(app, db)
 cache.init_app(app)
+limiter.init_app(app)
 
 # Register Blueprints
 app.register_blueprint(opml_bp)
