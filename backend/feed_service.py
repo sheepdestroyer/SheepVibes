@@ -12,6 +12,7 @@ import logging  # Standard logging
 import os
 import socket
 import ssl
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import timezone  # Specifically import timezone
@@ -1014,7 +1015,7 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return new_req
 
 
-def _fetch_feed_content(feed_url):
+def _fetch_feed_content(feed_url, etag=None, last_modified=None):
     """Fetches and parses feed content from a given URL.
 
     This function is a wrapper around `fetch_feed` to handle exceptions
@@ -1029,7 +1030,9 @@ def _fetch_feed_content(feed_url):
         fetching or parsing failed.
     """
     try:
-        parsed_feed = fetch_feed(feed_url)
+        parsed_feed = fetch_feed(feed_url,
+                                 etag=etag,
+                                 last_modified=last_modified)
         return parsed_feed
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error in fetch thread for feed %s",
@@ -1057,6 +1060,20 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         )
         return False, 0, feed_db_obj.tab_id
 
+    # Handle 304 Not Modified
+    if getattr(parsed_feed, "status", 0) == 304:
+        # Update last_updated_time to show we checked
+        feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+        try:
+            db.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+            logger.exception(
+                "Error committing timestamp update (304) for %s",
+                _sanitize_for_log(feed_db_obj.name),
+            )
+        return True, 0, feed_db_obj.tab_id
+
     # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
     if not parsed_feed.entries:
         logger.info(
@@ -1065,6 +1082,14 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
             feed_db_obj.id,
         )
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+
+        # Save conditional GET headers if present
+        if hasattr(parsed_feed, "http_etag") and parsed_feed.http_etag:
+            feed_db_obj.etag = parsed_feed.http_etag
+        if (hasattr(parsed_feed, "http_last_modified")
+                and parsed_feed.http_last_modified):
+            feed_db_obj.last_modified = parsed_feed.http_last_modified
+
         # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
         feed_name = feed_db_obj.name
         try:
@@ -1080,7 +1105,27 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
 
     try:
         new_items = process_feed_entries(feed_db_obj, parsed_feed)
-        # process_feed_entries handles its own logging and commits for items and last_updated_time.
+
+        # Save conditional GET headers if present
+        updates = False
+        if (hasattr(parsed_feed, "http_etag")
+                and parsed_feed.http_etag != feed_db_obj.etag):
+            feed_db_obj.etag = parsed_feed.http_etag
+            updates = True
+        if (hasattr(parsed_feed, "http_last_modified") and
+                parsed_feed.http_last_modified != feed_db_obj.last_modified):
+            feed_db_obj.last_modified = parsed_feed.http_last_modified
+            updates = True
+
+        if updates:
+            try:
+                db.session.commit()
+            except sqlalchemy.exc.SQLAlchemyError:
+                logger.warning(
+                    "Failed to save ETag/Last-Modified for %s",
+                    _sanitize_for_log(feed_db_obj.name),
+                )
+
         return True, new_items, feed_db_obj.tab_id
     except Exception:  # pylint: disable=broad-exception-caught
         # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
@@ -1095,8 +1140,10 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         return False, 0, feed_db_obj.tab_id
 
 
-def fetch_feed(feed_url):
-    """Fetches and parses a feed, preventing SSRF via IP pinning."""
+def fetch_feed(feed_url, etag=None, last_modified=None):
+    """Fetches and parses a feed, preventing SSRF via IP pinning.
+    Supports Conditional GET via ETag and Last-Modified.
+    """
     safe_ip, _ = validate_and_resolve_url(feed_url)
     if not safe_ip:
         return None
@@ -1115,13 +1162,16 @@ def fetch_feed(feed_url):
         opener = urllib.request.build_opener(http_handler, https_handler,
                                              redirect_handler)
 
-        req = urllib.request.Request(
-            feed_url,
-            headers={
-                "User-Agent": "SheepVibes/1.0",
-                "Accept-Encoding": "identity",  # Prevent Zip Bombs
-            },
-        )
+        headers = {
+            "User-Agent": "SheepVibes/1.0",
+            "Accept-Encoding": "identity",  # Prevent Zip Bombs
+        }
+        if etag:
+            headers["If-None-Match"] = etag
+        if last_modified:
+            headers["If-Modified-Since"] = last_modified
+
+        req = urllib.request.Request(feed_url, headers=headers)
         url_opener = opener.open(req, timeout=10)
 
         with url_opener as response:
@@ -1155,6 +1205,10 @@ def fetch_feed(feed_url):
                 )
                 return None
 
+            # Capture conditional GET headers for next request
+            new_etag = response.getheader("ETag")
+            new_last_modified = response.getheader("Last-Modified")
+
         # ZIP BOMB PROTECTION
         # Even with 'Accept-Encoding: identity', some servers might send GZIP.
         # We manually check for the GZIP magic header (\x1f\x8b) and reject.
@@ -1181,7 +1235,20 @@ def fetch_feed(feed_url):
                 str(bozo_exc)) if bozo_exc else "Unknown"
             logger.warning("Feed parsing warning: %s", safe_exc_msg)
 
+        # Attach captured headers to the parsed object for storage
+        parsed_feed.http_etag = new_etag
+        parsed_feed.http_last_modified = new_last_modified
         return parsed_feed
+
+    except urllib.error.HTTPError as e:
+        if e.code == 304:
+            logger.info("Feed %s not modified (304).",
+                        _sanitize_for_log(feed_url))
+            return feedparser.FeedParserDict(status=304,
+                                             debug_message="Not Modified")
+        logger.warning("HTTP Error fetching feed %s: %s",
+                       _sanitize_for_log(feed_url), e)
+        return None
 
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error fetching feed %s", _sanitize_for_log(feed_url))
@@ -1604,7 +1671,9 @@ def fetch_and_update_feed(feed_id):
         return False, 0, None
 
     # fetch_feed already handles errors and returns None, but logic here checks return
-    parsed_feed = _fetch_feed_content(feed.url)
+    parsed_feed = _fetch_feed_content(feed.url,
+                                      etag=feed.etag,
+                                      last_modified=feed.last_modified)
 
     # Delegate processing to helper
     return _process_fetch_result(feed, parsed_feed)
@@ -1634,7 +1703,13 @@ def update_all_feeds():
     with concurrent.futures.ThreadPoolExecutor(
             max_workers=actual_workers) as executor:
         future_to_feed = {
-            executor.submit(_fetch_feed_content, feed.url): feed
+            executor.submit(
+                _fetch_feed_content,
+                feed.url,
+                etag=feed.etag,
+                last_modified=feed.last_modified,
+            ):
+            feed
             for feed in all_feeds
         }
 
