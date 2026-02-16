@@ -1227,16 +1227,65 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
         feed_db_obj.site_link = new_site_link
 
 
+def _generate_guid(entry, entry_link):
+    """
+    Generates a GUID for a feed entry.
+    Priority:
+    1. entry.get("id") - if provided.
+    2. Synthetic GUID: sha256(link + title) - if not.
+    """
+    if entry.get("id"):
+        return entry.get("id")
+
+    # Synthetic GUID generation
+    title_for_hash = entry.get("title", "")
+    unique_string = f"{entry_link}{title_for_hash}"
+    return hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+
+
 def _collect_new_items(feed_db_obj, parsed_feed):
     """Identifies new items to add and updates existing ones."""
     items_to_add = []
     batch_processed_guids = set()
 
-    # Optimization: Query only necessary columns to avoid loading full objects
-    # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link,
-        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
+    # Pre-calculate dates and collect potential GUIDs/Links for optimized querying
+    entries_with_dates = []
+    potential_guids = set()
+    potential_links = set()
+
+    for entry in parsed_feed.entries:
+        parsed_published = parse_published_time(entry)
+        entries_with_dates.append((entry, parsed_published))
+
+        # Collect keys for optimization
+        raw_link = entry.get("link")
+        entry_link = validate_link_structure(raw_link)
+
+        if entry_link:
+            potential_links.add(entry_link)
+            db_guid = _generate_guid(entry, entry_link)
+            potential_guids.add(db_guid)
+
+    # Optimization: Query ONLY items that might conflict with incoming entries.
+    # Instead of loading ALL items for the feed, we filter by the GUIDs and Links we just saw.
+    query = db.session.query(
+        FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title
+    ).filter(FeedItem.feed_id == feed_db_obj.id)
+
+    if potential_guids or potential_links:
+        query = query.filter(
+            db.or_(
+                FeedItem.guid.in_(potential_guids),
+                FeedItem.link.in_(potential_links)
+            )
+        )
+    else:
+        # If no valid entries to check, we won't match anything useful.
+        # But we must return an empty list if there are no keys to check against.
+        # However, filter(False) is efficient.
+        query = query.filter(db.literal(False))
+
+    items_tuple = query.all()
 
     # Create lookup maps
     existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
@@ -1248,12 +1297,6 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         _sanitize_for_log(feed_db_obj.name),
         feed_db_obj.id,
     )
-
-    # Pre-calculate dates to avoid double parsing and ensure consistency between
-    # sorting and storage (e.g. if parse_published_time uses current time as fallback).
-    entries_with_dates = []
-    for entry in parsed_feed.entries:
-        entries_with_dates.append((entry, parse_published_time(entry)))
 
     # Sort entries by published date (newest first).
     # Our "First Wins" deduplication strategy (below) will preserve the version
@@ -1279,15 +1322,7 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             continue
 
         # SECURITY & LOGIC: Generate a robust GUID if missing.
-        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
-        if entry.get("id"):
-            db_guid = entry.get("id")
-        else:
-            # Create a synthetic GUID based on link and title to ensure uniqueness
-            # for items that share a link but have different content.
-            unique_string = f"{entry_link}{entry.get('title', '')}"
-
-            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+        db_guid = _generate_guid(entry, entry_link)
 
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
