@@ -33,9 +33,8 @@ EXAMPLE_COM_IP = "93.184.216.34"
 def mock_dns(mocker):
     """Mock socket.getaddrinfo to prevent DNS resolution errors during tests."""
     mock_getaddrinfo = mocker.patch("backend.feed_service.socket.getaddrinfo")
-    mock_getaddrinfo.return_value = [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (EXAMPLE_COM_IP, 80))
-    ]
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6,
+                                      "", (EXAMPLE_COM_IP, 80))]
     return mock_getaddrinfo
 
 
