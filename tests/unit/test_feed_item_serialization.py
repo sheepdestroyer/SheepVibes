@@ -1,10 +1,12 @@
-
-import unittest
 import datetime
+import unittest
 from datetime import timezone
+
 from backend.models import FeedItem
 
+
 class TestFeedItemSerialization(unittest.TestCase):
+
     def test_to_iso_z_string_naive(self):
         # Naive datetime (simulating DB retrieval)
         naive_dt = datetime.datetime(2023, 1, 1, 12, 0, 0)
@@ -32,5 +34,6 @@ class TestFeedItemSerialization(unittest.TestCase):
         result = FeedItem.to_iso_z_string(None)
         self.assertIsNone(result)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
