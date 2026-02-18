@@ -205,18 +205,13 @@ class FeedItem(db.Model):
         if dt_val is None:
             return None
 
-        # At this point, dt_val from DB is naive UTC due to the validator.
-        # If dt_val is directly passed (e.g. not from DB and still aware),
-        # it needs conversion.
+        # Optimization: fast path for naive UTC datetimes (standard in this DB).
+        # Avoids creating intermediate datetime objects (replace) and string replacement overhead.
         if dt_val.tzinfo is None:
-            # Naive datetime from DB (assumed UTC), make it aware UTC
-            dt_val_utc = dt_val.replace(tzinfo=timezone.utc)
-        else:
-            # Aware datetime (e.g. passed directly, not from DB), convert to UTC
-            dt_val_utc = dt_val.astimezone(timezone.utc)
+            return dt_val.isoformat() + "Z"
 
-        iso_string = dt_val_utc.isoformat()
-        return iso_string.replace("+00:00", "Z")
+        # Aware datetime path: ensure UTC and correct 'Z' suffix
+        return dt_val.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
     def to_dict(self):
         """Serializes the FeedItem object to a dictionary.
