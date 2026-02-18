@@ -267,12 +267,12 @@ def setup_tabs_and_feeds(client):
         db.session.add_all([tab1, tab2])
         db.session.commit()  # Commit to get IDs
 
-        feed1 = Feed(tab_id=tab1.id, name="Feed 1", url="url1")
-        feed2 = Feed(tab_id=tab1.id, name="Feed 2", url="url2")
+        feed1 = Feed(tab_id=tab1.id, name="Feed 1", url="http://example.com/feed1")
+        feed2 = Feed(tab_id=tab1.id, name="Feed 2", url="http://example.com/feed2")
         feed3 = Feed(
             tab_id=tab2.id,
             name="Feed 3",
-            url="url3",
+            url="http://example.com/feed3.xml",
             site_link="http://example.com/feed3",
         )
         db.session.add_all([feed1, feed2, feed3])
@@ -472,7 +472,7 @@ def test_add_feed_fetch_fails(mock_fetch, client, setup_tabs_and_feeds):
 def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     """Test POST /api/feeds with a duplicate URL."""
     tab1_id = setup_tabs_and_feeds["tab1_id"]
-    existing_url = "url1"  # From setup_tabs_and_feeds
+    existing_url = "http://example.com/feed1"  # From setup_tabs_and_feeds
 
     response = client.post(
         "/api/feeds", json={"url": existing_url, "tab_id": tab1_id})
@@ -490,8 +490,9 @@ def test_add_feed_invalid_tab(
     mock_fetch_unused, client
 ):  # mock_fetch_unused if not directly used but to be consistent
     """Test POST /api/feeds with a non-existent tab_id."""
+    # Use a valid URL format to pass validation
     response = client.post(
-        "/api/feeds", json={"url": "some_url", "tab_id": 999})
+        "/api/feeds", json={"url": "http://example.com/valid", "tab_id": 999})
     assert response.status_code == 404
 
 
@@ -1419,14 +1420,14 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
     feed1 = tab1_feeds[0]
     assert feed1.get("text") == "Feed 1"
     assert feed1.get("title") == "Feed 1"
-    assert feed1.get("xmlUrl") == "url1"
+    assert feed1.get("xmlUrl") == "http://example.com/feed1"
     assert feed1.get("type") == "rss"
     assert feed1.get("htmlUrl") is None
 
     feed2 = tab1_feeds[1]
     assert feed2.get("text") == "Feed 2"
     assert feed2.get("title") == "Feed 2"
-    assert feed2.get("xmlUrl") == "url2"
+    assert feed2.get("xmlUrl") == "http://example.com/feed2"
     assert feed2.get("type") == "rss"
     assert feed2.get("htmlUrl") is None
 
@@ -1440,7 +1441,7 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
     feed3 = tab2_feeds[0]
     assert feed3.get("text") == "Feed 3"
     assert feed3.get("title") == "Feed 3"
-    assert feed3.get("xmlUrl") == "url3"
+    assert feed3.get("xmlUrl") == "http://example.com/feed3.xml"
     assert feed3.get("type") == "rss"
     # Check htmlUrl export
     assert feed3.get("htmlUrl") == "http://example.com/feed3"
