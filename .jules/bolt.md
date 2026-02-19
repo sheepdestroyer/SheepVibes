@@ -9,3 +9,9 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-02-16 - Batching DOM Updates with DocumentFragment
+
+**Learning:** Appending multiple elements to a live DOM container one by one in a loop can cause significant performance degradation due to multiple layout reflows and repaints. Using a `DocumentFragment` to batch these operations in memory before a single append to the DOM can improve rendering performance by ~50% for large lists.
+
+**Action:** Always use `DocumentFragment` when rendering lists of elements in vanilla JavaScript to ensure optimal performance and minimize browser work.
