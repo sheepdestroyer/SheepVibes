@@ -9,5 +9,5 @@ gunicorn
 Flask-Caching>=2.1.0
 redis
 Flask-CORS
-filelock==3.24.2
+filelock==3.24.3
 defusedxml
