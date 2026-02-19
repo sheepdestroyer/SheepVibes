@@ -81,7 +81,7 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "File object is empty"}), 400)
 
     # Basic security: check file extension
-    allowed_extensions = {".opml", ".xml", ".txt"}
+    allowed_extensions = {".opml", ".xml"}
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
         return None, (
