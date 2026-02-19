@@ -18,6 +18,24 @@ export function throttle(callback, delay) {
 }
 
 /**
+ * A simple debounce utility function to delay function execution until a pause in calls.
+ * @param {function} callback - The function to debounce.
+ * @param {number} delay - The delay in milliseconds.
+ * @returns {function} The debounced function.
+ */
+export function debounce(callback, delay) {
+    let timeoutId;
+    return function (...args) {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+        timeoutId = setTimeout(() => {
+            callback.apply(this, args);
+        }, delay);
+    };
+}
+
+/**
  * Formats an ISO date string into a user-friendly relative or absolute time.
  * @param {string | null} isoString - The ISO date string to format.
  * @returns {string} A formatted date string (e.g., "5 min ago", "Apr 20, 2025").
