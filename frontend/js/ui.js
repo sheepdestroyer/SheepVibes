@@ -200,9 +200,9 @@ export function renderTabs(tabs, activeTabId, callbacks) {
         return { activeTabId: null };
     }
 
-    tabs.sort((a, b) => a.order - b.order);
+    const sortedTabs = [...tabs].sort((a, b) => a.order - b.order);
 
-    tabs.forEach(tab => {
+    sortedTabs.forEach(tab => {
         const button = document.createElement('button');
         button.textContent = tab.name;
         button.dataset.tabId = tab.id;
