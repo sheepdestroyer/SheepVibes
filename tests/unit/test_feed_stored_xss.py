@@ -1,5 +1,7 @@
 import pytest
+
 from backend.models import Feed, Tab, db
+
 
 def test_add_feed_xss_prevention(client):
     """
@@ -14,12 +16,15 @@ def test_add_feed_xss_prevention(client):
     response = client.post("/api/feeds", json={"url": xss_url})
 
     # Assert that the application rejects the malicious URL
-    assert response.status_code == 400, "Expected 400 Bad Request for invalid URL scheme"
+    assert response.status_code == 400, (
+        "Expected 400 Bad Request for invalid URL scheme"
+    )
     assert "Invalid feed URL" in response.get_json()["error"]
 
     # Verify the feed was NOT stored in the database
     feed = Feed.query.filter_by(url=xss_url).first()
     assert feed is None, "Feed with malicious URL should not be stored"
+
 
 def test_update_feed_url_xss_prevention(client):
     """
@@ -30,7 +35,8 @@ def test_update_feed_url_xss_prevention(client):
     db.session.add(tab)
     db.session.commit()
 
-    valid_feed = Feed(tab_id=tab.id, name="Valid Feed", url="http://example.com/feed")
+    valid_feed = Feed(tab_id=tab.id, name="Valid Feed",
+                      url="http://example.com/feed")
     db.session.add(valid_feed)
     db.session.commit()
 

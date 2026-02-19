@@ -267,8 +267,10 @@ def setup_tabs_and_feeds(client):
         db.session.add_all([tab1, tab2])
         db.session.commit()  # Commit to get IDs
 
-        feed1 = Feed(tab_id=tab1.id, name="Feed 1", url="http://example.com/url1")
-        feed2 = Feed(tab_id=tab1.id, name="Feed 2", url="http://example.com/url2")
+        feed1 = Feed(tab_id=tab1.id, name="Feed 1",
+                     url="http://example.com/url1")
+        feed2 = Feed(tab_id=tab1.id, name="Feed 2",
+                     url="http://example.com/url2")
         feed3 = Feed(
             tab_id=tab2.id,
             name="Feed 3",
@@ -491,7 +493,8 @@ def test_add_feed_invalid_tab(
 ):  # mock_fetch_unused if not directly used but to be consistent
     """Test POST /api/feeds with a non-existent tab_id."""
     response = client.post(
-        "/api/feeds", json={"url": "http://example.com/some_url", "tab_id": 999})
+        "/api/feeds", json={"url": "http://example.com/some_url", "tab_id": 999}
+    )
     assert response.status_code == 404
 
 
