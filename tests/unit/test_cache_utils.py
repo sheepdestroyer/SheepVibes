@@ -1,13 +1,15 @@
 import pytest
+
 from backend.app import app
-from backend.extensions import cache
 from backend.cache_utils import (
     get_version,
-    make_tabs_cache_key,
-    make_tab_feeds_cache_key,
-    invalidate_tabs_cache,
     invalidate_tab_feeds_cache,
+    invalidate_tabs_cache,
+    make_tab_feeds_cache_key,
+    make_tabs_cache_key,
 )
+from backend.extensions import cache
+
 
 @pytest.fixture(autouse=True)
 def clear_cache():
@@ -18,6 +20,7 @@ def clear_cache():
     with app.app_context():
         cache.clear()
 
+
 def test_get_version_default():
     """Test get_version returns default when key is not in cache."""
     with app.app_context():
@@ -26,11 +29,13 @@ def test_get_version_default():
         # Explicit default
         assert get_version("non_existent_key", default=5) == 5
 
+
 def test_get_version_cached():
     """Test get_version returns cached value when key exists."""
     with app.app_context():
         cache.set("test_key", 10)
         assert get_version("test_key") == 10
+
 
 def test_make_tabs_cache_key():
     """Test make_tabs_cache_key incorporates version correctly."""
@@ -41,6 +46,7 @@ def test_make_tabs_cache_key():
         # After invalidating tabs cache, version should be 2
         invalidate_tabs_cache()
         assert make_tabs_cache_key() == "view/tabs/v2"
+
 
 def test_make_tab_feeds_cache_key():
     """Test make_tab_feeds_cache_key incorporates versions and query params."""
@@ -58,7 +64,8 @@ def test_make_tab_feeds_cache_key():
             assert key == "view/tab/1/v4/tabs_v3/?"
 
         # Case 3: With query params (ensure 'limit' is used and 'other' is ignored)
-        with app.test_request_context("/api/tabs/1/feeds?limit=10&other=ignored"):
+        with app.test_request_context(
+                "/api/tabs/1/feeds?limit=10&other=ignored"):
             key = make_tab_feeds_cache_key(1)
             # The function sorts query params, though here we only have one 'used' param
             assert key == "view/tab/1/v4/tabs_v3/?limit=10"
@@ -70,6 +77,7 @@ def test_make_tab_feeds_cache_key():
             # urllib.parse.urlencode with multiple values
             assert key == "view/tab/1/v4/tabs_v3/?limit=10&limit=20"
 
+
 def test_invalidate_tabs_cache():
     """Test invalidate_tabs_cache increments version in cache."""
     with app.app_context():
@@ -78,6 +86,7 @@ def test_invalidate_tabs_cache():
         assert get_version("tabs_version") == 2
         invalidate_tabs_cache()
         assert get_version("tabs_version") == 3
+
 
 def test_invalidate_tab_feeds_cache():
     """Test invalidate_tab_feeds_cache increments versions correctly."""
