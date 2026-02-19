@@ -1385,10 +1385,6 @@ def _is_batch_duplicate(db_guid, batch_guids, feed_name):
         )
         return True
 
-    # RELAXATION: Do not strict dedupe by link alone.
-    # We rely on the robust GUID (which includes Title) to catch duplicates.
-    # if entry_link in batch_links: ... -> REMOVED
-
     return False
 
 
