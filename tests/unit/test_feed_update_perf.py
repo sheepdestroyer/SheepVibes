@@ -1,25 +1,31 @@
-
 import datetime
-import pytest
 import time
-from sqlalchemy import event
-from backend.app import app
-from backend.models import db, Feed, FeedItem, Tab
-from backend import feed_service
 from unittest.mock import MagicMock
+
+import pytest
+from sqlalchemy import event
+
+from backend import feed_service
+from backend.app import app
+from backend.models import Feed, FeedItem, Tab, db
 
 # --- Test Helpers ---
 
+
 class MockFeedEntry(dict):
     """Mocks a feedparser entry with both dict and attribute access."""
+
     def __init__(self, **kwargs):
         super().__init__()
         for k, v in kwargs.items():
             self[k] = v
         # Ensure default keys exist if not provided
-        if "id" not in self: self["id"] = None
-        if "link" not in self: self["link"] = None
-        if "title" not in self: self["title"] = None
+        if "id" not in self:
+            self["id"] = None
+        if "link" not in self:
+            self["link"] = None
+        if "title" not in self:
+            self["title"] = None
 
     def __getattr__(self, name):
         try:
@@ -30,12 +36,15 @@ class MockFeedEntry(dict):
     def get(self, key, default=None):
         return super().get(key, default)
 
+
 class MockParsedFeed:
     """Mocks a parsed feed object from feedparser."""
+
     def __init__(self, entries):
         self.feed = {"title": "Test Feed"}
         self.entries = entries
         self.bozo = 0
+
 
 @pytest.fixture
 def db_setup():
@@ -48,17 +57,23 @@ def db_setup():
         db.session.remove()
         db.drop_all()
 
+
 @pytest.fixture
 def captured_queries():
     queries = []
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+
+    def before_cursor_execute(
+        conn, cursor, statement, parameters, context, executemany
+    ):
         # Normalize whitespace for easier checking
         clean_stmt = " ".join(statement.split())
         queries.append(clean_stmt)
 
-    listener = event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
+    listener = event.listen(
+        db.engine, "before_cursor_execute", before_cursor_execute)
     yield queries
     event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
+
 
 def test_feed_update_query_optimization(db_setup, captured_queries):
     """
@@ -78,13 +93,15 @@ def test_feed_update_query_optimization(db_setup, captured_queries):
     # Add 50 existing items
     items = []
     for i in range(50):
-        items.append(FeedItem(
-            feed_id=feed.id,
-            title=f"Item {i}",
-            link=f"http://perf.test/{i}",
-            guid=f"guid-{i}",
-            published_time=datetime.datetime.now(datetime.timezone.utc)
-        ))
+        items.append(
+            FeedItem(
+                feed_id=feed.id,
+                title=f"Item {i}",
+                link=f"http://perf.test/{i}",
+                guid=f"guid-{i}",
+                published_time=datetime.datetime.now(datetime.timezone.utc),
+            )
+        )
     db.session.bulk_save_objects(items)
     db.session.commit()
 
@@ -98,14 +115,16 @@ def test_feed_update_query_optimization(db_setup, captured_queries):
         title="New Item",
         link="http://perf.test/new",
         id="new-guid",
-        published_parsed=datetime.datetime.now(datetime.timezone.utc).timetuple()
+        published_parsed=datetime.datetime.now(
+            datetime.timezone.utc).timetuple(),
     )
 
     existing_entry = MockFeedEntry(
         title="Item 0 Updated",
         link="http://perf.test/0",
         id="guid-0",
-        published_parsed=datetime.datetime.now(datetime.timezone.utc).timetuple()
+        published_parsed=datetime.datetime.now(
+            datetime.timezone.utc).timetuple(),
     )
 
     parsed_feed = MockParsedFeed([new_entry, existing_entry])
@@ -119,7 +138,8 @@ def test_feed_update_query_optimization(db_setup, captured_queries):
     # 4. Analyze Queries
     # Find the SELECT query on feed_items
     select_queries = [
-        q for q in captured_queries
+        q
+        for q in captured_queries
         if "SELECT" in q.upper() and "feed_items" in q.lower()
     ]
 
@@ -140,7 +160,10 @@ def test_feed_update_query_optimization(db_setup, captured_queries):
     )
 
     if not has_optimized_query:
-        pytest.fail("Optimization MISSING: Did not find a query filtering by GUID/Link IN list.")
+        pytest.fail(
+            "Optimization MISSING: Did not find a query filtering by GUID/Link IN list."
+        )
+
 
 def test_feed_update_query_optimization_missing_id(db_setup, captured_queries):
     """
@@ -152,21 +175,24 @@ def test_feed_update_query_optimization_missing_id(db_setup, captured_queries):
     db.session.add(tab)
     db.session.commit()
 
-    feed = Feed(name="PerfFeedNoID", url="http://perf-noid.test", tab_id=tab.id)
+    feed = Feed(name="PerfFeedNoID",
+                url="http://perf-noid.test", tab_id=tab.id)
     db.session.add(feed)
     db.session.commit()
 
     # Add 10 existing items
     items = []
     for i in range(10):
-        items.append(FeedItem(
-            feed_id=feed.id,
-            title=f"Item {i}",
-            link=f"http://perf-noid.test/{i}",
-            # Use hash logic if we were strict, but simple guid is fine for pre-pop
-            guid=f"hash-{i}",
-            published_time=datetime.datetime.now(datetime.timezone.utc)
-        ))
+        items.append(
+            FeedItem(
+                feed_id=feed.id,
+                title=f"Item {i}",
+                link=f"http://perf-noid.test/{i}",
+                # Use hash logic if we were strict, but simple guid is fine for pre-pop
+                guid=f"hash-{i}",
+                published_time=datetime.datetime.now(datetime.timezone.utc),
+            )
+        )
     db.session.bulk_save_objects(items)
     db.session.commit()
 
@@ -177,7 +203,8 @@ def test_feed_update_query_optimization_missing_id(db_setup, captured_queries):
         title="New Item No ID",
         link="http://perf-noid.test/new",
         # id is missing
-        published_parsed=datetime.datetime.now(datetime.timezone.utc).timetuple()
+        published_parsed=datetime.datetime.now(
+            datetime.timezone.utc).timetuple(),
     )
 
     parsed_feed = MockParsedFeed([new_entry_no_id])
@@ -189,7 +216,8 @@ def test_feed_update_query_optimization_missing_id(db_setup, captured_queries):
 
     # 4. Analyze Queries
     select_queries = [
-        q for q in captured_queries
+        q
+        for q in captured_queries
         if "SELECT" in q.upper() and "feed_items" in q.lower()
     ]
 
@@ -204,4 +232,6 @@ def test_feed_update_query_optimization_missing_id(db_setup, captured_queries):
     )
 
     if not has_optimized_query:
-        pytest.fail("Optimization MISSING for items without ID: Did not find a query filtering by GUID/Link IN list.")
+        pytest.fail(
+            "Optimization MISSING for items without ID: Did not find a query filtering by GUID/Link IN list."
+        )
