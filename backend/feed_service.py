@@ -1227,16 +1227,57 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
         feed_db_obj.site_link = new_site_link
 
 
+def _generate_guid_for_entry(entry, valid_link):
+    """Generates a robust GUID for a feed entry.
+
+    Prioritizes the entry's ID if present. Otherwise, generates a deterministic
+    hash based on the link and title to handle feeds without unique IDs.
+    """
+    if entry.get("id"):
+        return entry.get("id")
+
+    unique_string = f"{valid_link}{entry.get('title', '')}"
+    return hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+
+
 def _collect_new_items(feed_db_obj, parsed_feed):
     """Identifies new items to add and updates existing ones."""
     items_to_add = []
     batch_processed_guids = set()
 
-    # Optimization: Query only necessary columns to avoid loading full objects
-    # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link,
-        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
+    # Pre-calculate candidate GUIDs and links to optimize DB query
+    candidate_guids = set()
+    candidate_links = set()
+
+    for entry in parsed_feed.entries:
+        raw_link = entry.get("link")
+        entry_link = validate_link_structure(raw_link)
+
+        if not entry_link:
+            continue
+
+        candidate_guids.add(_generate_guid_for_entry(entry, entry_link))
+        candidate_links.add(entry_link)
+
+    if not candidate_guids and not candidate_links:
+        # No valid items in feed
+        return []
+
+    # Optimization: Query only necessary columns for candidate items
+    query = db.session.query(
+        FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title
+    ).filter(FeedItem.feed_id == feed_db_obj.id)
+
+    filters = []
+    if candidate_guids:
+        filters.append(FeedItem.guid.in_(candidate_guids))
+    if candidate_links:
+        filters.append(FeedItem.link.in_(candidate_links))
+
+    # Apply filters (filters is guaranteed non-empty due to return check above)
+    query = query.filter(db.or_(*filters))
+
+    items_tuple = query.all()
 
     # Create lookup maps
     existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
@@ -1279,15 +1320,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             continue
 
         # SECURITY & LOGIC: Generate a robust GUID if missing.
-        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
-        if entry.get("id"):
-            db_guid = entry.get("id")
-        else:
-            # Create a synthetic GUID based on link and title to ensure uniqueness
-            # for items that share a link but have different content.
-            unique_string = f"{entry_link}{entry.get('title', '')}"
-
-            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+        # Fallback to hash of link+title to distinguish items pointing to same URL.
+        db_guid = _generate_guid_for_entry(entry, entry_link)
 
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
