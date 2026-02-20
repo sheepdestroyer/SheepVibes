@@ -14,8 +14,10 @@ from ..extensions import db
 from ..feed_service import (
     fetch_and_update_feed,
     fetch_feed,
+    is_valid_feed_url,
     process_feed_entries,
     update_all_feeds,
+    validate_link_structure,
 )
 from ..models import Feed, FeedItem, Tab
 from ..sse import announcer
@@ -35,6 +37,9 @@ def add_feed():
         return jsonify({"error": "Missing feed URL"}), 400
 
     feed_url = data["url"].strip()
+    if not is_valid_feed_url(feed_url):
+        return jsonify({"error": "Invalid feed URL"}), 400
+
     tab_id = data.get("tab_id")  # Optional tab ID
 
     # Determine target tab ID
@@ -73,7 +78,8 @@ def add_feed():
         feed_name = parsed_feed.feed.get(
             "title", feed_url
         )  # Use URL as fallback if title missing
-        site_link = parsed_feed.feed.get("link")  # Get the website link
+        site_link = validate_link_structure(
+            parsed_feed.feed.get("link"))  # Get the website link
 
     try:
         # Create and save the new feed
@@ -197,6 +203,8 @@ def update_feed_url(feed_id):
         return jsonify({"error": "Missing or invalid feed URL"}), 400
 
     new_url = data["url"].strip()
+    if not is_valid_feed_url(new_url):
+        return jsonify({"error": "Invalid feed URL"}), 400
 
     # Check if the new URL is already used by another feed
     existing_feed = Feed.query.filter(
@@ -232,8 +240,8 @@ def update_feed_url(feed_id):
             new_name = parsed_feed.feed.get(
                 "title", new_url
             )  # Use URL as fallback if title missing
-            new_site_link = parsed_feed.feed.get(
-                "link")  # Get the website link
+            new_site_link = validate_link_structure(
+                parsed_feed.feed.get("link"))  # Get the website link
 
         # Update the feed
         original_url = feed.url
