@@ -1,5 +1,12 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-02-20
+
+- **Security: Fix Stored XSS in Feed URLs**
+  - **Vulnerability**: Feed URLs and site links were not being validated in `add_feed` and `update_feed_url` endpoints, allowing potential Stored XSS via `javascript:` or other malicious schemes.
+  - **Fix**: Implemented strict URL validation using `is_valid_feed_url` and `validate_link_structure` from `feed_service` in `backend/blueprints/feeds.py`.
+  - **Verification**: Added `tests/unit/test_feed_stored_xss.py` to confirm rejection of malicious URLs. Updated `tests/unit/test_app.py` to use valid HTTP URLs in tests.
+
 ## 2026-01-29
 
 - **Feat: Robust OPML Import & Feed Refresh Progress**
