@@ -79,7 +79,8 @@ def add_feed():
             "title", feed_url
         )  # Use URL as fallback if title missing
         site_link = validate_link_structure(
-            parsed_feed.feed.get("link"))  # Get the website link
+            parsed_feed.feed.get("link")
+        )  # Get the website link
 
     try:
         # Create and save the new feed
@@ -241,7 +242,8 @@ def update_feed_url(feed_id):
                 "title", new_url
             )  # Use URL as fallback if title missing
             new_site_link = validate_link_structure(
-                parsed_feed.feed.get("link"))  # Get the website link
+                parsed_feed.feed.get("link")
+            )  # Get the website link
 
         # Update the feed
         original_url = feed.url
