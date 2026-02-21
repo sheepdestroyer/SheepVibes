@@ -17,7 +17,7 @@ from .constants import (
     OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT,
     UPDATE_INTERVAL_MINUTES_DEFAULT,
 )
-from .extensions import cache, db, scheduler
+from .extensions import cache, db, limiter, scheduler
 from .feed_service import update_all_feeds
 from .sse import announcer
 
@@ -54,6 +54,7 @@ if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
     app.config["CACHE_TYPE"] = (
         "SimpleCache"  # Use SimpleCache for tests, no Redis needed
     )
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
     logger.info(
         "TESTING mode: Using in-memory SQLite database and SimpleCache.")
 else:
@@ -97,6 +98,7 @@ else:
     app.config["CACHE_TYPE"] = "RedisCache"
     app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL",
                                                    "redis://localhost:6379/0")
+    app.config["RATELIMIT_STORAGE_URI"] = app.config["CACHE_REDIS_URL"]
 
 # Disable modification tracking
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -105,6 +107,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 migrate = Migrate(app, db)
 cache.init_app(app)
+limiter.init_app(app)
 
 # Register Blueprints
 app.register_blueprint(opml_bp)

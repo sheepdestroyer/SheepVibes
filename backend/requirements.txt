@@ -11,3 +11,4 @@ redis
 Flask-CORS
 filelock==3.24.2
 defusedxml
+Flask-Limiter
