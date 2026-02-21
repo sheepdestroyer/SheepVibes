@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import patch
-from backend.app import app, db, cache, limiter
+
+import pytest
+
+from backend.app import app, cache, db, limiter
 from backend.models import Tab
+
 
 @pytest.fixture
 def rate_limit_client():
@@ -42,6 +45,7 @@ def rate_limit_client():
         db.session.remove()
         db.drop_all()
 
+
 def test_export_opml_rate_limit(rate_limit_client):
     """Test rate limiting on OPML export (10/minute)."""
     # Hit the endpoint 10 times
@@ -54,10 +58,11 @@ def test_export_opml_rate_limit(rate_limit_client):
     assert response.status_code == 429
     assert "Too Many Requests" in response.text or "429" in response.status
 
+
 @patch("backend.blueprints.feeds.fetch_feed")
 def test_add_feed_rate_limit(mock_fetch, rate_limit_client):
     """Test rate limiting on Add Feed (10/minute)."""
-    mock_fetch.return_value = None # Simulate fetch failure to keep it fast
+    mock_fetch.return_value = None  # Simulate fetch failure to keep it fast
 
     url = "/api/feeds"
     # We need a valid tab_id, assumed 1 from fixture
@@ -72,6 +77,7 @@ def test_add_feed_rate_limit(mock_fetch, rate_limit_client):
     data = {"url": "http://example.com/feed11", "tab_id": 1}
     response = rate_limit_client.post(url, json=data)
     assert response.status_code == 429
+
 
 def test_api_update_all_feeds_rate_limit(rate_limit_client):
     """Test rate limiting on Update All Feeds (1/minute)."""

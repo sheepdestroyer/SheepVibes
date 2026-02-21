@@ -25,7 +25,8 @@ def client():
     app.config["TESTING"] = True
     app.config["PROPAGATE_EXCEPTIONS"] = False
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["RATELIMIT_ENABLED"] = False  # Disable rate limiting for general tests
+    # Disable rate limiting for general tests
+    app.config["RATELIMIT_ENABLED"] = False
     limiter.enabled = False  # Explicitly disable limiter for tests
 
     # Use an in-memory SQLite database for testing
