@@ -10,7 +10,7 @@ import pytest
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
-from backend.app import app, cache  # Import the app and cache instance
+from backend.app import app, cache, limiter  # Import the app and cache instance
 from backend.feed_service import (  # For new tests
     parse_published_time,
     process_feed_entries,
@@ -25,6 +25,9 @@ def client():
     app.config["TESTING"] = True
     app.config["PROPAGATE_EXCEPTIONS"] = False
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Disable rate limiting for general tests
+    app.config["RATELIMIT_ENABLED"] = False
+    limiter.enabled = False  # Explicitly disable limiter for tests
 
     # Use an in-memory SQLite database for testing
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
