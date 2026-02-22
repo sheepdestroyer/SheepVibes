@@ -8,6 +8,14 @@ body {
     font-size: 14px;
 }
 
+body.logged-out .auth-only {
+    display: none !important;
+}
+
+body.logged-in #auth-container {
+    display: none !important;
+}
+
 a {
     color: #005a9c;
     text-decoration: none;
@@ -116,10 +124,26 @@ header h1 {
 }
 
 /* Settings Menu */
+#user-menu {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#username-display {
+    font-weight: 600;
+}
+
+#logout-button, #admin-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+}
+
 #settings-menu-container {
     position: relative;
-    margin-left: auto;
-    /* Push to the right */
 }
 
 #settings-button {
@@ -638,4 +662,67 @@ header h1 {
 
 .modal.is-busy-shaking .modal-content {
     animation: shake 0.82s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+/* Auth View */
+#auth-container {
+    max-width: 400px;
+    margin: 100px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.auth-view h2 {
+    margin-top: 0;
+}
+
+.auth-view button {
+    width: 100%;
+    padding: 10px;
+    background-color: #005a9c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Admin View */
+#admin-view {
+    position: fixed;
+    top: 50px;
+    left: 50px;
+    right: 50px;
+    bottom: 50px;
+    background: white;
+    z-index: 2000;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 20px;
+}
+
+#users-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#users-table th, #users-table td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+.hidden {
+    display: none !important;
 }

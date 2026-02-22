@@ -3,6 +3,7 @@ import json
 import logging
 
 from flask import Blueprint, jsonify, request
+from flask_login import current_user, login_required
 
 from ..cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
 from ..constants import (
@@ -15,9 +16,8 @@ from ..feed_service import (
     fetch_and_update_feed,
     fetch_feed,
     process_feed_entries,
-    update_all_feeds,
 )
-from ..models import Feed, FeedItem, Tab
+from ..models import Feed, FeedItem, Tab, Subscription, UserItemState
 from ..sse import announcer
 
 logger = logging.getLogger(__name__)
@@ -27,435 +27,235 @@ items_bp = Blueprint("items", __name__, url_prefix="/api/items")
 
 
 @feeds_bp.route("", methods=["POST"])
+@login_required
 def add_feed():
-    """Adds a new feed to a specified tab (or the default tab)."""
+    """Adds a new subscription to a specified tab for the current user."""
     data = request.get_json()
-    # Validate input
     if not data or "url" not in data or not data["url"].strip():
         return jsonify({"error": "Missing feed URL"}), 400
 
     feed_url = data["url"].strip()
-    tab_id = data.get("tab_id")  # Optional tab ID
+    tab_id = data.get("tab_id")
 
-    # Determine target tab ID
     if not tab_id:
-        # Find the first tab by order if no ID provided
-        default_tab = Tab.query.order_by(Tab.order).first()
+        default_tab = Tab.query.filter_by(user_id=current_user.id).order_by(Tab.order).first()
         if not default_tab:
-            # Cannot add feed if no tabs exist
-            return jsonify({"error": "Cannot add feed: No default tab found"}), 400
+            return jsonify({"error": "Cannot add feed: No tabs found"}), 400
         tab_id = default_tab.id
     else:
-        # Verify the provided tab_id exists
-        tab = db.session.get(Tab, tab_id)
+        tab = db.session.query(Tab).filter_by(id=tab_id, user_id=current_user.id).first()
         if not tab:
             return jsonify({"error": f"Tab with id {tab_id} not found"}), 404
 
-    # Check if feed URL already exists in the database
+    # Get or create global Feed
+    new_feed_created = False
     existing_feed = Feed.query.filter_by(url=feed_url).first()
-    if existing_feed:
-        return (
-            jsonify({"error": f"Feed with URL {feed_url} already exists"}),
-            409,
-        )  # Conflict
 
-    # Attempt to fetch the feed to get its title
-    parsed_feed = fetch_feed(feed_url)
-    if not parsed_feed or not parsed_feed.feed:
-        # If fetch fails initially, use the URL as the name
-        feed_name = feed_url
-        site_link = None  # No website link if fetch failed
-        logger.warning(
-            "Could not fetch title for %s, using URL as name.",
-            feed_url,
-        )
+    if existing_feed:
+        feed = existing_feed
+        # Check if user already has this feed subscribed
+        existing_sub = Subscription.query.filter_by(user_id=current_user.id, feed_id=feed.id).first()
+        if existing_sub:
+            return jsonify({"error": f"You are already subscribed to {feed_url}"}), 409
     else:
-        feed_name = parsed_feed.feed.get(
-            "title", feed_url
-        )  # Use URL as fallback if title missing
-        site_link = parsed_feed.feed.get("link")  # Get the website link
+        # Attempt to fetch the feed
+        parsed_feed = fetch_feed(feed_url)
+        feed_name = feed_url
+        site_link = None
+        if parsed_feed and parsed_feed.feed:
+            feed_name = parsed_feed.feed.get("title", feed_url)
+            site_link = parsed_feed.feed.get("link")
+
+        feed = Feed(name=feed_name, url=feed_url, site_link=site_link)
+        db.session.add(feed)
+        db.session.flush() # Get feed.id
+        new_feed_created = True
 
     try:
-        # Create and save the new feed
-        new_feed = Feed(
-            tab_id=tab_id,
-            name=feed_name,
-            url=feed_url,
-            site_link=site_link,
-            # last_updated_time defaults to now
-        )
-        db.session.add(new_feed)
-        db.session.commit()  # Commit to get the new_feed.id
+        new_sub = Subscription(user_id=current_user.id, tab_id=tab_id, feed_id=feed.id)
+        db.session.add(new_sub)
+        db.session.commit()
 
-        # Trigger initial fetch and processing of items for the new feed
-        num_new_items = 0
-        if parsed_feed:
-            try:
-                num_new_items = process_feed_entries(new_feed, parsed_feed)
-                logger.info(
-                    "Processed initial %s items for feed %s",
-                    num_new_items,
-                    new_feed.id,
-                )
-            except Exception as proc_e:
-                # Log error during initial processing but don't fail the add operation
-                logger.error(
-                    "Error processing initial items for feed %s: %s",
-                    new_feed.id,
-                    proc_e,
-                    exc_info=True,
-                )
+        if new_feed_created and parsed_feed:
+            process_feed_entries(feed, parsed_feed)
 
-        if num_new_items > 0:
-            invalidate_tab_feeds_cache(tab_id)
-        else:
-            invalidate_tabs_cache()  # At least invalidate for unread count change potential
-
-        logger.info(
-            "Added new feed '%s' with id %s to tab %s.",
-            new_feed.name,
-            new_feed.id,
-            tab_id,
-        )
-        return jsonify(new_feed.to_dict()), 201  # Created
+        invalidate_tab_feeds_cache(tab_id)
+        return jsonify(new_sub.to_dict()), 201
 
     except Exception as e:
         db.session.rollback()
-        logger.error(
-            "Error adding feed %s: %s",
-            feed_url,
-            str(e),
-            exc_info=True,
-        )
-        return (
-            jsonify({"error": "An internal error occurred while adding the feed."}),
-            500,
-        )
+        logger.error("Error adding feed %s: %s", feed_url, str(e), exc_info=True)
+        return (jsonify({"error": "An internal error occurred while adding the feed."}), 500)
 
 
-@feeds_bp.route("/<int:feed_id>", methods=["DELETE"])
-def delete_feed(feed_id):
-    """Deletes a feed and its associated items.
-
-    Args:
-        feed_id (int): The ID of the feed to delete.
-
-    Returns:
-        A tuple containing a JSON response and the HTTP status code.
-    """
-    # Find feed or return 404
-    feed = db.get_or_404(Feed, feed_id)
+@feeds_bp.route("/<int:sub_id>", methods=["DELETE"])
+@login_required
+def delete_feed(sub_id):
+    """Deletes a subscription for the current user."""
+    sub = db.session.query(Subscription).filter_by(id=sub_id, user_id=current_user.id).first_or_404()
+    tab_id = sub.tab_id
     try:
-        tab_id = feed.tab_id
-        feed_name = feed.name
-        # Associated items are deleted due to cascade settings
-        db.session.delete(feed)
+        db.session.delete(sub)
         db.session.commit()
         invalidate_tab_feeds_cache(tab_id)
-        logger.info(
-            "Deleted feed '%s' with id %s.",
-            feed_name,
-            feed_id,
-        )
-        # OK
-        return jsonify({"message": f"Feed {feed_id} deleted successfully"}), 200
+        return jsonify({"message": f"Subscription {sub_id} deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
-        logger.error(
-            "Error deleting feed %s: %s",
-            feed_id,
-            str(e),
-            exc_info=True,
-        )
-        return (
-            jsonify(
-                {"error": "An internal error occurred while deleting the feed."}),
-            500,
-        )
+        logger.error("Error deleting subscription %s: %s", sub_id, str(e), exc_info=True)
+        return (jsonify({"error": "An internal error occurred while deleting the feed."}), 500)
 
 
-@feeds_bp.route("/<int:feed_id>", methods=["PUT"])
-def update_feed_url(feed_id):
-    """Updates a feed's URL and name.
-
-    Args:
-        feed_id (int): The ID of the feed to update.
-
-    Returns:
-        A tuple containing a JSON response and the HTTP status code.
-    """
-    # Find feed or return 404
-    feed = db.get_or_404(Feed, feed_id)
-
+@feeds_bp.route("/<int:sub_id>", methods=["PUT"])
+@login_required
+def update_feed_url(sub_id):
+    """Updates a subscription's custom name or URL (global)."""
+    sub = db.session.query(Subscription).filter_by(id=sub_id, user_id=current_user.id).first_or_404()
     data = request.get_json()
-    # Validate input
-    if (
-        not data
-        or "url" not in data
-        or not (isinstance(data["url"], str) and data["url"].strip())
-    ):
-        return jsonify({"error": "Missing or invalid feed URL"}), 400
 
-    new_url = data["url"].strip()
+    # In this multi-user model, users usually shouldn't change the GLOBAL URL
+    # unless we want them to. Let's assume URL change means switching subscription
+    # to another feed (or creating it).
 
-    # Check if the new URL is already used by another feed
-    existing_feed = Feed.query.filter(
-        Feed.id != feed_id, Feed.url == new_url).first()
-    if existing_feed:
-        return (
-            jsonify({"error": f"Feed with URL {new_url} already exists"}),
-            409,
-        )  # Conflict
-
+    new_url = data.get("url", "").strip()
     custom_name = data.get("name", "").strip()
 
-    try:
-        # Attempt to fetch the feed to get its title (and verify accessibility/SSRF)
-        parsed_feed = fetch_feed(new_url)
-
-        if custom_name:
-            new_name = custom_name
-            new_site_link = (
-                parsed_feed.feed.get("link")
-                if parsed_feed and parsed_feed.feed
-                else None
-            )
-        elif not parsed_feed or not parsed_feed.feed:
-            # If fetch fails and no custom name provided, use the URL as the name
-            new_name = new_url
-            new_site_link = None
-            logger.warning(
-                "Could not fetch title for %s and no custom name provided, using URL as name.",
-                new_url,
-            )
+    if new_url and new_url != sub.feed.url:
+        # Logic to change feed URL for this subscription
+        # Similar to add_feed: find/create global feed and update sub.feed_id
+        existing_feed = Feed.query.filter_by(url=new_url).first()
+        if existing_feed:
+            sub.feed_id = existing_feed.id
         else:
-            new_name = parsed_feed.feed.get(
-                "title", new_url
-            )  # Use URL as fallback if title missing
-            new_site_link = parsed_feed.feed.get(
-                "link")  # Get the website link
+            parsed_feed = fetch_feed(new_url)
+            feed_name = new_url
+            site_link = None
+            if parsed_feed and parsed_feed.feed:
+                feed_name = parsed_feed.feed.get("title", new_url)
+                site_link = parsed_feed.feed.get("link")
 
-        # Update the feed
-        original_url = feed.url
-        feed.url = new_url
-        feed.name = new_name
-        feed.site_link = new_site_link
-        feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
-
-        db.session.commit()
-
-        # Invalidate cache for the feed's tab, as feed properties (name, url) have changed.
-        invalidate_tab_feeds_cache(feed.tab_id)
-        logger.info(
-            "Cache invalidated for tab %s after updating feed %s.",
-            feed.tab_id,
-            feed.id,
-        )
-
-        # Trigger update to fetch new items using the already fetched feed data
-        try:
+            new_global_feed = Feed(name=feed_name, url=new_url, site_link=site_link)
+            db.session.add(new_global_feed)
+            db.session.flush()
+            sub.feed_id = new_global_feed.id
             if parsed_feed:
-                # Reuse the already fetched and parsed feed data to process entries,
-                # avoiding a redundant network call.
-                process_feed_entries(feed, parsed_feed)
-        except Exception as update_e:
-            # Log error during update but don't fail the operation
-            logger.error(
-                "Error updating feed %s after URL change: %s",
-                feed.id,
-                update_e,
-                exc_info=True,
-            )
+                process_feed_entries(new_global_feed, parsed_feed)
 
-        logger.info(
-            "Updated feed %s from '%s' to '%s'.",
-            feed_id,
-            original_url,
-            new_url,
-        )
+    if custom_name:
+        sub.custom_name = custom_name
 
-        # Return full feed data including items for frontend to update widget
-        feed_data = feed.to_dict()
-        # Include only recent feed items in the response (limit to DEFAULT_FEED_ITEMS_LIMIT)
-        feed_data["items"] = [
-            item.to_dict()
-            for item in feed.items.order_by(
-                FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
-            ).limit(DEFAULT_FEED_ITEMS_LIMIT)
-        ]
-        return jsonify(feed_data), 200  # OK
+    try:
+        db.session.commit()
+        invalidate_tab_feeds_cache(sub.tab_id)
+
+        # Return subscription data including items
+        sub_dict = sub.to_dict()
+        items = sub.feed.items.order_by(FeedItem.published_time.desc().nullslast()).limit(DEFAULT_FEED_ITEMS_LIMIT).all()
+        # Get is_read statuses
+        item_ids = [it.id for it in items]
+        item_states = {s.item_id: s.is_read for s in UserItemState.query.filter(UserItemState.user_id == current_user.id, UserItemState.item_id.in_(item_ids)).all()}
+
+        sub_dict["items"] = [it.to_dict(is_read=item_states.get(it.id, False)) for it in items]
+        return jsonify(sub_dict), 200
 
     except Exception as e:
         db.session.rollback()
-        logger.error("Error updating feed %s: %s", feed_id, e, exc_info=True)
-        return (
-            jsonify(
-                {"error": "An internal error occurred while updating the feed."}),
-            500,
-        )
+        logger.error("Error updating subscription %s: %s", sub_id, e, exc_info=True)
+        return (jsonify({"error": "An internal error occurred while updating the feed."}), 500)
 
 
 @feeds_bp.route("/update-all", methods=["POST"])
+@login_required
 def api_update_all_feeds():
-    """Triggers an update for all feeds in the system.
-
-    Returns:
-        A tuple containing a JSON response and the HTTP status code.
-    """
-    logger.info("Received request to update all feeds.")
+    """Triggers an update for all feeds in the system (global)."""
+    # Still global, but maybe restricted to admins?
+    # Or just let any user trigger a global refresh?
+    # For SheepVibes, let's keep it open or restricted to logged-in users.
     try:
+        # Call the existing update_all_feeds service
+        from ..feed_service import update_all_feeds
         processed_count, new_items_count, affected_tab_ids = update_all_feeds()
-        logger.info(
-            "All feeds update process completed. Processed: %s, New Items: %s",
-            processed_count,
-            new_items_count,
-        )
-        if new_items_count > 0 and affected_tab_ids:
-            for tab_id in affected_tab_ids:
-                invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
-            invalidate_tabs_cache()
-            logger.info(
-                "Granular cache invalidation completed for affected tabs: %s",
-                affected_tab_ids,
-            )
-        # Announce the update to listening clients
-        event_data = {
+
+        # SSE handles broadcasting
+        return jsonify({
+            "message": "All feeds updated successfully.",
             "feeds_processed": processed_count,
             "new_items": new_items_count,
-            "affected_tab_ids": (
-                sorted(list(affected_tab_ids)) if affected_tab_ids else []
-            ),
-        }
-        msg = f"data: {json.dumps(event_data)}\n\n"
-        announcer.announce(msg=msg)
-        return (
-            jsonify(
-                {
-                    "message": "All feeds updated successfully.",
-                    "feeds_processed": processed_count,
-                    "new_items": new_items_count,
-                }
-            ),
-            200,
-        )
+        }), 200
     except Exception as e:
-        logger.error("Error during /api/feeds/update-all: %s",
-                     e, exc_info=True)
-        # Consistent error response with other parts of the API
-        return (
-            jsonify(
-                {"error": "An internal error occurred while updating all feeds."}),
-            500,
-        )
+        logger.error("Error during /api/feeds/update-all: %s", e, exc_info=True)
+        return (jsonify({"error": "An internal error occurred while updating all feeds."}), 500)
 
 
-@feeds_bp.route("/<int:feed_id>/update", methods=["POST"])
-def update_feed(feed_id):
-    """Manually triggers an update check for a specific feed."""
-    feed = db.get_or_404(Feed, feed_id)
+@feeds_bp.route("/<int:sub_id>/update", methods=["POST"])
+@login_required
+def update_feed(sub_id):
+    """Manually triggers an update check for a specific feed via subscription."""
+    sub = db.session.query(Subscription).filter_by(id=sub_id, user_id=current_user.id).first_or_404()
     try:
-        success, new_items, _ = fetch_and_update_feed(feed.id)
+        success, new_items, _ = fetch_and_update_feed(sub.feed_id)
         if success and new_items > 0:
-            invalidate_tab_feeds_cache(feed.tab_id)
-            logger.info(
-                "Cache invalidated for tab %s after manual update of feed %s.",
-                feed.tab_id,
-                feed.id,
-            )
-
-        return jsonify(feed.to_dict())
+            invalidate_tab_feeds_cache(sub.tab_id)
+        return jsonify(sub.to_dict())
     except Exception as e:
-        logger.error(
-            "Error during manual update for feed %s: %s",
-            feed.id,
-            e,
-            exc_info=True,
-        )
-        return (
-            jsonify(
-                {
-                    "error": f"An internal error occurred while manually updating feed {feed_id}."
-                }
-            ),
-            500,
-        )
+        logger.error("Error during manual update for subscription %s: %s", sub_id, e, exc_info=True)
+        return (jsonify({"error": "An internal error occurred"}), 500)
 
 
-@feeds_bp.route("/<int:feed_id>/items", methods=["GET"])
-def get_feed_items(feed_id):
-    """Returns a paginated list of items for a specific feed."""
-    # Ensure the feed exists, or return a 404 error
-    db.get_or_404(Feed, feed_id)
+@feeds_bp.route("/<int:sub_id>/items", methods=["GET"])
+@login_required
+def get_feed_items(sub_id):
+    """Returns a paginated list of items for a specific subscription."""
+    sub = db.session.query(Subscription).filter_by(id=sub_id, user_id=current_user.id).first_or_404()
 
-    # Get offset and limit from the request's query string, with default values
     try:
         offset = int(request.args.get("offset", 0))
         limit = int(request.args.get("limit", DEFAULT_PAGINATION_LIMIT))
     except (ValueError, TypeError):
-        return (
-            jsonify(
-                {"error": "Offset and limit parameters must be valid integers."}),
-            400,
-        )
+        return (jsonify({"error": "Offset and limit parameters must be valid integers."}), 400)
 
-    # Validate and cap pagination parameters
-    if offset < 0:
-        return jsonify({"error": "Offset cannot be negative."}), 400
-    if limit <= 0:
-        return jsonify({"error": "Limit must be positive."}), 400
-    limit = min(limit, MAX_PAGINATION_LIMIT)
+    offset = max(0, offset)
+    limit = max(1, min(limit, MAX_PAGINATION_LIMIT))
 
-    # Query the database for the items, ordered by date
-    items = (
-        FeedItem.query.filter_by(feed_id=feed_id)
-        .order_by(
-            FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
-        )
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    items = (FeedItem.query.filter_by(feed_id=sub.feed_id)
+             .order_by(FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc())
+             .offset(offset).limit(limit).all())
 
-    # Return the items as a JSON response
-    return jsonify([item.to_dict() for item in items])
+    # Get is_read statuses
+    item_ids = [it.id for it in items]
+    item_states = {s.item_id: s.is_read for s in UserItemState.query.filter(UserItemState.user_id == current_user.id, UserItemState.item_id.in_(item_ids)).all()}
+
+    return jsonify([it.to_dict(is_read=item_states.get(it.id, False)) for it in items])
 
 
 @items_bp.route("/<int:item_id>/read", methods=["POST"])
+@login_required
 def mark_item_read(item_id):
-    """Marks a specific feed item as read.
-
-    Args:
-        item_id (int): The ID of the feed item to mark as read.
-
-    Returns:
-        A tuple containing a JSON response and the HTTP status code.
-    """
-    # Find item or return 404
+    """Marks a specific feed item as read for the current user."""
     item = db.session.get(FeedItem, item_id)
     if not item:
         return jsonify({"error": "Feed item not found"}), 404
 
-    # If already read, return success without changing anything
-    if item.is_read:
-        return jsonify({"message": "Item already marked as read"}), 200  # OK
+    # Check if item state already exists
+    state = UserItemState.query.filter_by(user_id=current_user.id, item_id=item_id).first()
+    if state and state.is_read:
+        return jsonify({"message": "Item already marked as read"}), 200
 
     try:
-        tab_id = item.feed.tab_id
-        item.is_read = True
+        if not state:
+            state = UserItemState(user_id=current_user.id, item_id=item_id, is_read=True)
+            db.session.add(state)
+        else:
+            state.is_read = True
+
         db.session.commit()
-        invalidate_tab_feeds_cache(tab_id)
-        logger.info("Marked item %s as read.", item_id)
-        # OK
+
+        # Invalidate caches for all tabs where this feed is subscribed by this user
+        subs = Subscription.query.filter_by(user_id=current_user.id, feed_id=item.feed_id).all()
+        for sub in subs:
+            invalidate_tab_feeds_cache(sub.tab_id)
+
         return jsonify({"message": f"Item {item_id} marked as read"}), 200
     except Exception as e:
         db.session.rollback()
-        logger.error(
-            "Error marking item %s as read: %s", item_id, str(e), exc_info=True
-        )
-        # Let 500 handler manage response (or return specific error)
-        return (
-            jsonify(
-                {"error": "An internal error occurred while marking the item as read."}
-            ),
-            500,
-        )
+        logger.error("Error marking item %s as read: %s", item_id, str(e), exc_info=True)
+        return (jsonify({"error": "An internal error occurred"}), 500)

@@ -1,57 +1,75 @@
 import datetime
-from datetime import timezone  # Import timezone
+from datetime import timezone
 
+from flask_login import UserMixin
 from sqlalchemy.orm import validates
 
-# Initialize SQLAlchemy ORM extension
-# This will be initialized with the app in app.py using db.init_app(app)
 from .extensions import db
 
-# --- Database Models ---
+
+class User(db.Model, UserMixin):
+    """Represents a user of the application."""
+
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=True)
+    is_admin = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.datetime.now(timezone.utc))
+
+    # Relationships
+    tabs = db.relationship("Tab", backref="user", lazy=True, cascade="all, delete-orphan")
+    subscriptions = db.relationship("Subscription", backref="user", lazy=True, cascade="all, delete-orphan")
+    item_states = db.relationship("UserItemState", backref="user", lazy=True, cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "is_admin": self.is_admin,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class Tab(db.Model):
-    """Represents a tab for organizing feeds.
-
-    Attributes:
-        id (int): The primary key.
-        name (str): The name of the tab.
-        order (int): The display order of the tab.
-        feeds (relationship): A relationship to the feeds in this tab.
-    """
+    """Represents a tab for organizing feeds."""
 
     __tablename__ = "tabs"
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False,
-                     unique=True)  # Name of the tab
-    order = db.Column(db.Integer, default=0)  # Display order of the tab
-    # Relationship to Feeds: One-to-Many (one Tab has many Feeds)
-    # cascade='all, delete-orphan' means deleting a Tab also deletes its associated Feeds
-    feeds = db.relationship("Feed",
-                            backref="tab",
-                            lazy=True,
-                            cascade="all, delete-orphan")
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    order = db.Column(db.Integer, default=0)
+
+    # Relationship to Subscriptions: One-to-Many
+    subscriptions = db.relationship("Subscription", backref="tab", lazy=True, cascade="all, delete-orphan")
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "name", name="uq_tab_user_id_name"),
+    )
 
     def to_dict(self, unread_count=None):
-        """Serializes the Tab object to a dictionary.
-
-        Args:
-            unread_count (int, optional): The unread count for this tab.
-                                          If None, it will be queried from the DB.
-
-        Returns:
-            dict: A dictionary representation of the tab, including the unread count.
-        """
         if unread_count is None:
-            # Calculate total unread count for all feeds within this tab
-            unread_count = (db.session.query(
-                db.func.count(FeedItem.id)).join(Feed).filter(
-                    Feed.tab_id == self.id,
-                    FeedItem.is_read.is_(False)).scalar() or 0)
+            # Calculate total unread count for all subscriptions within this tab
+            # This is slow, better to use joined queries in blueprints
+            unread_count = (db.session.query(db.func.count(FeedItem.id))
+                            .join(Feed, Feed.id == FeedItem.feed_id)
+                            .join(Subscription, Subscription.feed_id == Feed.id)
+                            .outerjoin(UserItemState, db.and_(
+                                UserItemState.item_id == FeedItem.id,
+                                UserItemState.user_id == self.user_id
+                            ))
+                            .filter(
+                                Subscription.tab_id == self.id,
+                                db.or_(UserItemState.is_read.is_(False), UserItemState.is_read.is_(None))
+                            ).scalar() or 0)
 
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "name": self.name,
             "order": self.order,
             "unread_count": unread_count,
@@ -59,171 +77,96 @@ class Tab(db.Model):
 
 
 class Feed(db.Model):
-    """Represents an RSS/Atom feed source.
-
-    Attributes:
-        id (int): The primary key.
-        tab_id (int): The foreign key for the tab this feed belongs to.
-        name (str): The name of the feed.
-        url (str): The URL of the feed.
-        site_link (str): The URL of the feed's website.
-        last_updated_time (datetime): The last time the feed was updated.
-        items (relationship): A relationship to the items in this feed.
-    """
+    """Represents a global RSS/Atom feed source."""
 
     __tablename__ = "feeds"
 
     id = db.Column(db.Integer, primary_key=True)
-    tab_id = db.Column(db.Integer, db.ForeignKey("tabs.id"),
-                       nullable=False)  # Foreign key to Tab
-    name = db.Column(
-        db.String(200),
-        nullable=False)  # Name of the feed (often from feed title)
-    url = db.Column(db.String(500),
-                    nullable=False)  # URL of the feed (the XML feed URL)
-    site_link = db.Column(
-        db.String(500),
-        nullable=True)  # URL of the feed's main website (HTML link)
-    last_updated_time = db.Column(
-        db.DateTime, default=lambda: datetime.datetime.now(
-            timezone.utc))  # Last time feed was successfully fetched
-    # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
-    # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
-    # lazy='dynamic' allows for further querying on the relationship.
-    items = db.relationship("FeedItem",
-                            backref="feed",
-                            lazy="dynamic",
-                            cascade="all, delete-orphan")
+    name = db.Column(db.String(200), nullable=False)  # Default name from feed title
+    url = db.Column(db.String(500), nullable=False, unique=True)
+    site_link = db.Column(db.String(500), nullable=True)
+    last_updated_time = db.Column(db.DateTime, default=lambda: datetime.datetime.now(timezone.utc))
 
-    def to_dict(self, unread_count=None):
-        """Serializes the Feed object to a dictionary.
+    items = db.relationship("FeedItem", backref="feed", lazy="dynamic", cascade="all, delete-orphan")
+    subscriptions = db.relationship("Subscription", backref="feed", lazy=True, cascade="all, delete-orphan")
 
-        Args:
-            unread_count (int, optional): The unread count for this feed.
-                                          If None, it will be queried from the DB.
-
-        Returns:
-            dict: A dictionary representation of the feed, including the unread count.
-        """
-        if unread_count is None:
-            # Calculate unread count for this specific feed
-            unread_count = (db.session.query(db.func.count(
-                FeedItem.id)).filter(FeedItem.feed_id == self.id,
-                                     FeedItem.is_read.is_(False)).scalar()
-                or 0)
-
+    def to_dict(self, unread_count=0):
         return {
-            "id":
-            self.id,
-            "tab_id":
-            self.tab_id,
-            "name":
-            self.name,
-            "url":
-            self.url,
-            "site_link":
-            self.site_link,
-            "last_updated_time": (self.last_updated_time.isoformat()
-                                  if self.last_updated_time else None),
-            "unread_count":
-            unread_count,
+            "id": self.id,
+            "name": self.name,
+            "url": self.url,
+            "site_link": self.site_link,
+            "last_updated_time": self.last_updated_time.isoformat() if self.last_updated_time else None,
+            "unread_count": unread_count,
+        }
+
+
+class Subscription(db.Model):
+    """Links a User to a Feed within a Tab."""
+
+    __tablename__ = "subscriptions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    tab_id = db.Column(db.Integer, db.ForeignKey("tabs.id"), nullable=False)
+    feed_id = db.Column(db.Integer, db.ForeignKey("feeds.id"), nullable=False)
+    custom_name = db.Column(db.String(200), nullable=True)  # User's alias for the feed
+    order = db.Column(db.Integer, default=0)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "feed_id", name="uq_subscription_user_id_feed_id"),
+    )
+
+    def to_dict(self, unread_count=0):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "tab_id": self.tab_id,
+            "feed_id": self.feed_id,
+            "name": self.custom_name or self.feed.name,
+            "url": self.feed.url,
+            "site_link": self.feed.site_link,
+            "last_updated_time": self.feed.last_updated_time.isoformat() if self.feed.last_updated_time else None,
+            "unread_count": unread_count,
         }
 
 
 class FeedItem(db.Model):
-    """Represents a single item within an RSS/Atom feed.
-
-    Attributes:
-        id (int): The primary key.
-        feed_id (int): The foreign key for the feed this item belongs to.
-        title (str): The title of the feed item.
-        link (str): The URL of the feed item.
-        published_time (datetime): The time the item was published.
-        fetched_time (datetime): The time the item was fetched.
-        is_read (bool): Whether the item has been read.
-        guid (str): The GUID of the feed item.
-    """
+    """Represents a single item within a global Feed."""
 
     __tablename__ = "feed_items"
     id = db.Column(db.Integer, primary_key=True)
-    feed_id = db.Column(
-        db.Integer,
-        db.ForeignKey("feeds.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )  # Add index
+    feed_id = db.Column(db.Integer, db.ForeignKey("feeds.id", ondelete="CASCADE"), nullable=False, index=True)
     title = db.Column(db.String, nullable=False)
     link = db.Column(db.String, nullable=False)
-    published_time = db.Column(db.DateTime, nullable=True,
-                               index=True)  # Add index
-    fetched_time = db.Column(
-        db.DateTime,
-        nullable=False,
-        default=lambda: datetime.datetime.now(timezone.utc))
-    is_read = db.Column(db.Boolean, nullable=False, default=False,
-                        index=True)  # Add index
-    guid = db.Column(
-        db.String, nullable=True)  # GUID unique per feed via UniqueConstraint
+    published_time = db.Column(db.DateTime, nullable=True, index=True)
+    fetched_time = db.Column(db.DateTime, nullable=False, default=lambda: datetime.datetime.now(timezone.utc))
+    guid = db.Column(db.String, nullable=True)
 
     __table_args__ = (
-        db.UniqueConstraint("feed_id",
-                            "guid",
-                            name="uq_feed_item_feed_id_guid"),
-        db.Index(
-            "ix_feed_items_feed_id_published_fetched_time",
-            "feed_id",
-            "published_time",
-            "fetched_time",
-        ),
+        db.UniqueConstraint("feed_id", "guid", name="uq_feed_item_feed_id_guid"),
+        db.Index("ix_feed_items_feed_id_published_fetched_time", "feed_id", "published_time", "fetched_time"),
     )
 
     @validates("published_time", "fetched_time")
     def validate_datetime_utc(self, key, dt):
-        """Validates that the datetime is UTC.
-
-        Args:
-            key (str): The name of the field being validated.
-            dt (datetime.datetime): The datetime object to validate.
-
-        Returns:
-            datetime.datetime: The validated datetime object.
-        """
         if dt is None:
             return None
         if dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None:
-            # Aware datetime, convert to UTC and make naive for storage
             return dt.astimezone(timezone.utc).replace(tzinfo=None)
-        # Naive datetime, assume it's already UTC
         return dt
 
     @staticmethod
     def to_iso_z_string(dt_val: datetime.datetime | None) -> str | None:
-        """
-        Converts a datetime object to a UTC ISO string with 'Z' suffix.
-        Handles naive (assumed UTC) and timezone-aware datetime objects.
-        """
         if dt_val is None:
             return None
-
-        # At this point, dt_val from DB is naive UTC due to the validator.
-        # If dt_val is directly passed (e.g. not from DB and still aware),
-        # it needs conversion.
         if dt_val.tzinfo is None:
-            # Naive datetime from DB (assumed UTC), make it aware UTC
             dt_val_utc = dt_val.replace(tzinfo=timezone.utc)
         else:
-            # Aware datetime (e.g. passed directly, not from DB), convert to UTC
             dt_val_utc = dt_val.astimezone(timezone.utc)
+        return dt_val_utc.isoformat().replace("+00:00", "Z")
 
-        iso_string = dt_val_utc.isoformat()
-        return iso_string.replace("+00:00", "Z")
-
-    def to_dict(self):
-        """Serializes the FeedItem object to a dictionary.
-
-        Returns:
-            dict: A dictionary representation of the feed item.
-        """
+    def to_dict(self, is_read=False):
         return {
             "id": self.id,
             "feed_id": self.feed_id,
@@ -231,6 +174,22 @@ class FeedItem(db.Model):
             "link": self.link,
             "published_time": FeedItem.to_iso_z_string(self.published_time),
             "fetched_time": FeedItem.to_iso_z_string(self.fetched_time),
-            "is_read": self.is_read,
+            "is_read": is_read,
             "guid": self.guid,
         }
+
+
+class UserItemState(db.Model):
+    """Tracks per-user state for a FeedItem (e.g., is_read)."""
+
+    __tablename__ = "user_item_states"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey("feed_items.id", ondelete="CASCADE"), nullable=False)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "item_id", name="uq_user_item_state_user_id_item_id"),
+        db.Index("ix_user_item_states_user_id_is_read", "user_id", "is_read"),
+    )

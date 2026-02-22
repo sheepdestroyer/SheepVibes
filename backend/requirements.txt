@@ -11,3 +11,5 @@ redis
 Flask-CORS
 filelock==3.24.3
 defusedxml
+Flask-Login==0.6.3
+Flask-Bcrypt==1.0.1

@@ -1,5 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
+from flask_bcrypt import Bcrypt
 from flask_caching import Cache
+from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
 
@@ -14,3 +16,5 @@ naming_convention = {
 db = SQLAlchemy(metadata=MetaData(naming_convention=naming_convention))
 cache = Cache()
 scheduler = BackgroundScheduler()
+login_manager = LoginManager()
+bcrypt = Bcrypt()

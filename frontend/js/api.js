@@ -1,5 +1,4 @@
 // API configuration
-// Derive base URL from current location, with optional configurable override.
 export const API_BASE_URL =
     (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) ||
     window.API_BASE_URL ||
@@ -7,14 +6,16 @@ export const API_BASE_URL =
 
 /**
  * Fetches data from the specified API endpoint.
- * Handles JSON parsing, error reporting, and different response types.
- * @param {string} url - The API endpoint URL.
- * @param {object} options - Optional fetch options (method, headers, body).
- * @returns {Promise<object|null>} A promise resolving to the JSON data, {success: true} for successful non-JSON responses, or null on failure.
  */
 export async function fetchData(url, options = {}, responseType = 'json') {
     try {
         const response = await fetch(`${API_BASE_URL}${url}`, options);
+
+        if (response.status === 401 && !url.includes('/api/auth/me')) {
+            // Trigger logout / redirect to login if session expired
+            window.dispatchEvent(new CustomEvent('auth-required'));
+        }
+
         if (!response.ok) {
             const error = new Error(`HTTP error! status: ${response.status}`);
             try {
@@ -23,24 +24,17 @@ export async function fetchData(url, options = {}, responseType = 'json') {
                     const errorData = await response.json();
                     if (errorData && errorData.error) {
                         error.backendMessage = errorData.error;
-                        error.message += `, message: ${errorData.error}`;
+                        error.message = errorData.error;
                     }
-                } else {
-                    const errorText = await response.text();
-                    error.message += `, message: ${errorText}`;
                 }
-            } catch (e) {
-                error.message += `, message: ${response.statusText}`;
-            }
+            } catch (e) {}
             throw error;
         }
         if (response.status === 204 || response.headers.get('content-length') === '0') {
             return { success: true };
         }
-
-        if (responseType === 'text') {
-            return await response.text();
-        }
+        if (responseType === 'text') return await response.text();
+        if (responseType === 'blob') return await response.blob();
         return await response.json();
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -51,6 +45,20 @@ export async function fetchData(url, options = {}, responseType = 'json') {
 // --- API Methods ---
 
 export const api = {
+    // Auth
+    login: (username, password) => fetchData('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    }),
+    register: (username, password, email) => fetchData('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, email })
+    }),
+    logout: () => fetchData('/api/auth/logout', { method: 'POST' }),
+    getMe: () => fetchData('/api/auth/me'),
+
     // Tabs
     getTabs: () => fetchData('/api/tabs'),
     createTab: (name) => fetchData('/api/tabs', {
@@ -65,7 +73,7 @@ export const api = {
     }),
     deleteTab: (id) => fetchData(`/api/tabs/${id}`, { method: 'DELETE' }),
 
-    // Feeds
+    // Feeds (Subscriptions)
     getFeedsForTab: (tabId) => fetchData(`/api/tabs/${tabId}/feeds`),
     addFeed: (url, tabId) => fetchData('/api/feeds', {
         method: 'POST',
@@ -81,7 +89,7 @@ export const api = {
     updateAllFeeds: () => fetchData('/api/feeds/update-all', { method: 'POST' }),
 
     // Items
-    getFeedItems: (feedId, offset, limit) => fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`),
+    getFeedItems: (subId, offset, limit) => fetchData(`/api/feeds/${subId}/items?offset=${offset}&limit=${limit}`),
     markItemRead: (itemId) => fetchData(`/api/items/${itemId}/read`, { method: 'POST' }),
 
     // OPML
@@ -89,5 +97,11 @@ export const api = {
     importOpml: (formData) => fetchData('/api/opml/import', {
         method: 'POST',
         body: formData
-    })
+    }),
+
+    // Admin
+    getAdminUsers: () => fetchData('/api/admin/users'),
+    deleteUser: (userId) => fetchData(`/api/admin/users/${userId}`, { method: 'DELETE' }),
+    toggleUserAdmin: (userId) => fetchData(`/api/admin/users/${userId}/toggle-admin`, { method: 'POST' }),
+    exportDb: () => fetchData('/api/admin/export-db', { method: 'GET' }, 'blob')
 };

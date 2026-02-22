@@ -9,18 +9,23 @@
     <link rel="stylesheet" href="style.css">
 </head>
 
-<body>
+<body class="logged-out">
     <header>
         <h1>SheepVibes</h1>
-        <nav id="tabs-container">
+        <nav id="tabs-container" class="auth-only">
             <!-- Tabs will be loaded here -->
         </nav>
-        <div id="tab-management-buttons">
+        <div id="tab-management-buttons" class="auth-only">
             <button id="add-tab-button" title="Add New Tab">+</button>
             <button id="rename-tab-button" title="Rename Active Tab">Rename</button>
             <button id="delete-tab-button" title="Delete Active Tab">-</button>
         </div>
-        <div id="settings-menu-container">
+        <div id="user-menu" class="auth-only">
+            <button id="admin-button" class="admin-only hidden" title="Admin Panel">🛡️</button>
+            <span id="username-display"></span>
+            <button id="logout-button" title="Logout">🚪</button>
+        </div>
+        <div id="settings-menu-container" class="auth-only">
             <button id="settings-button">⚙️</button>
             <div id="settings-menu" class="hidden">
                 <div id="add-feed-section">
@@ -35,13 +40,81 @@
             </div>
         </div>
     </header>
-    <div id="progress-container" class="hidden">
-        <div id="progress-status"></div>
-        <progress id="progress-bar" value="0" max="100"></progress>
+
+    <div id="auth-container">
+        <div id="login-view" class="auth-view">
+            <h2>Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required autocomplete="current-password">
+                </div>
+                <button type="submit">Login</button>
+            </form>
+            <p>Don't have an account? <a href="#" id="show-register">Register here</a></p>
+        </div>
+
+        <div id="register-view" class="auth-view hidden">
+            <h2>Register</h2>
+            <form id="register-form">
+                <div class="form-group">
+                    <label for="register-username">Username</label>
+                    <input type="text" id="register-username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="register-email">Email (optional)</label>
+                    <input type="email" id="register-email" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" required autocomplete="new-password">
+                </div>
+                <button type="submit">Register</button>
+            </form>
+            <p>Already have an account? <a href="#" id="show-login">Login here</a></p>
+        </div>
     </div>
-    <main id="feed-grid">
-        <!-- Feed widgets will be loaded here -->
-    </main>
+
+    <div id="admin-view" class="hidden">
+        <div class="admin-header">
+            <h2>Admin Panel</h2>
+            <button id="close-admin-button">Close</button>
+        </div>
+        <div id="admin-content">
+            <section>
+                <h3>User Management</h3>
+                <table id="users-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Admin</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody"></tbody>
+                </table>
+            </section>
+            <section>
+                <h3>System</h3>
+                <button id="admin-export-db-button">Download Database (SQLite)</button>
+            </section>
+        </div>
+    </div>
+
+    <div id="app-content" class="auth-only">
+        <div id="progress-container" class="hidden">
+            <div id="progress-status"></div>
+            <progress id="progress-bar" value="0" max="100"></progress>
+        </div>
+        <main id="feed-grid">
+            <!-- Feed widgets will be loaded here -->
+        </main>
+    </div>
 
     <div id="modal-root">
         <!-- Edit Feed Modal -->
@@ -58,9 +131,9 @@
                         <small id="edit-feed-error" style="color: red; display: none;"></small>
                     </div>
                     <div class="form-group">
-                        <label for="edit-feed-name">Feed Name:</label>
-                        <input type="text" id="edit-feed-name" readonly>
-                        <small>Name will be automatically updated from the feed</small>
+                        <label for="edit-feed-name">Name / Alias:</label>
+                        <input type="text" id="edit-feed-name">
+                        <small>Leave empty to use feed title</small>
                     </div>
                     <div class="modal-buttons">
                         <button type="submit" id="save-feed-button">Save Changes</button>

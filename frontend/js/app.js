@@ -10,98 +10,153 @@ import {
     showProgress,
     updateProgress,
     hideProgress,
-    updateProgressBarPosition
+    updateProgressBarPosition,
+    renderAdminUsers
 } from './ui.js';
 
 const PROGRESS_FALLBACK_TIMEOUT_MS = 15000;
 let progressFallbackTimeoutId = null;
 
 // State
-const storedTabId = localStorage.getItem('activeTabId');
-let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
+let activeTabId = parseInt(localStorage.getItem('activeTabId'), 10) || null;
 let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
-
-// --- Progress Fallback Helpers ---
-
-function _startProgressFallback() {
-    _clearProgressFallback();
-    progressFallbackTimeoutId = setTimeout(() => {
-        console.warn('Progress SSE timeout reached. Hiding progress bar.');
-        hideProgress();
-        progressFallbackTimeoutId = null;
-    }, PROGRESS_FALLBACK_TIMEOUT_MS);
-}
-
-function _clearProgressFallback() {
-    if (progressFallbackTimeoutId) {
-        clearTimeout(progressFallbackTimeoutId);
-        progressFallbackTimeoutId = null;
-    }
-}
+let currentUser = null;
 
 // --- Initialization ---
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Setup event listeners
+    setupEventListeners();
+    await checkAuth();
+    updateProgressBarPosition();
+    window.addEventListener('resize', updateProgressBarPosition);
+    window.addEventListener('auth-required', () => handleLogout());
+});
+
+function setupEventListeners() {
+    // Auth listeners
+    document.getElementById('login-form').addEventListener('submit', handleLogin);
+    document.getElementById('register-form').addEventListener('submit', handleRegister);
+    document.getElementById('show-register').onclick = (e) => { e.preventDefault(); showAuthView('register'); };
+    document.getElementById('show-login').onclick = (e) => { e.preventDefault(); showAuthView('login'); };
+    document.getElementById('logout-button').addEventListener('click', handleLogout);
+
+    // Tab listeners
     document.getElementById('add-tab-button').addEventListener('click', handleAddTab);
     document.getElementById('rename-tab-button').addEventListener('click', handleRenameTab);
     document.getElementById('delete-tab-button').addEventListener('click', handleDeleteTab);
-    document.getElementById('settings-button').addEventListener('click', toggleSettingsMenu);
+
+    // Feed/Settings listeners
+    document.getElementById('settings-button').addEventListener('click', () => document.getElementById('settings-menu').classList.toggle('hidden'));
     document.getElementById('add-feed-button').addEventListener('click', handleAddFeed);
     document.getElementById('refresh-all-feeds-button').addEventListener('click', handleRefreshAllFeeds);
     document.getElementById('export-opml-button').addEventListener('click', handleExportOpml);
     document.getElementById('import-opml-button').addEventListener('click', () => document.getElementById('opml-file-input').click());
     document.getElementById('opml-file-input').addEventListener('change', handleImportOpmlFileSelect);
 
+    // Admin listeners
+    document.getElementById('admin-button').onclick = handleOpenAdmin;
+    document.getElementById('close-admin-button').onclick = () => document.getElementById('admin-view').classList.add('hidden');
+    document.getElementById('admin-export-db-button').onclick = handleExportDb;
+
     // Modal listeners
     document.getElementById('edit-feed-modal-close-button').addEventListener('click', closeEditFeedModal);
     document.getElementById('cancel-edit-button').addEventListener('click', closeEditFeedModal);
     document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
 
-    // Initial load
-    await initializeTabs();
-    initializeSSE();
-    updateProgressBarPosition();
-
-    // Resize listener for progress bar positioning
-    window.addEventListener('resize', updateProgressBarPosition);
-
     // Close settings on click outside
-    document.addEventListener('click', (event) => {
-        const settingsMenu = document.getElementById('settings-menu');
-        const settingsButton = document.getElementById('settings-button');
-        if (!settingsMenu.classList.contains('hidden') &&
-            !settingsMenu.contains(event.target) &&
-            !settingsButton.contains(event.target)) {
-            settingsMenu.classList.add('hidden');
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('settings-menu');
+        const btn = document.getElementById('settings-button');
+        if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+            menu.classList.add('hidden');
         }
     });
-});
+}
 
-// --- Core Logic ---
+// --- Auth ---
+
+async function checkAuth() {
+    try {
+        currentUser = await api.getMe();
+        onLoggedIn();
+    } catch (e) {
+        onLoggedOut();
+    }
+}
+
+function onLoggedIn() {
+    currentUser = currentUser || {};
+    document.body.classList.replace('logged-out', 'logged-in');
+    document.getElementById('username-display').textContent = currentUser.username;
+    if (currentUser.is_admin) {
+        document.getElementById('admin-button').classList.remove('hidden');
+    } else {
+        document.getElementById('admin-button').classList.add('hidden');
+    }
+    initializeTabs();
+    initializeSSE();
+}
+
+function onLoggedOut() {
+    currentUser = null;
+    document.body.classList.replace('logged-in', 'logged-out');
+    document.getElementById('feed-grid').innerHTML = '';
+    loadedTabs.clear();
+}
+
+function showAuthView(view) {
+    document.querySelectorAll('.auth-view').forEach(v => v.classList.add('hidden'));
+    document.getElementById(`${view}-view`).classList.remove('hidden');
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const u = document.getElementById('login-username').value;
+    const p = document.getElementById('login-password').value;
+    try {
+        currentUser = await api.login(u, p);
+        showToast(`Welcome, ${currentUser.username}!`, 'success');
+        onLoggedIn();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    const u = document.getElementById('register-username').value;
+    const email = document.getElementById('register-email').value;
+    const p = document.getElementById('register-password').value;
+    try {
+        await api.register(u, p, email);
+        showToast('Registration successful! Please login.', 'success');
+        showAuthView('login');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function handleLogout() {
+    try { await api.logout(); } catch (e) {}
+    onLoggedOut();
+    showToast('Logged out.', 'info');
+}
+
+// --- Tabs ---
 
 async function initializeTabs() {
     try {
         allTabs = await api.getTabs();
-
-        // Validation: if activeTabId is no longer in valid tabs, reset it
         if (!allTabs.some(t => t.id === activeTabId)) {
             activeTabId = allTabs.length > 0 ? allTabs[0].id : null;
         }
-
         renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
-
         if (activeTabId) {
-            if (!loadedTabs.has(activeTabId)) {
-                await loadFeedsForTab(activeTabId);
-            } else {
-                toggleWidgetsVisibility();
-            }
+            await (loadedTabs.has(activeTabId) ? Promise.resolve(toggleWidgetsVisibility()) : loadFeedsForTab(activeTabId));
         }
-    } catch (error) {
-        console.error('Error initializing tabs:', error);
+    } catch (err) {
         showToast('Failed to load tabs.', 'error');
     }
 }
@@ -110,171 +165,105 @@ async function switchTab(tabId) {
     if (tabId === activeTabId) return;
     activeTabId = tabId;
     localStorage.setItem('activeTabId', tabId);
-
-    // Update UI active state and re-render tabs logic
     renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
-
-    // Show/Hide widgets
     toggleWidgetsVisibility();
-
-    // Load content if not loaded
-    if (!loadedTabs.has(tabId)) {
-        await loadFeedsForTab(tabId);
-    }
+    if (!loadedTabs.has(tabId)) await loadFeedsForTab(tabId);
 }
 
 function toggleWidgetsVisibility() {
-    const feedGrid = document.getElementById('feed-grid');
-    const widgets = feedGrid.querySelectorAll('.feed-widget');
-
-    // Hide all first
-    widgets.forEach(widget => {
-        if (widget.dataset.tabId == activeTabId) {
-            widget.style.display = 'block';
-        } else {
-            widget.style.display = 'none';
-        }
+    const widgets = document.querySelectorAll('.feed-widget');
+    widgets.forEach(w => {
+        w.style.display = (w.dataset.tabId == activeTabId) ? 'block' : 'none';
     });
-
-    // Handle "empty" message visibility (simplified)
-    // Ideally we would check if we HAVE feeds for this tab.
-    // We loaded them in loadFeedsForTab.
-    // If loadedTabs has it, but no widgets match -> empty.
 }
 
 async function loadFeedsForTab(tabId) {
-    const feedGrid = document.getElementById('feed-grid');
-
-    // If already loaded, just return (toggleWidgetsVisibility handles display)
     if (loadedTabs.has(tabId)) return;
-
+    const grid = document.getElementById('feed-grid');
     try {
-        const feeds = await api.getFeedsForTab(tabId);
-
-        // Remove ANY existing "no feeds" messages to be clean
-        const placeholders = feedGrid.querySelectorAll(
-            `.empty-tab-message[data-tab-id="${tabId}"]`
-        );
-        placeholders.forEach(p => p.remove());
-
-        if (feeds && feeds.length > 0) {
-            feeds.forEach(feed => {
-                const widget = createFeedWidget(feed, {
+        const subs = await api.getFeedsForTab(tabId);
+        grid.querySelectorAll(`.empty-tab-message[data-tab-id="${tabId}"]`).forEach(p => p.remove());
+        if (subs && subs.length > 0) {
+            subs.forEach(sub => {
+                grid.appendChild(createFeedWidget(sub, {
                     onEdit: (id, url, name) => showEditFeedModal(id, url, name),
                     onDelete: handleDeleteFeed,
                     onMarkItemRead: handleMarkItemRead,
                     onLoadMore: handleLoadMoreItems
-                });
-                feedGrid.appendChild(widget);
+                }));
             });
         } else {
-            // Create an empty-state message container for this tab
             const msg = document.createElement('div');
-            msg.className = 'feed-widget empty-tab-message'; // Reuse class but add distinct marker
+            msg.className = 'feed-widget empty-tab-message';
             msg.dataset.tabId = tabId;
-            msg.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
-            feedGrid.appendChild(msg);
+            msg.innerHTML = '<p>No feeds in this tab.</p>';
+            grid.appendChild(msg);
         }
         loadedTabs.add(tabId);
         toggleWidgetsVisibility();
-    } catch (error) {
-        console.error('Error loading feeds:', error);
+    } catch (err) {
         showToast('Failed to load feeds.', 'error');
     }
 }
 
 // --- Handlers ---
 
-function toggleSettingsMenu() {
-    document.getElementById('settings-menu').classList.toggle('hidden');
-}
-
 async function handleAddTab() {
-    const name = prompt("Enter new tab name:");
+    const name = prompt("New tab name:");
     if (!name) return;
     try {
         await api.createTab(name);
         await initializeTabs();
         showToast('Tab created!', 'success');
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
+    } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function handleRenameTab() {
     if (!activeTabId) return;
     const tab = allTabs.find(t => t.id === activeTabId);
-    if (!tab) return;
-    const newName = prompt("Enter new name:", tab.name);
+    const newName = prompt("Rename tab to:", tab.name);
     if (!newName || newName === tab.name) return;
-
     try {
         await api.updateTab(activeTabId, newName);
         await initializeTabs();
         showToast('Tab renamed.', 'success');
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
+    } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function handleDeleteTab() {
-    if (!activeTabId || !confirm("Delete this tab and all its feeds?")) return;
+    if (!activeTabId || !confirm("Delete tab and all its feeds?")) return;
     try {
-        const deletedTabId = activeTabId;
-        await api.deleteTab(deletedTabId);
-
-        // Surgically update the UI and state instead of a full reload
-        document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
-        loadedTabs.delete(deletedTabId);
+        await api.deleteTab(activeTabId);
+        document.querySelectorAll(`.feed-widget[data-tab-id="${activeTabId}"]`).forEach(w => w.remove());
+        loadedTabs.delete(activeTabId);
         activeTabId = null;
-
-        await initializeTabs(); // Still need this to re-render the tab list properly
+        await initializeTabs();
         showToast('Tab deleted.', 'success');
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
+    } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function handleAddFeed() {
-    const urlInput = document.getElementById('feed-url-input');
-    const url = urlInput.value.trim();
-    if (!url) {
-        showToast('Please enter a URL', 'error');
-        return;
-    }
-    if (!activeTabId) {
-        showToast('No active tab selected', 'error');
-        return;
-    }
-
+    const input = document.getElementById('feed-url-input');
+    const url = input.value.trim();
+    if (!url || !activeTabId) return showToast('Enter URL and select a tab', 'error');
     const btn = document.getElementById('add-feed-button');
-    const originalText = btn.textContent;
-    btn.textContent = 'Adding...';
     btn.disabled = true;
-
     try {
         await api.addFeed(url, activeTabId);
-        urlInput.value = '';
+        input.value = '';
         showToast('Feed added!', 'success');
         await reloadTab(activeTabId);
-    } catch (e) {
-        showToast(e.message, 'error');
-    } finally {
-        btn.textContent = originalText;
-        btn.disabled = false;
-    }
+    } catch (e) { showToast(e.message, 'error'); }
+    finally { btn.disabled = false; }
 }
 
-async function handleDeleteFeed(feedId) {
-    if (!confirm("Delete feed?")) return;
+async function handleDeleteFeed(subId) {
+    if (!confirm("Delete this subscription?")) return;
     try {
-        await api.deleteFeed(feedId);
-        const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
-        if (widget) widget.remove();
+        await api.deleteFeed(subId);
+        document.querySelector(`.feed-widget[data-sub-id="${subId}"]`)?.remove();
         showToast('Feed deleted.', 'success');
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
+    } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function handleEditFeedSubmit(e) {
@@ -283,196 +272,148 @@ async function handleEditFeedSubmit(e) {
     const url = document.getElementById('edit-feed-url').value;
     const name = document.getElementById('edit-feed-name').value;
     try {
-        const updatedFeed = await api.updateFeed(id, url, name);
-        const oldWidget = document.querySelector(`.feed-widget[data-feed-id="${id}"]`);
-        if (oldWidget) {
-            const newWidget = createFeedWidget(updatedFeed, {
+        const updated = await api.updateFeed(id, url, name);
+        const old = document.querySelector(`.feed-widget[data-sub-id="${id}"]`);
+        if (old) {
+            old.replaceWith(createFeedWidget(updated, {
                 onEdit: (fid, furl, fname) => showEditFeedModal(fid, furl, fname),
                 onDelete: handleDeleteFeed,
                 onMarkItemRead: handleMarkItemRead,
                 onLoadMore: handleLoadMoreItems
-            });
-            oldWidget.replaceWith(newWidget);
+            }));
         }
         closeEditFeedModal();
-        showToast('Feed updated.', 'success');
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
+        showToast('Subscription updated.', 'success');
+    } catch (err) { showToast(err.message, 'error'); }
 }
 
-async function handleRefreshAllFeeds() {
-    showProgress('Starting feed refresh...');
-    _startProgressFallback();
+async function handleMarkItemRead(itemId, li, subId, tabId) {
+    if (li.classList.contains('read')) return;
     try {
-        await api.updateAllFeeds();
-        // The SSE events will drive the rest of the UI updates.
-    } catch (e) {
-        showToast('Failed to refresh: ' + e.message, 'error');
-        _clearProgressFallback();
-        hideProgress(); // Hide progress bar on failure
-    }
+        await api.markItemRead(itemId);
+        li.classList.replace('unread', 'read');
+        updateUnreadBadge(li.closest('.feed-widget'));
+        updateUnreadBadge(document.querySelector(`button[data-tab-id="${tabId}"]`));
+    } catch (e) { console.error(e); }
+}
+
+function updateUnreadBadge(el) {
+    const b = el?.querySelector('.unread-count-badge');
+    if (!b) return;
+    const count = parseInt(b.textContent, 10) - 1;
+    if (count > 0) b.textContent = count; else b.remove();
+}
+
+async function handleLoadMoreItems(list) {
+    if (list.dataset.loading === 'true' || list.dataset.allItemsLoaded === 'true') return;
+    list.dataset.loading = 'true';
+    try {
+        const items = await api.getFeedItems(list.dataset.subId, parseInt(list.dataset.offset, 10), ITEMS_PER_PAGE);
+        if (items?.length) appendItemsToFeedWidget(list, items, { onMarkItemRead: handleMarkItemRead });
+        else list.dataset.allItemsLoaded = 'true';
+    } catch (e) { console.error(e); }
+    finally { list.dataset.loading = 'false'; }
+}
+
+// --- Admin ---
+
+async function handleOpenAdmin() {
+    const view = document.getElementById('admin-view');
+    view.classList.remove('hidden');
+    try {
+        const users = await api.getAdminUsers();
+        renderAdminUsers(users, {
+            onDeleteUser: async (id) => {
+                if (confirm(`Delete user ${id}?`)) {
+                    await api.deleteUser(id);
+                    handleOpenAdmin();
+                }
+            },
+            onToggleAdmin: async (id) => {
+                await api.toggleUserAdmin(id);
+                handleOpenAdmin();
+            }
+        });
+    } catch (e) { showToast('Admin access denied or error.', 'error'); }
+}
+
+async function handleExportDb() {
+    try {
+        const blob = await api.exportDb();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'sheepvibes_backup.db';
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (e) { showToast('Failed to export database.', 'error'); }
+}
+
+// --- Progress/OPML ---
+
+async function handleRefreshAllFeeds() {
+    showProgress('Refreshing feeds...');
+    _startProgressFallback();
+    try { await api.updateAllFeeds(); }
+    catch (e) { showToast(e.message, 'error'); hideProgress(); _clearProgressFallback(); }
 }
 
 async function handleExportOpml() {
     try {
         const xml = await api.exportOpml();
         const blob = new Blob([xml], { type: 'application/xml' });
-        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = 'sheepvibes_feeds.opml';
-        document.body.appendChild(a);
+        a.href = URL.createObjectURL(blob);
+        a.download = `sheepvibes_${currentUser.username}.opml`;
         a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
+    } catch (e) { showToast('Export failed.', 'error'); }
 }
 
 async function handleImportOpmlFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
-
-    const formData = new FormData();
-    formData.append('file', file);
-    if (activeTabId !== null) formData.append('tab_id', activeTabId);
-
-    showProgress('Importing OPML file...');
+    const fd = new FormData();
+    fd.append('file', file);
+    if (activeTabId) fd.append('tab_id', activeTabId);
+    showProgress('Importing OPML...');
     _startProgressFallback();
     try {
-        const data = await api.importOpml(formData);
-        // Always re-initialize tabs, as new (empty) tabs might have been created.
+        await api.importOpml(fd);
         await initializeTabs();
-
-        if (data.imported_count > 0) {
-            const tabsToReload = new Set(data.affected_tab_ids || []);
-            if (data.tab_id) {
-                tabsToReload.add(data.tab_id);
-            }
-            for (const tabId of tabsToReload) {
-                if (loadedTabs.has(tabId)) {
-                    await reloadTab(tabId);
-                }
-            }
-        }
-        // The 'progress_complete' SSE event is the single source of truth for hiding the
-        // progress bar and showing the final status.
-    } catch (err) {
-        showToast(err.message, 'error');
-        _clearProgressFallback();
-        hideProgress();
-    } finally {
-        e.target.value = '';
-    }
+        // SSE will hide progress
+    } catch (err) { showToast(err.message, 'error'); hideProgress(); }
+    finally { e.target.value = ''; }
 }
 
-async function handleMarkItemRead(itemId, liElement, feedId, tabId) {
-    if (liElement.classList.contains('read')) return;
-    try {
-        await api.markItemRead(itemId);
-        liElement.classList.replace('unread', 'read');
-        updateUnreadCount(liElement.closest('.feed-widget'));
-        updateUnreadCount(document.querySelector(`button[data-tab-id="${tabId}"]`));
-    } catch (e) {
-        console.error('Failed to mark read', e);
-    }
-}
-
-function updateUnreadCount(element) {
-    if (!element) return;
-    const badge = element.querySelector('.unread-count-badge');
-    if (badge) {
-        const newCount = parseInt(badge.textContent, 10) - 1;
-        if (newCount > 0) {
-            badge.textContent = newCount;
-        } else {
-            badge.remove();
-        }
-    }
-}
-
-async function handleLoadMoreItems(listElement) {
-    if (listElement.dataset.loading === 'true' || listElement.dataset.allItemsLoaded === 'true') return;
-
-    listElement.dataset.loading = 'true';
-    const feedId = listElement.dataset.feedId;
-    const offset = parseInt(listElement.dataset.offset, 10) || 0;
-
-    try {
-        const items = await api.getFeedItems(feedId, offset, ITEMS_PER_PAGE);
-        if (items && items.length > 0) {
-            appendItemsToFeedWidget(listElement, items, {
-                onMarkItemRead: handleMarkItemRead
-            });
-        } else {
-            listElement.dataset.allItemsLoaded = 'true';
-        }
-    } catch (e) {
-        console.error(e);
-    } finally {
-        listElement.dataset.loading = 'false';
-    }
-}
-
-// Helpers
+// --- Helpers ---
 
 async function reloadTab(tabId) {
     if (activeTabId === tabId) {
-        // Remove existing for this tab
         document.querySelectorAll(`.feed-widget[data-tab-id="${tabId}"]`).forEach(w => w.remove());
         loadedTabs.delete(tabId);
         await loadFeedsForTab(tabId);
-    } else {
-        loadedTabs.delete(tabId);
-    }
+    } else loadedTabs.delete(tabId);
 }
+
+function _startProgressFallback() {
+    _clearProgressFallback();
+    progressFallbackTimeoutId = setTimeout(() => { hideProgress(); }, PROGRESS_FALLBACK_TIMEOUT_MS);
+}
+function _clearProgressFallback() { if (progressFallbackTimeoutId) clearTimeout(progressFallbackTimeoutId); }
 
 function initializeSSE() {
-    const eventSource = new EventSource(`${API_BASE_URL}/api/stream`);
-
-    eventSource.onmessage = async (event) => {
+    const es = new EventSource(`${API_BASE_URL}/api/stream`);
+    es.onmessage = async (e) => {
         try {
-            const data = JSON.parse(event.data);
-
-            // Handle progress updates
-            if (data.type === 'progress') {
-                // Any progress event clears/resets the fallback to keep it alive during long operations
-                _startProgressFallback();
-                updateProgress(data.status, data.value, data.max);
-                return;
-            }
-            if (data.type === 'progress_complete') {
-                _clearProgressFallback();
-                hideProgress();
-                showToast(data.status || 'Operation complete!', 'success');
-                return;
-            }
-
-            // Handle new items notification
-            if (data.new_items > 0) {
-                showToast(`Updates: ${data.new_items} new items`, 'info');
+            const data = JSON.parse(e.data);
+            if (data.type === 'progress') { _startProgressFallback(); updateProgress(data.status, data.value, data.max); }
+            else if (data.type === 'progress_complete') { _clearProgressFallback(); hideProgress(); showToast(data.status || 'Done!', 'success'); }
+            else if (data.new_items > 0) {
+                showToast(`New items: ${data.new_items}`, 'info');
                 allTabs = await api.getTabs();
                 renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
-
-                const affectedIds = data.affected_tab_ids || [];
-                affectedIds.forEach(id => {
-                    loadedTabs.delete(id);
-                });
-
-                if (activeTabId && affectedIds.includes(activeTabId)) {
-                    await reloadTab(activeTabId);
-                }
+                (data.affected_tab_ids || []).forEach(id => { loadedTabs.delete(id); if (id == activeTabId) reloadTab(id); });
             }
-        } catch (e) {
-            console.error('SSE message parsing failed:', e);
-        }
-    };
-
-    eventSource.onerror = (err) => {
-        console.error('SSE connection failed:', err);
+        } catch (err) {}
     };
 }
-
-

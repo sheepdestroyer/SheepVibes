@@ -9,6 +9,8 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from .blueprints.admin import admin_bp
+from .blueprints.auth import auth_bp
 from .blueprints.feeds import feeds_bp, items_bp
 from .blueprints.opml import autosave_opml, opml_bp
 from .blueprints.tabs import tabs_bp
@@ -17,7 +19,7 @@ from .constants import (
     OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT,
     UPDATE_INTERVAL_MINUTES_DEFAULT,
 )
-from .extensions import cache, db, scheduler
+from .extensions import bcrypt, cache, db, login_manager, scheduler
 from .feed_service import update_all_feeds
 from .sse import announcer
 
@@ -31,6 +33,8 @@ logger = logging.getLogger("sheepvibes")
 
 # Initialize Flask application
 app = Flask(__name__)
+# SECRET_KEY is required for session management
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-sheepvibes")
 # Apply ProxyFix to handle headers from reverse proxies (e.g. X-Forwarded-Proto) correctly
 # This ensures request.is_secure is accurate for HSTS.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -105,12 +109,17 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 migrate = Migrate(app, db)
 cache.init_app(app)
+bcrypt.init_app(app)
+login_manager.init_app(app)
+login_manager.login_view = "auth.login"
 
 # Register Blueprints
 app.register_blueprint(opml_bp)
 app.register_blueprint(tabs_bp)
 app.register_blueprint(feeds_bp)
 app.register_blueprint(items_bp)
+app.register_blueprint(auth_bp)
+app.register_blueprint(admin_bp)
 
 # --- Scheduler Configuration ---
 

@@ -45,7 +45,7 @@ from .constants import (
 )
 
 # Import database models from the new models.py
-from .models import Feed, FeedItem, Tab, db
+from .models import Feed, FeedItem, Tab, Subscription, UserItemState, db
 from .sse import announcer
 
 # Set up logger for this module
@@ -63,6 +63,7 @@ class OpmlImportState:
     """Holds the shared state for OPML processing."""
 
     stack: list[OpmlStackItem]
+    user_id: int
     all_existing_feed_urls_set: set[str]
     newly_added_feeds_list: list[Feed]
     affected_tab_ids_set: set[int]
@@ -159,39 +160,53 @@ def _process_opml_feed_node(
         state.skipped_count += 1
         return
 
+    # In multi-user mode, we check if the USER already has this feed subscribed
+    # Actually, state.all_existing_feed_urls_set should be populated with USER's feed URLs
     if xml_url in state.all_existing_feed_urls_set:
         logger.info(
-            "OPML import: Feed with URL '%s' already exists. Skipping.",
+            "OPML import: Feed with URL '%s' already subscribed by user. Skipping.",
             _sanitize_for_log(xml_url),
         )
         state.skipped_count += 1
         return
 
     try:
-        new_feed = Feed(tab_id=current_tab_id, name=feed_name, url=xml_url)
-        db.session.add(new_feed)
-        state.newly_added_feeds_list.append(new_feed)
+        # Get or create global feed
+        global_feed = Feed.query.filter_by(url=xml_url).first()
+        if not global_feed:
+            global_feed = Feed(name=feed_name, url=xml_url)
+            db.session.add(global_feed)
+            db.session.flush()  # Get ID
+
+        new_sub = Subscription(
+            user_id=state.user_id,
+            tab_id=current_tab_id,
+            feed_id=global_feed.id,
+            custom_name=feed_name if feed_name != xml_url else None
+        )
+        db.session.add(new_sub)
+        state.newly_added_feeds_list.append(global_feed)
         state.all_existing_feed_urls_set.add(xml_url)
         state.imported_count += 1
         state.affected_tab_ids_set.add(current_tab_id)
     except sqlalchemy.exc.SQLAlchemyError:
         logger.exception(
-            "OPML import: Error preparing feed '%s'",
+            "OPML import: Error preparing subscription for '%s'",
             _sanitize_for_log(feed_name),
         )
         state.skipped_count += 1
 
 
-def _get_or_create_nested_tab(folder_name):
-    """Finds an existing tab by name or creates a new one."""
-    existing_tab = Tab.query.filter_by(name=folder_name).first()
+def _get_or_create_nested_tab(folder_name, user_id):
+    """Finds an existing tab by name or creates a new one for a specific user."""
+    existing_tab = Tab.query.filter_by(user_id=user_id, name=folder_name).first()
 
     if existing_tab:
         return existing_tab.id, existing_tab.name
 
-    max_order = db.session.query(db.func.max(Tab.order)).scalar()
+    max_order = db.session.query(db.func.max(Tab.order)).filter_by(user_id=user_id).scalar()
     new_order = (max_order or -1) + 1
-    new_folder_tab = Tab(name=folder_name, order=new_order)
+    new_folder_tab = Tab(user_id=user_id, name=folder_name, order=new_order)
     db.session.add(new_folder_tab)
 
     # Use a savepoint to prevent rolling back the entire session (and losing feeds)
@@ -234,7 +249,7 @@ def _process_folder_node(
     if element_name and child_outlines:
         try:
             nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
-                element_name)
+                element_name, state.user_id)
             state.stack.append((list(reversed(child_outlines)), nested_tab_id,
                                 nested_tab_name))
         except sqlalchemy.exc.SQLAlchemyError:
@@ -282,6 +297,7 @@ def _process_opml_outlines_iterative(
     initial_outline_elements,
     top_level_tab_id,
     top_level_tab_name,
+    user_id,
     all_existing_feed_urls_set,
     total_outlines,
 ):
@@ -294,6 +310,7 @@ def _process_opml_outlines_iterative(
     )]
     state = OpmlImportState(
         stack=stack,
+        user_id=user_id,
         all_existing_feed_urls_set=all_existing_feed_urls_set,
         newly_added_feeds_list=[],
         affected_tab_ids_set=set(),
@@ -321,7 +338,7 @@ def _process_opml_outlines_iterative(
     return state
 
 
-def _determine_target_tab(requested_tab_id_str):
+def _determine_target_tab(requested_tab_id_str, user_id):
     """
     Determines the target tab for OPML import.
     Returns:
@@ -354,22 +371,25 @@ def _determine_target_tab(requested_tab_id_str):
             )
 
     if not target_tab_id:
-        default_tab_obj = Tab.query.order_by(Tab.order).first()
+        default_tab_obj = Tab.query.filter_by(user_id=user_id).order_by(Tab.order).first()
         if default_tab_obj:
             target_tab_id = default_tab_obj.id
             target_tab_name = default_tab_obj.name
         else:
             logger.info(
-                "OPML import: No tabs exist. Creating a default tab for top-level feeds."
+                "OPML import: No tabs exist for user %s. Creating a default tab.",
+                user_id
             )
             default_tab_name_for_creation = DEFAULT_OPML_IMPORT_TAB_NAME
             temp_tab_check = Tab.query.filter_by(
+                user_id=user_id,
                 name=default_tab_name_for_creation).first()
             if temp_tab_check:
                 target_tab_id = temp_tab_check.id
                 target_tab_name = temp_tab_check.name
             else:
                 newly_created_default_tab = Tab(
+                    user_id=user_id,
                     name=default_tab_name_for_creation, order=0)
                 db.session.add(newly_created_default_tab)
                 try:
@@ -583,8 +603,8 @@ def _invalidate_import_caches(affected_tab_ids_set):
     )
 
 
-def import_opml(opml_file_stream, requested_tab_id_str):
-    """Imports feeds from an OPML file, sending progress via SSE."""
+def import_opml(opml_file_stream, requested_tab_id_str, user_id):
+    """Imports feeds from an OPML file for a specific user, sending progress via SSE."""
     root, error_resp = _parse_opml_root(opml_file_stream)
     if error_resp:
         return None, error_resp
@@ -595,7 +615,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         top_level_target_tab_name,
         was_default_tab_created,
         error_resp,
-    ) = _determine_target_tab(requested_tab_id_str)
+    ) = _determine_target_tab(requested_tab_id_str, user_id)
     if error_resp:
         return None, error_resp
 
@@ -614,7 +634,10 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         )
         return result, None
 
-    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
+    # Multi-user: Only check feeds already subscribed by THIS user
+    all_existing_feed_urls_set = {
+        s.feed.url for s in Subscription.query.filter_by(user_id=user_id).all()
+    }
 
     # Announce start
     announcer.announce(
@@ -625,6 +648,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         list(opml_body),
         top_level_target_tab_id,
         top_level_target_tab_name,
+        user_id,
         all_existing_feed_urls_set,
         total_outlines,
     )
@@ -1617,6 +1641,7 @@ def update_all_feeds():
     processed_count = 0
     successful_count = 0
     total_new_items = 0
+    # affected_tab_ids across all users
     affected_tab_ids = set()
 
     logger.info("Starting update process for %d feeds (Parallelized).",
@@ -1644,13 +1669,16 @@ def update_all_feeds():
 
             try:
                 parsed_feed = future.result()
-                success, new_items, tab_id = _process_fetch_result(
+                success, new_items, _ = _process_fetch_result(
                     feed_obj, parsed_feed)
                 if success:
                     successful_count += 1
                     total_new_items += new_items
                     if new_items > 0:
-                        affected_tab_ids.add(tab_id)
+                        # Find all tabs across all users that subscribe to this feed
+                        subs = Subscription.query.filter_by(feed_id=feed_obj.id).all()
+                        for sub in subs:
+                            affected_tab_ids.add(sub.tab_id)
             except Exception:  # pylint: disable=broad-exception-caught
                 logger.exception(
                     "Critical error processing future for feed %s (%s)",

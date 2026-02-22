@@ -1,36 +1,20 @@
 import { formatDate, throttle } from './utils.js';
 
-const SCROLL_BUFFER = 200; // Pixels from bottom to trigger load
-const SCROLL_THROTTLE = 200; // ms
-
-
-// --- Toast Notification ---
+const SCROLL_BUFFER = 200;
+const SCROLL_THROTTLE = 200;
 
 export function showToast(message, type = 'info', duration = 3000) {
     const toastContainer = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
-
     toastContainer.appendChild(toast);
-
-    // Animate in
-    setTimeout(() => {
-        toast.classList.add('show');
-    }, 100);
-
-    // Animate out and remove
+    setTimeout(() => toast.classList.add('show'), 100);
     setTimeout(() => {
         toast.classList.remove('show');
-        const removalTimeout = setTimeout(() => toast.remove(), 500);
-        toast.addEventListener('transitionend', () => {
-            clearTimeout(removalTimeout);
-            toast.remove();
-        }, { once: true });
+        setTimeout(() => toast.remove(), 500);
     }, duration);
 }
-
-// --- Badge ---
 
 export function createBadge(count) {
     if (count > 0) {
@@ -41,8 +25,6 @@ export function createBadge(count) {
     }
     return null;
 }
-
-// --- Feed Item ---
 
 function createFeedItemElement(item, clickHandler) {
     const listItem = document.createElement('li');
@@ -55,186 +37,158 @@ function createFeedItemElement(item, clickHandler) {
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.addEventListener('click', () => clickHandler(listItem));
-    link.addEventListener('auxclick', (event) => {
-        if (event.button === 1) {
-            clickHandler(listItem);
-        }
-    });
+    link.addEventListener('auxclick', (e) => { if (e.button === 1) clickHandler(listItem); });
     listItem.appendChild(link);
 
     const timestamp = document.createElement('span');
     timestamp.textContent = formatDate(item.published_time || item.fetched_time);
     listItem.appendChild(timestamp);
-
     return listItem;
 }
 
-// --- Feed Widget ---
-
-export function createFeedWidget(feed, callbacks) {
+export function createFeedWidget(sub, callbacks) {
     const { onEdit, onDelete, onMarkItemRead, onLoadMore } = callbacks;
     const widget = document.createElement('div');
     widget.classList.add('feed-widget');
-    widget.dataset.feedId = feed.id;
-    widget.dataset.tabId = feed.tab_id;
+    widget.dataset.subId = sub.id;
+    widget.dataset.tabId = sub.tab_id;
 
-    // Header with buttons
     const buttonContainer = document.createElement('div');
     buttonContainer.classList.add('feed-widget-buttons');
 
-    const editButton = document.createElement('button');
-    editButton.classList.add('edit-feed-button');
-    editButton.textContent = '✎';
-    editButton.title = 'Edit Feed';
-    editButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onEdit(feed.id, feed.url, feed.name);
-    });
-    buttonContainer.appendChild(editButton);
+    const editBtn = document.createElement('button');
+    editBtn.className = 'edit-feed-button';
+    editBtn.textContent = '✎';
+    editBtn.title = 'Edit Subscription';
+    editBtn.addEventListener('click', (e) => { e.stopPropagation(); onEdit(sub.id, sub.url, sub.name); });
+    buttonContainer.appendChild(editBtn);
 
-    const deleteButton = document.createElement('button');
-    deleteButton.classList.add('delete-feed-button');
-    deleteButton.textContent = 'X';
-    deleteButton.title = 'Delete Feed';
-    deleteButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onDelete(feed.id);
-    });
-    buttonContainer.appendChild(deleteButton);
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-feed-button';
+    deleteBtn.textContent = 'X';
+    deleteBtn.title = 'Delete Subscription';
+    deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); onDelete(sub.id); });
+    buttonContainer.appendChild(deleteBtn);
 
     const titleElement = document.createElement('h2');
-    const titleTextNode = document.createTextNode(feed.name);
-    const feedLinkUrl = feed.site_link || feed.url;
-
-    if (feedLinkUrl) {
+    const titleText = document.createTextNode(sub.name);
+    const linkUrl = sub.site_link || sub.url;
+    if (linkUrl) {
         const titleLink = document.createElement('a');
-        titleLink.href = feedLinkUrl;
+        titleLink.href = linkUrl;
         titleLink.target = '_blank';
         titleLink.rel = 'noopener noreferrer';
-        titleLink.appendChild(titleTextNode);
+        titleLink.appendChild(titleText);
         titleElement.appendChild(titleLink);
     } else {
-        titleElement.appendChild(titleTextNode);
+        titleElement.appendChild(titleText);
     }
 
-    const badge = createBadge(feed.unread_count);
-    if (badge) {
-        buttonContainer.prepend(badge);
-    }
-
+    const badge = createBadge(sub.unread_count);
+    if (badge) buttonContainer.prepend(badge);
     titleElement.appendChild(buttonContainer);
     widget.appendChild(titleElement);
 
-    // List
     const itemList = document.createElement('ul');
     widget.appendChild(itemList);
 
-    const items = feed.items || [];
+    const items = sub.items || [];
     itemList.dataset.offset = items.length;
-    itemList.dataset.feedId = feed.id;
-    itemList.dataset.tabId = feed.tab_id;
+    itemList.dataset.subId = sub.id;
+    itemList.dataset.tabId = sub.tab_id;
     itemList.dataset.loading = 'false';
     itemList.dataset.allItemsLoaded = 'false';
 
-    // Infinite Scroll: Per-widget implementation
     itemList.addEventListener('scroll', throttle(() => {
-        // Check if scrolled near bottom
         if (itemList.scrollTop + itemList.clientHeight >= itemList.scrollHeight - SCROLL_BUFFER) {
             onLoadMore(itemList);
         }
     }, SCROLL_THROTTLE));
 
-    // Render Items
-    if (feed.items && feed.items.length > 0) {
-        const fragment = document.createDocumentFragment();
-        feed.items.forEach(item => {
-            const listItem = createFeedItemElement(item, (li) => {
-                onMarkItemRead(item.id, li, feed.id, feed.tab_id);
-            });
-            fragment.appendChild(listItem);
+    if (items.length > 0) {
+        const frag = document.createDocumentFragment();
+        items.forEach(item => {
+            frag.appendChild(createFeedItemElement(item, (li) => onMarkItemRead(item.id, li, sub.id, sub.tab_id)));
         });
-        itemList.appendChild(fragment);
+        itemList.appendChild(frag);
     } else {
-        itemList.innerHTML = '<li>No items found for this feed.</li>';
+        itemList.innerHTML = '<li>No items found.</li>';
     }
 
-    // Programmatically trigger a scroll event to handle cases where the initial
-    // content is not enough to make the list scrollable.
-    // Dispatch AFTER rendering so we check the actual content height.
-    setTimeout(() => {
-        itemList.dispatchEvent(new Event('scroll'));
-    }, 0);
-
+    setTimeout(() => itemList.dispatchEvent(new Event('scroll')), 0);
     return widget;
 }
 
 export function appendItemsToFeedWidget(widgetList, items, callbacks) {
     const { onMarkItemRead } = callbacks;
-    const feedId = widgetList.dataset.feedId;
+    const subId = widgetList.dataset.subId;
     const tabId = widgetList.dataset.tabId;
-    const fragment = document.createDocumentFragment();
-
+    const frag = document.createDocumentFragment();
     items.forEach(item => {
-        const listItem = createFeedItemElement(item, (li) => {
-            onMarkItemRead(item.id, li, feedId, tabId);
-        });
-        fragment.appendChild(listItem);
+        frag.appendChild(createFeedItemElement(item, (li) => onMarkItemRead(item.id, li, subId, tabId)));
     });
-    widgetList.appendChild(fragment);
-
-    // Update offset
-    const currentOffset = parseInt(widgetList.dataset.offset) || 0;
-    widgetList.dataset.offset = currentOffset + items.length;
+    widgetList.appendChild(frag);
+    widgetList.dataset.offset = (parseInt(widgetList.dataset.offset) || 0) + items.length;
 }
-
-// --- Tabs ---
 
 export function renderTabs(tabs, activeTabId, callbacks) {
     const { onSwitchTab } = callbacks;
-    const tabsContainer = document.getElementById('tabs-container');
-    const feedGrid = document.getElementById('feed-grid');
-    const renameTabButton = document.getElementById('rename-tab-button');
-    const deleteTabButton = document.getElementById('delete-tab-button');
+    const container = document.getElementById('tabs-container');
+    const grid = document.getElementById('feed-grid');
+    const renameBtn = document.getElementById('rename-tab-button');
+    const deleteBtn = document.getElementById('delete-tab-button');
 
-    tabsContainer.innerHTML = '';
+    container.innerHTML = '';
     if (!tabs || tabs.length === 0) {
-        tabsContainer.innerHTML = '<span>No tabs found.</span>';
-        renameTabButton.disabled = true;
-        deleteTabButton.disabled = true;
-        feedGrid.innerHTML = '<p>Create a tab to get started!</p>';
+        container.innerHTML = '<span>No tabs found.</span>';
+        renameBtn.disabled = true;
+        deleteBtn.disabled = true;
+        grid.innerHTML = '<p>Create a tab to get started!</p>';
         return { activeTabId: null };
     }
 
-    tabs.sort((a, b) => a.order - b.order);
-
-    tabs.forEach(tab => {
-        const button = document.createElement('button');
-        button.textContent = tab.name;
-        button.dataset.tabId = tab.id;
-        button.classList.toggle('active', tab.id == activeTabId);
-        button.addEventListener('click', () => onSwitchTab(tab.id));
-
+    tabs.sort((a, b) => a.order - b.order).forEach(tab => {
+        const btn = document.createElement('button');
+        btn.textContent = tab.name;
+        btn.dataset.tabId = tab.id;
+        btn.classList.toggle('active', tab.id == activeTabId);
+        btn.addEventListener('click', () => onSwitchTab(tab.id));
         const badge = createBadge(tab.unread_count);
-        if (badge) {
-            button.appendChild(badge);
-        }
-
-        tabsContainer.appendChild(button);
+        if (badge) btn.appendChild(badge);
+        container.appendChild(btn);
     });
 
-    renameTabButton.disabled = false;
-    deleteTabButton.disabled = tabs.length <= 1;
-
-    return { activeTabId }; // Useful if selection logic was internal, but here it's passed in
+    renameBtn.disabled = false;
+    deleteBtn.disabled = tabs.length <= 1;
+    return { activeTabId };
 }
 
-// --- Modals ---
+export function renderAdminUsers(users, callbacks) {
+    const tbody = document.getElementById('users-tbody');
+    const { onDeleteUser, onToggleAdmin } = callbacks;
+    tbody.innerHTML = '';
+    users.forEach(user => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${user.id}</td>
+            <td>${user.username}</td>
+            <td>${user.is_admin ? '✅' : '❌'}</td>
+            <td>
+                <button class="toggle-admin-btn">${user.is_admin ? 'Demote' : 'Promote'}</button>
+                <button class="delete-user-btn">Delete</button>
+            </td>
+        `;
+        tr.querySelector('.toggle-admin-btn').onclick = () => onToggleAdmin(user.id);
+        tr.querySelector('.delete-user-btn').onclick = () => onDeleteUser(user.id);
+        tbody.appendChild(tr);
+    });
+}
 
-export function showEditFeedModal(feedId, currentUrl, currentName) {
+export function showEditFeedModal(subId, currentUrl, currentName) {
     const modal = document.getElementById('edit-feed-modal');
-    document.getElementById('edit-feed-id').value = feedId;
+    document.getElementById('edit-feed-id').value = subId;
     document.getElementById('edit-feed-url').value = currentUrl;
-    document.getElementById('edit-feed-name').value = currentName;
+    document.getElementById('edit-feed-name').value = currentName || '';
     document.getElementById('edit-feed-error').style.display = 'none';
     modal.classList.add('is-active');
 }
@@ -243,36 +197,26 @@ export function closeEditFeedModal() {
     document.getElementById('edit-feed-modal').classList.remove('is-active');
 }
 
-// --- Progress Bar ---
-
 export function showProgress(message) {
-    const progressContainer = document.getElementById('progress-container');
-    const progressStatus = document.getElementById('progress-status');
-    const progressBar = document.getElementById('progress-bar');
-
-    progressStatus.textContent = message;
-    progressBar.value = 0;
-    progressContainer.classList.remove('hidden');
+    const container = document.getElementById('progress-container');
+    document.getElementById('progress-status').textContent = message;
+    document.getElementById('progress-bar').value = 0;
+    container.classList.remove('hidden');
 }
 
 export function updateProgress(status, value, max) {
-    const progressStatus = document.getElementById('progress-status');
-    const progressBar = document.getElementById('progress-bar');
-
-    progressStatus.textContent = status;
-    progressBar.value = value;
-    progressBar.max = max;
+    document.getElementById('progress-status').textContent = status;
+    const bar = document.getElementById('progress-bar');
+    bar.value = value;
+    bar.max = max;
 }
 
 export function hideProgress() {
-    const progressContainer = document.getElementById('progress-container');
-    progressContainer.classList.add('hidden');
+    document.getElementById('progress-container').classList.add('hidden');
 }
 
 export function updateProgressBarPosition() {
     const header = document.querySelector('header');
-    const progressContainer = document.getElementById('progress-container');
-    if (header && progressContainer) {
-        progressContainer.style.top = `${header.offsetHeight}px`;
-    }
+    const container = document.getElementById('progress-container');
+    if (header && container) container.style.top = `${header.offsetHeight}px`;
 }
