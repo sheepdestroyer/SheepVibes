@@ -46,29 +46,23 @@ def client():
     app.config["WTF_CSRF_ENABLED"] = False
 
     from backend.app import cache
-
     with app.test_client() as client, app.app_context():
         db.create_all()
         cache.clear()
         # Create a default admin user and log them in
         from backend.extensions import bcrypt
         from backend.models import User
-
         username = "testuser"
         password = "password"
         password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
-        user = User(username=username,
-                    password_hash=password_hash, is_admin=True)
+        user = User(username=username, password_hash=password_hash, is_admin=True)
         db.session.add(user)
         db.session.commit()
 
-        client.post(
-            "/api/auth/login", json={"username": username, "password": password}
-        )
+        client.post("/api/auth/login", json={"username": username, "password": password})
         yield client
         db.session.remove()
         db.drop_all()
-
 
 @pytest.fixture
 def auth_client(client):

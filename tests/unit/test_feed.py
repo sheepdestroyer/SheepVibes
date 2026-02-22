@@ -47,7 +47,6 @@ def db_setup():
     with app.app_context():
         db.create_all()
         from backend.models import User
-
         if not User.query.get(1):
             user = User(id=1, username="testuser", password_hash="hash")
             db.session.add(user)
@@ -224,7 +223,9 @@ def test_kernel_org_scenario(db_setup, mocker):  # pylint: disable=unused-argume
     tab = Tab(user_id=1, name="Tech", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(name="Kernel Org Feed", url="http://dummy.kernel.org/feed")
+    feed_obj = Feed(
+        name="Kernel Org Feed", url="http://dummy.kernel.org/feed"
+    )
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -274,7 +275,8 @@ def test_hacker_news_scenario_guid_handling(db_setup, mocker):  # pylint: disabl
     tab = Tab(user_id=1, name="News", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(name="HN Feed", url="http://dummy.hn.org/feed")
+    feed_obj = Feed(
+        name="HN Feed", url="http://dummy.hn.org/feed")
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -325,8 +327,9 @@ def test_duplicate_link_same_feed_no_true_guid(db_setup, mocker):  # pylint: dis
     tab = Tab(user_id=1, name="General", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(name="Test Feed DupLinks",
-                    url="http://dummy.duplinks.org/feed")
+    feed_obj = Feed(
+        name="Test Feed DupLinks", url="http://dummy.duplinks.org/feed"
+    )
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -361,7 +364,8 @@ def test_existing_item_link_update_with_same_guid(db_setup, mocker):  # pylint: 
     tab = Tab(user_id=1, name="Update", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(name="Update Feed", url="http://update.com/rss")
+    feed_obj = Feed(name="Update Feed",
+                    url="http://update.com/rss")
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -513,7 +517,9 @@ def test_update_feed_last_updated_time(db_setup, mocker, mock_dns):  # pylint: d
     db.session.add(tab)
     db.session.commit()
 
-    feed_obj = Feed(name="TestTimestampFeed", url="http://dummy.timestamp/rss")
+    feed_obj = Feed(
+        name="TestTimestampFeed", url="http://dummy.timestamp/rss"
+    )
     # Create initial_time as naive UTC to match DB retrieval behavior
     initial_time_aware = datetime.datetime.now(
         datetime.timezone.utc
@@ -667,7 +673,9 @@ def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # py
     db.session.add(tab)
     db.session.commit()
 
-    feed_obj = Feed(name="Fallback Test Feed", url="http://fallback.com/rss")
+    feed_obj = Feed(
+        name="Fallback Test Feed", url="http://fallback.com/rss"
+    )
     db.session.add(feed_obj)
     db.session.commit()
 
@@ -775,7 +783,9 @@ def test_feed_item_eviction_on_limit_exceeded(db_setup, mocker):  # pylint: disa
     db.session.add(tab)
     db.session.commit()
 
-    feed_obj = Feed(name="Eviction Test Feed", url="http://eviction.com/rss")
+    feed_obj = Feed(
+        name="Eviction Test Feed", url="http://eviction.com/rss"
+    )
     db.session.add(feed_obj)
     db.session.commit()
 

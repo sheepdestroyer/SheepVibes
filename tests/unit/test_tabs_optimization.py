@@ -1,27 +1,19 @@
 from contextlib import contextmanager
-
 from sqlalchemy import event
-
 from backend.app import db
-from backend.models import Feed, FeedItem, Subscription, Tab, User, UserItemState
-
+from backend.models import Feed, FeedItem, Tab, User, Subscription, UserItemState
 
 @contextmanager
 def count_queries():
     """Context manager to count SQL queries executed within the block."""
     query_count = [0]
-
-    def before_cursor_execute(
-        conn, cursor, statement, parameters, context, executemany
-    ):
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         query_count[0] += 1
-
     event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
     try:
         yield query_count
     finally:
         event.remove(db.engine, "before_cursor_execute", before_cursor_execute)
-
 
 def test_get_tabs_query_count_constant(client):
     """Verify that get_tabs executes a constant number of queries."""
@@ -38,18 +30,12 @@ def test_get_tabs_query_count_constant(client):
             db.session.flush()
             sub = Subscription(user_id=user_id, tab_id=tab.id, feed_id=feed.id)
             db.session.add(sub)
-            item = FeedItem(
-                title=f"Item {i}",
-                link=f"http://example.com/{i}/item",
-                guid=f"guid-{i}",
-                feed_id=feed.id,
-            )
+            item = FeedItem(title=f"Item {i}", link=f"http://example.com/{i}/item", guid=f"guid-{i}", feed_id=feed.id)
             db.session.add(item)
         db.session.commit()
 
     def get_query_count():
         from backend.extensions import cache
-
         cache.clear()
         with count_queries() as qc:
             response = client.get("/api/tabs")
@@ -64,7 +50,6 @@ def test_get_tabs_query_count_constant(client):
     assert count_n == count_1
     assert count_n <= 3
 
-
 def test_tab_to_dict_optimization(client):
     """Verify Tab.to_dict respects the unread_count override."""
     user = User.query.first()
@@ -76,12 +61,7 @@ def test_tab_to_dict_optimization(client):
     db.session.flush()
     sub = Subscription(user_id=user.id, tab_id=tab.id, feed_id=feed.id)
     db.session.add(sub)
-    item = FeedItem(
-        title="Item 1",
-        link="http://example.com/item-1",
-        feed_id=feed.id,
-        guid="guid-to-dict",
-    )
+    item = FeedItem(title="Item 1", link="http://example.com/item-1", feed_id=feed.id, guid="guid-to-dict")
     db.session.add(item)
     db.session.commit()
 
@@ -91,7 +71,6 @@ def test_tab_to_dict_optimization(client):
 
     assert result["unread_count"] == 123
     assert qc[0] == 0
-
 
 def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
     """Verify Tab.to_dict unread count calculation."""
@@ -105,15 +84,11 @@ def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
     sub = Subscription(user_id=user.id, tab_id=tab.id, feed_id=feed.id)
     db.session.add(sub)
 
-    unread_item = FeedItem(
-        title="Unread", link="http://example.com/u", feed_id=feed.id, guid="guid-u"
-    )
+    unread_item = FeedItem(title="Unread", link="http://example.com/u", feed_id=feed.id, guid="guid-u")
     db.session.add(unread_item)
     db.session.flush()
 
-    read_item = FeedItem(
-        title="Read", link="http://example.com/r", feed_id=feed.id, guid="guid-r"
-    )
+    read_item = FeedItem(title="Read", link="http://example.com/r", feed_id=feed.id, guid="guid-r")
     db.session.add(read_item)
     db.session.flush()
 
