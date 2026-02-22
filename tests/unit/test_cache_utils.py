@@ -13,8 +13,6 @@ from backend.cache_utils import (
 from backend.extensions import cache
 
 
-
-
 @pytest.fixture(autouse=True)
 def app_context():
     """Provide an app context and clear the cache for each test."""
@@ -50,24 +48,21 @@ def test_get_version_cached():
 def test_make_tabs_cache_key():
     """Test make_tabs_cache_key incorporates version correctly."""
     # Initial version is 1 (default)
-    key = make_tabs_cache_key()
-    assert key.startswith("view/tabs/v")
-    assert "v1" in key
+    assert make_tabs_cache_key() == "view/tabs/v1"
 
     # After invalidating tabs cache, version should be 2
     invalidate_tabs_cache()
-    key_after_invalidation = make_tabs_cache_key()
-    assert "v2" in key_after_invalidation
+    assert make_tabs_cache_key() == "view/tabs/v2"
 
 
 @pytest.mark.parametrize(
-    "url, tab_id, cache_versions, expected_key_parts, unexpected_parts",
+    "url, tab_id, cache_versions, expected_key, unexpected_parts",
     [
         pytest.param(
             "/api/tabs/1/feeds",
             1,
             {},
-            ["view/tab/1/v1/", "tabs_v1/"],
+            "view/tab/1/v1/tabs_v1/",
             [],
             id="default_versions_no_query_params",
         ),
@@ -75,7 +70,7 @@ def test_make_tabs_cache_key():
             "/api/tabs/1/feeds",
             1,
             {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
-            ["view/tab/1/v4/", "tabs_v3/"],
+            "view/tab/1/v4/tabs_v3/",
             [],
             id="custom_versions_no_query_params",
         ),
@@ -83,7 +78,7 @@ def test_make_tabs_cache_key():
             "/api/tabs/1/feeds?limit=10&other=ignored",
             1,
             {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
-            ["view/tab/1/v4/", "tabs_v3/", "/?", "limit=10"],
+            "view/tab/1/v4/tabs_v3/?limit=10",
             ["other=ignored"],
             id="with_query_params",
         ),
@@ -94,21 +89,20 @@ def test_make_tabs_cache_key():
             "/api/tabs/1/feeds?limit=10&limit=20",
             1,
             {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
-            ["view/tab/1/v4/", "tabs_v3/", "/?", "limit=10", "limit=20"],
+            "view/tab/1/v4/tabs_v3/?limit=10&limit=20",
             [],
             id="multiple_values_for_query_param",
         ),
     ],
 )
-def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key_parts, unexpected_parts):
+def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key, unexpected_parts):
     """Test make_tab_feeds_cache_key incorporates versions and query params."""
     for k, v in cache_versions.items():
         cache.set(k, v)
 
     with app.test_request_context(url):
         key = make_tab_feeds_cache_key(tab_id)
-        for part in expected_key_parts:
-            assert part in key
+        assert key == expected_key
         
         for part in unexpected_parts:
             assert part not in key
