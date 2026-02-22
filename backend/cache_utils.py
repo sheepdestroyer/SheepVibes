@@ -7,6 +7,13 @@ from .extensions import cache
 
 logger = logging.getLogger(__name__)
 
+TABS_VERSION_KEY = "tabs_version"
+
+
+def get_tab_version_key(tab_id):
+    """Helper to generate a version key for a specific tab."""
+    return f"tab_{tab_id}_version"
+
 
 def get_version(key, default=1):
     """Gets a version number for a cache key from the cache.
@@ -18,7 +25,8 @@ def get_version(key, default=1):
     Returns:
         int: The version number.
     """
-    return cache.get(key) or default
+    version = cache.get(key)
+    return version if version is not None else default
 
 
 def make_tabs_cache_key(*args, **kwargs):
@@ -31,7 +39,7 @@ def make_tabs_cache_key(*args, **kwargs):
     Returns:
         str: The generated cache key.
     """
-    version = get_version("tabs_version")
+    version = get_version(TABS_VERSION_KEY)
     return f"view/tabs/v{version}"
 
 
@@ -44,22 +52,22 @@ def make_tab_feeds_cache_key(tab_id):
     Returns:
         str: The generated cache key.
     """
-    tabs_version = get_version("tabs_version")  # For unread counts
-    tab_version = get_version(f"tab_{tab_id}_version")
+    tabs_version = get_version(TABS_VERSION_KEY)  # For unread counts
+    tab_version = get_version(get_tab_version_key(tab_id))
     # Only include parameters that are used by the endpoint in the cache key.
     used_params = ["limit"]
     sorted_query = sorted(
         (k, v) for k, v in request.args.items(multi=True) if k in used_params
     )
     query_string = urllib.parse.urlencode(sorted_query)
-    return f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/?{query_string}"
+    base_key = f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/"
+    return f"{base_key}?{query_string}" if query_string else base_key
 
 
 def invalidate_tabs_cache():
     """Invalidates the tabs list cache by incrementing its version."""
-    version_key = "tabs_version"
-    new_version = get_version(version_key) + 1
-    cache.set(version_key, new_version)
+    new_version = get_version(TABS_VERSION_KEY) + 1
+    cache.set(TABS_VERSION_KEY, new_version)
     logger.info("Invalidated tabs cache. New version: %s", new_version)
 
 
@@ -70,7 +78,7 @@ def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
         tab_id (int): The ID of the tab to invalidate the cache for.
         invalidate_tabs (bool): If True, also invalidates the main tabs list cache.
     """
-    version_key = f"tab_{tab_id}_version"
+    version_key = get_tab_version_key(tab_id)
     new_version = get_version(version_key) + 1
     cache.set(version_key, new_version)
     logger.info("Invalidated cache for tab %s. New version: %s",
