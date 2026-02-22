@@ -77,6 +77,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Add `is_read` flag to `FeedItems` model (default: false).
     *   [x] Add API endpoint `POST /api/items/<item_id>/read` or similar.
     *   [x] Update frontend to mark items visually and call the API (e.g., on click, or mark all visible as read).
+    *   [x] Fix middle-click not marking items as read by adding `auxclick` listener.
     *   [x] Update backend to calculate unread counts per feed/tab.
     *   [x] Display unread counts in the UI (widgets, tabs).
 
