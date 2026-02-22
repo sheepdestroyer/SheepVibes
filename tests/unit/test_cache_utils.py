@@ -95,7 +95,9 @@ def test_make_tabs_cache_key():
         ),
     ],
 )
-def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key, unexpected_parts):
+def test_make_tab_feeds_cache_key(
+    url, tab_id, cache_versions, expected_key, unexpected_parts
+):
     """Test make_tab_feeds_cache_key incorporates versions and query params."""
     for k, v in cache_versions.items():
         cache.set(k, v)
@@ -103,7 +105,7 @@ def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key, une
     with app.test_request_context(url):
         key = make_tab_feeds_cache_key(tab_id)
         assert key == expected_key
-        
+
         for part in unexpected_parts:
             assert part not in key
 
