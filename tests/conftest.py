@@ -44,13 +44,14 @@ def client():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = "test-secret"
-    app.config["WTF_CSRF_ENABLED"] = False # Disable CSRF for testing
+    app.config["WTF_CSRF_ENABLED"] = False  # Disable CSRF for testing
 
     with app.test_client() as client, app.app_context():
         db.create_all()
         yield client
         db.session.remove()
         db.drop_all()
+
 
 @pytest.fixture
 def auth_client(client):
@@ -65,5 +66,6 @@ def auth_client(client):
     db.session.add(user)
     db.session.commit()
 
-    client.post("/api/auth/login", json={"username": username, "password": password})
+    client.post("/api/auth/login",
+                json={"username": username, "password": password})
     return client
