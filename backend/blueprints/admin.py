@@ -4,8 +4,7 @@ import sqlite3
 import tempfile
 from functools import wraps
 
-from flask import (Blueprint, after_this_request, current_app, jsonify,
-                   send_file)
+from flask import Blueprint, after_this_request, current_app, jsonify, send_file
 from flask_login import current_user, login_required
 
 from ..extensions import db
@@ -47,7 +46,8 @@ def delete_user(user_id):
     deleted_username = user.username
     db.session.delete(user)
     db.session.commit()
-    logger.info("Admin %s deleted user %s", current_user.username, deleted_username)
+    logger.info("Admin %s deleted user %s",
+                current_user.username, deleted_username)
     return jsonify({"message": f"User {deleted_username} deleted"}), 200
 
 

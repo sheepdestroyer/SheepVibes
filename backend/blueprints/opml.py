@@ -46,7 +46,8 @@ def _generate_opml_string(user_id):
 
         tab_count += 1
         sorted_subs = sorted(
-            tab.subscriptions, key=lambda s: (s.order, (s.custom_name or s.feed.name))
+            tab.subscriptions, key=lambda s: (
+                s.order, (s.custom_name or s.feed.name))
         )
 
         for sub in sorted_subs:
@@ -110,7 +111,8 @@ def import_opml():
 def export_opml():
     """Exports the current user's feeds as an OPML file."""
     try:
-        opml_string, tab_count, feed_count = _generate_opml_string(current_user.id)
+        opml_string, tab_count, feed_count = _generate_opml_string(
+            current_user.id)
     except SQLAlchemyError:
         logger.exception("Database error during OPML generation for export")
         return jsonify({"error": "Database error during OPML generation"}), 500

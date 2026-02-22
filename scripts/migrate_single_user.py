@@ -12,8 +12,10 @@ def migrate_data():
         if not admin:
             print("Creating admin user...")
             password = os.environ.get("ADMIN_PASSWORD", "admin123")
-            password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
-            admin = User(username="admin", password_hash=password_hash, is_admin=True)
+            password_hash = bcrypt.generate_password_hash(
+                password).decode("utf-8")
+            admin = User(username="admin",
+                         password_hash=password_hash, is_admin=True)
             db.session.add(admin)
             db.session.commit()
             print(f"Admin user created with ID {admin.id}")

@@ -16,8 +16,10 @@ from .blueprints.feeds import feeds_bp, items_bp
 from .blueprints.opml import autosave_opml, opml_bp
 from .blueprints.tabs import tabs_bp
 from .cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
-from .constants import (OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT,
-                        UPDATE_INTERVAL_MINUTES_DEFAULT)
+from .constants import (
+    OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT,
+    UPDATE_INTERVAL_MINUTES_DEFAULT,
+)
 from .extensions import bcrypt, cache, db, login_manager, scheduler
 from .feed_service import update_all_feeds
 from .sse import announcer
@@ -169,7 +171,8 @@ def scheduled_feed_update():
                     # Invalidate the cache after updates
                     if new_items > 0 and affected_tab_ids:
                         for tab_id in affected_tab_ids:
-                            invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
+                            invalidate_tab_feeds_cache(
+                                tab_id, invalidate_tabs=False)
                         invalidate_tabs_cache()
                         logger.info(
                             "Granular cache invalidation completed for affected tabs: %s",
@@ -181,7 +184,8 @@ def scheduled_feed_update():
                         "feeds_processed": feeds_updated,
                         "new_items": new_items,
                         "affected_tab_ids": (
-                            sorted(list(affected_tab_ids)) if affected_tab_ids else []
+                            sorted(list(affected_tab_ids)
+                                   ) if affected_tab_ids else []
                         ),
                     }
                     msg = f"data: {json.dumps(event_data)}\n\n"

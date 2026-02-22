@@ -1,8 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from backend.app import app
-from backend.models import (Feed, FeedItem, Subscription, Tab, User,
-                            UserItemState, db)
+from backend.models import Feed, FeedItem, Subscription, Tab, User, UserItemState, db
 
 # --- Tests ---
 
@@ -99,6 +98,7 @@ def test_mark_item_read_success(client):
 
     response = client.post(f"/api/items/{item_id}/read")
     assert response.status_code == 200
-    state = UserItemState.query.filter_by(user_id=user.id, item_id=item_id).first()
+    state = UserItemState.query.filter_by(
+        user_id=user.id, item_id=item_id).first()
     assert state is not None
     assert state.is_read is True
