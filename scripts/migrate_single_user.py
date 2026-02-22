@@ -1,9 +1,8 @@
 import os
-import sys
 
 from backend.app import app
 from backend.extensions import bcrypt
-from backend.models import Feed, FeedItem, Subscription, Tab, User, UserItemState, db
+from backend.models import User, db
 
 
 def migrate_data():
@@ -12,8 +11,9 @@ def migrate_data():
         admin = User.query.filter_by(username="admin").first()
         if not admin:
             print("Creating admin user...")
+            password = os.environ.get("ADMIN_PASSWORD", "admin123")
             password_hash = bcrypt.generate_password_hash(
-                "admin123").decode("utf-8")
+                password).decode("utf-8")
             admin = User(username="admin",
                          password_hash=password_hash, is_admin=True)
             db.session.add(admin)
@@ -34,3 +34,4 @@ def migrate_data():
 
 if __name__ == "__main__":
     migrate_data()
+

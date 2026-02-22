@@ -211,10 +211,9 @@ def update_feed_url(sub_id):
 @feeds_bp.route("/update-all", methods=["POST"])
 @login_required
 def api_update_all_feeds():
-    """Triggers an update for all feeds in the system (global)."""
-    # Still global, but maybe restricted to admins?
-    # Or just let any user trigger a global refresh?
-    # For SheepVibes, let's keep it open or restricted to logged-in users.
+    """Triggers an update for all feeds in the system (admin only)."""
+    if not current_user.is_admin:
+        return jsonify({"error": "Admin privileges required"}), 403
     try:
         # Call the existing update_all_feeds service
         from ..feed_service import update_all_feeds

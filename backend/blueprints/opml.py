@@ -78,6 +78,17 @@ def import_opml():
     if opml_file.filename == "":
         return jsonify({"error": "No file selected"}), 400
 
+    # Validate file size (max 5MB)
+    content = opml_file.read()
+    if len(content) > 5 * 1024 * 1024:
+        return jsonify({"error": "File is too large (max 5MB)"}), 400
+    opml_file.seek(0)
+
+    # Validate file extension
+    _, ext = os.path.splitext(opml_file.filename)
+    if ext.lower() not in {".opml", ".xml"}:
+        return jsonify({"error": "Invalid file type. Allowed: .opml, .xml"}), 400
+
     requested_tab_id_str = request.form.get("tab_id")
 
     # Call the service function - needs to be updated for multi-user

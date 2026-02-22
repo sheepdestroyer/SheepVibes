@@ -1,18 +1,6 @@
-import datetime
-import io
-import json
-import os
-import xml.etree.ElementTree as ET
-from datetime import timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from backend.app import app, cache
-from backend.feed_service import (
-    parse_published_time,
-    process_feed_entries,
-)
+from backend.app import app
 from backend.models import Feed, FeedItem, Subscription, Tab, User, UserItemState, db
 
 # --- Tests ---

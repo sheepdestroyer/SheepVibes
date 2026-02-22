@@ -6,6 +6,7 @@ import os
 from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
+from flask_login import login_required
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -34,8 +35,18 @@ logger = logging.getLogger("sheepvibes")
 # Initialize Flask application
 app = Flask(__name__)
 # SECRET_KEY is required for session management
-app.config["SECRET_KEY"] = os.environ.get(
-    "SECRET_KEY", "dev-secret-key-sheepvibes")
+_secret = os.environ.get("SECRET_KEY")
+if not _secret:
+    if os.environ.get("FLASK_ENV") == "production" or not app.debug:
+        import secrets
+        _secret = secrets.token_hex(32)
+        logger.warning(
+            "SECRET_KEY not set! Generated a random key. "
+            "Sessions will NOT survive restarts. Set SECRET_KEY in production."
+        )
+    else:
+        _secret = "dev-secret-key-sheepvibes"
+app.config["SECRET_KEY"] = _secret
 # Apply ProxyFix to handle headers from reverse proxies (e.g. X-Forwarded-Proto) correctly
 # This ensures request.is_secure is accurate for HSTS.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -333,6 +344,7 @@ def serve_static_files(filename):
 
 
 @app.route("/api/stream")
+@login_required
 def stream():
     """Endpoint for Server-Sent Events (SSE) to stream updates."""
     return Response(announcer.listen(), mimetype="text/event-stream")
