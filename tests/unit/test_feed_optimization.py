@@ -1,7 +1,7 @@
-
 import logging
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from sqlalchemy import event, false
 from sqlalchemy.engine import Engine
 
@@ -23,6 +23,7 @@ def db_setup():
         db.session.remove()
         db.drop_all()
 
+
 class MockFeedEntry(dict):
     def __init__(self, title, link, guid=None, published_parsed=None, **kwargs):
         super().__init__()
@@ -32,16 +33,19 @@ class MockFeedEntry(dict):
         self["published_parsed"] = published_parsed
         for k, v in kwargs.items():
             self[k] = v
+
     def __getattr__(self, name):
         try:
             return self[name]
         except KeyError:
             raise AttributeError(name)
 
+
 class MockParsedFeed:
     def __init__(self, title, entries):
         self.feed = {"title": title}
         self.entries = entries
+
 
 def test_optimization_uses_in_clause(db_setup, caplog):
     """
@@ -63,7 +67,7 @@ def test_optimization_uses_in_clause(db_setup, caplog):
             title=f"Item {i}",
             link=f"http://opt.feed/item{i}",
             guid=f"guid{i}",
-            published_time=None
+            published_time=None,
         )
         db.session.add(item)
     db.session.commit()
@@ -73,14 +77,18 @@ def test_optimization_uses_in_clause(db_setup, caplog):
     # Existing item (should be found)
     entries.append(MockFeedEntry("Item 0", "http://opt.feed/item0", "guid0"))
     # New item
-    entries.append(MockFeedEntry("New Item", "http://opt.feed/new", "new_guid"))
+    entries.append(MockFeedEntry(
+        "New Item", "http://opt.feed/new", "new_guid"))
 
     parsed_feed = MockParsedFeed("OptFeed", entries)
 
     # Capture SQL queries
     queries = []
+
     @event.listens_for(Engine, "before_cursor_execute")
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    def before_cursor_execute(
+        conn, cursor, statement, parameters, context, executemany
+    ):
         queries.append(statement)
 
     # Run processing
@@ -100,7 +108,10 @@ def test_optimization_uses_in_clause(db_setup, caplog):
             logger.info(f"Found optimized query: {q_str}")
             break
 
-    assert found_optimized_query, "Did not find a query using IN clause for item deduplication"
+    assert found_optimized_query, (
+        "Did not find a query using IN clause for item deduplication"
+    )
+
 
 def test_fallback_to_fetch_all_on_many_candidates(db_setup):
     """
@@ -118,13 +129,18 @@ def test_fallback_to_fetch_all_on_many_candidates(db_setup):
     # Simulate many candidates (> 500)
     entries = []
     for i in range(600):
-        entries.append(MockFeedEntry(f"Item {i}", f"http://fb.feed/item{i}", f"guid{i}"))
+        entries.append(
+            MockFeedEntry(f"Item {i}", f"http://fb.feed/item{i}", f"guid{i}")
+        )
 
     parsed_feed = MockParsedFeed("FallbackFeed", entries)
 
     queries = []
+
     @event.listens_for(Engine, "before_cursor_execute")
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    def before_cursor_execute(
+        conn, cursor, statement, parameters, context, executemany
+    ):
         queries.append(statement)
 
     feed_service.process_feed_entries(feed, parsed_feed)
@@ -141,7 +157,10 @@ def test_fallback_to_fetch_all_on_many_candidates(db_setup):
                 logger.info(f"Found fallback query: {q_str}")
                 break
 
-    assert fallback_query_found, "Should fallback to simple query (no IN clause) for large inputs"
+    assert fallback_query_found, (
+        "Should fallback to simple query (no IN clause) for large inputs"
+    )
+
 
 def test_empty_feed_optimization(db_setup):
     """
@@ -159,8 +178,11 @@ def test_empty_feed_optimization(db_setup):
     parsed_feed = MockParsedFeed("EmptyFeed", [])
 
     queries = []
+
     @event.listens_for(Engine, "before_cursor_execute")
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    def before_cursor_execute(
+        conn, cursor, statement, parameters, context, executemany
+    ):
         queries.append(statement)
 
     # Should not raise exception
@@ -176,11 +198,13 @@ def test_empty_feed_optimization(db_setup):
         # Or just checking that it ran without error is mostly enough for the NameError regression.
         # But let's check for optimization.
         if "FROM FEED_ITEMS" in q_str and ("0 = 1" in q_str or "FALSE" in q_str):
-             found_false_query = True
-             break
+            found_false_query = True
+            break
 
     # Actually, SQLAlchemy might not execute the query if it detects it's statically false?
     # No, filter(false()) creates a query with `WHERE 0 = 1`.
 
     # If no candidates, we expect the query to be executed with false condition.
-    assert found_false_query, "Should execute query with false condition for empty candidates"
+    assert found_false_query, (
+        "Should execute query with false condition for empty candidates"
+    )
