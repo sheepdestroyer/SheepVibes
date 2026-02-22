@@ -30,6 +30,7 @@ from defusedxml.common import (
     EntitiesForbidden,
     ExternalReferenceForbidden,
 )
+from sqlalchemy import false, or_
 from sqlalchemy.exc import IntegrityError
 
 from .cache_utils import (
@@ -1231,16 +1232,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     """Identifies new items to add and updates existing ones."""
     items_to_add = []
     batch_processed_guids = set()
-
-    # Optimization: Query only necessary columns to avoid loading full objects
-    # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link,
-        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
-
-    # Create lookup maps
-    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
-    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
+    candidate_guids = set()
+    candidate_links = set()
+    processed_entries = []
 
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
@@ -1249,26 +1243,80 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         feed_db_obj.id,
     )
 
-    # Pre-calculate dates to avoid double parsing and ensure consistency between
-    # sorting and storage (e.g. if parse_published_time uses current time as fallback).
-    entries_with_dates = []
+    # 1. First pass: Pre-process entries to calculate GUIDs, parse dates, and collect candidates.
+    # This prepares data for efficient DB querying and avoids re-calculation.
     for entry in parsed_feed.entries:
-        entries_with_dates.append((entry, parse_published_time(entry)))
+        parsed_published = parse_published_time(entry)
 
-    # Sort entries by published date (newest first).
-    # Our "First Wins" deduplication strategy (below) will preserve the version
-    # that appears first in the iteration. Sorting ensures the most recently
-    # published version is processed first and thus preserved in case of duplicates.
+        raw_link = entry.get("link")
+        entry_link = validate_link_structure(raw_link)
+
+        db_guid = None
+        if entry_link:
+            # GUID logic depends on link presence for synthetic fallback
+            if entry.get("id"):
+                db_guid = entry.get("id")
+            else:
+                # Synthetic GUID
+                unique_string = f"{entry_link}{entry.get('title', '')}"
+                db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+
+            if db_guid:
+                candidate_guids.add(db_guid)
+            candidate_links.add(entry_link)
+
+        processed_entries.append({
+            "entry": entry,
+            "published": parsed_published,
+            "link": entry_link,
+            "guid": db_guid,
+        })
+
+    # 2. Sort processed entries by date (newest first).
     try:
-        entries_with_dates.sort(key=lambda x: x[1], reverse=True)
+        processed_entries.sort(key=lambda x: x["published"], reverse=True)
     except Exception:  # pylint: disable=broad-exception-caught
-        # If sorting fails, proceed with original order.
         logger.warning("Failed to sort entries for feed %s",
                        _sanitize_for_log(feed_db_obj.name))
 
-    for entry, parsed_published in entries_with_dates:
-        raw_link = entry.get("link")
-        entry_link = validate_link_structure(raw_link)
+    # 3. Optimized DB Query: Fetch only potentially matching items.
+    # If the candidate set is reasonable size, use IN clause.
+    # Otherwise fallback to fetching all (legacy behavior) to avoid SQLite limits.
+    items_query = db.session.query(
+        FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title
+    ).filter_by(feed_id=feed_db_obj.id)
+
+    # Threshold for switching to "Fetch All" to avoid binding too many variables
+    MAX_VARS = 500
+
+    if (len(candidate_guids) + len(candidate_links)) <= MAX_VARS and (candidate_guids or candidate_links):
+        conditions = []
+        if candidate_guids:
+            conditions.append(FeedItem.guid.in_(candidate_guids))
+        if candidate_links:
+            conditions.append(FeedItem.link.in_(candidate_links))
+
+        items_query = items_query.filter(or_(*conditions))
+    elif not candidate_guids and not candidate_links:
+        # No valid items to check against, so no existing items needed.
+        # But we still iterate to log warnings about missing links if any.
+        # We can effectively return empty list here for items_tuple,
+        # but to be safe and consistent with logic below, we can filter False.
+        items_query = items_query.filter(false())
+
+    # Execute query
+    items_tuple = items_query.all()
+
+    # Create lookup maps
+    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
+    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
+
+    # 4. Main Loop: Process entries using pre-calculated data
+    for item_data in processed_entries:
+        entry = item_data["entry"]
+        entry_link = item_data["link"]
+        parsed_published = item_data["published"]
+        db_guid = item_data["guid"]
 
         if not entry_link:
             logger.warning(
@@ -1278,28 +1326,9 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             )
             continue
 
-        # SECURITY & LOGIC: Generate a robust GUID if missing.
-        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
-        if entry.get("id"):
-            db_guid = entry.get("id")
-        else:
-            # Create a synthetic GUID based on link and title to ensure uniqueness
-            # for items that share a link but have different content.
-            unique_string = f"{entry_link}{entry.get('title', '')}"
-
-            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
-
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
         if not existing_match:
-            # Minimal fallback: Check by link ONLY if we used link as GUID (legacy)
-            # or if we really want to strict de-dupe.
-            # But for now, let's rely on our robust GUID.
-            # We still check existing_items_by_link just in case we have old DB entries
-            # that were saved with just the link as GUID?
-            # Actually, standard behavior is to trust the GUID.
-            # If we change how GUID is generated, we might duplicate old items once.
-            # This is acceptable to fix the regression.
             existing_match = existing_items_by_link.get(entry_link)
 
         if existing_match:
