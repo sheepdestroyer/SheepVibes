@@ -1,5 +1,7 @@
 import logging
 import os
+import sqlite3
+import tempfile
 from functools import wraps
 
 from flask import Blueprint, current_app, jsonify, send_file
@@ -75,6 +77,7 @@ def toggle_admin(user_id):
 @login_required
 @admin_required
 def export_db():
+    """Export the SQLite database as a safe backup copy."""
     db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
     if not db_uri.startswith("sqlite:///"):
         return jsonify({"error": "Database export only supported for SQLite"}), 400
@@ -87,4 +90,18 @@ def export_db():
     if not db_path.startswith(project_root) or not os.path.exists(db_path):
         return jsonify({"error": "Database file not found or access denied"}), 404
 
-    return send_file(db_path, as_attachment=True)
+    # Use SQLite backup API for a consistent snapshot (avoids corruption
+    # from concurrent writes during download)
+    try:
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".db")
+        os.close(tmp_fd)
+        source = sqlite3.connect(db_path)
+        dest = sqlite3.connect(tmp_path)
+        source.backup(dest)
+        source.close()
+        dest.close()
+        return send_file(tmp_path, as_attachment=True,
+                         download_name="sheepvibes.db")
+    except Exception as e:
+        logger.error("Database export failed: %s", e, exc_info=True)
+        return jsonify({"error": "Database export failed"}), 500
