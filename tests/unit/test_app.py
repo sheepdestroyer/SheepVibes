@@ -13,16 +13,15 @@ from backend.feed_service import (
     parse_published_time,
     process_feed_entries,
 )
-from backend.models import Feed, FeedItem, Subscription, Tab, User, UserItemState, db
+from backend.models import Feed, FeedItem, Tab, db, User, Subscription, UserItemState
+
 
 # --- Tests ---
-
 
 def test_get_tabs_empty(client):
     response = client.get("/api/tabs")
     assert response.status_code == 200
     assert response.json == []
-
 
 def test_get_tabs_with_data(client):
     user = User.query.first()
@@ -39,13 +38,11 @@ def test_get_tabs_with_data(client):
     assert data[0]["name"] == "News"
     assert data[1]["name"] == "Tech"
 
-
 def test_create_tab_success(client):
     response = client.post("/api/tabs", json={"name": "Science"})
     assert response.status_code == 201
     assert response.json["name"] == "Science"
     assert Tab.query.filter_by(name="Science").count() == 1
-
 
 def test_rename_tab_success(client):
     user = User.query.first()
@@ -58,7 +55,6 @@ def test_rename_tab_success(client):
     assert response.status_code == 200
     assert db.session.get(Tab, tab_id).name == "New Name"
 
-
 def test_delete_tab_success(client):
     user = User.query.first()
     tab = Tab(user_id=user.id, name="To Delete")
@@ -69,7 +65,6 @@ def test_delete_tab_success(client):
     response = client.delete(f"/api/tabs/{tab_id}")
     assert response.status_code == 200
     assert db.session.get(Tab, tab_id) is None
-
 
 def test_add_feed_success(client, mocker):
     user = User.query.first()
@@ -84,15 +79,12 @@ def test_add_feed_success(client, mocker):
     mock_feed.entries = []
     mock_fetch.return_value = mock_feed
 
-    response = client.post(
-        "/api/feeds", json={"url": "http://example.com/rss", "tab_id": tab_id}
-    )
+    response = client.post("/api/feeds", json={"url": "http://example.com/rss", "tab_id": tab_id})
     assert response.status_code == 201
     assert response.json["name"] == "Test Feed"
 
     assert Subscription.query.count() == 1
     assert Feed.query.filter_by(url="http://example.com/rss").count() == 1
-
 
 def test_mark_item_read_success(client):
     user = User.query.first()
@@ -110,7 +102,6 @@ def test_mark_item_read_success(client):
 
     response = client.post(f"/api/items/{item_id}/read")
     assert response.status_code == 200
-    state = UserItemState.query.filter_by(
-        user_id=user.id, item_id=item_id).first()
+    state = UserItemState.query.filter_by(user_id=user.id, item_id=item_id).first()
     assert state is not None
     assert state.is_read is True

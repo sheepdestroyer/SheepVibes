@@ -17,7 +17,7 @@ from ..feed_service import (
     fetch_feed,
     process_feed_entries,
 )
-from ..models import Feed, FeedItem, Subscription, Tab, UserItemState
+from ..models import Feed, FeedItem, Tab, Subscription, UserItemState
 from ..sse import announcer
 
 logger = logging.getLogger(__name__)
@@ -38,18 +38,12 @@ def add_feed():
     tab_id = data.get("tab_id")
 
     if not tab_id:
-        default_tab = (
-            Tab.query.filter_by(user_id=current_user.id).order_by(
-                Tab.order).first()
-        )
+        default_tab = Tab.query.filter_by(user_id=current_user.id).order_by(Tab.order).first()
         if not default_tab:
             return jsonify({"error": "Cannot add feed: No tabs found"}), 400
         tab_id = default_tab.id
     else:
-        tab = (
-            db.session.query(Tab).filter_by(
-                id=tab_id, user_id=current_user.id).first()
-        )
+        tab = db.session.query(Tab).filter_by(id=tab_id, user_id=current_user.id).first()
         if not tab:
             return jsonify({"error": f"Tab with id {tab_id} not found"}), 404
 
@@ -60,9 +54,7 @@ def add_feed():
     if existing_feed:
         feed = existing_feed
         # Check if user already has this feed subscribed
-        existing_sub = Subscription.query.filter_by(
-            user_id=current_user.id, feed_id=feed.id
-        ).first()
+        existing_sub = Subscription.query.filter_by(user_id=current_user.id, feed_id=feed.id).first()
         if existing_sub:
             return jsonify({"error": f"You are already subscribed to {feed_url}"}), 409
     else:
@@ -76,12 +68,11 @@ def add_feed():
 
         feed = Feed(name=feed_name, url=feed_url, site_link=site_link)
         db.session.add(feed)
-        db.session.flush()  # Get feed.id
+        db.session.flush() # Get feed.id
         new_feed_created = True
 
     try:
-        new_sub = Subscription(user_id=current_user.id,
-                               tab_id=tab_id, feed_id=feed.id)
+        new_sub = Subscription(user_id=current_user.id, tab_id=tab_id, feed_id=feed.id)
         db.session.add(new_sub)
         db.session.commit()
 
@@ -93,23 +84,15 @@ def add_feed():
 
     except Exception as e:
         db.session.rollback()
-        logger.error("Error adding feed %s: %s",
-                     feed_url, str(e), exc_info=True)
-        return (
-            jsonify({"error": "An internal error occurred while adding the feed."}),
-            500,
-        )
+        logger.error("Error adding feed %s: %s", feed_url, str(e), exc_info=True)
+        return (jsonify({"error": "An internal error occurred while adding the feed."}), 500)
 
 
 @feeds_bp.route("/<int:sub_id>", methods=["DELETE"])
 @login_required
 def delete_feed(sub_id):
     """Deletes a subscription for the current user."""
-    sub = (
-        db.session.query(Subscription)
-        .filter_by(id=sub_id, user_id=current_user.id)
-        .first_or_404()
-    )
+    sub = db.session.query(Subscription).filter_by(id=sub_id, user_id=current_user.id).first_or_404()
     tab_id = sub.tab_id
     try:
         db.session.delete(sub)
@@ -118,25 +101,15 @@ def delete_feed(sub_id):
         return jsonify({"message": f"Subscription {sub_id} deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
-        logger.error(
-            "Error deleting subscription %s: %s", sub_id, str(e), exc_info=True
-        )
-        return (
-            jsonify(
-                {"error": "An internal error occurred while deleting the feed."}),
-            500,
-        )
+        logger.error("Error deleting subscription %s: %s", sub_id, str(e), exc_info=True)
+        return (jsonify({"error": "An internal error occurred while deleting the feed."}), 500)
 
 
 @feeds_bp.route("/<int:sub_id>", methods=["PUT"])
 @login_required
 def update_feed_url(sub_id):
     """Updates a subscription's custom name or URL (global)."""
-    sub = (
-        db.session.query(Subscription)
-        .filter_by(id=sub_id, user_id=current_user.id)
-        .first_or_404()
-    )
+    sub = db.session.query(Subscription).filter_by(id=sub_id, user_id=current_user.id).first_or_404()
     data = request.get_json()
 
     # In this multi-user model, users usually shouldn't change the GLOBAL URL
@@ -160,8 +133,7 @@ def update_feed_url(sub_id):
                 feed_name = parsed_feed.feed.get("title", new_url)
                 site_link = parsed_feed.feed.get("link")
 
-            new_global_feed = Feed(
-                name=feed_name, url=new_url, site_link=site_link)
+            new_global_feed = Feed(name=feed_name, url=new_url, site_link=site_link)
             db.session.add(new_global_feed)
             db.session.flush()
             sub.feed_id = new_global_feed.id
@@ -177,35 +149,18 @@ def update_feed_url(sub_id):
 
         # Return subscription data including items
         sub_dict = sub.to_dict()
-        items = (
-            sub.feed.items.order_by(FeedItem.published_time.desc().nullslast())
-            .limit(DEFAULT_FEED_ITEMS_LIMIT)
-            .all()
-        )
+        items = sub.feed.items.order_by(FeedItem.published_time.desc().nullslast()).limit(DEFAULT_FEED_ITEMS_LIMIT).all()
         # Get is_read statuses
         item_ids = [it.id for it in items]
-        item_states = {
-            s.item_id: s.is_read
-            for s in UserItemState.query.filter(
-                UserItemState.user_id == current_user.id,
-                UserItemState.item_id.in_(item_ids),
-            ).all()
-        }
+        item_states = {s.item_id: s.is_read for s in UserItemState.query.filter(UserItemState.user_id == current_user.id, UserItemState.item_id.in_(item_ids)).all()}
 
-        sub_dict["items"] = [
-            it.to_dict(is_read=item_states.get(it.id, False)) for it in items
-        ]
+        sub_dict["items"] = [it.to_dict(is_read=item_states.get(it.id, False)) for it in items]
         return jsonify(sub_dict), 200
 
     except Exception as e:
         db.session.rollback()
-        logger.error("Error updating subscription %s: %s",
-                     sub_id, e, exc_info=True)
-        return (
-            jsonify(
-                {"error": "An internal error occurred while updating the feed."}),
-            500,
-        )
+        logger.error("Error updating subscription %s: %s", sub_id, e, exc_info=True)
+        return (jsonify({"error": "An internal error occurred while updating the feed."}), 500)
 
 
 @feeds_bp.route("/update-all", methods=["POST"])
@@ -218,51 +173,31 @@ def api_update_all_feeds():
     try:
         # Call the existing update_all_feeds service
         from ..feed_service import update_all_feeds
-
         processed_count, new_items_count, affected_tab_ids = update_all_feeds()
 
         # SSE handles broadcasting
-        return (
-            jsonify(
-                {
-                    "message": "All feeds updated successfully.",
-                    "feeds_processed": processed_count,
-                    "new_items": new_items_count,
-                }
-            ),
-            200,
-        )
+        return jsonify({
+            "message": "All feeds updated successfully.",
+            "feeds_processed": processed_count,
+            "new_items": new_items_count,
+        }), 200
     except Exception as e:
-        logger.error("Error during /api/feeds/update-all: %s",
-                     e, exc_info=True)
-        return (
-            jsonify(
-                {"error": "An internal error occurred while updating all feeds."}),
-            500,
-        )
+        logger.error("Error during /api/feeds/update-all: %s", e, exc_info=True)
+        return (jsonify({"error": "An internal error occurred while updating all feeds."}), 500)
 
 
 @feeds_bp.route("/<int:sub_id>/update", methods=["POST"])
 @login_required
 def update_feed(sub_id):
     """Manually triggers an update check for a specific feed via subscription."""
-    sub = (
-        db.session.query(Subscription)
-        .filter_by(id=sub_id, user_id=current_user.id)
-        .first_or_404()
-    )
+    sub = db.session.query(Subscription).filter_by(id=sub_id, user_id=current_user.id).first_or_404()
     try:
         success, new_items, _ = fetch_and_update_feed(sub.feed_id)
         if success and new_items > 0:
             invalidate_tab_feeds_cache(sub.tab_id)
         return jsonify(sub.to_dict())
     except Exception as e:
-        logger.error(
-            "Error during manual update for subscription %s: %s",
-            sub_id,
-            e,
-            exc_info=True,
-        )
+        logger.error("Error during manual update for subscription %s: %s", sub_id, e, exc_info=True)
         return (jsonify({"error": "An internal error occurred"}), 500)
 
 
@@ -270,44 +205,24 @@ def update_feed(sub_id):
 @login_required
 def get_feed_items(sub_id):
     """Returns a paginated list of items for a specific subscription."""
-    sub = (
-        db.session.query(Subscription)
-        .filter_by(id=sub_id, user_id=current_user.id)
-        .first_or_404()
-    )
+    sub = db.session.query(Subscription).filter_by(id=sub_id, user_id=current_user.id).first_or_404()
 
     try:
         offset = int(request.args.get("offset", 0))
         limit = int(request.args.get("limit", DEFAULT_PAGINATION_LIMIT))
     except (ValueError, TypeError):
-        return (
-            jsonify(
-                {"error": "Offset and limit parameters must be valid integers."}),
-            400,
-        )
+        return (jsonify({"error": "Offset and limit parameters must be valid integers."}), 400)
 
     offset = max(0, offset)
     limit = max(1, min(limit, MAX_PAGINATION_LIMIT))
 
-    items = (
-        FeedItem.query.filter_by(feed_id=sub.feed_id)
-        .order_by(
-            FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
-        )
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    items = (FeedItem.query.filter_by(feed_id=sub.feed_id)
+             .order_by(FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc())
+             .offset(offset).limit(limit).all())
 
     # Get is_read statuses
     item_ids = [it.id for it in items]
-    item_states = {
-        s.item_id: s.is_read
-        for s in UserItemState.query.filter(
-            UserItemState.user_id == current_user.id,
-            UserItemState.item_id.in_(item_ids),
-        ).all()
-    }
+    item_states = {s.item_id: s.is_read for s in UserItemState.query.filter(UserItemState.user_id == current_user.id, UserItemState.item_id.in_(item_ids)).all()}
 
     return jsonify([it.to_dict(is_read=item_states.get(it.id, False)) for it in items])
 
@@ -321,17 +236,13 @@ def mark_item_read(item_id):
         return jsonify({"error": "Feed item not found"}), 404
 
     # Check if item state already exists
-    state = UserItemState.query.filter_by(
-        user_id=current_user.id, item_id=item_id
-    ).first()
+    state = UserItemState.query.filter_by(user_id=current_user.id, item_id=item_id).first()
     if state and state.is_read:
         return jsonify({"message": "Item already marked as read"}), 200
 
     try:
         if not state:
-            state = UserItemState(
-                user_id=current_user.id, item_id=item_id, is_read=True
-            )
+            state = UserItemState(user_id=current_user.id, item_id=item_id, is_read=True)
             db.session.add(state)
         else:
             state.is_read = True
@@ -339,16 +250,12 @@ def mark_item_read(item_id):
         db.session.commit()
 
         # Invalidate caches for all tabs where this feed is subscribed by this user
-        subs = Subscription.query.filter_by(
-            user_id=current_user.id, feed_id=item.feed_id
-        ).all()
+        subs = Subscription.query.filter_by(user_id=current_user.id, feed_id=item.feed_id).all()
         for sub in subs:
             invalidate_tab_feeds_cache(sub.tab_id)
 
         return jsonify({"message": f"Item {item_id} marked as read"}), 200
     except Exception as e:
         db.session.rollback()
-        logger.error(
-            "Error marking item %s as read: %s", item_id, str(e), exc_info=True
-        )
+        logger.error("Error marking item %s as read: %s", item_id, str(e), exc_info=True)
         return (jsonify({"error": "An internal error occurred"}), 500)
