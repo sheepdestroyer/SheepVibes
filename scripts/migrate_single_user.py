@@ -1,5 +1,3 @@
-
-
 from backend.app import app
 from backend.extensions import bcrypt
 from backend.models import User, db

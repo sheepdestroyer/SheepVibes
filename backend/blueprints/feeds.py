@@ -19,7 +19,6 @@ from ..feed_service import (
 )
 from ..models import Feed, FeedItem, Subscription, Tab, UserItemState
 
-
 logger = logging.getLogger(__name__)
 
 feeds_bp = Blueprint("feeds", __name__, url_prefix="/api/feeds")

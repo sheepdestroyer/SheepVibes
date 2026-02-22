@@ -1,6 +1,3 @@
-
-
-
 def test_register_and_login(client):
     # Use unique username
     username = "newuser_reg"

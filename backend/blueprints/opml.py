@@ -4,7 +4,6 @@ import logging
 import os
 import xml.etree.ElementTree as ET
 
-
 from flask import Blueprint, Response, jsonify, request
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
@@ -97,8 +96,7 @@ def import_opml():
 def export_opml():
     """Exports the current user's feeds as an OPML file."""
     try:
-        opml_string, _, _ = _generate_opml_string(
-            current_user.id)
+        opml_string, _, _ = _generate_opml_string(current_user.id)
     except SQLAlchemyError:
         logger.exception("Database error during OPML generation for export")
         return jsonify({"error": "Database error during OPML generation"}), 500
