@@ -39,6 +39,7 @@ _secret = os.environ.get("SECRET_KEY")
 if not _secret:
     if os.environ.get("FLASK_ENV") == "production" or not app.debug:
         import secrets
+
         _secret = secrets.token_hex(32)
         logger.warning(
             "SECRET_KEY not set! Generated a random key. "
