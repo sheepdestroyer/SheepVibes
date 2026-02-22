@@ -82,8 +82,7 @@ def export_db():
     db_path_str = db_uri.replace("sqlite:///", "")
     # Prevent path traversal by ensuring the path is within the project root
     db_path = os.path.abspath(db_path_str)
-    project_root = os.path.abspath(
-        current_app.config.get("PROJECT_ROOT", "."))
+    project_root = os.path.abspath(current_app.config.get("PROJECT_ROOT", "."))
 
     if not db_path.startswith(project_root) or not os.path.exists(db_path):
         return jsonify({"error": "Database file not found or access denied"}), 404
