@@ -18,7 +18,8 @@ def get_version(key, default=1):
     Returns:
         int: The version number.
     """
-    return cache.get(key) or default
+    version = cache.get(key)
+    return version if version is not None else default
 
 
 def make_tabs_cache_key(*args, **kwargs):
@@ -52,7 +53,8 @@ def make_tab_feeds_cache_key(tab_id):
         (k, v) for k, v in request.args.items(multi=True) if k in used_params
     )
     query_string = urllib.parse.urlencode(sorted_query)
-    return f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/?{query_string}"
+    base_key = f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/"
+    return f"{base_key}?{query_string}" if query_string else base_key
 
 
 def invalidate_tabs_cache():
@@ -73,8 +75,7 @@ def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
     version_key = f"tab_{tab_id}_version"
     new_version = get_version(version_key) + 1
     cache.set(version_key, new_version)
-    logger.info("Invalidated cache for tab %s. New version: %s",
-                tab_id, new_version)
+    logger.info("Invalidated cache for tab %s. New version: %s", tab_id, new_version)
     if invalidate_tabs:
         # Also invalidate the main tabs list because unread counts will have changed.
         invalidate_tabs_cache()

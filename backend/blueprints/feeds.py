@@ -6,17 +6,11 @@ from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
 from ..cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
-from ..constants import (
-    DEFAULT_FEED_ITEMS_LIMIT,
-    DEFAULT_PAGINATION_LIMIT,
-    MAX_PAGINATION_LIMIT,
-)
+from ..constants import (DEFAULT_FEED_ITEMS_LIMIT, DEFAULT_PAGINATION_LIMIT,
+                         MAX_PAGINATION_LIMIT)
 from ..extensions import db
-from ..feed_service import (
-    fetch_and_update_feed,
-    fetch_feed,
-    process_feed_entries,
-)
+from ..feed_service import (fetch_and_update_feed, fetch_feed,
+                            process_feed_entries)
 from ..models import Feed, FeedItem, Subscription, Tab, UserItemState
 from ..sse import announcer
 
@@ -39,16 +33,14 @@ def add_feed():
 
     if not tab_id:
         default_tab = (
-            Tab.query.filter_by(user_id=current_user.id).order_by(
-                Tab.order).first()
+            Tab.query.filter_by(user_id=current_user.id).order_by(Tab.order).first()
         )
         if not default_tab:
             return jsonify({"error": "Cannot add feed: No tabs found"}), 400
         tab_id = default_tab.id
     else:
         tab = (
-            db.session.query(Tab).filter_by(
-                id=tab_id, user_id=current_user.id).first()
+            db.session.query(Tab).filter_by(id=tab_id, user_id=current_user.id).first()
         )
         if not tab:
             return jsonify({"error": f"Tab with id {tab_id} not found"}), 404
@@ -80,8 +72,7 @@ def add_feed():
         new_feed_created = True
 
     try:
-        new_sub = Subscription(user_id=current_user.id,
-                               tab_id=tab_id, feed_id=feed.id)
+        new_sub = Subscription(user_id=current_user.id, tab_id=tab_id, feed_id=feed.id)
         db.session.add(new_sub)
         db.session.commit()
 
@@ -93,8 +84,7 @@ def add_feed():
 
     except Exception as e:
         db.session.rollback()
-        logger.error("Error adding feed %s: %s",
-                     feed_url, str(e), exc_info=True)
+        logger.error("Error adding feed %s: %s", feed_url, str(e), exc_info=True)
         return (
             jsonify({"error": "An internal error occurred while adding the feed."}),
             500,
@@ -122,8 +112,7 @@ def delete_feed(sub_id):
             "Error deleting subscription %s: %s", sub_id, str(e), exc_info=True
         )
         return (
-            jsonify(
-                {"error": "An internal error occurred while deleting the feed."}),
+            jsonify({"error": "An internal error occurred while deleting the feed."}),
             500,
         )
 
@@ -160,8 +149,7 @@ def update_feed_url(sub_id):
                 feed_name = parsed_feed.feed.get("title", new_url)
                 site_link = parsed_feed.feed.get("link")
 
-            new_global_feed = Feed(
-                name=feed_name, url=new_url, site_link=site_link)
+            new_global_feed = Feed(name=feed_name, url=new_url, site_link=site_link)
             db.session.add(new_global_feed)
             db.session.flush()
             sub.feed_id = new_global_feed.id
@@ -199,11 +187,9 @@ def update_feed_url(sub_id):
 
     except Exception as e:
         db.session.rollback()
-        logger.error("Error updating subscription %s: %s",
-                     sub_id, e, exc_info=True)
+        logger.error("Error updating subscription %s: %s", sub_id, e, exc_info=True)
         return (
-            jsonify(
-                {"error": "An internal error occurred while updating the feed."}),
+            jsonify({"error": "An internal error occurred while updating the feed."}),
             500,
         )
 
@@ -211,10 +197,9 @@ def update_feed_url(sub_id):
 @feeds_bp.route("/update-all", methods=["POST"])
 @login_required
 def api_update_all_feeds():
-    """Triggers an update for all feeds in the system (global)."""
-    # Still global, but maybe restricted to admins?
-    # Or just let any user trigger a global refresh?
-    # For SheepVibes, let's keep it open or restricted to logged-in users.
+    """Triggers an update for all feeds in the system (admin only)."""
+    if not current_user.is_admin:
+        return jsonify({"error": "Admin privileges required"}), 403
     try:
         # Call the existing update_all_feeds service
         from ..feed_service import update_all_feeds
@@ -233,11 +218,9 @@ def api_update_all_feeds():
             200,
         )
     except Exception as e:
-        logger.error("Error during /api/feeds/update-all: %s",
-                     e, exc_info=True)
+        logger.error("Error during /api/feeds/update-all: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"error": "An internal error occurred while updating all feeds."}),
+            jsonify({"error": "An internal error occurred while updating all feeds."}),
             500,
         )
 
@@ -281,8 +264,7 @@ def get_feed_items(sub_id):
         limit = int(request.args.get("limit", DEFAULT_PAGINATION_LIMIT))
     except (ValueError, TypeError):
         return (
-            jsonify(
-                {"error": "Offset and limit parameters must be valid integers."}),
+            jsonify({"error": "Offset and limit parameters must be valid integers."}),
             400,
         )
 

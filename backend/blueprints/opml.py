@@ -46,8 +46,7 @@ def _generate_opml_string(user_id):
 
         tab_count += 1
         sorted_subs = sorted(
-            tab.subscriptions, key=lambda s: (
-                s.order, (s.custom_name or s.feed.name))
+            tab.subscriptions, key=lambda s: (s.order, (s.custom_name or s.feed.name))
         )
 
         for sub in sorted_subs:
@@ -78,6 +77,20 @@ def import_opml():
     if opml_file.filename == "":
         return jsonify({"error": "No file selected"}), 400
 
+    # Validate file size (max 5MB)
+    content = opml_file.read()
+    if len(content) > 5 * 1024 * 1024:
+        return jsonify({"error": "File is too large (max 5MB)"}), 400
+    opml_file.seek(0)
+
+    # Validate file extension
+    _, ext = os.path.splitext(opml_file.filename)
+    if ext.lower() not in {".opml", ".xml"}:
+        return (
+            jsonify({"error": "Invalid file type. Allowed: .opml, .xml"}),
+            400,
+        )
+
     requested_tab_id_str = request.form.get("tab_id")
 
     # Call the service function - needs to be updated for multi-user
@@ -97,8 +110,7 @@ def import_opml():
 def export_opml():
     """Exports the current user's feeds as an OPML file."""
     try:
-        opml_string, tab_count, feed_count = _generate_opml_string(
-            current_user.id)
+        opml_string, tab_count, feed_count = _generate_opml_string(current_user.id)
     except SQLAlchemyError:
         logger.exception("Database error during OPML generation for export")
         return jsonify({"error": "Database error during OPML generation"}), 500
