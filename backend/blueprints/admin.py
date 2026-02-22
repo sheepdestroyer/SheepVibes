@@ -4,7 +4,7 @@ import sqlite3
 import tempfile
 from functools import wraps
 
-from flask import Blueprint, current_app, jsonify, send_file
+from flask import Blueprint, after_this_request, current_app, jsonify, send_file
 from flask_login import current_user, login_required
 
 from ..extensions import db
@@ -92,6 +92,7 @@ def export_db():
 
     # Use SQLite backup API for a consistent snapshot (avoids corruption
     # from concurrent writes during download)
+    tmp_path = None
     try:
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".db")
         os.close(tmp_fd)
@@ -100,7 +101,19 @@ def export_db():
         source.backup(dest)
         source.close()
         dest.close()
+
+        @after_this_request
+        def cleanup(response):
+            try:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError as err:
+                logger.error("Error removing temp file %s: %s", tmp_path, err)
+            return response
+
         return send_file(tmp_path, as_attachment=True, download_name="sheepvibes.db")
     except Exception as e:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
         logger.error("Database export failed: %s", e, exc_info=True)
         return jsonify({"error": "Database export failed"}), 500
