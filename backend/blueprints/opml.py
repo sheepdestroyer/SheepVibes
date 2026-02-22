@@ -4,13 +4,14 @@ import logging
 import os
 import xml.etree.ElementTree as ET
 
-from flask import Blueprint, Response, jsonify, request
+from filelock import FileLock, Timeout
+from flask import Blueprint, Response, current_app, jsonify, request
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
-from ..models import Subscription, Tab
+from ..models import Tab, Subscription, Feed
 
 opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
 logger = logging.getLogger(__name__)
@@ -25,12 +26,9 @@ def _generate_opml_string(user_id):
     body_element = ET.SubElement(opml_element, "body")
 
     # Eager load subscriptions and feeds to avoid N+1 queries
-    tabs = (
-        Tab.query.filter_by(user_id=user_id)
-        .options(selectinload(Tab.subscriptions).selectinload(Subscription.feed))
-        .order_by(Tab.order)
-        .all()
-    )
+    tabs = Tab.query.filter_by(user_id=user_id).options(
+        selectinload(Tab.subscriptions).selectinload(Subscription.feed)
+    ).order_by(Tab.order).all()
 
     feed_count = 0
     tab_count = 0
@@ -44,10 +42,7 @@ def _generate_opml_string(user_id):
         folder_outline.set("title", tab.name)
 
         tab_count += 1
-        sorted_subs = sorted(
-            tab.subscriptions, key=lambda s: (
-                s.order, (s.custom_name or s.feed.name))
-        )
+        sorted_subs = sorted(tab.subscriptions, key=lambda s: (s.order, (s.custom_name or s.feed.name)))
 
         for sub in sorted_subs:
             feed_outline = ET.SubElement(folder_outline, "outline")
@@ -60,9 +55,7 @@ def _generate_opml_string(user_id):
                 feed_outline.set("htmlUrl", sub.feed.site_link)
             feed_count += 1
 
-    opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode(
-        "utf-8"
-    )
+    opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode("utf-8")
 
     return opml_string, tab_count, feed_count
 
@@ -77,23 +70,11 @@ def import_opml():
     if opml_file.filename == "":
         return jsonify({"error": "No file selected"}), 400
 
-    # Validate file size (max 5MB)
-    content = opml_file.read()
-    if len(content) > 5 * 1024 * 1024:
-        return jsonify({"error": "File is too large (max 5MB)"}), 400
-    opml_file.seek(0)
-
-    # Validate file extension
-    _, ext = os.path.splitext(opml_file.filename)
-    if ext.lower() not in {".opml", ".xml"}:
-        return jsonify({"error": "Invalid file type. Allowed: .opml, .xml"}), 400
-
     requested_tab_id_str = request.form.get("tab_id")
 
     # Call the service function - needs to be updated for multi-user
     result, error_info = import_opml_service(
-        opml_file.stream, requested_tab_id_str, current_user.id
-    )
+        opml_file.stream, requested_tab_id_str, current_user.id)
 
     if error_info:
         error_json, status_code = error_info
@@ -107,7 +88,7 @@ def import_opml():
 def export_opml():
     """Exports the current user's feeds as an OPML file."""
     try:
-        opml_string, _, _ = _generate_opml_string(current_user.id)
+        opml_string, tab_count, feed_count = _generate_opml_string(current_user.id)
     except SQLAlchemyError:
         logger.exception("Database error during OPML generation for export")
         return jsonify({"error": "Database error during OPML generation"}), 500
