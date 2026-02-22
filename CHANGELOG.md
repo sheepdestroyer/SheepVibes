@@ -1,5 +1,10 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-02-22
+
+- **Fix: Middle-click to mark as read**
+  - Added `auxclick` event listener to feed item links in `frontend/js/ui.js` to ensure items are marked as read when opened via middle-click.
+
 ## 2026-01-29
 
 - **Feat: Robust OPML Import & Feed Refresh Progress**

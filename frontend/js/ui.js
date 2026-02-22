@@ -55,6 +55,11 @@ function createFeedItemElement(item, clickHandler) {
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.addEventListener('click', () => clickHandler(listItem));
+    link.addEventListener('auxclick', (event) => {
+        if (event.button === 1) {
+            clickHandler(listItem);
+        }
+    });
     listItem.appendChild(link);
 
     const timestamp = document.createElement('span');
