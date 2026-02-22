@@ -12,7 +12,7 @@ from ..cache_utils import (
 )
 from ..constants import DEFAULT_FEED_ITEMS_LIMIT, MAX_PAGINATION_LIMIT
 from ..extensions import cache, db
-from ..models import Feed, FeedItem, Subscription, Tab, UserItemState
+from ..models import FeedItem, Subscription, Tab, UserItemState
 
 logger = logging.getLogger(__name__)
 

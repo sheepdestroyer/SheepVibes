@@ -44,6 +44,7 @@ def client():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = "test-secret"
     app.config["WTF_CSRF_ENABLED"] = False
+    app.config["CACHE_TYPE"] = "SimpleCache"
 
     from backend.app import cache
 
@@ -55,7 +56,7 @@ def client():
         from backend.models import User
 
         username = "testuser"
-        password = "password"
+        password = os.environ.get("TEST_PASSWORD", "password")
         password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
         user = User(username=username,
                     password_hash=password_hash, is_admin=True)

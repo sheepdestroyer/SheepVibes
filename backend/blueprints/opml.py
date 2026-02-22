@@ -4,14 +4,14 @@ import logging
 import os
 import xml.etree.ElementTree as ET
 
-from filelock import FileLock, Timeout
-from flask import Blueprint, Response, current_app, jsonify, request
+
+from flask import Blueprint, Response, jsonify, request
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
-from ..models import Feed, Subscription, Tab
+from ..models import Subscription, Tab
 
 opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ def import_opml():
 def export_opml():
     """Exports the current user's feeds as an OPML file."""
     try:
-        opml_string, tab_count, feed_count = _generate_opml_string(
+        opml_string, _, _ = _generate_opml_string(
             current_user.id)
     except SQLAlchemyError:
         logger.exception("Database error during OPML generation for export")

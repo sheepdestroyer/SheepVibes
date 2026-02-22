@@ -1,9 +1,8 @@
-import os
-import sys
+
 
 from backend.app import app
 from backend.extensions import bcrypt
-from backend.models import Feed, FeedItem, Subscription, Tab, User, UserItemState, db
+from backend.models import User, db
 
 
 def migrate_data():

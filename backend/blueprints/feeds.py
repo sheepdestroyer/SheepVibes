@@ -5,7 +5,7 @@ import logging
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
-from ..cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
+from ..cache_utils import invalidate_tab_feeds_cache
 from ..constants import (
     DEFAULT_FEED_ITEMS_LIMIT,
     DEFAULT_PAGINATION_LIMIT,
@@ -18,7 +18,7 @@ from ..feed_service import (
     process_feed_entries,
 )
 from ..models import Feed, FeedItem, Subscription, Tab, UserItemState
-from ..sse import announcer
+
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,7 @@ def api_update_all_feeds():
         # Call the existing update_all_feeds service
         from ..feed_service import update_all_feeds
 
-        processed_count, new_items_count, affected_tab_ids = update_all_feeds()
+        processed_count, new_items_count, _ = update_all_feeds()
 
         # SSE handles broadcasting
         return (

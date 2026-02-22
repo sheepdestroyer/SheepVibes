@@ -45,7 +45,7 @@ from .constants import (
 )
 
 # Import database models from the new models.py
-from .models import Feed, FeedItem, Subscription, Tab, UserItemState, db
+from .models import Feed, FeedItem, Subscription, Tab, db
 from .sse import announcer
 
 # Set up logger for this module

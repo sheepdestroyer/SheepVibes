@@ -1,6 +1,4 @@
-import pytest
 
-from backend.models import Feed, Subscription, Tab, User
 
 
 def test_register_and_login(client):
