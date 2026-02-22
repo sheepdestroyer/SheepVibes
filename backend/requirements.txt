@@ -11,3 +11,4 @@ redis
 Flask-CORS
 filelock==3.24.3
 defusedxml
+Flask-WTF
