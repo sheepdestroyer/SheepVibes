@@ -48,27 +48,35 @@ def test_make_tabs_cache_key():
     "url, tab_id, cache_versions, expected_key",
     [
         pytest.param(
-            "/api/tabs/1/feeds", 1, {},
+            "/api/tabs/1/feeds",
+            1,
+            {},
             "view/tab/1/v1/tabs_v1/?",
-            id="default_versions_no_query_params"
+            id="default_versions_no_query_params",
         ),
         pytest.param(
-            "/api/tabs/1/feeds", 1, {"tabs_version": 3, "tab_1_version": 4},
+            "/api/tabs/1/feeds",
+            1,
+            {"tabs_version": 3, "tab_1_version": 4},
             "view/tab/1/v4/tabs_v3/?",
-            id="custom_versions_no_query_params"
+            id="custom_versions_no_query_params",
         ),
         pytest.param(
-            "/api/tabs/1/feeds?limit=10&other=ignored", 1, {"tabs_version": 3, "tab_1_version": 4},
+            "/api/tabs/1/feeds?limit=10&other=ignored",
+            1,
+            {"tabs_version": 3, "tab_1_version": 4},
             "view/tab/1/v4/tabs_v3/?limit=10",
-            id="with_query_params"
+            id="with_query_params",
         ),
         # Case 4: Multiple values for the same used param ('limit')
         # Verifies that request.args.items(multi=True) and urllib.parse.urlencode
         # correctly preserve repeated keys in the generated cache key.
         pytest.param(
-            "/api/tabs/1/feeds?limit=10&limit=20", 1, {"tabs_version": 3, "tab_1_version": 4},
+            "/api/tabs/1/feeds?limit=10&limit=20",
+            1,
+            {"tabs_version": 3, "tab_1_version": 4},
             "view/tab/1/v4/tabs_v3/?limit=10&limit=20",
-            id="multiple_values_for_query_param"
+            id="multiple_values_for_query_param",
         ),
     ],
 )
