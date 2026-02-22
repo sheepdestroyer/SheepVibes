@@ -1,5 +1,7 @@
 import pytest
-from backend.app import app, CSRF_COOKIE_NAME, CSRF_HEADER_NAME
+
+from backend.app import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, app
+
 
 def test_csrf_protection_flow(client):
     """Test the full CSRF protection flow."""
@@ -33,19 +35,20 @@ def test_csrf_protection_flow(client):
     response = client.post(
         "/api/tabs",
         json={"name": "Should Fail 3"},
-        headers={CSRF_HEADER_NAME: "wrong_token"}
+        headers={CSRF_HEADER_NAME: "wrong_token"},
     )
     assert response.status_code == 403
 
     # 5. Test POST with matching cookie and header (should succeed)
     # Note: We use a unique name to avoid conflict if DB is not reset
     response = client.post(
-        "/api/tabs",
-        json={"name": "CSRF Test Tab"},
-        headers={CSRF_HEADER_NAME: token}
+        "/api/tabs", json={"name": "CSRF Test Tab"}, headers={CSRF_HEADER_NAME: token}
     )
     # Expect 201 Created or 200 OK
-    assert response.status_code in [200, 201], f"Request failed with status {response.status_code}: {response.data}"
+    assert response.status_code in [
+        200,
+        201,
+    ], f"Request failed with status {response.status_code}: {response.data}"
 
     # Reset config (though fixture teardown handles app context, config might persist in memory if not careful)
     app.config["CSRF_ENABLED"] = False
