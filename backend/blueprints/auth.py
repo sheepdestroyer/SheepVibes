@@ -30,8 +30,9 @@ def register():
 
     password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 
-    # Check if this is the first user; if so, make them an admin
-    is_admin = User.query.count() == 0
+    # First registered user becomes admin; query.first() is slightly safer
+    # against race conditions than count() == 0
+    is_admin = not User.query.first()
 
     new_user = User(
         username=username, password_hash=password_hash, email=email, is_admin=is_admin
