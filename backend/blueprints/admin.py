@@ -100,8 +100,7 @@ def export_db():
         source.backup(dest)
         source.close()
         dest.close()
-        return send_file(tmp_path, as_attachment=True,
-                         download_name="sheepvibes.db")
+        return send_file(tmp_path, as_attachment=True, download_name="sheepvibes.db")
     except Exception as e:
         logger.error("Database export failed: %s", e, exc_info=True)
         return jsonify({"error": "Database export failed"}), 500
