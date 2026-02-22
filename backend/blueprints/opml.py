@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
-from ..models import Tab, Subscription, Feed
+from ..models import Feed, Subscription, Tab
 
 opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
 logger = logging.getLogger(__name__)
@@ -26,9 +26,12 @@ def _generate_opml_string(user_id):
     body_element = ET.SubElement(opml_element, "body")
 
     # Eager load subscriptions and feeds to avoid N+1 queries
-    tabs = Tab.query.filter_by(user_id=user_id).options(
-        selectinload(Tab.subscriptions).selectinload(Subscription.feed)
-    ).order_by(Tab.order).all()
+    tabs = (
+        Tab.query.filter_by(user_id=user_id)
+        .options(selectinload(Tab.subscriptions).selectinload(Subscription.feed))
+        .order_by(Tab.order)
+        .all()
+    )
 
     feed_count = 0
     tab_count = 0
@@ -42,7 +45,10 @@ def _generate_opml_string(user_id):
         folder_outline.set("title", tab.name)
 
         tab_count += 1
-        sorted_subs = sorted(tab.subscriptions, key=lambda s: (s.order, (s.custom_name or s.feed.name)))
+        sorted_subs = sorted(
+            tab.subscriptions, key=lambda s: (
+                s.order, (s.custom_name or s.feed.name))
+        )
 
         for sub in sorted_subs:
             feed_outline = ET.SubElement(folder_outline, "outline")
@@ -55,7 +61,9 @@ def _generate_opml_string(user_id):
                 feed_outline.set("htmlUrl", sub.feed.site_link)
             feed_count += 1
 
-    opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode("utf-8")
+    opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode(
+        "utf-8"
+    )
 
     return opml_string, tab_count, feed_count
 
@@ -74,7 +82,8 @@ def import_opml():
 
     # Call the service function - needs to be updated for multi-user
     result, error_info = import_opml_service(
-        opml_file.stream, requested_tab_id_str, current_user.id)
+        opml_file.stream, requested_tab_id_str, current_user.id
+    )
 
     if error_info:
         error_json, status_code = error_info
@@ -88,7 +97,8 @@ def import_opml():
 def export_opml():
     """Exports the current user's feeds as an OPML file."""
     try:
-        opml_string, tab_count, feed_count = _generate_opml_string(current_user.id)
+        opml_string, tab_count, feed_count = _generate_opml_string(
+            current_user.id)
     except SQLAlchemyError:
         logger.exception("Database error during OPML generation for export")
         return jsonify({"error": "Database error during OPML generation"}), 500
