@@ -2,6 +2,7 @@ import atexit
 import json
 import logging
 import os
+import secrets
 
 from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -111,6 +112,51 @@ app.register_blueprint(opml_bp)
 app.register_blueprint(tabs_bp)
 app.register_blueprint(feeds_bp)
 app.register_blueprint(items_bp)
+
+# --- CSRF Protection ---
+
+# Enable CSRF protection by default
+app.config.setdefault("CSRF_ENABLED", True)
+CSRF_COOKIE_NAME = "csrf_token"
+CSRF_HEADER_NAME = "X-CSRFToken"
+
+
+@app.before_request
+def csrf_protect():
+    """Validates the CSRF token for unsafe requests."""
+    if not app.config.get("CSRF_ENABLED"):
+        return
+
+    if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+        token = request.cookies.get(CSRF_COOKIE_NAME)
+        header_token = request.headers.get(CSRF_HEADER_NAME)
+
+        if not token or not header_token or token != header_token:
+            logger.warning(
+                "CSRF validation failed: Token: %s, Header: %s, IP: %s",
+                "Present" if token else "Missing",
+                "Present" if header_token else "Missing",
+                request.remote_addr,
+            )
+            return jsonify({"error": "CSRF token missing or invalid"}), 403
+
+
+@app.after_request
+def set_csrf_cookie(response):
+    """Sets the CSRF cookie if missing."""
+    if not app.config.get("CSRF_ENABLED"):
+        return response
+
+    if CSRF_COOKIE_NAME not in request.cookies:
+        response.set_cookie(
+            CSRF_COOKIE_NAME,
+            secrets.token_hex(32),
+            httponly=False,  # Must be accessible to JS
+            samesite="Lax",
+            secure=False,  # TODO: Set to True in production (HTTPS)
+        )
+    return response
+
 
 # --- Scheduler Configuration ---
 
