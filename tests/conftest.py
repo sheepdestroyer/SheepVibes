@@ -19,7 +19,6 @@ def fixture_tests_root():
 def opml_file_path(tests_root):
     """Return the path to the test OPML file, ensuring it exists."""
     path = tests_root.joinpath("test_feeds.opml")
-    # Using specific exception instead of assert for production code safety, though this is test code.
     if not path.is_file():
         raise FileNotFoundError(f"Test data file not found at: {path}")
     return path
@@ -44,28 +43,28 @@ def client():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = "test-secret"
-    app.config["WTF_CSRF_ENABLED"] = False  # Disable CSRF for testing
+    app.config["WTF_CSRF_ENABLED"] = False
 
+    from backend.app import cache
     with app.test_client() as client, app.app_context():
         db.create_all()
+        cache.clear()
+        # Create a default admin user and log them in
+        from backend.extensions import bcrypt
+        from backend.models import User
+        username = "testuser"
+        password = "password"
+        password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+        user = User(username=username, password_hash=password_hash, is_admin=True)
+        db.session.add(user)
+        db.session.commit()
+
+        client.post("/api/auth/login", json={"username": username, "password": password})
         yield client
         db.session.remove()
         db.drop_all()
 
-
 @pytest.fixture
 def auth_client(client):
-    """A client that is already logged in as a test user."""
-    from backend.extensions import bcrypt
-    from backend.models import User, db
-
-    username = "testuser"
-    password = "password"
-    password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
-    user = User(username=username, password_hash=password_hash, is_admin=True)
-    db.session.add(user)
-    db.session.commit()
-
-    client.post("/api/auth/login",
-                json={"username": username, "password": password})
+    """Alias for client since it's already authenticated."""
     return client

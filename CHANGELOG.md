@@ -2,6 +2,13 @@
 
 ## 2026-02-22
 
+- **Feat: Multi-user Support and Admin Panel**
+  - **Auth System**: Integrated Flask-Login and Flask-Bcrypt for secure user authentication and registration.
+  - **Shared Feed Model**: Refactored database schema to share feeds and items globally across users while maintaining private subscriptions and unread statuses.
+  - **Admin Panel**: Added user management interface and database export functionality for administrators.
+  - **Scoped API**: Scoped all tab and feed operations to the authenticated user.
+  - **Frontend Overhaul**: Replaced the single-user UI with a session-aware interface including Login/Register views and an Admin Panel.
+
 - **Fix: Middle-click to mark as read**
   - Added `auxclick` event listener to feed item links in `frontend/js/ui.js` to ensure items are marked as read when opened via middle-click.
 

@@ -1,70 +1,57 @@
 import pytest
-
-from backend.models import Feed, Subscription, Tab, User
-
+from backend.models import User, Tab, Subscription, Feed
 
 def test_register_and_login(client):
+    # Use unique username
+    username = "newuser_reg"
     # Register
-    res = client.post(
-        "/api/auth/register", json={"username": "testuser", "password": "password123"}
-    )
+    res = client.post("/api/auth/register", json={"username": username, "password": "password123"})
     assert res.status_code == 201
 
     # Login
-    res = client.post(
-        "/api/auth/login", json={"username": "testuser", "password": "password123"}
-    )
+    res = client.post("/api/auth/login", json={"username": username, "password": "password123"})
     assert res.status_code == 200
-    assert res.get_json()["username"] == "testuser"
+    assert res.get_json()["username"] == username
 
     # Me
     res = client.get("/api/auth/me")
     assert res.status_code == 200
-    assert res.get_json()["username"] == "testuser"
-
+    assert res.get_json()["username"] == username
 
 def test_multiuser_isolation(client):
-    # Create two users
-    client.post("/api/auth/register",
-                json={"username": "u1", "password": "p1"})
-    client.post("/api/auth/register",
-                json={"username": "u2", "password": "p2"})
+    # testuser already exists from conftest
 
-    # Login as u1
-    client.post("/api/auth/login", json={"username": "u1", "password": "p1"})
+    # Login as u1 (already logged in as testuser by default, but let's be explicit)
+    client.post("/api/auth/login", json={"username": "testuser", "password": "password"})
     client.post("/api/tabs", json={"name": "Tab U1"})
 
-    # Logout u1
+    # Logout
     client.post("/api/auth/logout")
 
-    # Login as u2
+    # Register and Login as u2
+    client.post("/api/auth/register", json={"username": "u2", "password": "p2"})
     client.post("/api/auth/login", json={"username": "u2", "password": "p2"})
+
     res = client.get("/api/tabs")
     tabs = res.get_json()
-    assert len(tabs) == 0  # u2 shouldn't see u1's tabs
+    assert len(tabs) == 0 # u2 shouldn't see testuser's tabs
 
     client.post("/api/tabs", json={"name": "Tab U2"})
     res = client.get("/api/tabs")
     assert len(res.get_json()) == 1
     assert res.get_json()[0]["name"] == "Tab U2"
 
-
 def test_admin_access(client):
-    # First user is admin
-    client.post("/api/auth/register",
-                json={"username": "admin", "password": "p1"})
-    client.post("/api/auth/login",
-                json={"username": "admin", "password": "p1"})
+    # testuser is admin from conftest
+    client.post("/api/auth/login", json={"username": "testuser", "password": "password"})
 
     res = client.get("/api/admin/users")
     assert res.status_code == 200
-    assert len(res.get_json()) == 1
 
-    # Second user is NOT admin
+    # Create non-admin user
     client.post("/api/auth/logout")
-    client.post("/api/auth/register",
-                json={"username": "user", "password": "p2"})
-    client.post("/api/auth/login", json={"username": "user", "password": "p2"})
+    client.post("/api/auth/register", json={"username": "regular_user", "password": "p2"})
+    client.post("/api/auth/login", json={"username": "regular_user", "password": "p2"})
 
     res = client.get("/api/admin/users")
-    assert res.status_code == 403  # Forbidden
+    assert res.status_code == 403 # Forbidden

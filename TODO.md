@@ -119,6 +119,6 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] Import/Export OPML feed lists. (Refactored for robustness, SSE progress, and XSS prevention)
 *   [ ] Widget resizing/reordering (drag and drop).
 *   [ ] Different widget view types (e.g., list vs. expanded).
-*   [ ] User authentication.
+*   [x] User authentication. (Multi-user support with shared global feeds)
 *   [ ] Keyword filtering/highlighting within feeds.
 *   [ ] More advanced configuration options per feed.
