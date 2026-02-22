@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from backend.app import app, db
-
 os.environ["TESTING"] = "true"
+
+from backend.app import app, db
 
 
 @pytest.fixture(scope="session", name="tests_root")

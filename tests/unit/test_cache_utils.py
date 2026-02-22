@@ -1,7 +1,4 @@
-import os
 import pytest
-
-os.environ["TESTING"] = "true"
 
 from backend.app import app
 from backend.cache_utils import (
@@ -15,7 +12,7 @@ from backend.cache_utils import (
 )
 from backend.extensions import cache
 
-app.config["TESTING"] = True
+
 
 
 @pytest.fixture(autouse=True)
@@ -64,13 +61,14 @@ def test_make_tabs_cache_key():
 
 
 @pytest.mark.parametrize(
-    "url, tab_id, cache_versions, expected_key_parts",
+    "url, tab_id, cache_versions, expected_key_parts, unexpected_parts",
     [
         pytest.param(
             "/api/tabs/1/feeds",
             1,
             {},
             ["view/tab/1/v1/", "tabs_v1/"],
+            [],
             id="default_versions_no_query_params",
         ),
         pytest.param(
@@ -78,6 +76,7 @@ def test_make_tabs_cache_key():
             1,
             {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
             ["view/tab/1/v4/", "tabs_v3/"],
+            [],
             id="custom_versions_no_query_params",
         ),
         pytest.param(
@@ -85,6 +84,7 @@ def test_make_tabs_cache_key():
             1,
             {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
             ["view/tab/1/v4/", "tabs_v3/", "/?", "limit=10"],
+            ["other=ignored"],
             id="with_query_params",
         ),
         # Case 4: Multiple values for the same used param ('limit')
@@ -95,11 +95,12 @@ def test_make_tabs_cache_key():
             1,
             {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
             ["view/tab/1/v4/", "tabs_v3/", "/?", "limit=10", "limit=20"],
+            [],
             id="multiple_values_for_query_param",
         ),
     ],
 )
-def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key_parts):
+def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key_parts, unexpected_parts):
     """Test make_tab_feeds_cache_key incorporates versions and query params."""
     for k, v in cache_versions.items():
         cache.set(k, v)
@@ -109,9 +110,8 @@ def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key_part
         for part in expected_key_parts:
             assert part in key
         
-        # Verify ignored params are not included
-        if "other=ignored" in url:
-            assert "other=ignored" not in key
+        for part in unexpected_parts:
+            assert part not in key
 
 
 def test_invalidate_tabs_cache():

@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 TABS_VERSION_KEY = "tabs_version"
 
+
 def get_tab_version_key(tab_id):
     """Helper to generate a version key for a specific tab."""
     return f"tab_{tab_id}_version"
