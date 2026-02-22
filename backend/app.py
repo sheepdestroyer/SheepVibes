@@ -34,19 +34,21 @@ logger = logging.getLogger("sheepvibes")
 # Initialize Flask application
 app = Flask(__name__)
 # SECRET_KEY is required for session management
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-sheepvibes")
+app.config["SECRET_KEY"] = os.environ.get(
+    "SECRET_KEY", "dev-secret-key-sheepvibes")
 # Apply ProxyFix to handle headers from reverse proxies (e.g. X-Forwarded-Proto) correctly
 # This ensures request.is_secure is accurate for HSTS.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config["PROJECT_ROOT"] = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), ".."))
+    os.path.join(os.path.dirname(__file__), "..")
+)
 
 # Configure CORS with specific allowed origins
 allowed_origins_str = os.environ.get(
-    "CORS_ALLOWED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080")
+    "CORS_ALLOWED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080"
+)
 allowed_origins = [
-    origin.strip() for origin in allowed_origins_str.split(",")
-    if origin.strip()
+    origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()
 ]
 CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 
@@ -58,8 +60,7 @@ if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
     app.config["CACHE_TYPE"] = (
         "SimpleCache"  # Use SimpleCache for tests, no Redis needed
     )
-    logger.info(
-        "TESTING mode: Using in-memory SQLite database and SimpleCache.")
+    logger.info("TESTING mode: Using in-memory SQLite database and SimpleCache.")
 else:
     # Existing database configuration logic
     default_db_path_in_container = "/app/data/sheepvibes.db"
@@ -69,19 +70,20 @@ else:
         if db_path_env.startswith("sqlite:///"):
             app.config["SQLALCHEMY_DATABASE_URI"] = db_path_env
             logger.info(
-                "Using DATABASE_PATH environment variable directly: %s",
-                db_path_env)
+                "Using DATABASE_PATH environment variable directly: %s", db_path_env
+            )
         else:
             db_path = db_path_env
             app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
             logger.info(
-                "Using DATABASE_PATH environment variable for file path: %s",
-                db_path)
+                "Using DATABASE_PATH environment variable for file path: %s", db_path
+            )
     else:
         # Default path logic
         if not os.path.exists("/app"):  # Assume local development
             project_root = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), ".."))
+                os.path.join(os.path.dirname(__file__), "..")
+            )
             local_data_dir = os.path.join(project_root, "data")
             os.makedirs(local_data_dir, exist_ok=True)
             db_path = os.path.join(local_data_dir, "sheepvibes.db")
@@ -99,8 +101,9 @@ else:
 
     # --- Cache Configuration for non-testing ---
     app.config["CACHE_TYPE"] = "RedisCache"
-    app.config["CACHE_REDIS_URL"] = os.environ.get("CACHE_REDIS_URL",
-                                                   "redis://localhost:6379/0")
+    app.config["CACHE_REDIS_URL"] = os.environ.get(
+        "CACHE_REDIS_URL", "redis://localhost:6379/0"
+    )
 
 # Disable modification tracking
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -124,15 +127,16 @@ app.register_blueprint(admin_bp)
 # --- Scheduler Configuration ---
 
 UPDATE_INTERVAL_MINUTES = int(
-    os.environ.get("UPDATE_INTERVAL_MINUTES", UPDATE_INTERVAL_MINUTES_DEFAULT))
+    os.environ.get("UPDATE_INTERVAL_MINUTES", UPDATE_INTERVAL_MINUTES_DEFAULT)
+)
 OPML_AUTOSAVE_INTERVAL_MINUTES = int(
-    os.environ.get("OPML_AUTOSAVE_INTERVAL_MINUTES",
-                   OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT))
+    os.environ.get(
+        "OPML_AUTOSAVE_INTERVAL_MINUTES", OPML_AUTOSAVE_INTERVAL_MINUTES_DEFAULT
+    )
+)
 
 
-@scheduler.scheduled_job("interval",
-                         minutes=UPDATE_INTERVAL_MINUTES,
-                         id="update_feeds")
+@scheduler.scheduled_job("interval", minutes=UPDATE_INTERVAL_MINUTES, id="update_feeds")
 def scheduled_feed_update():
     """Scheduled job to periodically update all feeds in the database."""
     # Use a file lock to ensure only one worker runs this job
@@ -146,8 +150,7 @@ def scheduled_feed_update():
                     UPDATE_INTERVAL_MINUTES,
                 )
                 try:
-                    feeds_updated, new_items, affected_tab_ids = update_all_feeds(
-                    )
+                    feeds_updated, new_items, affected_tab_ids = update_all_feeds()
                     logger.info(
                         "Scheduled update completed: %s feeds updated, %s new items",
                         feeds_updated,
@@ -156,8 +159,8 @@ def scheduled_feed_update():
                     # Invalidate the cache after updates
                     if new_items > 0 and affected_tab_ids:
                         for tab_id in affected_tab_ids:
-                            invalidate_tab_feeds_cache(tab_id,
-                                                       invalidate_tabs=False)
+                            invalidate_tab_feeds_cache(
+                                tab_id, invalidate_tabs=False)
                         invalidate_tabs_cache()
                         logger.info(
                             "Granular cache invalidation completed for affected tabs: %s",
@@ -166,27 +169,27 @@ def scheduled_feed_update():
 
                     # Announce the update to any listening clients
                     event_data = {
-                        "feeds_processed":
-                        feeds_updated,
-                        "new_items":
-                        new_items,
-                        "affected_tab_ids": (sorted(list(affected_tab_ids))
-                                             if affected_tab_ids else []),
+                        "feeds_processed": feeds_updated,
+                        "new_items": new_items,
+                        "affected_tab_ids": (
+                            sorted(list(affected_tab_ids)
+                                   ) if affected_tab_ids else []
+                        ),
                     }
                     msg = f"data: {json.dumps(event_data)}\n\n"
                     announcer.announce(msg=msg)
                 except Exception as e:
-                    logger.error("Error during scheduled feed update: %s",
-                                 e,
-                                 exc_info=True)
+                    logger.error(
+                        "Error during scheduled feed update: %s", e, exc_info=True
+                    )
     except Timeout:
         # Lock acquisition failed (another worker is running the job), just skip
         pass
 
 
-@scheduler.scheduled_job("interval",
-                         minutes=OPML_AUTOSAVE_INTERVAL_MINUTES,
-                         id="autosave_opml")
+@scheduler.scheduled_job(
+    "interval", minutes=OPML_AUTOSAVE_INTERVAL_MINUTES, id="autosave_opml"
+)
 def scheduled_opml_autosave():
     """Scheduled job to periodically save OPML to disk."""
     with app.app_context():
@@ -211,32 +214,37 @@ if not app.config.get("TESTING"):
 
 # --- Security Headers ---
 
-CSP_POLICY = ("default-src 'self'; "
-              "img-src * data:; "
-              "script-src 'self'; "
-              "style-src 'self' 'unsafe-inline'; "
-              "connect-src 'self'; "
-              "object-src 'none'; "
-              "base-uri 'self'; "
-              "form-action 'self'; "
-              "frame-ancestors 'self'")
+CSP_POLICY = (
+    "default-src 'self'; "
+    "img-src * data:; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'self'"
+)
 
 PERMISSIONS_POLICY = ", ".join(
-    sorted([
-        "accelerometer=()",
-        "autoplay=()",
-        "camera=()",
-        "display-capture=()",
-        "fullscreen=()",
-        "geolocation=()",
-        "gyroscope=()",
-        "magnetometer=()",
-        "microphone=()",
-        "midi=()",
-        "payment=()",
-        "usb=()",
-        "xr-spatial-tracking=()",
-    ]))
+    sorted(
+        [
+            "accelerometer=()",
+            "autoplay=()",
+            "camera=()",
+            "display-capture=()",
+            "fullscreen=()",
+            "geolocation=()",
+            "gyroscope=()",
+            "magnetometer=()",
+            "microphone=()",
+            "midi=()",
+            "payment=()",
+            "usb=()",
+            "xr-spatial-tracking=()",
+        ]
+    )
+)
 
 
 @app.after_request
@@ -277,7 +285,8 @@ def add_security_headers(response):
     # Enforce HTTPS for all future connections to this domain.
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains")
+            "max-age=31536000; includeSubDomains"
+        )
 
     return response
 
@@ -304,7 +313,8 @@ def internal_error(error):
 # --- Static and Stream Routes ---
 
 FRONTEND_FOLDER = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "frontend"))
+    os.path.join(os.path.dirname(__file__), "..", "frontend")
+)
 
 
 @app.route("/")
