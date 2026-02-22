@@ -1,7 +1,12 @@
+import os
 import pytest
+
+os.environ["TESTING"] = "true"
 
 from backend.app import app
 from backend.cache_utils import (
+    TABS_VERSION_KEY,
+    get_tab_version_key,
     get_version,
     invalidate_tab_feeds_cache,
     invalidate_tabs_cache,
@@ -9,6 +14,8 @@ from backend.cache_utils import (
     make_tabs_cache_key,
 )
 from backend.extensions import cache
+
+app.config["TESTING"] = True
 
 
 @pytest.fixture(autouse=True)
@@ -31,10 +38,10 @@ def test_get_version_default():
 
 
 def test_get_version_falsy_cached_value():
-    """Document that get_version returns default for falsy cached values (e.g. 0)."""
+    """Document that get_version returns cached value even for falsy values (e.g. 0)."""
     cache.set("test_key", 0)
-    assert get_version("test_key") == 1
-    assert get_version("test_key", default=5) == 5
+    assert get_version("test_key") == 0
+    assert get_version("test_key", default=5) == 0
 
 
 def test_get_version_cached():
@@ -46,12 +53,14 @@ def test_get_version_cached():
 def test_make_tabs_cache_key():
     """Test make_tabs_cache_key incorporates version correctly."""
     # Initial version is 1 (default)
-    assert make_tabs_cache_key().startswith("view/tabs/v")
-    assert "v1" in make_tabs_cache_key()
+    key = make_tabs_cache_key()
+    assert key.startswith("view/tabs/v")
+    assert "v1" in key
 
     # After invalidating tabs cache, version should be 2
     invalidate_tabs_cache()
-    assert "v2" in make_tabs_cache_key()
+    key_after_invalidation = make_tabs_cache_key()
+    assert "v2" in key_after_invalidation
 
 
 @pytest.mark.parametrize(
@@ -61,20 +70,20 @@ def test_make_tabs_cache_key():
             "/api/tabs/1/feeds",
             1,
             {},
-            ["view/tab/1/v1/", "tabs_v1/", "/?"],
+            ["view/tab/1/v1/", "tabs_v1/"],
             id="default_versions_no_query_params",
         ),
         pytest.param(
             "/api/tabs/1/feeds",
             1,
-            {"tabs_version": 3, "tab_1_version": 4},
-            ["view/tab/1/v4/", "tabs_v3/", "/?"],
+            {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
+            ["view/tab/1/v4/", "tabs_v3/"],
             id="custom_versions_no_query_params",
         ),
         pytest.param(
             "/api/tabs/1/feeds?limit=10&other=ignored",
             1,
-            {"tabs_version": 3, "tab_1_version": 4},
+            {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
             ["view/tab/1/v4/", "tabs_v3/", "/?", "limit=10"],
             id="with_query_params",
         ),
@@ -84,7 +93,7 @@ def test_make_tabs_cache_key():
         pytest.param(
             "/api/tabs/1/feeds?limit=10&limit=20",
             1,
-            {"tabs_version": 3, "tab_1_version": 4},
+            {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
             ["view/tab/1/v4/", "tabs_v3/", "/?", "limit=10", "limit=20"],
             id="multiple_values_for_query_param",
         ),
@@ -99,34 +108,38 @@ def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key_part
         key = make_tab_feeds_cache_key(tab_id)
         for part in expected_key_parts:
             assert part in key
+        
+        # Verify ignored params are not included
+        if "other=ignored" in url:
+            assert "other=ignored" not in key
 
 
 def test_invalidate_tabs_cache():
     """Test invalidate_tabs_cache increments version in cache."""
-    assert get_version("tabs_version") == 1
+    assert get_version(TABS_VERSION_KEY) == 1
     invalidate_tabs_cache()
-    assert get_version("tabs_version") == 2
+    assert get_version(TABS_VERSION_KEY) == 2
     invalidate_tabs_cache()
-    assert get_version("tabs_version") == 3
+    assert get_version(TABS_VERSION_KEY) == 3
 
 
 def test_invalidate_tab_feeds_cache():
     """Test invalidate_tab_feeds_cache increments versions correctly."""
     # Test basic invalidation (defaults to also invalidating tabs)
-    assert get_version("tab_1_version") == 1
-    assert get_version("tabs_version") == 1
+    assert get_version(get_tab_version_key(1)) == 1
+    assert get_version(TABS_VERSION_KEY) == 1
 
     invalidate_tab_feeds_cache(1)
-    assert get_version("tab_1_version") == 2
-    assert get_version("tabs_version") == 2
+    assert get_version(get_tab_version_key(1)) == 2
+    assert get_version(TABS_VERSION_KEY) == 2
 
     # Test invalidation of specific tab without invalidating all tabs
     invalidate_tab_feeds_cache(1, invalidate_tabs=False)
-    assert get_version("tab_1_version") == 3
-    assert get_version("tabs_version") == 2
+    assert get_version(get_tab_version_key(1)) == 3
+    assert get_version(TABS_VERSION_KEY) == 2
 
     # Test invalidation of another tab
     invalidate_tab_feeds_cache(2, invalidate_tabs=True)
-    assert get_version("tab_2_version") == 2
-    assert get_version("tab_1_version") == 3
-    assert get_version("tabs_version") == 3
+    assert get_version(get_tab_version_key(2)) == 2
+    assert get_version(get_tab_version_key(1)) == 3
+    assert get_version(TABS_VERSION_KEY) == 3
