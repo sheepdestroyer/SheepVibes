@@ -6,6 +6,7 @@ import os
 from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
+from flask_login import login_required
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -323,6 +324,7 @@ def serve_static_files(filename):
 
 
 @app.route("/api/stream")
+@login_required
 def stream():
     """Endpoint for Server-Sent Events (SSE) to stream updates."""
     return Response(announcer.listen(), mimetype="text/event-stream")
