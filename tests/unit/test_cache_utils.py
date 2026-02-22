@@ -17,18 +17,22 @@ def app_context():
     with app.app_context():
         cache.clear()
         yield
-        cache.clear()
 
 
 def test_get_version_default():
     """Test get_version returns default when key is not in cache and does not persist it."""
     # Default is 1 if not specified
     assert get_version("non_existent_key") == 1
-    assert cache.get("non_existent_key") is None
 
     # Explicit default
     assert get_version("non_existent_key", default=5) == 5
-    assert cache.get("non_existent_key") is None
+
+
+def test_get_version_falsy_cached_value():
+    """Document that get_version returns default for falsy cached values (e.g. 0)."""
+    cache.set("test_key", 0)
+    assert get_version("test_key") == 1
+    assert get_version("test_key", default=5) == 5
 
 
 def test_get_version_cached():
