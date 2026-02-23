@@ -1,19 +1,23 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
 from sqlalchemy.exc import IntegrityError
+
 from backend.app import app, db
 from backend.models import Tab
+
 
 @pytest.fixture(autouse=True)
 def disable_csrf():
     """Disable CSRF protection for these tests."""
-    original_value = app.config.get('WTF_CSRF_ENABLED')
-    app.config['WTF_CSRF_ENABLED'] = False
+    original_value = app.config.get("WTF_CSRF_ENABLED")
+    app.config["WTF_CSRF_ENABLED"] = False
     yield
     if original_value is not None:
-        app.config['WTF_CSRF_ENABLED'] = original_value
+        app.config["WTF_CSRF_ENABLED"] = original_value
     else:
-        app.config.pop('WTF_CSRF_ENABLED', None)
+        app.config.pop("WTF_CSRF_ENABLED", None)
+
 
 def test_create_tab_success(client):
     """Test successful creation of a new tab."""
@@ -28,6 +32,7 @@ def test_create_tab_success(client):
     assert tab is not None
     assert tab.name == "New Tab"
 
+
 def test_create_tab_duplicate_name(client):
     """Test creating a tab with a duplicate name (application-level check)."""
     # Create first tab
@@ -37,6 +42,7 @@ def test_create_tab_duplicate_name(client):
     response = client.post("/api/tabs", json={"name": "Duplicate Tab"})
     assert response.status_code == 409
     assert "already exists" in response.get_json()["error"]
+
 
 def test_create_tab_race_condition_integrity_error(client):
     """
@@ -58,7 +64,9 @@ def test_create_tab_race_condition_integrity_error(client):
     # Using a side_effect with an instance of IntegrityError
     fake_integrity_error = IntegrityError("INSERT...", {}, "orig")
 
-    with patch("backend.blueprints.tabs.db.session.commit", side_effect=fake_integrity_error) as mock_commit:
+    with patch(
+        "backend.blueprints.tabs.db.session.commit", side_effect=fake_integrity_error
+    ) as mock_commit:
         # Also verify rollback is called
         with patch("backend.blueprints.tabs.db.session.rollback") as mock_rollback:
             response = client.post("/api/tabs", json={"name": tab_name})
