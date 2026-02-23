@@ -24,6 +24,7 @@ import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
 import sqlalchemy.exc
+from sqlalchemy import or_
 from dateutil import parser as date_parser
 from defusedxml.common import (
     DTDForbidden,
@@ -1232,11 +1233,61 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     items_to_add = []
     batch_processed_guids = set()
 
-    # Optimization: Query only necessary columns to avoid loading full objects
-    # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link,
-        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
+    # Optimization: Pre-calculate GUIDs and Links from the parsed feed to query
+    # only relevant existing items from the database.
+    # This avoids fetching the entire history of a feed (which can be large)
+    # just to check for duplicates against a small batch of new items.
+
+    target_guids = set()
+    target_links = set()
+
+    # Iterate once to collect potential identifiers.
+    # Logic mirrors the GUID generation loop below.
+    for entry in parsed_feed.entries:
+        raw_link = entry.get("link")
+        entry_link = validate_link_structure(raw_link)
+        if not entry_link:
+            continue
+
+        if entry.get("id"):
+            target_guids.add(entry.get("id"))
+        else:
+             unique_string = f"{entry_link}{entry.get('title', '')}"
+             target_guids.add(hashlib.sha256(unique_string.encode("utf-8")).hexdigest())
+
+        target_links.add(entry_link)
+
+    # Conservative limit for SQLite variables (default 999, but safer to keep low)
+    # If the feed has fewer entries than this, we use the optimized query.
+    # Otherwise, we fallback to fetching all items for the feed to avoid "too many SQL variables" error.
+    SAFE_SQLITE_LIMIT = 500
+
+    filters = [FeedItem.feed_id == feed_db_obj.id]
+
+    # Use optimized query if within safe limits and we have targets
+    if 0 < len(target_guids) + len(target_links) < SAFE_SQLITE_LIMIT:
+        or_conditions = []
+        if target_guids:
+            or_conditions.append(FeedItem.guid.in_(target_guids))
+        if target_links:
+            or_conditions.append(FeedItem.link.in_(target_links))
+
+        if or_conditions:
+            filters.append(or_(*or_conditions))
+
+            # Optimization: Query only necessary columns to avoid loading full objects
+            # item[1] is guid, item[2] is link, item[3] is title
+            items_tuple = (db.session.query(
+                FeedItem.id, FeedItem.guid, FeedItem.link,
+                FeedItem.title).filter(*filters).all())
+        else:
+            items_tuple = [] # No valid items in feed to check against
+    else:
+        # Fallback: Fetch all items for this feed (legacy behavior)
+        # Used when feed update is massive or empty
+        items_tuple = (db.session.query(
+            FeedItem.id, FeedItem.guid, FeedItem.link,
+            FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
 
     # Create lookup maps
     existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
