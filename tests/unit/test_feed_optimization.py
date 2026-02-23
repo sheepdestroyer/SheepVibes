@@ -1,21 +1,21 @@
-
-import unittest
 import datetime
+import os
+import unittest
 from datetime import timezone
 from unittest.mock import MagicMock, patch
-import os
 
 from backend.app import app, cache
 from backend.extensions import db
-from backend.models import Feed, FeedItem
 from backend.feed_service import _collect_new_items, parse_published_time
+from backend.models import Feed, FeedItem
+
 
 class TestFeedOptimization(unittest.TestCase):
     def setUp(self):
         self.app = app
-        self.app.config['TESTING'] = True
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-        self.app.config['CACHE_TYPE'] = 'SimpleCache'
+        self.app.config["TESTING"] = True
+        self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+        self.app.config["CACHE_TYPE"] = "SimpleCache"
 
         # Reset extensions
         if "sqlalchemy" in self.app.extensions:
@@ -50,7 +50,7 @@ class TestFeedOptimization(unittest.TestCase):
                 title=f"Item {i}",
                 link=f"http://example.com/item/{i}",
                 guid=f"guid-{i}",
-                published_time=datetime.datetime.now(timezone.utc)
+                published_time=datetime.datetime.now(timezone.utc),
             )
             db.session.add(item)
         db.session.commit()
@@ -67,7 +67,7 @@ class TestFeedOptimization(unittest.TestCase):
             entry.get.side_effect = lambda k, d=None, i=i: {
                 "title": f"Item {i} Updated",
                 "link": f"http://example.com/item/{i}",
-                "id": f"guid-{i}"
+                "id": f"guid-{i}",
             }.get(k, d)
             entry.published_parsed = None
             entry.published = None
@@ -79,7 +79,7 @@ class TestFeedOptimization(unittest.TestCase):
             entry.get.side_effect = lambda k, d=None, i=i: {
                 "title": f"Item {i}",
                 "link": f"http://example.com/item/{i}",
-                "id": f"guid-{i}"
+                "id": f"guid-{i}",
             }.get(k, d)
             entry.published_parsed = None
             entry.published = None
@@ -93,7 +93,7 @@ class TestFeedOptimization(unittest.TestCase):
         # but _collect_new_items calls it directly.
         # So we patch 'backend.feed_service.parse_published_time'
 
-        with patch('backend.feed_service.parse_published_time') as mock_parse_time:
+        with patch("backend.feed_service.parse_published_time") as mock_parse_time:
             mock_parse_time.return_value = datetime.datetime.now(timezone.utc)
 
             # Run
@@ -112,14 +112,21 @@ class TestFeedOptimization(unittest.TestCase):
             # Items 95-99 should have updated titles
             # Since _collect_new_items updates items in DB directly (synchronize_session=False)
             # We need to query them fresh
-            updated_items = FeedItem.query.filter(FeedItem.feed_id == feed.id, FeedItem.guid.in_([f"guid-{i}" for i in range(95, 100)])).all()
+            updated_items = FeedItem.query.filter(
+                FeedItem.feed_id == feed.id,
+                FeedItem.guid.in_([f"guid-{i}" for i in range(95, 100)]),
+            ).all()
             for item in updated_items:
-                self.assertTrue(item.title.endswith("Updated"), f"Item {item.guid} title not updated: {item.title}")
+                self.assertTrue(
+                    item.title.endswith("Updated"),
+                    f"Item {item.guid} title not updated: {item.title}",
+                )
 
     def test_collect_new_items_fallback(self):
         """Test fallback to full fetch if too many entries."""
         # Setup
-        feed = Feed(tab_id=1, name="Large Feed", url="http://example.com/large")
+        feed = Feed(tab_id=1, name="Large Feed",
+                    url="http://example.com/large")
         db.session.add(feed)
         db.session.commit()
 
@@ -130,7 +137,7 @@ class TestFeedOptimization(unittest.TestCase):
             entry.get.side_effect = lambda k, d=None, i=i: {
                 "title": f"Item {i}",
                 "link": f"http://example.com/item/{i}",
-                "id": f"guid-{i}"
+                "id": f"guid-{i}",
             }.get(k, d)
             entry.published_parsed = None
             entry.published = None
@@ -139,7 +146,7 @@ class TestFeedOptimization(unittest.TestCase):
         parsed_feed = MagicMock()
         parsed_feed.entries = entries
 
-        with patch('backend.feed_service.parse_published_time') as mock_parse_time:
+        with patch("backend.feed_service.parse_published_time") as mock_parse_time:
             mock_parse_time.return_value = datetime.datetime.now(timezone.utc)
 
             items_to_add = _collect_new_items(feed, parsed_feed)
@@ -147,5 +154,6 @@ class TestFeedOptimization(unittest.TestCase):
             # All 600 should be new
             self.assertEqual(len(items_to_add), 600)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
