@@ -43,3 +43,23 @@ export function formatDate(isoString) {
         return 'Invalid date';
     }
 }
+
+/**
+ * Validates and returns the active tab ID.
+ * If the current ID is invalid or not in the list, it defaults to the first tab or null.
+ * @param {Array} tabs - The list of available tabs.
+ * @param {number|string|null} currentActiveId - The currently active tab ID.
+ * @returns {number|null} The validated active tab ID.
+ */
+export function validateActiveTab(tabs, currentActiveId) {
+    if (!tabs || tabs.length === 0) {
+        return null;
+    }
+    // Check if currentActiveId is valid and exists in tabs
+    const isValid = tabs.some(t => t.id === currentActiveId);
+    if (isValid) {
+        return currentActiveId;
+    }
+    // Default to first tab if invalid
+    return tabs[0].id;
+}
