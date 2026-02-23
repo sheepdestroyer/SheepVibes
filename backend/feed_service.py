@@ -321,123 +321,151 @@ def _process_opml_outlines_iterative(
     return state
 
 
+def _resolve_requested_tab(requested_tab_id_str):
+    """
+    Attempts to resolve the requested tab ID to a valid Tab object.
+
+    Args:
+        requested_tab_id_str (str): The requested tab ID as a string.
+
+    Returns:
+        tuple: (tab_id, tab_name) if found, else (None, None).
+    """
+    if not requested_tab_id_str:
+        return None, None
+
+    try:
+        tab_id_val = int(requested_tab_id_str)
+        tab_obj = db.session.get(Tab, tab_id_val)
+        if tab_obj:
+            return tab_obj.id, tab_obj.name
+
+        logger.warning(
+            "OPML import: Requested tab_id %s not found. Will use default logic.",
+            tab_id_val,
+        )
+    except ValueError:
+        logger.warning(
+            "OPML import: Invalid tab_id format '%s'. Will use default logic.",
+            _sanitize_for_log(requested_tab_id_str),
+        )
+    return None, None
+
+def _get_or_create_default_tab():
+    """
+    Finds or creates a default tab for OPML import.
+
+    Returns:
+        tuple: (tab_id, tab_name, was_created, error_response)
+        - tab_id (int): The ID of the target tab (None if error).
+        - tab_name (str): The name of the target tab (None if error).
+        - was_created (bool): True if a new default tab was created.
+        - error_response (tuple): (json_response, status_code) if an error occurred.
+    """
+    default_tab_obj = Tab.query.order_by(Tab.order).first()
+    if default_tab_obj:
+        return default_tab_obj.id, default_tab_obj.name, False, None
+
+    logger.info(
+        "OPML import: No tabs exist. Creating a default tab for top-level feeds."
+    )
+    default_tab_name_for_creation = DEFAULT_OPML_IMPORT_TAB_NAME
+    temp_tab_check = Tab.query.filter_by(
+        name=default_tab_name_for_creation).first()
+    if temp_tab_check:
+        return temp_tab_check.id, temp_tab_check.name, False, None
+
+    newly_created_default_tab = Tab(
+        name=default_tab_name_for_creation, order=0)
+    db.session.add(newly_created_default_tab)
+    try:
+        # Since this is the start of the import, we can safely commit the new tab
+        # without worrying about partial feed state (none exists yet).
+        db.session.commit()
+
+        logger.info(
+            "OPML import: Created default tab '%s' (ID: %s).",
+            newly_created_default_tab.name,
+            newly_created_default_tab.id,
+        )
+        invalidate_tabs_cache()
+        return newly_created_default_tab.id, newly_created_default_tab.name, True, None
+
+    except IntegrityError:
+        db.session.rollback()
+        # No need to expunge here as rollback clears the session
+        logger.info(
+            "OPML import: Race condition on default tab creation. Re-fetching tab '%s'.",
+            default_tab_name_for_creation,
+        )
+        # Another process likely created it. Fetch it.
+        refetched_tab = Tab.query.filter_by(
+            name=default_tab_name_for_creation).first()
+        if refetched_tab:
+             return refetched_tab.id, refetched_tab.name, False, None
+        else:
+            # This is an unexpected state, but we should fail gracefully.
+            logger.error(
+                "OPML import: Failed to create or find default tab '%s' after race.",
+                default_tab_name_for_creation,
+            )
+            return (
+                None,
+                None,
+                False,
+                (
+                    {
+                        "error":
+                        "Failed to create a default tab for import."
+                    },
+                    500,
+                ),
+            )
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(
+            "OPML import: Failed to create default tab '%s'",
+            default_tab_name_for_creation,
+        )
+        return (
+            None,
+            None,
+            False,
+            (
+                {
+                    "error":
+                    "Failed to create a default tab for import."
+                },
+                500,
+            ),
+        )
+
+
+
 def _determine_target_tab(requested_tab_id_str):
     """
     Determines the target tab for OPML import.
     Returns:
-        tuple: (tab_id, tab_name, was_created)
+        tuple: (tab_id, tab_name, was_created, error_response)
         - tab_id (int): The ID of the target tab.
         - tab_name (str): The name of the target tab.
         - was_created (bool): True if a new default tab was created, False otherwise.
         - error_response (tuple): (json_response, status_code) if an error occurred, else None.
     """
-    target_tab_id = None
-    target_tab_name = None
-    was_created = False
+    # 1. Try to resolve the requested tab ID if provided
+    target_tab_id, target_tab_name = _resolve_requested_tab(requested_tab_id_str)
 
-    if requested_tab_id_str:
-        try:
-            tab_id_val = int(requested_tab_id_str)
-            tab_obj = db.session.get(Tab, tab_id_val)
-            if tab_obj:
-                target_tab_id = tab_obj.id
-                target_tab_name = tab_obj.name
-            else:
-                logger.warning(
-                    "OPML import: Requested tab_id %s not found. Will use default logic.",
-                    tab_id_val,
-                )
-        except ValueError:
-            logger.warning(
-                "OPML import: Invalid tab_id format '%s'. Will use default logic.",
-                _sanitize_for_log(requested_tab_id_str),
-            )
+    if target_tab_id:
+        return target_tab_id, target_tab_name, False, None
+
+    # 2. If no valid requested tab, find or create a default tab
+    target_tab_id, target_tab_name, was_created, error = _get_or_create_default_tab()
+
+    if error:
+        return None, None, False, error
 
     if not target_tab_id:
-        default_tab_obj = Tab.query.order_by(Tab.order).first()
-        if default_tab_obj:
-            target_tab_id = default_tab_obj.id
-            target_tab_name = default_tab_obj.name
-        else:
-            logger.info(
-                "OPML import: No tabs exist. Creating a default tab for top-level feeds."
-            )
-            default_tab_name_for_creation = DEFAULT_OPML_IMPORT_TAB_NAME
-            temp_tab_check = Tab.query.filter_by(
-                name=default_tab_name_for_creation).first()
-            if temp_tab_check:
-                target_tab_id = temp_tab_check.id
-                target_tab_name = temp_tab_check.name
-            else:
-                newly_created_default_tab = Tab(
-                    name=default_tab_name_for_creation, order=0)
-                db.session.add(newly_created_default_tab)
-                try:
-                    # Since this is the start of the import, we can safely commit the new tab
-                    # without worrying about partial feed state (none exists yet).
-                    db.session.commit()
-
-                    logger.info(
-                        "OPML import: Created default tab '%s' (ID: %s).",
-                        newly_created_default_tab.name,
-                        newly_created_default_tab.id,
-                    )
-                    invalidate_tabs_cache()
-                    target_tab_id = newly_created_default_tab.id
-                    target_tab_name = newly_created_default_tab.name
-                    was_created = True
-                except sqlalchemy.exc.IntegrityError:
-                    db.session.rollback()
-                    # No need to expunge here as rollback clears the session
-                    logger.info(
-                        "OPML import: Race condition on default tab creation. Re-fetching tab '%s'.",
-                        default_tab_name_for_creation,
-                    )
-                    # Another process likely created it. Fetch it.
-                    refetched_tab = Tab.query.filter_by(
-                        name=default_tab_name_for_creation).first()
-                    if refetched_tab:
-                        target_tab_id = refetched_tab.id
-                        target_tab_name = refetched_tab.name
-                        # was_created remains False, as this process didn't create it.
-                    else:
-                        # This is an unexpected state, but we should fail gracefully.
-                        logger.error(
-                            "OPML import: Failed to create or find default tab '%s' after race.",
-                            default_tab_name_for_creation,
-                        )
-                        return (
-                            None,
-                            None,
-                            False,
-                            (
-                                {
-                                    "error":
-                                    "Failed to create a default tab for import."
-                                },
-                                500,
-                            ),
-                        )
-                except sqlalchemy.exc.SQLAlchemyError:
-                    db.session.rollback()
-                    logger.exception(
-                        "OPML import: Failed to create default tab '%s'",
-                        default_tab_name_for_creation,
-                    )
-                    return (
-                        None,
-                        None,
-                        False,
-                        (
-                            {
-                                "error":
-                                "Failed to create a default tab for import."
-                            },
-                            500,
-                        ),
-                    )
-
-    if not target_tab_id:
+        # Should be covered by error return above, but as a safeguard
         logger.error(
             "OPML import: Critical error - failed to determine a top-level target tab."
         )
