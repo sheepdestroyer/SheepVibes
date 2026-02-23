@@ -1474,6 +1474,30 @@ def _save_items_individually(feed_db_obj, items_to_add):
     return count
 
 
+def _get_ids_to_evict(feed_db_obj):
+    """Identifies feed item IDs to evict based on the feed limit.
+
+    Args:
+        feed_db_obj (Feed): The feed object to check.
+
+    Returns:
+        list: A list of FeedItem IDs to be evicted.
+    """
+    # Fetch IDs to evict.
+    # We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
+    # 1. Provide a bounded result set, avoiding OOM on massive feeds.
+    # 2. Avoid SQLite-specific LIMIT -1 behavior.
+    # This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
+    ids_to_evict_rows = (db.session.query(
+        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+            FeedItem.published_time.desc().nullslast(),
+            FeedItem.fetched_time.desc().nullslast(),
+            FeedItem.id.desc(),
+    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN).all())
+
+    return [r.id for r in ids_to_evict_rows]
+
+
 def _enforce_feed_limit(feed_db_obj):
     """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
 
@@ -1488,22 +1512,10 @@ def _enforce_feed_limit(feed_db_obj):
     # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
 
-    # Fetch IDs to evict.
-    # We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
-    # 1. Provide a bounded result set, avoiding OOM on massive feeds.
-    # 2. Avoid SQLite-specific LIMIT -1 behavior.
-    # This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
-    ids_to_evict_rows = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
-            FeedItem.published_time.desc().nullslast(),
-            FeedItem.fetched_time.desc().nullslast(),
-            FeedItem.id.desc(),
-    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN).all())
+    ids_to_evict = _get_ids_to_evict(feed_db_obj)
 
-    if not ids_to_evict_rows:
+    if not ids_to_evict:
         return
-
-    ids_to_evict = [r.id for r in ids_to_evict_rows]
 
     # Chunk the deletions to avoid hitting SQLite's parameter limit (default 999)
     chunk_size = DELETE_CHUNK_SIZE
