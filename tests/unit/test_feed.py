@@ -946,9 +946,15 @@ def test_create_safe_opener():
     handlers = opener.handlers
 
     # Check for presence and correct configuration
-    safe_http = next((h for h in handlers if isinstance(h, feed_service.SafeHTTPHandler)), None)
-    safe_https = next((h for h in handlers if isinstance(h, feed_service.SafeHTTPSHandler)), None)
-    safe_redirect = next((h for h in handlers if isinstance(h, feed_service.SafeRedirectHandler)), None)
+    safe_http = next(
+        (h for h in handlers if isinstance(h, feed_service.SafeHTTPHandler)), None
+    )
+    safe_https = next(
+        (h for h in handlers if isinstance(h, feed_service.SafeHTTPSHandler)), None
+    )
+    safe_redirect = next(
+        (h for h in handlers if isinstance(h, feed_service.SafeRedirectHandler)), None
+    )
 
     assert safe_http is not None, "Opener should have SafeHTTPHandler"
     assert safe_https is not None, "Opener should have SafeHTTPSHandler"
