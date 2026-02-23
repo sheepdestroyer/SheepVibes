@@ -160,6 +160,7 @@ def test_eviction_null_handling(client):
         check_dated = FeedItem.query.filter_by(guid="guid-0").first()
         assert check_dated is not None
 
+
 def test_get_ids_to_evict(client):
     """Test the helper function _get_ids_to_evict directly."""
     with app.app_context():
@@ -171,7 +172,9 @@ def test_get_ids_to_evict(client):
         assert len(ids) == 0
 
         # Scenario 2: At limit
-        create_dummy_items(feed.id, 5, start_index=MAX_ITEMS_PER_FEED - 5) # Brings total to MAX
+        create_dummy_items(
+            feed.id, 5, start_index=MAX_ITEMS_PER_FEED - 5
+        )  # Brings total to MAX
         ids = _get_ids_to_evict(feed)
         assert len(ids) == 0
 
@@ -198,7 +201,8 @@ def test_get_ids_to_evict(client):
         # In create_dummy_items: Item 0 is newest, Item N is oldest.
         # We expect Item MAX to Item MAX+9 to be in the list.
 
-        all_items = FeedItem.query.order_by(FeedItem.published_time.desc()).all()
+        all_items = FeedItem.query.order_by(
+            FeedItem.published_time.desc()).all()
         # all_items[0] is newest. all_items[MAX] is the first one to be evicted.
         expected_ids = [item.id for item in all_items[MAX_ITEMS_PER_FEED:]]
 
