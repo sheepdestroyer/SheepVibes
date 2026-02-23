@@ -2,6 +2,7 @@ import atexit
 import json
 import logging
 import os
+import secrets
 
 from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -54,6 +55,8 @@ if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
     app.config["CACHE_TYPE"] = (
         "SimpleCache"  # Use SimpleCache for tests, no Redis needed
     )
+    # Disable CSRF by default in tests to prevent breaking existing tests
+    app.config.setdefault("CSRF_ENABLED", False)
     logger.info(
         "TESTING mode: Using in-memory SQLite database and SimpleCache.")
 else:
@@ -200,6 +203,24 @@ if not app.config.get("TESTING"):
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
 
+# --- CSRF Protection ---
+
+
+@app.before_request
+def csrf_protect():
+    """Validates CSRF token for unsafe methods."""
+    if not app.config.get("CSRF_ENABLED", True):
+        return
+
+    if request.method not in ["GET", "HEAD", "OPTIONS", "TRACE"]:
+        token_cookie = request.cookies.get("csrf_token")
+        token_header = request.headers.get("X-CSRFToken")
+        if not token_cookie or not token_header or token_cookie != token_header:
+            logger.warning("CSRF validation failed: Cookie: %s, Header: %s",
+                           token_cookie, token_header)
+            return jsonify({"error": "CSRF token missing or invalid"}), 403
+
+
 # --- Security Headers ---
 
 CSP_POLICY = ("default-src 'self'; "
@@ -233,8 +254,18 @@ PERMISSIONS_POLICY = ", ".join(
 @app.after_request
 def add_security_headers(response):
     """
-    Add security headers to all responses.
+    Add security headers and CSRF cookie to all responses.
     """
+    # CSRF Token Cookie
+    if app.config.get("CSRF_ENABLED", True) and "csrf_token" not in request.cookies:
+        response.set_cookie(
+            "csrf_token",
+            secrets.token_hex(32),
+            httponly=False,  # JS needs to read this
+            samesite="Lax",
+            secure=request.is_secure,
+        )
+
     # Content Security Policy (CSP)
     # default-src 'self': Only allow resources from the same origin by default.
     # img-src * data: Allow images from any source (for feeds) and data URIs.

@@ -6,13 +6,38 @@ export const API_BASE_URL =
     '';
 
 /**
+ * Retrieves the value of a cookie by name.
+ * @param {string} name - The name of the cookie.
+ * @returns {string|undefined} The cookie value or undefined if not found.
+ */
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+/**
  * Fetches data from the specified API endpoint.
  * Handles JSON parsing, error reporting, and different response types.
+ * Automatically adds X-CSRFToken header for unsafe methods if the cookie exists.
  * @param {string} url - The API endpoint URL.
  * @param {object} options - Optional fetch options (method, headers, body).
  * @returns {Promise<object|null>} A promise resolving to the JSON data, {success: true} for successful non-JSON responses, or null on failure.
  */
 export async function fetchData(url, options = {}, responseType = 'json') {
+    // Add CSRF Token for unsafe methods
+    const csrfToken = getCookie('csrf_token');
+    if (csrfToken && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes((options.method || 'GET').toUpperCase())) {
+        const headers = options.headers || {};
+        // Handle Headers object or plain object
+        if (headers instanceof Headers) {
+            headers.append('X-CSRFToken', csrfToken);
+        } else {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+        options.headers = headers;
+    }
+
     try {
         const response = await fetch(`${API_BASE_URL}${url}`, options);
         if (!response.ok) {
