@@ -1095,6 +1095,20 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         return False, 0, feed_db_obj.tab_id
 
 
+def create_safe_opener(safe_ip):
+    """Creates a URL opener with custom handlers for SSRF/TOCTOU prevention."""
+    # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
+
+    # Register BOTH handlers to ensure safety during redirects (HTTPS -> HTTP or HTTP -> HTTPS)
+    # Both handlers utilize ip pinning via `safe_ip` (and `req.safe_ip` for redirects).
+    http_handler = SafeHTTPHandler(safe_ip=safe_ip)
+    https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
+    redirect_handler = SafeRedirectHandler()
+
+    # Build opener with all handlers
+    return urllib.request.build_opener(http_handler, https_handler, redirect_handler)
+
+
 def fetch_feed(feed_url):
     """Fetches and parses a feed, preventing SSRF via IP pinning."""
     safe_ip, _ = validate_and_resolve_url(feed_url)
@@ -1103,18 +1117,7 @@ def fetch_feed(feed_url):
 
     logger.info("Fetching feed: %s", _sanitize_for_log(feed_url))
     try:
-        # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
-
-        # Register BOTH handlers to ensure safety during redirects (HTTPS -> HTTP or HTTP -> HTTPS)
-        # Both handlers utilize ip pinning via `safe_ip` (and `req.safe_ip` for redirects).
-        http_handler = SafeHTTPHandler(safe_ip=safe_ip)
-        https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
-        redirect_handler = SafeRedirectHandler()
-
-        # Build opener with all handlers
-        opener = urllib.request.build_opener(http_handler, https_handler,
-                                             redirect_handler)
-
+        opener = create_safe_opener(safe_ip)
         req = urllib.request.Request(
             feed_url,
             headers={
