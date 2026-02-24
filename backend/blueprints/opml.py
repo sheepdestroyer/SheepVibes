@@ -4,7 +4,7 @@ import logging
 import os
 from xml.etree.ElementTree import Element as UnsafeElement, SubElement as UnsafeSubElement, tostring
 
-import defusedxml.ElementTree as ET
+
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
