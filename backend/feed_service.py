@@ -865,15 +865,11 @@ def _is_safe_ip(ip):
                 or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
 
 
-class SafeHTTPSConnection(http.client.HTTPSConnection):
-    """
-    Custom HTTPSConnection that connects to a specific 'safe_ip'
-    but uses the original hostname for SNI and SSL validation.
-    Prevents DNS Rebinding (TOCTOU) on HTTPS.
 
-    This class ensures that the IP address validated in the check phase
-    is the EXACT same IP address used for the connection, preventing
-    an attacker from swapping the IP (DNS Rebinding) between check and use.
+
+class SafeConnectionMixin:
+    """
+    Mixin to handle connecting to a specific 'safe_ip'.
     """
 
     def __init__(
@@ -888,16 +884,35 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
         )
         self.safe_ip = safe_ip
 
+    def _connect_to_safe_ip(self):
+        """Establishes a TCP connection to the safe IP."""
+        self.sock = socket.create_connection(
+            (self.safe_ip, self.port),
+            self.timeout,
+            self.source_address,
+        )
+
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class SafeHTTPSConnection(SafeConnectionMixin, http.client.HTTPSConnection):
+    """
+    Custom HTTPSConnection that connects to a specific 'safe_ip'
+    but uses the original hostname for SNI and SSL validation.
+    Prevents DNS Rebinding (TOCTOU) on HTTPS.
+
+    This class ensures that the IP address validated in the check phase
+    is the EXACT same IP address used for the connection, preventing
+    an attacker from swapping the IP (DNS Rebinding) between check and use.
+    """
+
     def connect(self):
         # Override connect to force connection to self.safe_ip
         # Logic adapted from http.client.HTTPSConnection.connect
 
         # 1. Establish TCP connection to the SAFE IP
-        self.sock = socket.create_connection((self.safe_ip, self.port),
-                                             self.timeout, self.source_address)
-
-        if self._tunnel_host:
-            self._tunnel()
+        self._connect_to_safe_ip()
 
         # 2. Wrap socket with SSL using the ORIGINAL hostname for validation
         if self._context is None:
@@ -910,28 +925,15 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
         )
 
 
-class SafeHTTPConnection(http.client.HTTPConnection):
+class SafeHTTPConnection(SafeConnectionMixin, http.client.HTTPConnection):
     """
     Custom HTTPConnection that connects to a specific 'safe_ip'.
     Prevents DNS Rebinding (TOCTOU) on HTTP.
     """
 
-    def __init__(
-        self,
-        host,
-        safe_ip,
-        **kwargs,
-    ):
-        super().__init__(
-            host,
-            **kwargs,
-        )
-        self.safe_ip = safe_ip
-
     def connect(self):
         # Override connect to force connection to self.safe_ip
-        self.sock = socket.create_connection((self.safe_ip, self.port),
-                                             self.timeout, self.source_address)
+        self._connect_to_safe_ip()
 
 
 class SafeHTTPHandler(urllib.request.HTTPHandler):
