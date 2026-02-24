@@ -203,6 +203,10 @@ def test_get_ids_to_evict_over_limit(client):
             FeedItem.published_time.desc()).all())
         # all_items[0] is newest. all_items[MAX] is the first one to be evicted.
         # It takes items from MAX_ITEMS_PER_FEED up to MAX_ITEMS_PER_FEED + EVICTION_LIMIT_PER_RUN
-        expected_ids = [item.id for item in all_items[MAX_ITEMS_PER_FEED : MAX_ITEMS_PER_FEED + EVICTION_LIMIT_PER_RUN]]
+        expected_ids = [
+            item.id
+            for item in all_items[MAX_ITEMS_PER_FEED:MAX_ITEMS_PER_FEED +
+                                  EVICTION_LIMIT_PER_RUN]
+        ]
 
         assert set(ids) == set(expected_ids)

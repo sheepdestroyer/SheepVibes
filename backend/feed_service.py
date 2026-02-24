@@ -1480,18 +1480,12 @@ def _get_ids_to_evict(feed_db_obj: Feed) -> list[int]:
     Returns:
         list[int]: A list of FeedItem IDs to be evicted.
     """
-    ids_to_evict_rows = (
-        db.session.query(FeedItem.id)
-        .filter_by(feed_id=feed_db_obj.id)
-        .order_by(
+    ids_to_evict_rows = (db.session.query(
+        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
             FeedItem.id.desc(),
-        )
-        .offset(MAX_ITEMS_PER_FEED)
-        .limit(EVICTION_LIMIT_PER_RUN)
-        .all()
-    )
+    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN).all())
 
     return [r.id for r in ids_to_evict_rows]
 
