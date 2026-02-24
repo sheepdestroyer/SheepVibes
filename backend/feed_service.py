@@ -48,12 +48,14 @@ from .constants import (
 from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
 
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import Element  # noqa: F401, skipcq: BAN-B405
+
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
-OpmlStackItem = tuple[list, int, str]
-
+OpmlStackItem = tuple[list["Element"], int, str]
 
 @dataclass
 class OpmlImportState:
