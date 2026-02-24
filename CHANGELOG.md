@@ -2,6 +2,12 @@
 
 ## 2026-02-22
 
+- **Fix: Added Missing SECRET_KEY Configuration**
+  - Resolved security vulnerability by configuring `SECRET_KEY` in `backend/app.py`.
+  - Implemented environment variable check with a secure fallback for development.
+  - Added a production warning log when the default development key is used.
+  - Added a new security regression test `tests/unit/test_secret_key.py`.
+
 - **Fix: Middle-click to mark as read**
   - Added `auxclick` event listener to feed item links in `frontend/js/ui.js` to ensure items are marked as read when opened via middle-click.
 
