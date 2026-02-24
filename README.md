@@ -201,5 +201,9 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 ## Contributing
 Contributions are welcome. Please open an issue or pull request.
 
+## Security
+
+*   **XML Parsing**: This project uses `defusedxml` for all XML parsing operations to protect against XML External Entity (XXE) attacks. Developers should never use the standard `xml.etree.ElementTree` or `xml.sax` for parsing untrusted data.
+
 ## License
 This project is licensed under the GNU General Public License v3.0.

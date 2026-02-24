@@ -106,6 +106,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 ## Code Health & Maintenance
 
 *   [x] Fix `FeedItem.validate_datetime_utc` docstring and add regression tests.
+*   [x] Replace vulnerable XML parser with `defusedxml` and document security requirements.
 
 ## Code Review Completion
 
