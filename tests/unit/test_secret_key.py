@@ -1,6 +1,9 @@
 import os
+
 import pytest
+
 from backend.app import app
+
 
 def test_secret_key_is_set():
     """Test that SECRET_KEY is set in the application configuration."""
@@ -8,6 +11,7 @@ def test_secret_key_is_set():
     secret_key = app.config.get("SECRET_KEY")
     assert secret_key is not None, "SECRET_KEY should be set in app.config"
     assert secret_key != "", "SECRET_KEY should not be an empty string"
+
 
 def test_secret_key_value():
     """Test that SECRET_KEY matches the environment variable if set, or uses default."""

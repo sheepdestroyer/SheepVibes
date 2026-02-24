@@ -61,8 +61,7 @@ else:
     if app.config["SECRET_KEY"] == "dev-secret-key":
         logger.warning(
             "SECRET_KEY is using the default 'dev-secret-key'. "
-            "For production, please set the SECRET_KEY environment variable."
-        )
+            "For production, please set the SECRET_KEY environment variable.")
 
     # Existing database configuration logic
     default_db_path_in_container = "/app/data/sheepvibes.db"
