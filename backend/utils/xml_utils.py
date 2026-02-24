@@ -8,11 +8,17 @@ Please see security_xml.md for detailed security guidelines on XML parsing.
 
 from xml.etree.ElementTree import Element as UnsafeElement
 from xml.etree.ElementTree import SubElement as UnsafeSubElement
-from defusedxml.ElementTree import tostring, ParseError
-from defusedxml.ElementTree import parse as safe_parse
-from defusedxml.ElementTree import fromstring as safe_fromstring
+
 import defusedxml.sax as safe_sax
-from defusedxml.common import DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden
+from defusedxml.common import (
+    DTDForbidden,
+    EntitiesForbidden,
+    ExternalReferenceForbidden,
+)
+from defusedxml.ElementTree import ParseError
+from defusedxml.ElementTree import fromstring as safe_fromstring
+from defusedxml.ElementTree import parse as safe_parse
+from defusedxml.ElementTree import tostring
 
 __all__ = [
     "UnsafeElement",

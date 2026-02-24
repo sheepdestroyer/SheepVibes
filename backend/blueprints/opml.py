@@ -2,8 +2,6 @@
 
 import logging
 import os
-from ..utils.xml_utils import UnsafeElement, UnsafeSubElement, tostring
-
 
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
@@ -12,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab
+from ..utils.xml_utils import UnsafeElement, UnsafeSubElement, tostring
 
 opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
 logger = logging.getLogger(__name__)
@@ -77,7 +76,8 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "No file part in the request"}), 400)
     opml_file = request.files["file"]
     if opml_file.filename == "":
-        return None, (jsonify({"error": "No file selected for uploading"}), 400)
+        return None, (jsonify({"error":
+                               "No file selected for uploading"}), 400)
     if not opml_file:
         return None, (jsonify({"error": "File object is empty"}), 400)
 

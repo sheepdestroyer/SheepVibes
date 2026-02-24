@@ -20,15 +20,6 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
-from .utils.xml_utils import (
-    safe_parse,
-    safe_fromstring,
-    ParseError,
-    safe_sax,
-    DTDForbidden,
-    EntitiesForbidden,
-    ExternalReferenceForbidden,
-)
 import feedparser
 import sqlalchemy.exc
 from dateutil import parser as date_parser
@@ -49,6 +40,15 @@ from .constants import (
 # Import database models from the new models.py
 from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
+from .utils.xml_utils import (
+    DTDForbidden,
+    EntitiesForbidden,
+    ExternalReferenceForbidden,
+    ParseError,
+    safe_fromstring,
+    safe_parse,
+    safe_sax,
+)
 
 if TYPE_CHECKING:
     # See security_xml.md for secure XML guidelines
