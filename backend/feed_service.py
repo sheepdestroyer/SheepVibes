@@ -45,7 +45,6 @@ from .utils.xml_utils import (
     EntitiesForbidden,
     ExternalReferenceForbidden,
     ParseError,
-    safe_fromstring,
     safe_parse,
     safe_sax_parse_string,
 )
