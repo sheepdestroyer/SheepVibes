@@ -2,7 +2,7 @@
 
 import logging
 import os
-from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.etree.ElementTree import Element, SubElement, tostring  # skipcq: BAN-B405
 
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
@@ -141,7 +141,7 @@ def export_opml():
         logger.exception("Error during OPML generation for export")
         return jsonify({"error": "Failed to generate OPML export"}), 500
 
-    response = Response(opml_string, mimetype="text/x-opml")
+    response = Response(opml_string, mimetype="application/xml")
     response.headers["Content-Disposition"] = (
         'attachment; filename="sheepvibes_feeds.opml"')
 

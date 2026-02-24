@@ -1499,8 +1499,8 @@ def _enforce_feed_limit(feed_db_obj: Feed):
     ids_to_evict = list(
         db.session.scalars(
             db.select(FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
-                FeedItem.published_time.desc(),
-                FeedItem.fetched_time.desc(),
+                FeedItem.published_time.desc().nullslast(),
+                FeedItem.fetched_time.desc().nullslast(),
                 FeedItem.id.desc(),
             ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN)))
 
