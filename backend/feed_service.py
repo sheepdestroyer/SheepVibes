@@ -49,7 +49,7 @@ from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
 
 if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element  # skipcq: BAN-B405
+    from xml.etree.ElementTree import Element  # noqa: F401, skipcq: BAN-B405
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -1490,14 +1490,13 @@ def _get_ids_to_evict(feed_id: int) -> list[int]:
     Returns:
         list[int]: A list of FeedItem IDs to be evicted.
     """
-    ids_to_evict_rows = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_id).order_by(
-            FeedItem.published_time.desc().nullslast(),
-            FeedItem.fetched_time.desc().nullslast(),
-            FeedItem.id.desc(),
-    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN).all())
+    stmt = (db.select(FeedItem.id).filter_by(feed_id=feed_id).order_by(
+        FeedItem.published_time.desc().nullslast(),
+        FeedItem.fetched_time.desc().nullslast(),
+        FeedItem.id.desc(),
+    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN))
 
-    return [r.id for r in ids_to_evict_rows]
+    return list(db.session.scalars(stmt))
 
 
 def _enforce_feed_limit(feed_db_obj):
