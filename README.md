@@ -203,7 +203,7 @@ Contributions are welcome. Please open an issue or pull request.
 
 ## Security
 
-*   **XML Parsing**: This project uses a centralized `backend/utils/xml_utils.py` module for all XML operations. It leverages `defusedxml` for secure parsing to protect against XXE attacks. Developers must follow the guidelines in [security_xml.md](file:///home/sheepdestroyer/LAB/SheepVibes/security_xml.md).
+*   **XML Parsing**: This project uses a centralized `backend/utils/xml_utils.py` module for all XML operations. It leverages `defusedxml` for secure parsing to protect against XXE attacks. Developers must follow the guidelines in [security_xml.md](security_xml.md).
 
 ## License
 This project is licensed under the GNU General Public License v3.0.

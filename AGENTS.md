@@ -2,7 +2,7 @@
 
 ## Security Requirements
 
-*   **XML Parsing**: ALWAYS use the centralized `backend/utils/xml_utils.py` module instead of standard XML libraries or direct `defusedxml` imports. This ensures consistent application of security boundaries. Refer to [security_xml.md](file:///home/sheepdestroyer/LAB/SheepVibes/security_xml.md) for detailed guidelines.
+*   **XML Parsing**: ALWAYS use the centralized `backend/utils/xml_utils.py` module instead of standard XML libraries or direct `defusedxml` imports. This ensures consistent application of security boundaries. Refer to [security_xml.md](security_xml.md) for detailed guidelines.
 
 ## An Agent must always start by reading **all** `.md` files from the repository in order to have a global understanding of the application. They must also read both backend & frontend code files to understand the app's logic. 
 
