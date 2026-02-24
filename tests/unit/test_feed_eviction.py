@@ -195,11 +195,11 @@ def test_get_ids_to_evict_over_limit(client):
         assert len(ids) == EVICTION_LIMIT_PER_RUN
 
         # Verify the IDs correspond to the oldest items for *this feed*
-        all_items = (FeedItem.query.filter_by(feed_id=feed.id).order_by(
+        all_items = db.session.scalars(db.select(FeedItem).filter_by(feed_id=feed.id).order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
             FeedItem.id.desc(),
-        ).all())
+        )).all()
         # all_items[0] is newest. all_items[MAX] is the first one to be evicted.
         # It takes items from MAX_ITEMS_PER_FEED up to MAX_ITEMS_PER_FEED + EVICTION_LIMIT_PER_RUN
         expected_ids = [
