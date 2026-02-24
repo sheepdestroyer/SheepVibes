@@ -2,7 +2,7 @@
 
 import logging
 import os
-from xml.etree.ElementTree import Element, SubElement
+from xml.etree.ElementTree import Element as UnsafeElement, SubElement as UnsafeSubElement
 
 import defusedxml.ElementTree as ET
 from filelock import FileLock, Timeout
@@ -27,13 +27,13 @@ def _generate_opml_string(tabs=None):
     Returns:
         tuple[str, int, int]: A tuple containing the OPML string, tab count, and feed count.
     """
-    # Security Note: We use xml.etree.ElementTree.Element/SubElement for XML generation,
+    # Security Note: We use xml.etree.ElementTree.Element/SubElement (aliased as UnsafeElement/UnsafeSubElement) for XML generation,
     # but use defusedxml.ElementTree for any parsing of untrusted data to prevent XXE.
-    opml_element = Element("opml", version="2.0")
-    head_element = SubElement(opml_element, "head")
-    title_element = SubElement(head_element, "title")
+    opml_element = UnsafeElement("opml", version="2.0")
+    head_element = UnsafeSubElement(opml_element, "head")
+    title_element = UnsafeSubElement(head_element, "title")
     title_element.text = "SheepVibes Feeds"
-    body_element = SubElement(opml_element, "body")
+    body_element = UnsafeSubElement(opml_element, "body")
 
     if tabs is None:
         # Eager load feeds to avoid N+1 queries
@@ -46,7 +46,7 @@ def _generate_opml_string(tabs=None):
             continue
 
         # Create a folder outline for the tab
-        folder_outline = SubElement(body_element, "outline")
+        folder_outline = UnsafeSubElement(body_element, "outline")
         folder_outline.set("text", tab.name)
         folder_outline.set("title", tab.name)
         # Sort feeds by name for deterministic output because relation order is not guaranteed
@@ -54,7 +54,7 @@ def _generate_opml_string(tabs=None):
 
         # Add feeds for this tab
         for feed in sorted_feeds:
-            feed_outline = SubElement(folder_outline, "outline")
+            feed_outline = UnsafeSubElement(folder_outline, "outline")
             feed_outline.set("text", feed.name)
             feed_outline.set("title", feed.name)
             feed_outline.set("xmlUrl", feed.url)
