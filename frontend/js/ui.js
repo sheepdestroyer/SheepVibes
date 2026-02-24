@@ -69,6 +69,17 @@ function createFeedItemElement(item, clickHandler) {
     return listItem;
 }
 
+function renderFeedItems(items, onMarkItemRead, feedId, tabId) {
+    const fragment = document.createDocumentFragment();
+    items.forEach(item => {
+        const listItem = createFeedItemElement(item, (li) => {
+            onMarkItemRead(item.id, li, feedId, tabId);
+        });
+        fragment.appendChild(listItem);
+    });
+    return fragment;
+}
+
 // --- Feed Widget ---
 
 export function createFeedWidget(feed, callbacks) {
@@ -156,13 +167,9 @@ function createWidgetList(feed, callbacks) {
 
     // Render Items
     if (feed.items && feed.items.length > 0) {
-        const fragment = document.createDocumentFragment();
-        feed.items.forEach(item => {
-            const listItem = createFeedItemElement(item, (li) => {
-                onMarkItemRead(item.id, li, feed.id, feed.tab_id);
-            });
-            fragment.appendChild(listItem);
-        });
+
+        const fragment = renderFeedItems(feed.items, onMarkItemRead, feed.id, feed.tab_id);
+
         itemList.appendChild(fragment);
     } else {
         const emptyLi = document.createElement('li');
@@ -182,16 +189,13 @@ function createWidgetList(feed, callbacks) {
 
 export function appendItemsToFeedWidget(widgetList, items, callbacks) {
     const { onMarkItemRead } = callbacks;
-    const feedId = widgetList.dataset.feedId;
-    const tabId = widgetList.dataset.tabId;
-    const fragment = document.createDocumentFragment();
 
-    items.forEach(item => {
-        const listItem = createFeedItemElement(item, (li) => {
-            onMarkItemRead(item.id, li, feedId, tabId);
-        });
-        fragment.appendChild(listItem);
-    });
+    const feedId = widgetList.dataset.feedId;
+
+    const tabId = widgetList.dataset.tabId;
+
+    const fragment = renderFeedItems(items, onMarkItemRead, feedId, tabId);
+
     widgetList.appendChild(fragment);
 
     // Update offset
