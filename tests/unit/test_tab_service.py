@@ -1,8 +1,11 @@
 import datetime
+
 import pytest
-from backend.models import Tab, Feed, FeedItem
+
 from backend.app import db
+from backend.models import Feed, FeedItem, Tab
 from backend.tab_service import get_tab_feeds_with_items
+
 
 def test_get_tab_feeds_with_items_basic(client):
     """
@@ -25,14 +28,14 @@ def test_get_tab_feeds_with_items_basic(client):
         link="http://test.com/item1",
         feed_id=feed.id,
         published_time=datetime.datetime(2024, 1, 1, 12, 0, 0),
-        guid="guid1"
+        guid="guid1",
     )
     item2 = FeedItem(
         title="Item 2",
         link="http://test.com/item2",
         feed_id=feed.id,
         published_time=datetime.datetime(2024, 1, 2, 12, 0, 0),
-        guid="guid2"
+        guid="guid2",
     )
     db.session.add(item1)
     db.session.add(item2)
@@ -53,6 +56,7 @@ def test_get_tab_feeds_with_items_basic(client):
     # Check unread count
     assert feed_data["unread_count"] == 2
 
+
 def test_get_tab_feeds_with_items_limit(client):
     """
     Test that get_tab_feeds_with_items respects the limit.
@@ -72,7 +76,7 @@ def test_get_tab_feeds_with_items_limit(client):
             link=f"http://limit.com/item{i}",
             feed_id=feed.id,
             published_time=datetime.datetime(2024, 1, 1, 12, i, 0),
-            guid=f"guid{i}"
+            guid=f"guid{i}",
         )
         db.session.add(item)
     db.session.commit()
@@ -82,7 +86,8 @@ def test_get_tab_feeds_with_items_limit(client):
 
     assert len(result) == 1
     assert len(result[0]["items"]) == 3
-    assert result[0]["items"][0]["title"] == "Item 4" # Newest (12:04)
+    assert result[0]["items"][0]["title"] == "Item 4"  # Newest (12:04)
+
 
 def test_get_tab_feeds_empty_tab(client):
     """Test with a tab that has no feeds."""
@@ -92,6 +97,7 @@ def test_get_tab_feeds_empty_tab(client):
 
     result = get_tab_feeds_with_items(tab.id)
     assert result == []
+
 
 def test_get_tab_feeds_no_items(client):
     """Test with a feed that has no items."""

@@ -1,12 +1,17 @@
 import logging
+
 from sqlalchemy import func, select
+
+from .constants import DEFAULT_FEED_ITEMS_LIMIT
 from .extensions import db
 from .models import Feed, FeedItem
-from .constants import DEFAULT_FEED_ITEMS_LIMIT
 
 logger = logging.getLogger(__name__)
 
-def get_tab_feeds_with_items(tab_id: int, limit: int = DEFAULT_FEED_ITEMS_LIMIT) -> list[dict]:
+
+def get_tab_feeds_with_items(tab_id: int,
+                             limit: int = DEFAULT_FEED_ITEMS_LIMIT
+                             ) -> list[dict]:
     """
     Returns a list of feeds for a tab, including recent items for each feed.
     This is highly optimized to prevent the N+1 query problem.
