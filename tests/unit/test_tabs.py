@@ -37,7 +37,8 @@ def test_create_tab_duplicate_name(client):
     """Test creating a tab with a duplicate name (application-level check)."""
     # Create first tab and verify it succeeds
     setup_response = client.post("/api/tabs", json={"name": "Duplicate Tab"})
-    assert setup_response.status_code == 201, "Setup failed: could not create initial tab"
+    assert setup_response.status_code == 201, (
+        "Setup failed: could not create initial tab")
 
     # Try to create second tab with same name
     response = client.post("/api/tabs", json={"name": "Duplicate Tab"})
@@ -52,13 +53,15 @@ def test_create_tab_race_condition_integrity_error(client):
     """
     tab_name = "Race Condition Tab"
     fake_integrity_error = IntegrityError(
-        "INSERT...", {}, Exception("UNIQUE constraint failed: tabs.name")
-    )
+        "INSERT...", {}, Exception("UNIQUE constraint failed: tabs.name"))
 
     with (
-        patch("backend.blueprints.tabs.db.session.commit",
-              side_effect=fake_integrity_error) as mock_commit,
-        patch("backend.blueprints.tabs.db.session.rollback") as mock_rollback,
+            patch(
+                "backend.blueprints.tabs.db.session.commit",
+                side_effect=fake_integrity_error,
+            ) as mock_commit,
+            patch("backend.blueprints.tabs.db.session.rollback") as
+            mock_rollback,
     ):
         response = client.post("/api/tabs", json={"name": tab_name})
 
