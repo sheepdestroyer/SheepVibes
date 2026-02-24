@@ -49,9 +49,8 @@ from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
 
 if TYPE_CHECKING:
-    # Security Note: xml.etree.ElementTree is used here EXCLUSIVELY for type hinting.
-    # All actual XML parsing in this module MUST use defusedxml.ElementTree (aliased as SafeET)
-    # or defusedxml.sax to prevent XXE and other XML-based attacks.
+    # Note: xml.etree.ElementTree is imported EXCLUSIVELY for type hinting.
+    # Actual parsing MUST use defusedxml.ElementTree or defusedxml.sax to prevent XXE.
     from xml.etree.ElementTree import Element  # noqa: F401, skipcq: BAN-B405
 
 # Set up logger for this module

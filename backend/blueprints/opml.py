@@ -28,8 +28,8 @@ def _generate_opml_string(tabs=None):
     Returns:
         tuple[str, int, int]: A tuple containing the OPML string, tab count, and feed count.
     """
-    # Security Note: We use xml.etree.ElementTree.Element/SubElement (aliased as UnsafeElement/UnsafeSubElement) for XML generation,
-    # but use defusedxml.ElementTree for any parsing of untrusted data to prevent XXE.
+    # Note: Use UnsafeElement/UnsafeSubElement ONLY for XML generation.
+    # Parsing untrusted data must use defusedxml to prevent XXE.
     opml_element = UnsafeElement("opml", version="2.0")
     head_element = UnsafeSubElement(opml_element, "head")
     title_element = UnsafeSubElement(head_element, "title")
@@ -79,8 +79,7 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "No file part in the request"}), 400)
     opml_file = request.files["file"]
     if opml_file.filename == "":
-        return None, (jsonify({"error":
-                               "No file selected for uploading"}), 400)
+        return None, (jsonify({"error": "No file selected for uploading"}), 400)
     if not opml_file:
         return None, (jsonify({"error": "File object is empty"}), 400)
 
@@ -88,13 +87,8 @@ def _validate_opml_file_request():
     allowed_extensions = {".opml", ".xml", ".txt"}
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
-        return None, (
-            jsonify({
-                "error":
-                f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-            }),
-            400,
-        )
+        err_msg = f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+        return None, (jsonify({"error": err_msg}), 400)
 
     # Basic security: check file size (5MB limit)
     opml_file.seek(0, os.SEEK_END)
