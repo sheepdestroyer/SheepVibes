@@ -20,9 +20,16 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
+import defusedxml.ElementTree as ET
+import defusedxml.sax
 import feedparser
 import sqlalchemy.exc
 from dateutil import parser as date_parser
+from defusedxml.common import (
+    DTDForbidden,
+    EntitiesForbidden,
+    ExternalReferenceForbidden,
+)
 from sqlalchemy.exc import IntegrityError
 
 from .cache_utils import (
@@ -40,21 +47,15 @@ from .constants import (
 # Import database models from the new models.py
 from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
-from .utils.xml_utils import (
-    DTDForbidden,
-    EntitiesForbidden,
-    ExternalReferenceForbidden,
-    ParseError,
-    safe_parse,
-    safe_sax_parse_string,
-)
-
-if TYPE_CHECKING:
-    # See security_xml.md for secure XML guidelines
-    from xml.etree.ElementTree import Element  # noqa: F401, skipcq: BAN-B405
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    # Security Note: xml.etree.ElementTree is used here EXCLUSIVELY for type hinting.
+    # All actual XML parsing in this module MUST use defusedxml.ElementTree (aliased as ET)
+    # or defusedxml.sax to prevent XXE and other XML-based attacks.
+    from xml.etree.ElementTree import Element  # skipcq: BAN-B405
 
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
 OpmlStackItem = tuple[list["Element"], int, str]
@@ -482,24 +483,17 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name,
 def _parse_opml_root(opml_stream):
     """Parses the OPML stream and returns the root element."""
     try:
-        # Use parse() directly on stream for better encoding
-        tree = safe_parse(opml_stream)
+        # Use parse() directly on stream for better encoding handling
+        tree = ET.parse(opml_stream)
         root = tree.getroot()
         return root, None
-    except (
-            ParseError,
-            DTDForbidden,
-            EntitiesForbidden,
-            ExternalReferenceForbidden,
-    ) as e:
-        logger.error(
-            "OPML import failed: Malformed or insecure XML. Error: %s",
-            e,
-            exc_info=True)
+    except ET.ParseError as e:
+        logger.error("OPML import failed: Malformed XML. Error: %s",
+                     e,
+                     exc_info=True)
         return None, (
             {
-                "error":
-                "Malformed OPML file or insecure content. Please check the file format."
+                "error": "Malformed OPML file. Please check the file format."
             },
             400,
         )
@@ -752,7 +746,13 @@ def _validate_xml_safety(content):
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions
         handler = ContentHandler()
-        safe_sax_parse_string(content, handler)
+        defusedxml.sax.parseString(
+            content,
+            handler,
+            forbid_dtd=False,
+            forbid_entities=True,
+            forbid_external=True,
+        )
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
         logger.error("XML Security Violation detected: %s",
                      _sanitize_for_log(str(e)))
@@ -1477,45 +1477,36 @@ def _save_items_individually(feed_db_obj, items_to_add):
     return count
 
 
-def _get_ids_to_evict(feed_id: int) -> list[int]:
-    """Identifies feed item IDs to evict based on the feed limit.
+def _enforce_feed_limit(feed_db_obj):
+    """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
 
-    Ordering semantics: Candidates for eviction are selected by finding items
-    that fall beyond the MAX_ITEMS_PER_FEED limit, ordering by newest first
-    (published_time, fetched_time, ID as tie-breakers).
+    Optimization: Identify items to evict by offsetting from the newest items,
+    avoiding a separate COUNT(*) query.
 
-    We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
-    1. Provide a bounded result set, avoiding OOM on massive feeds.
-    2. Avoid SQLite-specific LIMIT -1 behavior.
-    This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
-
-    Args:
-        feed_id (int): The ID of the feed to check.
-
-    Returns:
-        list[int]: A list of FeedItem IDs to be evicted.
+    Note: This deletes at most EVICTION_LIMIT_PER_RUN items per invocation.
+    For massively overgrown feeds, multiple runs will be required to fully
+    enforce the limit (eventual consistency).
     """
-    stmt = (db.select(FeedItem.id).filter_by(feed_id=feed_id).order_by(
-        FeedItem.published_time.desc().nullslast(),
-        FeedItem.fetched_time.desc().nullslast(),
-        FeedItem.id.desc(),
-    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN))
-
-    return list(db.session.scalars(stmt))
-
-
-def _enforce_feed_limit(feed_db_obj: Feed):
-    """Enforces MAX_ITEMS_PER_FEED by evicting oldest items, utilizing `_get_ids_to_evict`.
-
-    This avoids a separate COUNT(*) query and ensures eventual consistency."""
     # We want to keep the newest MAX_ITEMS_PER_FEED items.
     # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
 
-    ids_to_evict = _get_ids_to_evict(feed_db_obj.id)
+    # Fetch IDs to evict.
+    # We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
+    # 1. Provide a bounded result set, avoiding OOM on massive feeds.
+    # 2. Avoid SQLite-specific LIMIT -1 behavior.
+    # This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
+    ids_to_evict_rows = (db.session.query(
+        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+            FeedItem.published_time.desc().nullslast(),
+            FeedItem.fetched_time.desc().nullslast(),
+            FeedItem.id.desc(),
+    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN).all())
 
-    if not ids_to_evict:
+    if not ids_to_evict_rows:
         return
+
+    ids_to_evict = [r.id for r in ids_to_evict_rows]
 
     # Chunk the deletions to avoid hitting SQLite's parameter limit (default 999)
     chunk_size = DELETE_CHUNK_SIZE
