@@ -1478,7 +1478,7 @@ def _get_ids_to_evict(feed_id: int) -> list[int]:
 
     Ordering semantics: Older published items are evicted first, using fetched_time
     and ID as tie-breakers.
-    
+
     We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
     1. Provide a bounded result set, avoiding OOM on massive feeds.
     2. Avoid SQLite-specific LIMIT -1 behavior.
