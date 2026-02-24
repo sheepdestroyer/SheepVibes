@@ -2,7 +2,8 @@
 
 import logging
 import os
-from xml.etree.ElementTree import Element as UnsafeElement, SubElement as UnsafeSubElement, tostring
+from xml.etree.ElementTree import Element as UnsafeElement, SubElement as UnsafeSubElement
+from defusedxml.ElementTree import tostring
 
 
 from filelock import FileLock, Timeout
