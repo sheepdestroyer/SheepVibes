@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-03-01 - Optimized Feed Update Check
+**Learning:** Checking for new items by fetching all existing items (`filter_by(feed_id=...).all()`) is O(N) where N is total items in feed. This is wasteful for large feeds when only checking a few new items.
+**Action:** Use a targeted query with `IN` clauses for GUIDs and Links of incoming items when the batch is small (< 300). This changes the operation to O(M) where M is new items. Fallback to full fetch for large updates to respect DB limits.

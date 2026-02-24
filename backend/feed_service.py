@@ -24,6 +24,7 @@ import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
 import sqlalchemy.exc
+from sqlalchemy import or_
 from dateutil import parser as date_parser
 from defusedxml.common import (
     DefusedXmlException,
@@ -1236,15 +1237,41 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     items_to_add = []
     batch_processed_guids = set()
 
-    # Optimization: Query only necessary columns to avoid loading full objects
-    # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link,
-        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
+    # Phase 1: Pre-process entries to gather metadata and candidates
+    processed_entries = []
+    candidate_guids = set()
+    candidate_links = set()
 
-    # Create lookup maps
-    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
-    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
+    for entry in parsed_feed.entries:
+        parsed_published = parse_published_time(entry)
+        raw_link = entry.get("link")
+        entry_link = validate_link_structure(raw_link)
+
+        # Store basic data; invalid links are handled in Phase 2
+        if not entry_link:
+            processed_entries.append((entry, parsed_published, None, None))
+            continue
+
+        # Calculate GUID
+        if entry.get("id"):
+            db_guid = entry.get("id")
+        else:
+            unique_string = f"{entry_link}{entry.get('title', '')}"
+            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+
+        processed_entries.append((entry, parsed_published, entry_link, db_guid))
+
+        if db_guid:
+            candidate_guids.add(db_guid)
+        if entry_link:
+            candidate_links.add(entry_link)
+
+    # Sort processed_entries by date (newest first)
+    try:
+        processed_entries.sort(key=lambda x: x[1], reverse=True)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.warning("Failed to sort entries for feed %s",
+                       _sanitize_for_log(feed_db_obj.name))
 
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
@@ -1253,27 +1280,37 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         feed_db_obj.id,
     )
 
-    # Pre-calculate dates to avoid double parsing and ensure consistency between
-    # sorting and storage (e.g. if parse_published_time uses current time as fallback).
-    entries_with_dates = []
-    for entry in parsed_feed.entries:
-        entries_with_dates.append((entry, parse_published_time(entry)))
+    # Optimization: Targeted query for small batches
+    # SQLite has a variable limit (default 999). 300 entries * 2 (guid+link) is safe.
+    should_optimize = len(candidate_guids) < 300
 
-    # Sort entries by published date (newest first).
-    # Our "First Wins" deduplication strategy (below) will preserve the version
-    # that appears first in the iteration. Sorting ensures the most recently
-    # published version is processed first and thus preserved in case of duplicates.
-    try:
-        entries_with_dates.sort(key=lambda x: x[1], reverse=True)
-    except Exception:  # pylint: disable=broad-exception-caught
-        # If sorting fails, proceed with original order.
-        logger.warning("Failed to sort entries for feed %s",
-                       _sanitize_for_log(feed_db_obj.name))
+    query = db.session.query(
+        FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title
+    ).filter(FeedItem.feed_id == feed_db_obj.id)
 
-    for entry, parsed_published in entries_with_dates:
-        raw_link = entry.get("link")
-        entry_link = validate_link_structure(raw_link)
+    if should_optimize and (candidate_guids or candidate_links):
+        conditions = []
+        if candidate_guids:
+            conditions.append(FeedItem.guid.in_(candidate_guids))
+        if candidate_links:
+            conditions.append(FeedItem.link.in_(candidate_links))
 
+        if conditions:
+            query = query.filter(or_(*conditions))
+
+    # If optimizing and no candidates, result is empty.
+    # Otherwise execute query.
+    if should_optimize and not candidate_guids and not candidate_links:
+        items_tuple = []
+    else:
+        items_tuple = query.all()
+
+    # Create lookup maps
+    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
+    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
+
+    # Phase 2: Process entries using lookup maps
+    for entry, parsed_published, entry_link, db_guid in processed_entries:
         if not entry_link:
             logger.warning(
                 "Skipping entry titled '%s' for feed '%s' due to missing link.",
@@ -1282,28 +1319,10 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             )
             continue
 
-        # SECURITY & LOGIC: Generate a robust GUID if missing.
-        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
-        if entry.get("id"):
-            db_guid = entry.get("id")
-        else:
-            # Create a synthetic GUID based on link and title to ensure uniqueness
-            # for items that share a link but have different content.
-            unique_string = f"{entry_link}{entry.get('title', '')}"
-
-            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
-
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
         if not existing_match:
-            # Minimal fallback: Check by link ONLY if we used link as GUID (legacy)
-            # or if we really want to strict de-dupe.
-            # But for now, let's rely on our robust GUID.
-            # We still check existing_items_by_link just in case we have old DB entries
-            # that were saved with just the link as GUID?
-            # Actually, standard behavior is to trust the GUID.
-            # If we change how GUID is generated, we might duplicate old items once.
-            # This is acceptable to fix the regression.
+            # Fallback to link check
             existing_match = existing_items_by_link.get(entry_link)
 
         if existing_match:
