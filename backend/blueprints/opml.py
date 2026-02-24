@@ -88,10 +88,9 @@ def _validate_opml_file_request():
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
         return None, (
-            jsonify({
-                "error":
-                f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-            }),
+            jsonify(
+                {"error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"}
+            ),
             400,
         )
 
