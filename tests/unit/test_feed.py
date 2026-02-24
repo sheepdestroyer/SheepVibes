@@ -935,3 +935,31 @@ def test_fetch_feed_toctou_prevention_http(mocker):
     has_safe_handler = any(isinstance(
         h, feed_service.SafeHTTPHandler) for h in args)
     assert has_safe_handler, "SafeHTTPHandler should be used for HTTP requests"
+
+
+def test_create_safe_opener():
+    """Test that create_safe_opener returns an opener with the correct handlers."""
+    safe_ip = "93.184.216.34"
+    opener = feed_service.create_safe_opener(safe_ip)
+
+    # Check that the opener has the correct handlers
+    handlers = opener.handlers
+
+    # Check for presence and correct configuration
+    safe_http = next(
+        (h for h in handlers if isinstance(h, feed_service.SafeHTTPHandler)), None
+    )
+    safe_https = next(
+        (h for h in handlers if isinstance(h, feed_service.SafeHTTPSHandler)), None
+    )
+    safe_redirect = next(
+        (h for h in handlers if isinstance(h, feed_service.SafeRedirectHandler)), None
+    )
+
+    assert safe_http is not None, "Opener should have SafeHTTPHandler"
+    assert safe_https is not None, "Opener should have SafeHTTPSHandler"
+    assert safe_redirect is not None, "Opener should have SafeRedirectHandler"
+
+    # Verify that the handlers are initialized with the correct safe_ip
+    assert safe_http.safe_ip == safe_ip
+    assert safe_https.safe_ip == safe_ip
