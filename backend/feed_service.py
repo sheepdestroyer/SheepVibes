@@ -1476,8 +1476,9 @@ def _save_items_individually(feed_db_obj, items_to_add):
 def _get_ids_to_evict(feed_id: int) -> list[int]:
     """Identifies feed item IDs to evict based on the feed limit.
 
-    Ordering semantics: Older published items are evicted first, using fetched_time
-    and ID as tie-breakers.
+    Ordering semantics: Candidates for eviction are selected by finding items
+    that fall beyond the MAX_ITEMS_PER_FEED limit, ordering by newest first
+    (published_time, fetched_time, ID as tie-breakers).
 
     We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
     1. Provide a bounded result set, avoiding OOM on massive feeds.
