@@ -2,8 +2,7 @@
 
 import logging
 import os
-from xml.etree.ElementTree import Element as UnsafeElement, SubElement as UnsafeSubElement
-from defusedxml.ElementTree import tostring
+from ..utils.xml_utils import UnsafeElement, UnsafeSubElement, tostring
 
 
 from filelock import FileLock, Timeout
@@ -28,8 +27,7 @@ def _generate_opml_string(tabs=None):
     Returns:
         tuple[str, int, int]: A tuple containing the OPML string, tab count, and feed count.
     """
-    # Note: Use UnsafeElement/UnsafeSubElement ONLY for XML generation.
-    # Parsing untrusted data must use defusedxml to prevent XXE.
+    # See security_xml.md for secure XML guidelines
     opml_element = UnsafeElement("opml", version="2.0")
     head_element = UnsafeSubElement(opml_element, "head")
     title_element = UnsafeSubElement(head_element, "title")

@@ -20,16 +20,18 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
-import defusedxml.ElementTree as SafeET
-import defusedxml.sax
-import feedparser
-import sqlalchemy.exc
-from dateutil import parser as date_parser
-from defusedxml.common import (
+from .utils.xml_utils import (
+    safe_parse,
+    safe_fromstring,
+    ParseError,
+    safe_sax,
     DTDForbidden,
     EntitiesForbidden,
     ExternalReferenceForbidden,
 )
+import feedparser
+import sqlalchemy.exc
+from dateutil import parser as date_parser
 from sqlalchemy.exc import IntegrityError
 
 from .cache_utils import (
@@ -49,8 +51,7 @@ from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
 
 if TYPE_CHECKING:
-    # Note: xml.etree.ElementTree is imported EXCLUSIVELY for type hinting.
-    # Actual parsing MUST use defusedxml.ElementTree or defusedxml.sax to prevent XXE.
+    # See security_xml.md for secure XML guidelines
     from xml.etree.ElementTree import Element  # noqa: F401, skipcq: BAN-B405
 
 # Set up logger for this module
@@ -482,11 +483,11 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name,
 def _parse_opml_root(opml_stream):
     """Parses the OPML stream and returns the root element."""
     try:
-        # Use parse() directly on stream for better encoding handling
-        tree = SafeET.parse(opml_stream)
+        # Use parse() directly on stream for better encoding
+        tree = safe_parse(opml_stream)
         root = tree.getroot()
         return root, None
-    except SafeET.ParseError as e:
+    except ParseError as e:
         logger.error("OPML import failed: Malformed XML. Error: %s",
                      e,
                      exc_info=True)
@@ -745,7 +746,7 @@ def _validate_xml_safety(content):
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions
         handler = ContentHandler()
-        defusedxml.sax.parseString(
+        safe_sax.parseString(
             content,
             handler,
             forbid_dtd=False,

@@ -2,7 +2,7 @@
 
 ## Security Requirements
 
-*   **XML Parsing**: ALWAYS use the `defusedxml` package instead of the standard `xml.etree.ElementTree` or `xml.sax` modules when parsing untrusted XML data (e.g., OPML imports, RSS feeds). This is critical to prevent XML External Entity (XXE) attacks. The standard `xml.etree.ElementTree.Element` and `SubElement` can still be used for XML *generation*, as long as no untrusted data is parsed with them.
+*   **XML Parsing**: ALWAYS use the centralized `backend/utils/xml_utils.py` module instead of standard XML libraries or direct `defusedxml` imports. This ensures consistent application of security boundaries. Refer to [security_xml.md](file:///home/sheepdestroyer/LAB/SheepVibes/security_xml.md) for detailed guidelines.
 
 ## An Agent must always start by reading **all** `.md` files from the repository in order to have a global understanding of the application. They must also read both backend & frontend code files to understand the app's logic. 
 
