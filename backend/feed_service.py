@@ -1477,7 +1477,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
     return count
 
 
-def _enforce_feed_limit(feed_db_obj):
+def _enforce_feed_limit(feed_db_obj: Feed):
     """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
 
     Optimization: Identify items to evict by offsetting from the newest items,
