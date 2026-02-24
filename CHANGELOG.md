@@ -3,7 +3,7 @@
 ## 2026-02-23
 
 - **Security: Replace standard XML parser with `defusedxml`**
-  - Mandated `defusedxml.ElementTree` for XML parsing in `backend/feed_service.py` and updated `tests/unit/test_app.py` to use secure parsing.
+  - Replaced `xml.etree.ElementTree` with `defusedxml.ElementTree` for all XML parsing operations in `backend/blueprints/opml.py` and `tests/unit/test_app.py`.
   - Added security documentation to `AGENTS.md` and `README.md` to prevent future use of vulnerable XML parsers.
   - Maintained `xml.etree.ElementTree` for XML generation in `backend/blueprints/opml.py` while ensuring all parsing is handled by `defusedxml`.
 
