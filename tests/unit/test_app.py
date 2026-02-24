@@ -1100,7 +1100,12 @@ _VALIDATE_UTC_CASES = [
     ),
     pytest.param(
         datetime.datetime(
-            2023, 3, 15, 10, 0, 0,
+            2023,
+            3,
+            15,
+            10,
+            0,
+            0,
             tzinfo=datetime.timezone(datetime.timedelta(hours=-5)),
         ),
         datetime.datetime(2023, 3, 15, 15, 0, 0),
