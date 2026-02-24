@@ -99,11 +99,13 @@ def test_eviction_over_limit_within_cap(client):
         assert newest is not None
 
         # Check if item MAX-1 (oldest allowed) exists (should be retained)
-        oldest_kept = FeedItem.query.filter_by(guid=f"guid-{MAX_ITEMS_PER_FEED - 1}").first()
+        oldest_kept = FeedItem.query.filter_by(
+            guid=f"guid-{MAX_ITEMS_PER_FEED - 1}").first()
         assert oldest_kept is not None
 
         # Check if item MAX (newest evicted) is gone (should be evicted)
-        newest_evicted = FeedItem.query.filter_by(guid=f"guid-{MAX_ITEMS_PER_FEED}").first()
+        newest_evicted = FeedItem.query.filter_by(
+            guid=f"guid-{MAX_ITEMS_PER_FEED}").first()
         assert newest_evicted is None
 
         # Check if item total-1 (oldest) is gone (should be evicted)
