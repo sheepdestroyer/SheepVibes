@@ -498,7 +498,7 @@ def _parse_opml_root(opml_stream):
             },
             400,
         )
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except OSError as e:
         logger.error(
             "OPML import failed: Could not parse file stream. Error: %s",
             e,

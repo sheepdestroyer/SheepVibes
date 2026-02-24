@@ -51,7 +51,7 @@ def _generate_opml_string(tabs=None):
         folder_outline.set("text", tab.name)
         folder_outline.set("title", tab.name)
         # Sort feeds by name for deterministic output because relation order is not guaranteed
-        sorted_feeds = sorted(tab.feeds, key=lambda f: f.name or "")
+        sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
 
         # Add feeds for this tab
         for feed in sorted_feeds:
