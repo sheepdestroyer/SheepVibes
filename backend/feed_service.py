@@ -52,13 +52,13 @@ if TYPE_CHECKING:
     # Security Note: xml.etree.ElementTree is used here EXCLUSIVELY for type hinting.
     # All actual XML parsing in this module MUST use defusedxml.ElementTree (aliased as SafeET)
     # or defusedxml.sax to prevent XXE and other XML-based attacks.
-    from xml.etree.ElementTree import Element  # noqa: F401, skipcq: BAN-B405
+    from xml.etree.ElementTree import Element as UnsafeElement  # noqa: F401, skipcq: BAN-B405
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
-OpmlStackItem = tuple[list["Element"], int, str]
+OpmlStackItem = tuple[list["UnsafeElement"], int, str]
 
 
 @dataclass
