@@ -20,7 +20,8 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
-import defusedxml.ElementTree as ET
+from defusedxml.common import DefusedXmlException
+import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
 import sqlalchemy.exc
@@ -484,10 +485,10 @@ def _parse_opml_root(opml_stream):
     """Parses the OPML stream and returns the root element."""
     try:
         # Use parse() directly on stream for better encoding handling
-        tree = ET.parse(opml_stream)
+        tree = SafeET.parse(opml_stream)
         root = tree.getroot()
         return root, None
-    except ET.ParseError as e:
+    except (SafeET.ParseError, DefusedXmlException) as e:
         logger.error("OPML import failed: Malformed XML. Error: %s",
                      e,
                      exc_info=True)
@@ -1477,7 +1478,7 @@ def _save_items_individually(feed_db_obj, items_to_add):
     return count
 
 
-def _enforce_feed_limit(feed_db_obj):
+def _enforce_feed_limit(feed_db_obj: Feed):
     """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
 
     Optimization: Identify items to evict by offsetting from the newest items,
