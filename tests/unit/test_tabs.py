@@ -52,11 +52,12 @@ def test_create_tab_race_condition_integrity_error(client):
         "INSERT...", {}, Exception("UNIQUE constraint failed: tabs.name"))
 
     with (
-        patch(
-            "backend.blueprints.tabs.db.session.commit",
-            side_effect=fake_integrity_error,
-        ) as mock_commit,
-        patch("backend.blueprints.tabs.db.session.rollback") as mock_rollback,
+            patch(
+                "backend.blueprints.tabs.db.session.commit",
+                side_effect=fake_integrity_error,
+            ) as mock_commit,
+            patch("backend.blueprints.tabs.db.session.rollback") as
+            mock_rollback,
     ):
         response = client.post("/api/tabs", json={"name": tab_name})
 
