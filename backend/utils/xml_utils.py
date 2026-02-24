@@ -26,12 +26,18 @@ from defusedxml.ElementTree import tostring
 # For parsing, use the safe_* functions provided below.
 
 
-def safe_sax_parse_string(xml_string, handler, **kwargs):
+def safe_sax_parse_string(xml_string, handler):
     """
     Safely parses an XML string using SAX.
-    Wraps defusedxml.sax.parseString to provide a consistent project interface.
+    Uses strict project-wide secure defaults.
     """
-    return _safe_sax.parseString(xml_string, handler, **kwargs)
+    return _safe_sax.parseString(
+        xml_string,
+        handler,
+        forbid_dtd=True,
+        forbid_entities=True,
+        forbid_external=True,
+    )
 
 
 __all__ = [

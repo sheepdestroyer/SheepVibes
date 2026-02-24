@@ -753,13 +753,7 @@ def _validate_xml_safety(content):
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions
         handler = ContentHandler()
-        safe_sax_parse_string(
-            content,
-            handler,
-            forbid_dtd=False,
-            forbid_entities=True,
-            forbid_external=True,
-        )
+        safe_sax_parse_string(content, handler)
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
         logger.error("XML Security Violation detected: %s",
                      _sanitize_for_log(str(e)))

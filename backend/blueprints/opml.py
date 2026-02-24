@@ -10,6 +10,8 @@ from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab
+# Security Note: UnsafeElement and UnsafeSubElement are used EXCLUSIVELY for
+# XML generation (export). All XML parsing must use safe_* functions from xml_utils.
 from ..utils.xml_utils import UnsafeElement, UnsafeSubElement, tostring
 
 opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
