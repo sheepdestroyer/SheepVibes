@@ -865,8 +865,6 @@ def _is_safe_ip(ip):
                 or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
 
 
-
-
 class SafeConnectionMixin:
     """
     Mixin to handle connecting to a specific 'safe_ip'.
