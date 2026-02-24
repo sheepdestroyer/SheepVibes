@@ -6,6 +6,7 @@ from backend.sse import MessageAnnouncer
 
 
 class TestMessageAnnouncer(unittest.TestCase):
+
     def setUp(self):
         self.announcer = MessageAnnouncer()
 
@@ -50,8 +51,7 @@ class TestMessageAnnouncer(unittest.TestCase):
 
         # Verify warning was logged
         mock_logger.warning.assert_called_with(
-            "A client's SSE message queue was full. Dropping message."
-        )
+            "A client's SSE message queue was full. Dropping message.")
 
     @patch("backend.sse.queue.Queue")
     def test_listen_yields_messages(self, mock_queue_cls):
