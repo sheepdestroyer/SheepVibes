@@ -487,13 +487,20 @@ def _parse_opml_root(opml_stream):
         tree = safe_parse(opml_stream)
         root = tree.getroot()
         return root, None
-    except (ParseError, DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
-        logger.error("OPML import failed: Malformed or insecure XML. Error: %s",
-                     e,
-                     exc_info=True)
+    except (
+            ParseError,
+            DTDForbidden,
+            EntitiesForbidden,
+            ExternalReferenceForbidden,
+    ) as e:
+        logger.error(
+            "OPML import failed: Malformed or insecure XML. Error: %s",
+            e,
+            exc_info=True)
         return None, (
             {
-                "error": "Malformed OPML file or insecure content. Please check the file format."
+                "error":
+                "Malformed OPML file or insecure content. Please check the file format."
             },
             400,
         )

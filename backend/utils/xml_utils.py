@@ -9,11 +9,6 @@ Please see security_xml.md for detailed security guidelines on XML parsing.
 from xml.etree.ElementTree import Element as UnsafeElement
 from xml.etree.ElementTree import SubElement as UnsafeSubElement
 
-# NOTE: UnsafeElement and UnsafeSubElement are the standard ElementTree
-# constructors. They are aliased here with 'Unsafe' prefix to remind developers
-# that they must ONLY be used for XML generation, never for parsing untrusted data.
-# For parsing, use the safe_* functions provided below.
-
 import defusedxml.sax as _safe_sax
 from defusedxml.common import (
     DTDForbidden,
@@ -24,6 +19,11 @@ from defusedxml.ElementTree import ParseError
 from defusedxml.ElementTree import fromstring as safe_fromstring
 from defusedxml.ElementTree import parse as safe_parse
 from defusedxml.ElementTree import tostring
+
+# NOTE: UnsafeElement and UnsafeSubElement are the standard ElementTree
+# constructors. They are aliased here with 'Unsafe' prefix to remind developers
+# that they must ONLY be used for XML generation, never for parsing untrusted data.
+# For parsing, use the safe_* functions provided below.
 
 
 def safe_sax_parse_string(xml_string, handler, **kwargs):
