@@ -6,8 +6,8 @@ consistent security boundaries across the application.
 Please see security_xml.md for detailed security guidelines on XML parsing.
 """
 
-from xml.etree.ElementTree import Element as UnsafeElement
-from xml.etree.ElementTree import SubElement as UnsafeSubElement
+from xml.etree.ElementTree import Element as UnsafeElement  # skipcq: BAN-B405
+from xml.etree.ElementTree import SubElement as UnsafeSubElement  # skipcq: BAN-B405
 
 import defusedxml.sax as _safe_sax
 from defusedxml.common import (

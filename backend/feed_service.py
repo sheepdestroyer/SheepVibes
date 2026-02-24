@@ -29,6 +29,11 @@ from .utils.xml_utils import (
     safe_sax_parse_string,
 )
 
+import feedparser
+import sqlalchemy.exc
+from dateutil import parser as date_parser
+from sqlalchemy.exc import IntegrityError
+
 from .cache_utils import (
     invalidate_tab_feeds_cache,
     invalidate_tabs_cache,

@@ -387,4 +387,4 @@ def test_import_malformed_opml(client):
     assert response.status_code == 400
 
     payload = response.get_json()
-    assert "Malformed OPML file" in payload.get("error", "")
+    assert "Malformed or insecure OPML file" in payload.get("error", "")
