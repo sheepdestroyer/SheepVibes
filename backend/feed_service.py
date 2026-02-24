@@ -20,15 +20,6 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
-from .utils.xml_utils import (
-    DTDForbidden,
-    EntitiesForbidden,
-    ExternalReferenceForbidden,
-    ParseError,
-    safe_parse,
-    safe_sax_parse_string,
-)
-
 import feedparser
 import sqlalchemy.exc
 from dateutil import parser as date_parser
@@ -49,6 +40,14 @@ from .constants import (
 # Import database models from the new models.py
 from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
+from .utils.xml_utils import (
+    DTDForbidden,
+    EntitiesForbidden,
+    ExternalReferenceForbidden,
+    ParseError,
+    safe_parse,
+    safe_sax_parse_string,
+)
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -498,10 +497,12 @@ def _parse_opml_root(opml_stream):
         logger.error(
             "OPML import failed: Malformed or insecure XML. Error: %s",
             _sanitize_for_log(str(e)),
-            exc_info=True)
+            exc_info=True,
+        )
         return None, (
             {
-                "error": "Malformed or insecure OPML file. Please check the file format."
+                "error":
+                "Malformed or insecure OPML file. Please check the file format."
             },
             400,
         )

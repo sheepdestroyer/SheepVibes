@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab, db
+
 # Security Note: UnsafeElement and UnsafeSubElement are used EXCLUSIVELY for
 # XML generation (export). All XML parsing must use safe_* functions from xml_utils.
 from ..utils.xml_utils import UnsafeElement, UnsafeSubElement, safe_tostring
@@ -65,7 +66,7 @@ def _generate_opml_string(tabs=None):
 
     # Convert the XML tree to a string
     opml_string = safe_tostring(opml_element, encoding="utf-8",
-                                 method="xml").decode("utf-8")
+                                method="xml").decode("utf-8")
 
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)
