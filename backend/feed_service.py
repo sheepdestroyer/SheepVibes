@@ -47,7 +47,7 @@ from .utils.xml_utils import (
     ParseError,
     safe_fromstring,
     safe_parse,
-    safe_sax,
+    safe_sax_parse_string,
 )
 
 if TYPE_CHECKING:
@@ -746,7 +746,7 @@ def _validate_xml_safety(content):
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions
         handler = ContentHandler()
-        safe_sax.parseString(
+        safe_sax_parse_string(
             content,
             handler,
             forbid_dtd=False,
