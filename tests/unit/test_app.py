@@ -1485,7 +1485,7 @@ def test_export_opml_empty(client):
     """Test GET /api/opml/export when no feeds exist."""
     response = client.get("/api/opml/export")
     assert response.status_code == 200
-    assert "application/xml" in response.content_type
+    assert "text/x-opml" in response.content_type
     assert (response.headers["Content-Disposition"] ==
             'attachment; filename="sheepvibes_feeds.opml"')
 
@@ -1512,7 +1512,7 @@ def test_export_opml_with_feeds(client, setup_tabs_and_feeds):
 
     response = client.get("/api/opml/export")
     assert response.status_code == 200
-    assert "application/xml" in response.content_type
+    assert "text/x-opml" in response.content_type
     assert (response.headers["Content-Disposition"] ==
             'attachment; filename="sheepvibes_feeds.opml"')
 
