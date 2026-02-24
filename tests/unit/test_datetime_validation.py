@@ -1,12 +1,16 @@
 import datetime
-from datetime import timezone, timedelta
+from datetime import timedelta, timezone
+
 import pytest
-from backend.models import FeedItem, Tab, Feed, db
+
+from backend.models import Feed, FeedItem, Tab, db
+
 
 def test_validate_datetime_utc_none():
     """Test that None is handled correctly by the validator."""
     item = FeedItem()
     assert item.validate_datetime_utc("published_time", None) is None
+
 
 def test_validate_datetime_utc_naive():
     """Test that naive datetime is returned as-is (assumed UTC)."""
@@ -16,6 +20,7 @@ def test_validate_datetime_utc_naive():
     assert validated == naive_dt
     assert validated.tzinfo is None
 
+
 def test_validate_datetime_utc_aware_utc():
     """Test that aware UTC datetime is converted to naive UTC."""
     item = FeedItem()
@@ -23,6 +28,7 @@ def test_validate_datetime_utc_aware_utc():
     validated = item.validate_datetime_utc("published_time", utc_dt)
     assert validated == datetime.datetime(2024, 1, 1, 12, 0, 0)
     assert validated.tzinfo is None
+
 
 def test_validate_datetime_utc_aware_non_utc_positive():
     """Test that aware non-UTC datetime (positive offset) is converted to naive UTC."""
@@ -35,6 +41,7 @@ def test_validate_datetime_utc_aware_non_utc_positive():
     assert validated == datetime.datetime(2024, 1, 1, 12, 0, 0)
     assert validated.tzinfo is None
 
+
 def test_validate_datetime_utc_aware_non_utc_negative():
     """Test that aware non-UTC datetime (negative offset) is converted to naive UTC."""
     item = FeedItem()
@@ -45,6 +52,7 @@ def test_validate_datetime_utc_aware_non_utc_negative():
     # 07:00 -05:00 is 12:00 UTC
     assert validated == datetime.datetime(2024, 1, 1, 12, 0, 0)
     assert validated.tzinfo is None
+
 
 def test_feed_item_assignment_validation(client):
     """Test that assignment to model fields triggers the validator."""
@@ -64,6 +72,7 @@ def test_feed_item_assignment_validation(client):
     assert item.fetched_time == datetime.datetime(2024, 1, 1, 12, 0, 0)
     assert item.fetched_time.tzinfo is None
 
+
 def test_feed_item_constructor_validation():
     """Test that passing values to the constructor triggers the validator."""
     other_tz = timezone(timedelta(hours=-5))
@@ -76,6 +85,7 @@ def test_feed_item_constructor_validation():
     assert item.fetched_time == datetime.datetime(2024, 1, 1, 12, 0, 0)
     assert item.fetched_time.tzinfo is None
 
+
 def test_feed_item_db_storage(client):
     """Test that values are correctly stored and retrieved from the DB."""
     # Create Tab and Feed
@@ -83,7 +93,9 @@ def test_feed_item_db_storage(client):
     db.session.add(tab)
     db.session.commit()
 
-    feed = Feed(name="Validation Feed", url="http://example.com", tab_id=tab.id)
+    feed = Feed(name="Validation Feed",
+                url="http://example.com",
+                tab_id=tab.id)
     db.session.add(feed)
     db.session.commit()
 
@@ -95,7 +107,7 @@ def test_feed_item_db_storage(client):
         title="Test Item",
         link="http://example.com/item",
         published_time=other_dt,
-        fetched_time=other_dt
+        fetched_time=other_dt,
     )
     db.session.add(item)
     db.session.commit()
