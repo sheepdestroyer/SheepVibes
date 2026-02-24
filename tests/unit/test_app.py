@@ -488,11 +488,7 @@ def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     mock_fetch.assert_not_called()  # Should check DB before fetching
 
 
-@patch("backend.blueprints.feeds.fetch_feed"
-       )  # Also needs patch if fetch_feed is involved in error path
-def test_add_feed_invalid_tab(
-        mock_fetch_unused,
-        client):  # mock_fetch_unused if not directly used but to be consistent
+def test_add_feed_invalid_tab(client):
     """Test POST /api/feeds with a non-existent tab_id."""
     response = client.post("/api/feeds",
                            json={
@@ -1070,39 +1066,89 @@ def test_to_iso_z_string_static_method():
     assert FeedItem.to_iso_z_string(None) is None
 
 
-def test_validate_datetime_utc_validator():
+class _NoOffsetTZ(datetime.tzinfo):
+    """Custom tzinfo where utcoffset() returns None (edge-case)."""
+
+    def utcoffset(self, dt):
+        return None
+
+    def tzname(self, dt):
+        return "NOTZ"
+
+    def dst(self, dt):
+        return None
+
+
+# DST-aware test: America/New_York during DST (EDT = UTC-4)
+# 2023-06-15 10:00 EDT => 2023-06-15 14:00 UTC
+_dst_tz = None
+try:
+    from zoneinfo import ZoneInfo
+
+    _dst_tz = ZoneInfo("America/New_York")
+except ImportError:
+    pass
+
+_no_offset_dt = datetime.datetime(2023, 6, 1, 8, 0, 0, tzinfo=_NoOffsetTZ())
+
+_VALIDATE_UTC_CASES = [
+    pytest.param(
+        datetime.datetime(2023, 1, 1, 12, 0, 0),
+        datetime.datetime(2023, 1, 1, 12, 0, 0),
+        True,  # expect_naive
+        id="naive_datetime",
+    ),
+    pytest.param(
+        datetime.datetime(
+            2023, 3, 15, 10, 0, 0,
+            tzinfo=datetime.timezone(datetime.timedelta(hours=-5)),
+        ),
+        datetime.datetime(2023, 3, 15, 15, 0, 0),
+        True,
+        id="aware_non_utc_fixed_offset",
+    ),
+    pytest.param(
+        datetime.datetime(2023, 5, 20, 14, 30, 0,
+                          tzinfo=datetime.timezone.utc),
+        datetime.datetime(2023, 5, 20, 14, 30, 0),
+        True,
+        id="aware_utc",
+    ),
+    pytest.param(None, None, None, id="none_input"),
+]
+
+# Add DST-aware case only when zoneinfo is available (Python 3.9+)
+if _dst_tz is not None:
+    _VALIDATE_UTC_CASES.append(
+        pytest.param(
+            datetime.datetime(2023, 6, 15, 10, 0, 0, tzinfo=_dst_tz),
+            datetime.datetime(2023, 6, 15, 14, 0, 0),
+            True,
+            id="aware_dst_america_new_york",
+        ))
+
+# Edge-case: custom tzinfo with utcoffset() returning None
+# Current behavior: returned as-is (tzinfo still attached, not naive)
+_VALIDATE_UTC_CASES.append(
+    pytest.param(
+        _no_offset_dt,
+        _no_offset_dt,
+        False,  # expect_naive=False => tzinfo still attached
+        id="custom_tzinfo_utcoffset_none",
+    ))
+
+
+@pytest.mark.parametrize("input_dt, expected_dt, expect_naive",
+                         _VALIDATE_UTC_CASES)
+def test_validate_datetime_utc_validator(input_dt, expected_dt, expect_naive):
     """Tests the FeedItem.validate_datetime_utc validator method."""
     item = FeedItem()
-
-    # 1. Test with a naive datetime (should be returned as-is)
-    naive_dt = datetime.datetime(2023, 1, 1, 12, 0, 0)
-    result = item.validate_datetime_utc("published_time", naive_dt)
-    assert result == naive_dt
-    assert result.tzinfo is None
-
-    # 2. Test with a timezone-aware datetime (not UTC)
-    tz_est = datetime.timezone(datetime.timedelta(hours=-5))
-    aware_dt_est = datetime.datetime(2023, 3, 15, 10, 0, 0, tzinfo=tz_est)
-    result = item.validate_datetime_utc("published_time", aware_dt_est)
-    # Should be 15:00 UTC and naive
-    assert result == datetime.datetime(2023, 3, 15, 15, 0, 0)
-    assert result.tzinfo is None
-
-    # 3. Test with a timezone-aware UTC datetime
-    aware_dt_utc = datetime.datetime(2023,
-                                     5,
-                                     20,
-                                     14,
-                                     30,
-                                     0,
-                                     tzinfo=datetime.timezone.utc)
-    result = item.validate_datetime_utc("published_time", aware_dt_utc)
-    # Should be 14:30 and naive
-    assert result == datetime.datetime(2023, 5, 20, 14, 30, 0)
-    assert result.tzinfo is None
-
-    # 4. Test with None input
-    assert item.validate_datetime_utc("published_time", None) is None
+    result = item.validate_datetime_utc("published_time", input_dt)
+    assert result == expected_dt
+    if result is not None and expect_naive:
+        assert result.tzinfo is None
+    elif result is not None and not expect_naive:
+        assert result.tzinfo is not None
 
 
 # --- Tests for feed_service functions ---
