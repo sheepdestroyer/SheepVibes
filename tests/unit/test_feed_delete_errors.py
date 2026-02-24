@@ -6,14 +6,10 @@ from backend.models import Feed, Tab, db
 
 def test_delete_feed_exception(client):
     """Test that delete_feed handles exceptions during deletion gracefully."""
-    # 1. Setup: Create a Tab and a Feed
+    # 1. Setup: Create a Tab and a Feed in a single transaction
     with app.app_context():
         tab = Tab(name="Test Tab")
-        db.session.add(tab)
-        db.session.commit()
-
-        feed = Feed(name="Test Feed",
-                    url="http://example.com/feed", tab_id=tab.id)
+        feed = Feed(name="Test Feed", url="http://example.com/feed", tab=tab)
         db.session.add(feed)
         db.session.commit()
         feed_id = feed.id
@@ -24,8 +20,12 @@ def test_delete_feed_exception(client):
         "backend.blueprints.feeds.db.session.commit",
         side_effect=Exception("Database error"),
     ):
-        # We also want to verify rollback is called.
-        with patch("backend.blueprints.feeds.db.session.rollback") as mock_rollback:
+        # Spy on rollback using wraps to preserve real behavior while
+        # allowing call-count assertions.
+        with patch(
+            "backend.blueprints.feeds.db.session.rollback",
+            wraps=db.session.rollback,
+        ) as mock_rollback:
             # 3. Call DELETE /api/feeds/<feed_id>
             response = client.delete(f"/api/feeds/{feed_id}")
 
@@ -36,5 +36,7 @@ def test_delete_feed_exception(client):
                 == "An internal error occurred while deleting the feed."
             )
 
-            # 5. Verify rollback was called
+            # 5. Verify rollback and database state
             mock_rollback.assert_called_once()
+            feed_after_delete = db.session.get(Feed, feed_id)
+            assert feed_after_delete is not None, "Feed should not be deleted on commit failure."
