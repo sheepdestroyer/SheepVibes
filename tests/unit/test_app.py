@@ -2,10 +2,10 @@ import datetime  # For new tests, specifically for timezone object
 import io
 import json
 import os
-import xml.etree.ElementTree as ET
 from datetime import timezone  # For new tests
 from unittest.mock import MagicMock, patch
 
+import defusedxml.ElementTree as ET
 import pytest
 
 # Import the Flask app instance and db object

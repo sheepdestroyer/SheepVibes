@@ -26,6 +26,7 @@ import feedparser
 import sqlalchemy.exc
 from dateutil import parser as date_parser
 from defusedxml.common import (
+    DefusedXmlException,
     DTDForbidden,
     EntitiesForbidden,
     ExternalReferenceForbidden,
@@ -48,11 +49,14 @@ from .constants import (
 from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
 
-if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element  # noqa: F401, skipcq: BAN-B405
-
 # Set up logger for this module
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    # Security Note: xml.etree.ElementTree is used here EXCLUSIVELY for type hinting.
+    # All actual XML parsing in this module MUST use defusedxml.ElementTree (aliased as SafeET)
+    # or defusedxml.sax to prevent XXE and other XML-based attacks.
+    from xml.etree.ElementTree import Element  # skipcq: BAN-B405
 
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
 OpmlStackItem = tuple[list["Element"], int, str]
@@ -484,7 +488,7 @@ def _parse_opml_root(opml_stream):
         tree = SafeET.parse(opml_stream)
         root = tree.getroot()
         return root, None
-    except SafeET.ParseError as e:
+    except (SafeET.ParseError, DefusedXmlException) as e:
         logger.error("OPML import failed: Malformed XML. Error: %s",
                      e,
                      exc_info=True)
@@ -494,7 +498,7 @@ def _parse_opml_root(opml_stream):
             },
             400,
         )
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except OSError as e:
         logger.error(
             "OPML import failed: Could not parse file stream. Error: %s",
             e,
@@ -1474,42 +1478,32 @@ def _save_items_individually(feed_db_obj, items_to_add):
     return count
 
 
-def _get_ids_to_evict(feed_id: int) -> list[int]:
-    """Identifies feed item IDs to evict based on the feed limit.
+def _enforce_feed_limit(feed_db_obj: Feed):
+    """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
 
-    Ordering semantics: Candidates for eviction are selected by finding items
-    that fall beyond the MAX_ITEMS_PER_FEED limit, ordering by newest first
-    (published_time, fetched_time, ID as tie-breakers).
+    Optimization: Identify items to evict by offsetting from the newest items,
+    avoiding a separate COUNT(*) query.
 
-    We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
-    1. Provide a bounded result set, avoiding OOM on massive feeds.
-    2. Avoid SQLite-specific LIMIT -1 behavior.
-    This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
-
-    Args:
-        feed_id (int): The ID of the feed to check.
-
-    Returns:
-        list[int]: A list of FeedItem IDs to be evicted.
+    Note: This deletes at most EVICTION_LIMIT_PER_RUN items per invocation.
+    For massively overgrown feeds, multiple runs will be required to fully
+    enforce the limit (eventual consistency).
     """
-    stmt = (db.select(FeedItem.id).filter_by(feed_id=feed_id).order_by(
+    # We want to keep the newest MAX_ITEMS_PER_FEED items.
+    # Anything beyond that (ordered by newest first) should be evicted.
+    # We use offset() to skip the newest items and select the rest.
+
+    # Fetch IDs to evict.
+    # We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
+    # 1. Provide a bounded result set, avoiding OOM on massive feeds.
+    # 2. Avoid SQLite-specific LIMIT -1 behavior.
+    # This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
+    stmt = (db.select(FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
         FeedItem.published_time.desc().nullslast(),
         FeedItem.fetched_time.desc().nullslast(),
         FeedItem.id.desc(),
     ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN))
 
-    return list(db.session.scalars(stmt))
-
-
-def _enforce_feed_limit(feed_db_obj: Feed):
-    """Enforces MAX_ITEMS_PER_FEED by evicting oldest items, utilizing `_get_ids_to_evict`.
-
-    This avoids a separate COUNT(*) query and ensures eventual consistency."""
-    # We want to keep the newest MAX_ITEMS_PER_FEED items.
-    # Anything beyond that (ordered by newest first) should be evicted.
-    # We use offset() to skip the newest items and select the rest.
-
-    ids_to_evict = _get_ids_to_evict(feed_db_obj.id)
+    ids_to_evict = list(db.session.scalars(stmt))
 
     if not ids_to_evict:
         return
