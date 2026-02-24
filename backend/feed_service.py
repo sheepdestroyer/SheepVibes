@@ -24,7 +24,6 @@ import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
 import sqlalchemy.exc
-from sqlalchemy import or_
 from dateutil import parser as date_parser
 from defusedxml.common import (
     DefusedXmlException,
@@ -32,6 +31,7 @@ from defusedxml.common import (
     EntitiesForbidden,
     ExternalReferenceForbidden,
 )
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from .cache_utils import (
@@ -1259,7 +1259,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             unique_string = f"{entry_link}{entry.get('title', '')}"
             db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
 
-        processed_entries.append((entry, parsed_published, entry_link, db_guid))
+        processed_entries.append(
+            (entry, parsed_published, entry_link, db_guid))
 
         if db_guid:
             candidate_guids.add(db_guid)
@@ -1285,8 +1286,8 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     should_optimize = len(candidate_guids) < 300
 
     query = db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title
-    ).filter(FeedItem.feed_id == feed_db_obj.id)
+        FeedItem.id, FeedItem.guid, FeedItem.link,
+        FeedItem.title).filter(FeedItem.feed_id == feed_db_obj.id)
 
     if should_optimize and (candidate_guids or candidate_links):
         conditions = []

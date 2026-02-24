@@ -2,15 +2,25 @@
 """
 Test script for the feed optimization functionality.
 """
+
+from unittest.mock import ANY, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, ANY
+from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
+
 from backend import feed_service
 from backend.models import Feed, FeedItem
-from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
+
 
 class MockFeedEntry(dict):
     """Mocks a feedparser entry."""
-    def __init__(self, title, link, guid=None, published_parsed=None, **kwargs):
+
+    def __init__(self,
+                 title,
+                 link,
+                 guid=None,
+                 published_parsed=None,
+                 **kwargs):
         super().__init__()
         self["title"] = title
         self["link"] = link
@@ -29,11 +39,14 @@ class MockFeedEntry(dict):
     def guid(self):
         return self.get("id")
 
+
 class MockParsedFeed:
+
     def __init__(self, feed_title, entries):
         self.feed = {"title": feed_title}
         self.entries = entries
         self.bozo = 0
+
 
 def test_collect_new_items_optimization_small_batch(mocker):
     """
@@ -42,7 +55,7 @@ def test_collect_new_items_optimization_small_batch(mocker):
     mock_session = mocker.patch("backend.feed_service.db.session")
     mock_query = mock_session.query.return_value
     mock_query.filter.return_value = mock_query
-    mock_query.filter_by.return_value = mock_query # Should not be used
+    mock_query.filter_by.return_value = mock_query  # Should not be used
     mock_query.all.return_value = []
 
     feed_obj = MagicMock(spec=Feed)
@@ -50,13 +63,16 @@ def test_collect_new_items_optimization_small_batch(mocker):
     feed_obj.name = "Test Feed"
 
     # Case 1: Small batch (should use optimization)
-    entries_small = [MockFeedEntry(f"T{i}", f"http://l{i}", f"g{i}") for i in range(5)]
+    entries_small = [
+        MockFeedEntry(f"T{i}", f"http://l{i}", f"g{i}") for i in range(5)
+    ]
     parsed_feed_small = MockParsedFeed("Small Feed", entries_small)
 
     feed_service._collect_new_items(feed_obj, parsed_feed_small)
 
     # Check that filter_by was NOT called
-    assert not mock_query.filter_by.called, "filter_by should not be used in the new implementation"
+    assert not mock_query.filter_by.called, (
+        "filter_by should not be used in the new implementation")
 
     # Check that filter was called at least twice (feed_id + OR condition)
     # 1. filter(FeedItem.feed_id == ...)
@@ -75,6 +91,7 @@ def test_collect_new_items_optimization_small_batch(mocker):
     # Just asserting call count > 1 confirms we added the extra filter condition
     print("Small batch verified: filter calls:", len(calls))
 
+
 def test_collect_new_items_optimization_large_batch(mocker):
     """
     Verifies that _collect_new_items uses fallback query (no OR clause) for large batches.
@@ -90,7 +107,9 @@ def test_collect_new_items_optimization_large_batch(mocker):
 
     # Case 2: Large batch (should fallback)
     # Threshold is 300
-    entries_large = [MockFeedEntry(f"T{i}", f"http://l{i}", f"g{i}") for i in range(350)]
+    entries_large = [
+        MockFeedEntry(f"T{i}", f"http://l{i}", f"g{i}") for i in range(350)
+    ]
     parsed_feed_large = MockParsedFeed("Large Feed", entries_large)
 
     feed_service._collect_new_items(feed_obj, parsed_feed_large)
@@ -99,6 +118,7 @@ def test_collect_new_items_optimization_large_batch(mocker):
     # The optimization condition (len < 300) fails, so the OR filter is skipped.
     assert mock_query.filter.call_count == 1
     print("Large batch verified: filter calls:", mock_query.filter.call_count)
+
 
 def test_collect_new_items_no_candidates(mocker):
     """
