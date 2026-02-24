@@ -190,16 +190,19 @@ def test_get_ids_to_evict_over_limit(client):
         FeedItem.query.filter_by(feed_id=feed.id).delete()
         db.session.commit()
 
-        # Create MAX + 10 items
-        create_dummy_items(feed.id, MAX_ITEMS_PER_FEED + 10)
+        # Create items exceeding the limit, but bounded by eviction limit
+        overage = EVICTION_LIMIT_PER_RUN + 1
+        create_dummy_items(feed.id, MAX_ITEMS_PER_FEED + overage)
 
         ids = _get_ids_to_evict(feed)
-        assert len(ids) == 10
+        # Should only fetch up to EVICTION_LIMIT_PER_RUN
+        assert len(ids) == EVICTION_LIMIT_PER_RUN
 
         # Verify the IDs correspond to the oldest items for *this feed*
         all_items = (FeedItem.query.filter_by(feed_id=feed.id).order_by(
             FeedItem.published_time.desc()).all())
         # all_items[0] is newest. all_items[MAX] is the first one to be evicted.
-        expected_ids = [item.id for item in all_items[MAX_ITEMS_PER_FEED:]]
+        # It takes items from MAX_ITEMS_PER_FEED up to MAX_ITEMS_PER_FEED + EVICTION_LIMIT_PER_RUN
+        expected_ids = [item.id for item in all_items[MAX_ITEMS_PER_FEED : MAX_ITEMS_PER_FEED + EVICTION_LIMIT_PER_RUN]]
 
         assert set(ids) == set(expected_ids)

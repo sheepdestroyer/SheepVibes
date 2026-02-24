@@ -51,11 +51,8 @@ from .sse import announcer
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element  # skipcq: BAN-B405
-
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
-OpmlStackItem = tuple[list["Element"], int, str]
+OpmlStackItem = tuple[list, int, str]
 
 
 @dataclass
@@ -1474,26 +1471,27 @@ def _save_items_individually(feed_db_obj, items_to_add):
     return count
 
 
-def _get_ids_to_evict(feed_db_obj):
+def _get_ids_to_evict(feed_db_obj: Feed) -> list[int]:
     """Identifies feed item IDs to evict based on the feed limit.
 
     Args:
         feed_db_obj (Feed): The feed object to check.
 
     Returns:
-        list: A list of FeedItem IDs to be evicted.
+        list[int]: A list of FeedItem IDs to be evicted.
     """
-    # Fetch IDs to evict.
-    # We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
-    # 1. Provide a bounded result set, avoiding OOM on massive feeds.
-    # 2. Avoid SQLite-specific LIMIT -1 behavior.
-    # This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
-    ids_to_evict_rows = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+    ids_to_evict_rows = (
+        db.session.query(FeedItem.id)
+        .filter_by(feed_id=feed_db_obj.id)
+        .order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
             FeedItem.id.desc(),
-    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN).all())
+        )
+        .offset(MAX_ITEMS_PER_FEED)
+        .limit(EVICTION_LIMIT_PER_RUN)
+        .all()
+    )
 
     return [r.id for r in ids_to_evict_rows]
 
