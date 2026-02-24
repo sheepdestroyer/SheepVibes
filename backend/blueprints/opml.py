@@ -2,7 +2,9 @@
 
 import logging
 import os
+from xml.etree.ElementTree import Element, SubElement
 
+import defusedxml.ElementTree as ET
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,10 +12,6 @@ from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab
-
-# Security Note: UnsafeElement and UnsafeSubElement are used EXCLUSIVELY for
-# XML generation (export). All XML parsing must use safe_* functions from xml_utils.
-from ..utils.xml_utils import UnsafeElement, UnsafeSubElement, safe_tostring
 
 opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
 logger = logging.getLogger(__name__)
@@ -29,18 +27,18 @@ def _generate_opml_string(tabs=None):
     Returns:
         tuple[str, int, int]: A tuple containing the OPML string, tab count, and feed count.
     """
-    # Security Note: We use xml.etree.ElementTree.Element/SubElement (aliased as UnsafeElement/UnsafeSubElement) for XML generation,
+    # Security Note: We use xml.etree.ElementTree.Element/SubElement for XML generation,
     # but use defusedxml.ElementTree for any parsing of untrusted data to prevent XXE.
-    opml_element = UnsafeElement("opml", version="2.0")
-    head_element = UnsafeSubElement(opml_element, "head")
-    title_element = UnsafeSubElement(head_element, "title")
+    opml_element = Element("opml", version="2.0")
+    head_element = SubElement(opml_element, "head")
+    title_element = SubElement(head_element, "title")
     title_element.text = "SheepVibes Feeds"
-    body_element = UnsafeSubElement(opml_element, "body")
+    body_element = SubElement(opml_element, "body")
 
     if tabs is None:
         # Eager load feeds to avoid N+1 queries
-        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(
-            Tab.order).all()
+        tabs = Tab.query.options(selectinload(
+            Tab.feeds)).order_by(Tab.order).all()
 
     for tab in tabs:
         # Skip tabs with no feeds
@@ -48,7 +46,7 @@ def _generate_opml_string(tabs=None):
             continue
 
         # Create a folder outline for the tab
-        folder_outline = UnsafeSubElement(body_element, "outline")
+        folder_outline = SubElement(body_element, "outline")
         folder_outline.set("text", tab.name)
         folder_outline.set("title", tab.name)
         # Sort feeds by name for deterministic output because relation order is not guaranteed
@@ -56,7 +54,7 @@ def _generate_opml_string(tabs=None):
 
         # Add feeds for this tab
         for feed in sorted_feeds:
-            feed_outline = UnsafeSubElement(folder_outline, "outline")
+            feed_outline = SubElement(folder_outline, "outline")
             feed_outline.set("text", feed.name)
             feed_outline.set("title", feed.name)
             feed_outline.set("xmlUrl", feed.url)
@@ -65,8 +63,9 @@ def _generate_opml_string(tabs=None):
                 feed_outline.set("htmlUrl", feed.site_link)
 
     # Convert the XML tree to a string
-    opml_string = safe_tostring(opml_element, encoding="utf-8",
-                                method="xml").decode("utf-8")
+    opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode(
+        "utf-8"
+    )
 
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)
@@ -80,8 +79,7 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "No file part in the request"}), 400)
     opml_file = request.files["file"]
     if opml_file.filename == "":
-        return None, (jsonify({"error":
-                               "No file selected for uploading"}), 400)
+        return None, (jsonify({"error": "No file selected for uploading"}), 400)
     if not opml_file:
         return None, (jsonify({"error": "File object is empty"}), 400)
 
@@ -90,10 +88,11 @@ def _validate_opml_file_request():
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
         return None, (
-            jsonify({
-                "error":
-                f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-            }),
+            jsonify(
+                {
+                    "error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                }
+            ),
             400,
         )
 
@@ -117,8 +116,8 @@ def import_opml():
     requested_tab_id_str = request.form.get("tab_id")
 
     # Call the service function
-    result, error_info = import_opml_service(opml_file.stream,
-                                             requested_tab_id_str)
+    result, error_info = import_opml_service(
+        opml_file.stream, requested_tab_id_str)
 
     if error_info:
         error_json, status_code = error_info
@@ -146,7 +145,8 @@ def export_opml():
 
     response = Response(opml_string, mimetype="application/xml")
     response.headers["Content-Disposition"] = (
-        'attachment; filename="sheepvibes_feeds.opml"')
+        'attachment; filename="sheepvibes_feeds.opml"'
+    )
 
     logger.info(
         "Successfully generated OPML export for %d feeds across %d tabs.",
@@ -181,12 +181,12 @@ def _get_autosave_directory():
                 abs_db_path = os.path.abspath(db_path)
                 data_dir = os.path.dirname(abs_db_path)
                 logger.debug(
-                    "Resolved autosave directory from SQLite path: %s",
-                    data_dir)
+                    "Resolved autosave directory from SQLite path: %s", data_dir
+                )
             except Exception:
                 logger.warning(
-                    "Could not resolve absolute path for SQLite DB: %s",
-                    db_path)
+                    "Could not resolve absolute path for SQLite DB: %s", db_path
+                )
 
     if not data_dir:
         # 3. Fall back to PROJECT_ROOT/data
@@ -196,7 +196,8 @@ def _get_autosave_directory():
 
     if not data_dir:
         logger.warning(
-            "Could not determine autosave directory. Skipping OPML autosave.")
+            "Could not determine autosave directory. Skipping OPML autosave."
+        )
         return None
 
     try:
@@ -237,8 +238,8 @@ def _write_atomically_with_lock(autosave_path, opml_string):
             try:
                 os.remove(temp_path)
             except OSError as e:
-                logger.warning("Failed to remove temporary file %s: %s",
-                               temp_path, e)
+                logger.warning(
+                    "Failed to remove temporary file %s: %s", temp_path, e)
     return False
 
 
