@@ -20,17 +20,14 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
-import defusedxml.ElementTree as ET
-import defusedxml.sax
-import feedparser
-import sqlalchemy.exc
-from dateutil import parser as date_parser
-from defusedxml.common import (
+from .utils.xml_utils import (
     DTDForbidden,
     EntitiesForbidden,
     ExternalReferenceForbidden,
+    ParseError,
+    safe_parse,
+    safe_sax_parse_string,
 )
-from sqlalchemy.exc import IntegrityError
 
 from .cache_utils import (
     invalidate_tab_feeds_cache,
@@ -484,16 +481,22 @@ def _parse_opml_root(opml_stream):
     """Parses the OPML stream and returns the root element."""
     try:
         # Use parse() directly on stream for better encoding handling
-        tree = ET.parse(opml_stream)
+        tree = safe_parse(opml_stream)
         root = tree.getroot()
         return root, None
-    except ET.ParseError as e:
-        logger.error("OPML import failed: Malformed XML. Error: %s",
-                     e,
-                     exc_info=True)
+    except (
+            ParseError,
+            DTDForbidden,
+            EntitiesForbidden,
+            ExternalReferenceForbidden,
+    ) as e:
+        logger.error(
+            "OPML import failed: Malformed or insecure XML. Error: %s",
+            _sanitize_for_log(str(e)),
+            exc_info=True)
         return None, (
             {
-                "error": "Malformed OPML file. Please check the file format."
+                "error": "Malformed or insecure OPML file. Please check the file format."
             },
             400,
         )
@@ -746,13 +749,7 @@ def _validate_xml_safety(content):
     try:
         # We use a no-op handler because we only care about the parsing process raising security exceptions
         handler = ContentHandler()
-        defusedxml.sax.parseString(
-            content,
-            handler,
-            forbid_dtd=False,
-            forbid_entities=True,
-            forbid_external=True,
-        )
+        safe_sax_parse_string(content, handler)
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
         logger.error("XML Security Violation detected: %s",
                      _sanitize_for_log(str(e)))
