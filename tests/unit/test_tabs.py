@@ -8,15 +8,9 @@ from backend.models import Tab
 
 
 @pytest.fixture(autouse=True)
-def disable_csrf():
+def disable_csrf(monkeypatch):
     """Disable CSRF protection for these tests."""
-    original_value = app.config.get("WTF_CSRF_ENABLED")
-    app.config["WTF_CSRF_ENABLED"] = False
-    yield
-    if original_value is not None:
-        app.config["WTF_CSRF_ENABLED"] = original_value
-    else:
-        app.config.pop("WTF_CSRF_ENABLED", None)
+    monkeypatch.setitem(app.config, "WTF_CSRF_ENABLED", False)
 
 
 def test_create_tab_success(client):
