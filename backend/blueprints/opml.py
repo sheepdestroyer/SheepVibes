@@ -2,7 +2,7 @@
 
 import logging
 import os
-from xml.etree.ElementTree import Element as UnsafeElement, SubElement as UnsafeSubElement
+from xml.etree.ElementTree import Element as UnsafeElement, SubElement as UnsafeSubElement, tostring
 
 import defusedxml.ElementTree as ET
 from filelock import FileLock, Timeout
@@ -63,8 +63,8 @@ def _generate_opml_string(tabs=None):
                 feed_outline.set("htmlUrl", feed.site_link)
 
     # Convert the XML tree to a string
-    opml_string = ET.tostring(opml_element, encoding="utf-8",
-                              method="xml").decode("utf-8")
+    opml_string = tostring(opml_element, encoding="utf-8",
+                           method="xml").decode("utf-8")
 
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)
