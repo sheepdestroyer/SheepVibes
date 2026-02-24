@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from ..feed_service import import_opml as import_opml_service
-from ..models import Tab, db
+from ..models import Tab
 
 # Security Note: UnsafeElement and UnsafeSubElement are used EXCLUSIVELY for
 # XML generation (export). All XML parsing must use safe_* functions from xml_utils.
