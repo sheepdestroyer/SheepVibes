@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import MagicMock
-from backend.models import Feed, Tab
+
+import pytest
+
 from backend.extensions import db
+from backend.models import Feed, Tab
+
 
 def test_update_feed_url_db_exception(client, mocker):
     """
@@ -34,12 +37,15 @@ def test_update_feed_url_db_exception(client, mocker):
 
     # 4. Execute: Call the endpoint with valid data
     # The URL needs to be valid enough to pass basic validation
-    response = client.put(f"/api/feeds/{feed_id}", json={"url": "http://new-url.com"})
+    response = client.put(f"/api/feeds/{feed_id}",
+                          json={"url": "http://new-url.com"})
 
     # 5. Verify the response
     assert response.status_code == 500, "Should return 500 Internal Server Error"
 
-    expected_error = {"error": "An internal error occurred while updating the feed."}
+    expected_error = {
+        "error": "An internal error occurred while updating the feed."
+    }
     assert response.json == expected_error, "Should return the standard error JSON"
 
     # Verify rollback was called - we can't easily spy on the session object method directly
