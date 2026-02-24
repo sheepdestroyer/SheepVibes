@@ -72,13 +72,22 @@ function createFeedItemElement(item, clickHandler) {
 // --- Feed Widget ---
 
 export function createFeedWidget(feed, callbacks) {
-    const { onEdit, onDelete, onMarkItemRead, onLoadMore } = callbacks;
     const widget = document.createElement('div');
     widget.classList.add('feed-widget');
     widget.dataset.feedId = feed.id;
     widget.dataset.tabId = feed.tab_id;
 
-    // Header with buttons
+    const header = createWidgetHeader(feed, callbacks);
+    widget.appendChild(header);
+
+    const list = createWidgetList(feed, callbacks);
+    widget.appendChild(list);
+
+    return widget;
+}
+
+function createWidgetHeader(feed, callbacks) {
+    const { onEdit, onDelete } = callbacks;
     const buttonContainer = document.createElement('div');
     buttonContainer.classList.add('feed-widget-buttons');
 
@@ -123,11 +132,12 @@ export function createFeedWidget(feed, callbacks) {
     }
 
     titleElement.appendChild(buttonContainer);
-    widget.appendChild(titleElement);
+    return titleElement;
+}
 
-    // List
+function createWidgetList(feed, callbacks) {
+    const { onLoadMore, onMarkItemRead } = callbacks;
     const itemList = document.createElement('ul');
-    widget.appendChild(itemList);
 
     const items = feed.items || [];
     itemList.dataset.offset = items.length;
@@ -165,7 +175,7 @@ export function createFeedWidget(feed, callbacks) {
         itemList.dispatchEvent(new Event('scroll'));
     }, 0);
 
-    return widget;
+    return itemList;
 }
 
 export function appendItemsToFeedWidget(widgetList, items, callbacks) {
