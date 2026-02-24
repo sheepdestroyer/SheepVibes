@@ -3,23 +3,24 @@ from datetime import timezone
 
 from backend.app import app
 from backend.constants import EVICTION_LIMIT_PER_RUN, MAX_ITEMS_PER_FEED
-from backend.feed_service import _enforce_feed_limit
+from backend.feed_service import _enforce_feed_limit, _get_ids_to_evict
 from backend.models import Feed, FeedItem, Tab, db
 
 
-def create_dummy_items(feed_id, count, start_date=None):
+def create_dummy_items(feed_id, count, start_date=None, start_index=0):
     """Helper to create dummy feed items."""
     items = []
     base_date = start_date or datetime.datetime.now(timezone.utc)
     for i in range(count):
+        idx = start_index + i
         # Create items with decreasing dates (newest first in loop, but we assign dates)
         # We want to simulate a feed. Let's make items with dates from base_date - i days.
-        pub_date = base_date - datetime.timedelta(days=i)
+        pub_date = base_date - datetime.timedelta(days=idx)
         item = FeedItem(
             feed_id=feed_id,
-            title=f"Item {i}",
-            link=f"http://example.com/item/{i}",
-            guid=f"guid-{i}",
+            title=f"Item {idx}",
+            link=f"http://example.com/item/{idx}",
+            guid=f"guid-{idx}",
             published_time=pub_date,
             fetched_time=base_date,  # fetched now
         )
@@ -158,3 +159,57 @@ def test_eviction_null_handling(client):
         # Verify a dated item (newest) is still there
         check_dated = FeedItem.query.filter_by(guid="guid-0").first()
         assert check_dated is not None
+
+
+def test_get_ids_to_evict_under_limit(client):  # noqa: ARG001
+    """Test _get_ids_to_evict when the feed items are strictly under the limit."""
+    with app.app_context():
+        feed = create_feed_with_tab()
+
+        create_dummy_items(feed.id, MAX_ITEMS_PER_FEED - 5)
+        ids = _get_ids_to_evict(feed.id)
+        assert len(ids) == 0
+
+
+def test_get_ids_to_evict_at_limit(client):  # noqa: ARG001
+    """Test _get_ids_to_evict when the feed items equal the exact limit."""
+    with app.app_context():
+        feed = create_feed_with_tab()
+
+        create_dummy_items(feed.id, MAX_ITEMS_PER_FEED)
+        ids = _get_ids_to_evict(feed.id)
+        assert len(ids) == 0
+
+
+def test_get_ids_to_evict_over_limit(client):  # noqa: ARG001
+    """Test _get_ids_to_evict when the feed items exceed the limit."""
+    with app.app_context():
+        feed = create_feed_with_tab()
+
+        # Create items exceeding the limit, but bounded by eviction limit
+        overage = EVICTION_LIMIT_PER_RUN + 1
+        create_dummy_items(feed.id, MAX_ITEMS_PER_FEED + overage)
+
+        ids = _get_ids_to_evict(feed.id)
+        # Should only fetch up to EVICTION_LIMIT_PER_RUN
+        assert len(ids) == EVICTION_LIMIT_PER_RUN
+
+        # Verify the IDs correspond to the correct slice of oldest items.
+        # Dummy items are created with GUIDs 'guid-0', 'guid-1', etc., where a lower
+        # index means a newer item. The eviction logic should target items starting
+        # from index `MAX_ITEMS_PER_FEED`.
+        all_items = db.session.scalars(
+            db.select(FeedItem).filter_by(feed_id=feed.id)).all()
+        id_to_index_map = {
+            item.id: int(item.guid.split("-")[1])
+            for item in all_items
+        }
+
+        # The returned IDs should correspond to indices from MAX_ITEMS_PER_FEED
+        # up to the eviction limit, and be sorted by index ascending (published_time desc).
+        evicted_indices = [id_to_index_map[item_id] for item_id in ids]
+        expected_indices = list(
+            range(MAX_ITEMS_PER_FEED,
+                  MAX_ITEMS_PER_FEED + EVICTION_LIMIT_PER_RUN))
+
+        assert evicted_indices == expected_indices
