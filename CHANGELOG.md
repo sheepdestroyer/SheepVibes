@@ -51,6 +51,13 @@
   - Updated GitHub workflow run-tests.yml to use Python 3.14
   - Updated Containerfile to use Python 3.14-slim base image
   - Updated documentation to reflect Python 3.14 migration
+
+## 2025-10-08
+
+- **Doc: Fix FeedItem.validate_datetime_utc Docstring**
+  - Updated the docstring for `FeedItem.validate_datetime_utc` in `backend/models.py` to accurately reflect its behavior (ensuring naive UTC objects for storage).
+  - Added unit test `test_validate_datetime_utc_validator` in `tests/unit/test_app.py` to verify the normalization logic for various datetime inputs.
+
 ## 2025-10-07
 
 - **Feat(frontend): Move unread counter to left of edit and close buttons**

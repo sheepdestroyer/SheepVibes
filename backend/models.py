@@ -179,14 +179,18 @@ class FeedItem(db.Model):
 
     @validates("published_time", "fetched_time")
     def validate_datetime_utc(self, key, dt):
-        """Validates that the datetime is UTC.
+        """Ensures that the datetime is a naive UTC object for database storage.
+
+        If the datetime is timezone-aware, it is converted to UTC and its
+        tzinfo is removed to make it naive. If it is already naive, it is
+        assumed to be UTC.
 
         Args:
             key (str): The name of the field being validated.
-            dt (datetime.datetime): The datetime object to validate.
+            dt (datetime.datetime | None): The datetime object to validate.
 
         Returns:
-            datetime.datetime: The validated datetime object.
+            datetime.datetime | None: A naive UTC datetime object, or None.
         """
         if dt is None:
             return None

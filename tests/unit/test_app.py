@@ -1045,6 +1045,35 @@ def test_to_iso_z_string_static_method():
     assert FeedItem.to_iso_z_string(None) is None
 
 
+def test_validate_datetime_utc_validator():
+    """Tests the FeedItem.validate_datetime_utc validator method."""
+    item = FeedItem()
+
+    # 1. Test with a naive datetime (should be returned as-is)
+    naive_dt = datetime.datetime(2023, 1, 1, 12, 0, 0)
+    result = item.validate_datetime_utc("published_time", naive_dt)
+    assert result == naive_dt
+    assert result.tzinfo is None
+
+    # 2. Test with a timezone-aware datetime (not UTC)
+    tz_est = datetime.timezone(datetime.timedelta(hours=-5))
+    aware_dt_est = datetime.datetime(2023, 3, 15, 10, 0, 0, tzinfo=tz_est)
+    result = item.validate_datetime_utc("published_time", aware_dt_est)
+    # Should be 15:00 UTC and naive
+    assert result == datetime.datetime(2023, 3, 15, 15, 0, 0)
+    assert result.tzinfo is None
+
+    # 3. Test with a timezone-aware UTC datetime
+    aware_dt_utc = datetime.datetime(2023, 5, 20, 14, 30, 0, tzinfo=datetime.timezone.utc)
+    result = item.validate_datetime_utc("published_time", aware_dt_utc)
+    # Should be 14:30 and naive
+    assert result == datetime.datetime(2023, 5, 20, 14, 30, 0)
+    assert result.tzinfo is None
+
+    # 4. Test with None input
+    assert item.validate_datetime_utc("published_time", None) is None
+
+
 # --- Tests for feed_service functions ---
 
 
