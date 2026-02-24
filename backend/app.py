@@ -203,6 +203,7 @@ if not app.config.get("TESTING"):
 
 # --- Security Headers ---
 
+
 @app.before_request
 def csrf_protect():
     """Verify CSRF token for unsafe methods."""
