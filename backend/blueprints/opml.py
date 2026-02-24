@@ -78,8 +78,7 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "No file part in the request"}), 400)
     opml_file = request.files["file"]
     if opml_file.filename == "":
-        return None, (jsonify({"error":
-                               "No file selected for uploading"}), 400)
+        return None, (jsonify({"error": "No file selected for uploading"}), 400)
     if not opml_file:
         return None, (jsonify({"error": "File object is empty"}), 400)
 
@@ -88,10 +87,7 @@ def _validate_opml_file_request():
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
         return None, (
-            jsonify({
-                "error":
-                f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-            }),
+            jsonify({"error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"}),
             400,
         )
 
@@ -142,7 +138,7 @@ def export_opml():
         logger.exception("Error during OPML generation for export")
         return jsonify({"error": "Failed to generate OPML export"}), 500
 
-    response = Response(opml_string, mimetype="application/xml")
+    response = Response(opml_string, mimetype="text/x-opml")
     response.headers["Content-Disposition"] = (
         'attachment; filename="sheepvibes_feeds.opml"')
 
