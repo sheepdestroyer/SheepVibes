@@ -161,7 +161,7 @@ def test_eviction_null_handling(client):
         assert check_dated is not None
 
 
-def test_get_ids_to_evict_under_limit(client):
+def test_get_ids_to_evict_under_limit(client):  # noqa: ARG001
     """Test _get_ids_to_evict when the feed items are strictly under the limit."""
     with app.app_context():
         feed = create_feed_with_tab()
@@ -171,7 +171,7 @@ def test_get_ids_to_evict_under_limit(client):
         assert len(ids) == 0
 
 
-def test_get_ids_to_evict_at_limit(client):
+def test_get_ids_to_evict_at_limit(client):  # noqa: ARG001
     """Test _get_ids_to_evict when the feed items equal the exact limit."""
     with app.app_context():
         feed = create_feed_with_tab()
@@ -181,7 +181,7 @@ def test_get_ids_to_evict_at_limit(client):
         assert len(ids) == 0
 
 
-def test_get_ids_to_evict_over_limit(client):
+def test_get_ids_to_evict_over_limit(client):  # noqa: ARG001
     """Test _get_ids_to_evict when the feed items exceed the limit."""
     with app.app_context():
         feed = create_feed_with_tab()
@@ -208,4 +208,4 @@ def test_get_ids_to_evict_over_limit(client):
                                   EVICTION_LIMIT_PER_RUN]
         ]
 
-        assert set(ids) == set(expected_ids)
+        assert ids == expected_ids
