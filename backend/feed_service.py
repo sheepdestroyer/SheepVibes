@@ -49,7 +49,7 @@ from .models import Feed, FeedItem, Tab, db
 from .sse import announcer
 
 if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element  # noqa: F401, skipcq: BAN-B405
+    from xml.etree.ElementTree import Element  # skipcq: BAN-B405
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -1473,17 +1473,25 @@ def _save_items_individually(feed_db_obj, items_to_add):
     return count
 
 
-def _get_ids_to_evict(feed_db_obj: Feed) -> list[int]:
+def _get_ids_to_evict(feed_id: int) -> list[int]:
     """Identifies feed item IDs to evict based on the feed limit.
 
+    Ordering semantics: Older published items are evicted first, using fetched_time
+    and ID as tie-breakers.
+    
+    We use .limit(EVICTION_LIMIT_PER_RUN) instead of .limit(-1) or .limit(None) to:
+    1. Provide a bounded result set, avoiding OOM on massive feeds.
+    2. Avoid SQLite-specific LIMIT -1 behavior.
+    This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
+
     Args:
-        feed_db_obj (Feed): The feed object to check.
+        feed_id (int): The ID of the feed to check.
 
     Returns:
         list[int]: A list of FeedItem IDs to be evicted.
     """
     ids_to_evict_rows = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+        FeedItem.id).filter_by(feed_id=feed_id).order_by(
             FeedItem.published_time.desc().nullslast(),
             FeedItem.fetched_time.desc().nullslast(),
             FeedItem.id.desc(),
@@ -1497,16 +1505,12 @@ def _enforce_feed_limit(feed_db_obj):
 
     Optimization: Identify items to evict by offsetting from the newest items,
     avoiding a separate COUNT(*) query.
-
-    Note: This deletes at most EVICTION_LIMIT_PER_RUN items per invocation.
-    For massively overgrown feeds, multiple runs will be required to fully
-    enforce the limit (eventual consistency).
     """
     # We want to keep the newest MAX_ITEMS_PER_FEED items.
     # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
 
-    ids_to_evict = _get_ids_to_evict(feed_db_obj)
+    ids_to_evict = _get_ids_to_evict(feed_db_obj.id)
 
     if not ids_to_evict:
         return

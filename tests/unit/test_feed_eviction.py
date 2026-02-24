@@ -167,7 +167,7 @@ def test_get_ids_to_evict_under_limit(client):
         feed = create_feed_with_tab()
 
         create_dummy_items(feed.id, MAX_ITEMS_PER_FEED - 5)
-        ids = _get_ids_to_evict(feed)
+        ids = _get_ids_to_evict(feed.id)
         assert len(ids) == 0
 
 
@@ -177,7 +177,7 @@ def test_get_ids_to_evict_at_limit(client):
         feed = create_feed_with_tab()
 
         create_dummy_items(feed.id, MAX_ITEMS_PER_FEED)
-        ids = _get_ids_to_evict(feed)
+        ids = _get_ids_to_evict(feed.id)
         assert len(ids) == 0
 
 
@@ -194,7 +194,7 @@ def test_get_ids_to_evict_over_limit(client):
         overage = EVICTION_LIMIT_PER_RUN + 1
         create_dummy_items(feed.id, MAX_ITEMS_PER_FEED + overage)
 
-        ids = _get_ids_to_evict(feed)
+        ids = _get_ids_to_evict(feed.id)
         # Should only fetch up to EVICTION_LIMIT_PER_RUN
         assert len(ids) == EVICTION_LIMIT_PER_RUN
 
