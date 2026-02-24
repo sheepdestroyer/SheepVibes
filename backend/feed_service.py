@@ -1501,11 +1501,9 @@ def _get_ids_to_evict(feed_id: int) -> list[int]:
 
 
 def _enforce_feed_limit(feed_db_obj: Feed):
-    """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
+    """Enforces MAX_ITEMS_PER_FEED by evicting oldest items, utilizing `_get_ids_to_evict`.
 
-    Optimization: Identify items to evict by offsetting from the newest items,
-    avoiding a separate COUNT(*) query.
-    """
+    This avoids a separate COUNT(*) query and ensures eventual consistency."""
     # We want to keep the newest MAX_ITEMS_PER_FEED items.
     # Anything beyond that (ordered by newest first) should be evicted.
     # We use offset() to skip the newest items and select the rest.
