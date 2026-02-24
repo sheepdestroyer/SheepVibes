@@ -2,6 +2,7 @@ import atexit
 import json
 import logging
 import os
+import secrets
 
 from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -201,6 +202,40 @@ if not app.config.get("TESTING"):
             scheduler.shutdown()
 
 # --- Security Headers ---
+
+
+@app.before_request
+def csrf_protect():
+    """Verify CSRF token for unsafe methods."""
+    if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+        # Skip CSRF check for tests unless explicitly enabled
+        if app.config.get("TESTING") and not app.config.get("CSRF_ENABLED"):
+            return
+
+        token_cookie = request.cookies.get("csrf_token")
+        token_header = request.headers.get("X-CSRFToken")
+
+        if not token_cookie or not token_header or token_cookie != token_header:
+            logger.warning("CSRF validation failed for %s %s", request.method,
+                           request.path)
+            return jsonify({"error": "CSRF token missing or incorrect"}), 403
+
+
+@app.after_request
+def set_csrf_cookie(response):
+    """Set CSRF cookie if missing."""
+    # Only set cookie if it's not already present in the request
+    # Use request.cookies to check presence, but set on response
+    if "csrf_token" not in request.cookies:
+        response.set_cookie(
+            "csrf_token",
+            secrets.token_hex(32),
+            httponly=False,  # Accessible to JS
+            samesite="Lax",
+            secure=request.is_secure,
+        )
+    return response
+
 
 CSP_POLICY = ("default-src 'self'; "
               "img-src * data:; "
