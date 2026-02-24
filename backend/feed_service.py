@@ -1496,17 +1496,16 @@ def _enforce_feed_limit(feed_db_obj):
     # 1. Provide a bounded result set, avoiding OOM on massive feeds.
     # 2. Avoid SQLite-specific LIMIT -1 behavior.
     # This means we only delete up to EVICTION_LIMIT_PER_RUN items per update, which acts as eventual consistency.
-    ids_to_evict_rows = (db.session.query(
-        FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
-            FeedItem.published_time.desc().nullslast(),
-            FeedItem.fetched_time.desc().nullslast(),
-            FeedItem.id.desc(),
-    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN).all())
+    stmt = (db.select(FeedItem.id).filter_by(feed_id=feed_db_obj.id).order_by(
+        FeedItem.published_time.desc().nullslast(),
+        FeedItem.fetched_time.desc().nullslast(),
+        FeedItem.id.desc(),
+    ).offset(MAX_ITEMS_PER_FEED).limit(EVICTION_LIMIT_PER_RUN))
 
-    if not ids_to_evict_rows:
+    ids_to_evict = list(db.session.scalars(stmt))
+
+    if not ids_to_evict:
         return
-
-    ids_to_evict = [r.id for r in ids_to_evict_rows]
 
     # Chunk the deletions to avoid hitting SQLite's parameter limit (default 999)
     chunk_size = DELETE_CHUNK_SIZE

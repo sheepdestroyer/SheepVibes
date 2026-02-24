@@ -2,9 +2,8 @@
 
 import logging
 import os
-from xml.etree.ElementTree import Element, SubElement
+from xml.etree.ElementTree import Element, SubElement, tostring  # skipcq: BAN-B405
 
-import defusedxml.ElementTree as ET
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
@@ -63,8 +62,8 @@ def _generate_opml_string(tabs=None):
                 feed_outline.set("htmlUrl", feed.site_link)
 
     # Convert the XML tree to a string
-    opml_string = ET.tostring(opml_element, encoding="utf-8",
-                              method="xml").decode("utf-8")
+    opml_string = tostring(opml_element, encoding="utf-8",
+                           method="xml").decode("utf-8")
 
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)
