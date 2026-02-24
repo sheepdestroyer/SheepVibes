@@ -161,34 +161,33 @@ def test_eviction_null_handling(client):
         assert check_dated is not None
 
 
-def test_get_ids_to_evict(client):
-    """Test the helper function _get_ids_to_evict directly."""
+def test_get_ids_to_evict_under_limit(client):
+    """Test _get_ids_to_evict when the feed items are strictly under the limit."""
     with app.app_context():
         feed = create_feed_with_tab()
 
-        # Scenario 1: Under limit
         create_dummy_items(feed.id, MAX_ITEMS_PER_FEED - 5)
         ids = _get_ids_to_evict(feed)
         assert len(ids) == 0
 
-        # Scenario 2: At limit
-        create_dummy_items(
-            feed.id, 5, start_index=MAX_ITEMS_PER_FEED - 5
-        )  # Brings total to MAX
+
+def test_get_ids_to_evict_at_limit(client):
+    """Test _get_ids_to_evict when the feed items equal the exact limit."""
+    with app.app_context():
+        feed = create_feed_with_tab()
+
+        create_dummy_items(feed.id, MAX_ITEMS_PER_FEED)
         ids = _get_ids_to_evict(feed)
         assert len(ids) == 0
 
-        # Scenario 3: Over limit
-        # Add 10 more items. Total = MAX + 10
-        # The create_dummy_items adds items with published_time=now, now-1day...
-        # So newly added items are "newer" or "older" depending on how I implement it.
-        # create_dummy_items uses: base_date - i days.
-        # If I call it again, I need to make sure dates don't conflict or are ordered correctly.
-        # Let's just clear and rebuild for simplicity in a new feed or similar.
 
-        # Cleaner approach for Scenario 3:
-        # Clear items
-        FeedItem.query.delete()
+def test_get_ids_to_evict_over_limit(client):
+    """Test _get_ids_to_evict when the feed items exceed the limit."""
+    with app.app_context():
+        feed = create_feed_with_tab()
+
+        # Clear items for *this feed* specifically just in case
+        FeedItem.query.filter_by(feed_id=feed.id).delete()
         db.session.commit()
 
         # Create MAX + 10 items
@@ -197,13 +196,12 @@ def test_get_ids_to_evict(client):
         ids = _get_ids_to_evict(feed)
         assert len(ids) == 10
 
-        # Verify the IDs correspond to the oldest items
-        # In create_dummy_items: Item 0 is newest, Item N is oldest.
-        # We expect Item MAX to Item MAX+9 to be in the list.
-
-        all_items = FeedItem.query.order_by(
-            FeedItem.published_time.desc()).all()
+        # Verify the IDs correspond to the oldest items for *this feed*
+        all_items = FeedItem.query.filter_by(feed_id=feed.id).order_by(
+            FeedItem.published_time.desc()
+        ).all()
         # all_items[0] is newest. all_items[MAX] is the first one to be evicted.
         expected_ids = [item.id for item in all_items[MAX_ITEMS_PER_FEED:]]
 
         assert set(ids) == set(expected_ids)
+
