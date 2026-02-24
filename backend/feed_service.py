@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
 OpmlStackItem = tuple[list["Element"], int, str]
 
+
 @dataclass
 class OpmlImportState:
     """Holds the shared state for OPML processing."""
