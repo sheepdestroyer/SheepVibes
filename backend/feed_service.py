@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     # Security Note: xml.etree.ElementTree is used here EXCLUSIVELY for type hinting.
-    # All actual XML parsing in this module MUST use defusedxml.ElementTree (aliased as ET)
+    # All actual XML parsing in this module MUST use defusedxml.ElementTree (aliased as SafeET)
     # or defusedxml.sax to prevent XXE and other XML-based attacks.
     from xml.etree.ElementTree import Element  # skipcq: BAN-B405
 
