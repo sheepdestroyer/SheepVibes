@@ -64,7 +64,9 @@ def _generate_opml_string(tabs=None):
                 feed_outline.set("htmlUrl", feed.site_link)
 
     # Use unsafe_tostring because we are strictly generating XML, not parsing it.
-    opml_string = unsafe_tostring(opml_element, encoding="unicode", method="xml")
+    opml_string = unsafe_tostring(opml_element,
+                                  encoding="unicode",
+                                  method="xml")
 
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)

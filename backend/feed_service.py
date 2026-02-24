@@ -20,13 +20,13 @@ from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
 
-from defusedxml.common import DefusedXmlException
 import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
 import sqlalchemy.exc
 from dateutil import parser as date_parser
 from defusedxml.common import (
+    DefusedXmlException,
     DTDForbidden,
     EntitiesForbidden,
     ExternalReferenceForbidden,
