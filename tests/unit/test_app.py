@@ -1723,7 +1723,7 @@ def test_import_opml_malformed_xml(client):
                            data={"file": opml_file},
                            content_type="multipart/form-data")
     assert response.status_code == 400
-    assert "Malformed OPML file" in response.json["error"]
+    assert "Malformed or insecure OPML file" in response.json["error"]
 
 
 @patch("backend.feed_service.fetch_and_update_feed")
