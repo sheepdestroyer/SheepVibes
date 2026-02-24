@@ -1500,7 +1500,7 @@ def _get_ids_to_evict(feed_id: int) -> list[int]:
     return list(db.session.scalars(stmt))
 
 
-def _enforce_feed_limit(feed_db_obj):
+def _enforce_feed_limit(feed_db_obj: Feed):
     """Enforces MAX_ITEMS_PER_FEED by evicting oldest items.
 
     Optimization: Identify items to evict by offsetting from the newest items,

@@ -194,18 +194,18 @@ def test_get_ids_to_evict_over_limit(client):  # noqa: ARG001
         # Should only fetch up to EVICTION_LIMIT_PER_RUN
         assert len(ids) == EVICTION_LIMIT_PER_RUN
 
-        # Verify the IDs correspond to the oldest items for *this feed*
-        all_items = db.session.scalars(db.select(FeedItem).filter_by(feed_id=feed.id).order_by(
-            FeedItem.published_time.desc().nullslast(),
-            FeedItem.fetched_time.desc().nullslast(),
-            FeedItem.id.desc(),
-        )).all()
-        # all_items[0] is newest. all_items[MAX] is the first one to be evicted.
-        # It takes items from MAX_ITEMS_PER_FEED up to MAX_ITEMS_PER_FEED + EVICTION_LIMIT_PER_RUN
-        expected_ids = [
-            item.id
-            for item in all_items[MAX_ITEMS_PER_FEED:MAX_ITEMS_PER_FEED +
-                                  EVICTION_LIMIT_PER_RUN]
-        ]
+        # Verify the IDs correspond to the correct slice of oldest items.
+        # Dummy items are created with GUIDs 'guid-0', 'guid-1', etc., where a lower
+        # index means a newer item. The eviction logic should target items starting
+        # from index `MAX_ITEMS_PER_FEED`.
+        all_items = db.session.scalars(db.select(FeedItem).filter_by(feed_id=feed.id)).all()
+        id_to_index_map = {item.id: int(item.guid.split('-')[1]) for item in all_items}
 
-        assert ids == expected_ids
+        # The returned IDs should correspond to indices from MAX_ITEMS_PER_FEED
+        # up to the eviction limit, and be sorted by index ascending (published_time desc).
+        evicted_indices = [id_to_index_map[item_id] for item_id in ids]
+        expected_indices = list(
+            range(MAX_ITEMS_PER_FEED, MAX_ITEMS_PER_FEED + EVICTION_LIMIT_PER_RUN)
+        )
+
+        assert evicted_indices == expected_indices
