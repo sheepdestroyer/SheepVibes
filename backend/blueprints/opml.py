@@ -78,8 +78,7 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "No file part in the request"}), 400)
     opml_file = request.files["file"]
     if opml_file.filename == "":
-        return None, (jsonify({"error":
-                               "No file selected for uploading"}), 400)
+        return None, (jsonify({"error": "No file selected for uploading"}), 400)
     if not opml_file:
         return None, (jsonify({"error": "File object is empty"}), 400)
 
