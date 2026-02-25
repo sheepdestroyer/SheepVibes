@@ -214,7 +214,10 @@ class FeedItem(db.Model):
         # it needs conversion.
         if dt_val.tzinfo is None:
             # Naive datetime from DB (assumed UTC), make it aware UTC
-            dt_val_utc = dt_val.replace(tzinfo=timezone.utc)
+            # Optimization: If it's a naive datetime, we assume it's UTC.
+            # isoformat() on naive datetime returns 'YYYY-MM-DDTHH:MM:SS.mmmmmm'.
+            # We simply append 'Z' to denote UTC.
+            return dt_val.isoformat() + "Z"
         else:
             # Aware datetime (e.g. passed directly, not from DB), convert to UTC
             dt_val_utc = dt_val.astimezone(timezone.utc)
