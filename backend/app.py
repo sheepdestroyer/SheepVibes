@@ -2,9 +2,10 @@ import atexit
 import json
 import logging
 import os
+import secrets
 
 from filelock import FileLock, Timeout
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -200,6 +201,53 @@ if not app.config.get("TESTING"):
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
 
+# --- CSRF Protection ---
+
+
+@app.before_request
+def validate_csrf():
+    """Validates CSRF token for unsafe methods."""
+    # Skip validation if testing, unless explicitly enabled
+    if app.config.get("TESTING") and not app.config.get("CSRF_ENABLED"):
+        return
+
+    # Skip validation for safe methods
+    if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+        return
+
+    # Get token from cookie and header
+    cookie_token = request.cookies.get("csrf_token")
+    header_token = request.headers.get("X-CSRFToken")
+
+    # Validate
+    if not cookie_token or not header_token or cookie_token != header_token:
+        logger.warning(
+            "CSRF validation failed: Missing or mismatched tokens. IP: %s, Path: %s, Method: %s",
+            request.remote_addr,
+            request.path,
+            request.method,
+        )
+        abort(403, description="CSRF validation failed")
+
+
+@app.after_request
+def set_csrf_cookie(response):
+    """Sets the CSRF token cookie if not present."""
+    if "csrf_token" not in request.cookies:
+        token = secrets.token_hex(32)
+        # HttpOnly=False allows JS to read it for double-submit pattern
+        # SameSite='Lax' protects against cross-site requests while allowing top-level navigation
+        response.set_cookie(
+            "csrf_token",
+            token,
+            httponly=False,
+            samesite="Lax",
+            secure=request.
+            is_secure,  # Only send over HTTPS if connection is secure
+        )
+    return response
+
+
 # --- Security Headers ---
 
 CSP_POLICY = ("default-src 'self'; "
@@ -274,6 +322,12 @@ def add_security_headers(response):
 
 
 # --- Error Handlers ---
+
+
+@app.errorhandler(403)
+def forbidden_error(error):
+    """Handles 403 Forbidden errors with a JSON response."""
+    return jsonify({"error": str(error.description)}), 403
 
 
 @app.errorhandler(404)
