@@ -36,6 +36,7 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config["PROJECT_ROOT"] = os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".."))
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
 
 # Configure CORS with specific allowed origins
 allowed_origins_str = os.environ.get(
@@ -57,6 +58,11 @@ if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
     logger.info(
         "TESTING mode: Using in-memory SQLite database and SimpleCache.")
 else:
+    if app.config["SECRET_KEY"] == "dev-secret-key":
+        logger.warning(
+            "SECRET_KEY is using the default 'dev-secret-key'. "
+            "For production, please set the SECRET_KEY environment variable.")
+
     # Existing database configuration logic
     default_db_path_in_container = "/app/data/sheepvibes.db"
     db_path_env = os.environ.get("DATABASE_PATH")
