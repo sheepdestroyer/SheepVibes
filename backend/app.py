@@ -242,7 +242,8 @@ def set_csrf_cookie(response):
             token,
             httponly=False,
             samesite="Lax",
-            secure=request.is_secure,  # Only send over HTTPS if connection is secure
+            secure=request.
+            is_secure,  # Only send over HTTPS if connection is secure
         )
     return response
 
