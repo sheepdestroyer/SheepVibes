@@ -1424,9 +1424,8 @@ def _save_items_to_db(feed_db_obj, items_to_add):
     return committed_count
 
 
-def _save_items_individually(feed_db_obj, items_to_add):
-    """Helper to save items one by one after a batch failure."""
-    # Ensure last_updated_time is updated even if items fail
+def _update_feed_last_updated_time(feed_db_obj):
+    """Updates the feed's last_updated_time."""
     try:
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         db.session.add(feed_db_obj)
@@ -1438,30 +1437,47 @@ def _save_items_individually(feed_db_obj, items_to_add):
         )
         db.session.rollback()  # Rollback if updating last_updated_time fails
 
+
+def _save_single_item(item, feed_name):
+    """Saves a single item, handling errors gracefully.
+
+    Returns:
+        bool: True if the item was saved successfully, False otherwise.
+    """
+    try:
+        db.session.add(item)
+        db.session.commit()
+        logger.debug("Individually added item: %s",
+                     _sanitize_for_log(item.title[:50]))
+        return True
+    except IntegrityError as ie:
+        db.session.rollback()
+        logger.error(
+            "Failed to add item '%s' for feed '%s' (link: %s, guid: %s): %s",
+            _sanitize_for_log(item.title[:100]),
+            _sanitize_for_log(feed_name),
+            _sanitize_for_log(item.link),
+            _sanitize_for_log(item.guid),
+            _sanitize_for_log(str(ie)),
+        )
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(
+            "Generic error adding item '%s'",
+            _sanitize_for_log(item.title[:100]),
+        )
+    return False
+
+
+def _save_items_individually(feed_db_obj, items_to_add):
+    """Helper to save items one by one after a batch failure."""
+    # Ensure last_updated_time is updated even if items fail
+    _update_feed_last_updated_time(feed_db_obj)
+
     count = 0
     for item in items_to_add:
-        try:
-            db.session.add(item)
-            db.session.commit()
+        if _save_single_item(item, feed_db_obj.name):
             count += 1
-            logger.debug("Individually added item: %s",
-                         _sanitize_for_log(item.title[:50]))
-        except IntegrityError as ie:
-            db.session.rollback()
-            logger.error(
-                "Failed to add item '%s' for feed '%s' (link: %s, guid: %s): %s",
-                _sanitize_for_log(item.title[:100]),
-                _sanitize_for_log(feed_db_obj.name),
-                _sanitize_for_log(item.link),
-                _sanitize_for_log(item.guid),
-                _sanitize_for_log(str(ie)),
-            )
-        except sqlalchemy.exc.SQLAlchemyError:
-            db.session.rollback()
-            logger.exception(
-                "Generic error adding item '%s'",
-                _sanitize_for_log(item.title[:100]),
-            )
 
     if count > 0:
         logger.info(
