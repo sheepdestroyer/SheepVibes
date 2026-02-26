@@ -40,8 +40,10 @@ app.config["PROJECT_ROOT"] = os.path.abspath(
 
 # Set secret key (required for sessions and can be used for other cryptographic needs)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
-if app.config["SECRET_KEY"] == "dev-secret-key" and not app.config.get("TESTING"):
-    logger.warning("Using default development SECRET_KEY. Change this in production!")
+if app.config["SECRET_KEY"] == "dev-secret-key" and not app.config.get(
+        "TESTING"):
+    logger.warning(
+        "Using default development SECRET_KEY. Change this in production!")
 
 # Configure CORS with specific allowed origins
 allowed_origins_str = os.environ.get(
@@ -230,7 +232,8 @@ def check_csrf():
         token = request.headers.get(CSRF_HEADER_NAME)
         cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
 
-        if not token or not cookie_token or not secrets.compare_digest(token, cookie_token):
+        if (not token or not cookie_token
+                or not secrets.compare_digest(token, cookie_token)):
             return jsonify({"error": "CSRF token missing or invalid"}), 403
 
 
