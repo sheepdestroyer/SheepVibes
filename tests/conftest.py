@@ -41,6 +41,7 @@ def mock_dns(mocker):
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
+    app.config["CSRF_ENABLED"] = False  # Disable CSRF for tests by default
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
