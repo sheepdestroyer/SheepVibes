@@ -207,6 +207,7 @@ export function renderTabs(tabs, activeTabId, callbacks) {
 
     const sortedTabs = [...tabs].sort((a, b) => a.order - b.order);
 
+    const fragment = document.createDocumentFragment();
     sortedTabs.forEach(tab => {
         const button = document.createElement('button');
         button.textContent = tab.name;
@@ -219,8 +220,9 @@ export function renderTabs(tabs, activeTabId, callbacks) {
             button.appendChild(badge);
         }
 
-        tabsContainer.appendChild(button);
+        fragment.appendChild(button);
     });
+    tabsContainer.appendChild(fragment);
 
     renameTabButton.disabled = false;
     deleteTabButton.disabled = tabs.length <= 1;
