@@ -2,6 +2,7 @@ import atexit
 import json
 import logging
 import os
+import secrets
 
 from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -36,6 +37,11 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config["PROJECT_ROOT"] = os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".."))
+
+# Set secret key (required for sessions and can be used for other cryptographic needs)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
+if app.config["SECRET_KEY"] == "dev-secret-key" and not app.config.get("TESTING"):
+    logger.warning("Using default development SECRET_KEY. Change this in production!")
 
 # Configure CORS with specific allowed origins
 allowed_origins_str = os.environ.get(
@@ -199,6 +205,53 @@ if not app.config.get("TESTING"):
             atexit.register(scheduler.shutdown)
         except (KeyboardInterrupt, SystemExit):
             scheduler.shutdown()
+
+# --- CSRF Protection ---
+
+CSRF_HEADER_NAME = "X-CSRFToken"
+CSRF_COOKIE_NAME = "csrf_token"
+
+
+def generate_csrf_token():
+    """Generates a cryptographically secure CSRF token."""
+    return secrets.token_hex(32)
+
+
+@app.before_request
+def check_csrf():
+    """
+    Validates CSRF token for state-changing requests (Double Submit Cookie pattern).
+    """
+    if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+        # Skip CSRF check in testing unless explicitly enabled
+        if app.config.get("TESTING") and not app.config.get("CSRF_ENABLED"):
+            return
+
+        token = request.headers.get(CSRF_HEADER_NAME)
+        cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
+
+        if not token or not cookie_token or not secrets.compare_digest(token, cookie_token):
+            return jsonify({"error": "CSRF token missing or invalid"}), 403
+
+
+@app.after_request
+def set_csrf_cookie(response):
+    """
+    Sets a CSRF cookie on the response if not already present.
+    The cookie is NOT HttpOnly so that JavaScript can read it to set the header.
+    """
+    if CSRF_COOKIE_NAME not in request.cookies:
+        token = generate_csrf_token()
+        response.set_cookie(
+            CSRF_COOKIE_NAME,
+            token,
+            # Allow JS access (HttpOnly=False)
+            httponly=False,
+            samesite="Lax",
+            secure=request.is_secure,  # Secure only if on HTTPS
+        )
+    return response
+
 
 # --- Security Headers ---
 
