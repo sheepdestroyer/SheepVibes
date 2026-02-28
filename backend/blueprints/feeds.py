@@ -16,6 +16,7 @@ from ..feed_service import (
     fetch_feed,
     process_feed_entries,
     update_all_feeds,
+    is_valid_feed_url,
 )
 from ..models import Feed, FeedItem, Tab
 from ..sse import announcer
@@ -35,6 +36,11 @@ def add_feed():
         return jsonify({"error": "Missing feed URL"}), 400
 
     feed_url = data["url"].strip()
+
+    # Validate feed URL structure/scheme to prevent SSRF and Stored XSS
+    if not is_valid_feed_url(feed_url):
+        return jsonify({"error": "Invalid feed URL scheme or structure"}), 400
+
     tab_id = data.get("tab_id")  # Optional tab ID
 
     # Determine target tab ID
@@ -197,6 +203,10 @@ def update_feed_url(feed_id):
         return jsonify({"error": "Missing or invalid feed URL"}), 400
 
     new_url = data["url"].strip()
+
+    # Validate feed URL structure/scheme to prevent SSRF and Stored XSS
+    if not is_valid_feed_url(new_url):
+        return jsonify({"error": "Invalid feed URL scheme or structure"}), 400
 
     # Check if the new URL is already used by another feed
     existing_feed = Feed.query.filter(
