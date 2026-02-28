@@ -1,16 +1,15 @@
 import pytest
-from backend.models import Feed, Tab
-from backend.extensions import db
+
 from backend.app import app
+from backend.extensions import db
+from backend.models import Feed, Tab
+
 
 def test_add_feed_invalid_url_scheme_prevented(client, mocker):
     """Test that feeds cannot be added with malicious URL schemes (Stored XSS prevention)."""
     malicious_url = "javascript:alert('XSS')"
 
-    response = client.post(
-        "/api/feeds",
-        json={"url": malicious_url}
-    )
+    response = client.post("/api/feeds", json={"url": malicious_url})
 
     assert response.status_code == 400
     assert "error" in response.json
@@ -18,6 +17,7 @@ def test_add_feed_invalid_url_scheme_prevented(client, mocker):
     with app.app_context():
         feed = Feed.query.filter_by(url=malicious_url).first()
         assert feed is None
+
 
 def test_update_feed_invalid_url_scheme_prevented(client, mocker):
     """Test that existing feeds cannot be updated with malicious URL schemes."""
@@ -35,10 +35,7 @@ def test_update_feed_invalid_url_scheme_prevented(client, mocker):
 
     malicious_url = "javascript:alert('XSS')"
 
-    response = client.put(
-        f"/api/feeds/{feed_id}",
-        json={"url": malicious_url}
-    )
+    response = client.put(f"/api/feeds/{feed_id}", json={"url": malicious_url})
 
     assert response.status_code == 400
     assert "error" in response.json
