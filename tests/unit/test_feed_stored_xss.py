@@ -1,4 +1,5 @@
 import pytest
+
 from backend.models import Feed, Tab, db
 
 
@@ -17,7 +18,10 @@ def test_add_feed_invalid_scheme_stored_xss(client):
     malicious_url = "javascript:alert('XSS')"
     response = client.post(
         "/api/feeds",
-        json={"url": malicious_url, "tab_id": tab_id},
+        json={
+            "url": malicious_url,
+            "tab_id": tab_id
+        },
     )
 
     assert response.status_code == 400
@@ -39,7 +43,9 @@ def test_update_feed_url_invalid_scheme_stored_xss(client):
     db.session.add(tab)
     db.session.commit()
 
-    feed = Feed(tab_id=tab.id, name="Test Feed", url="https://example.com/feed")
+    feed = Feed(tab_id=tab.id,
+                name="Test Feed",
+                url="https://example.com/feed")
     db.session.add(feed)
     db.session.commit()
     feed_id = feed.id
