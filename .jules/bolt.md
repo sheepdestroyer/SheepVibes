@@ -1,11 +1,3 @@
-## 2026-01-26 - Optimized to_dict serialization
-**Learning:** `Feed.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of feeds.
-**Action:** Always pre-calculate aggregate data (like counts) in the main route handler and pass it to `to_dict` to keep serialization O(1).
-
-## 2026-02-10 - Avoid COUNT(*) for limit enforcement
-**Learning:** When enforcing a limit on a collection (e.g., "keep top N items"), counting the collection first is redundant. Instead, query for items *beyond* the offset N directly.
-**Action:** Use a query with `order_by(DESC).offset(N).limit(BOUND)` to fetch IDs of excess items, then delete them using `DELETE WHERE id IN (...)`. Fetching IDs first avoids "subquery in DELETE" locking issues on SQLite and limiting the result set avoids OOM on massive collections.
-
-## 2026-02-14 - Optimized Tab.to_dict serialization
-**Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
-**Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+## 2024-03-04 - SQLite IN Clause Parameter Limitation for N+1 Avoidance
+**Learning:** When attempting to avoid N+1 queries by replacing bulk fetching (e.g. `query.all()`) with targeted `IN` clauses based on incoming payloads, you MUST be aware of SQLite's hard limit on variables in a query (historically 999). Blindly passing a large list of IDs/strings to an `IN` clause will cause query compilation errors.
+**Action:** When optimizing bulk lookups for data synchronization (like RSS feed items), implement a hybrid approach: measure the payload size. If the number of matching items is small (e.g., < 500), use the fast, targeted `IN` query. If it exceeds the threshold, fall back to the naive `fetch-all` approach to guarantee safety from database engine limits.

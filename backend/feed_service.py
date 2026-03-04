@@ -32,6 +32,7 @@ from defusedxml.common import (
     ExternalReferenceForbidden,
 )
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_
 
 from .cache_utils import (
     invalidate_tab_feeds_cache,
@@ -1236,16 +1237,6 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     items_to_add = []
     batch_processed_guids = set()
 
-    # Optimization: Query only necessary columns to avoid loading full objects
-    # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link,
-        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
-
-    # Create lookup maps
-    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
-    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
-
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
         len(parsed_feed.entries),
@@ -1253,11 +1244,63 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         feed_db_obj.id,
     )
 
-    # Pre-calculate dates to avoid double parsing and ensure consistency between
-    # sorting and storage (e.g. if parse_published_time uses current time as fallback).
+    # Pre-calculate dates and robust GUIDs to avoid double parsing
+    # and to build lookup sets for targeted database querying.
     entries_with_dates = []
+    guids_to_check = set()
+    links_to_check = set()
+
     for entry in parsed_feed.entries:
-        entries_with_dates.append((entry, parse_published_time(entry)))
+        raw_link = entry.get("link")
+        entry_link = validate_link_structure(raw_link)
+
+        # Calculate robust GUID early
+        db_guid = None
+        if entry_link:
+            if entry.get("id"):
+                db_guid = entry.get("id")
+            else:
+                unique_string = f"{entry_link}{entry.get('title', '')}"
+                db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+
+        entries_with_dates.append((entry, parse_published_time(entry), entry_link, db_guid))
+
+        if db_guid:
+            guids_to_check.add(db_guid)
+        if entry_link:
+            links_to_check.add(entry_link)
+
+    # Optimization: Query only necessary columns AND targeted items
+    # to avoid loading full feed history into memory.
+    items_tuple = []
+    if not entries_with_dates:
+        # Optimization: Handle empty feeds quickly to prevent empty IN clause issues
+        items_tuple = []
+    elif len(entries_with_dates) < 500:
+        # Use an IN clause if payload is small to avoid SQLite variable limit (999)
+
+        filter_conditions = []
+        if guids_to_check:
+            filter_conditions.append(FeedItem.guid.in_(guids_to_check))
+        if links_to_check:
+            filter_conditions.append(FeedItem.link.in_(links_to_check))
+
+        if filter_conditions:
+            items_tuple = (db.session.query(
+                FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title
+            ).filter(
+                FeedItem.feed_id == feed_db_obj.id,
+                or_(*filter_conditions)
+            ).all())
+    else:
+        # Fallback to fetching all items for the feed if the incoming payload is very large
+        items_tuple = (db.session.query(
+            FeedItem.id, FeedItem.guid, FeedItem.link,
+            FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
+
+    # Create lookup maps
+    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
+    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
 
     # Sort entries by published date (newest first).
     # Our "First Wins" deduplication strategy (below) will preserve the version
@@ -1270,10 +1313,7 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         logger.warning("Failed to sort entries for feed %s",
                        _sanitize_for_log(feed_db_obj.name))
 
-    for entry, parsed_published in entries_with_dates:
-        raw_link = entry.get("link")
-        entry_link = validate_link_structure(raw_link)
-
+    for entry, parsed_published, entry_link, db_guid in entries_with_dates:
         if not entry_link:
             logger.warning(
                 "Skipping entry titled '%s' for feed '%s' due to missing link.",
@@ -1281,17 +1321,6 @@ def _collect_new_items(feed_db_obj, parsed_feed):
                 _sanitize_for_log(feed_db_obj.name),
             )
             continue
-
-        # SECURITY & LOGIC: Generate a robust GUID if missing.
-        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
-        if entry.get("id"):
-            db_guid = entry.get("id")
-        else:
-            # Create a synthetic GUID based on link and title to ensure uniqueness
-            # for items that share a link but have different content.
-            unique_string = f"{entry_link}{entry.get('title', '')}"
-
-            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
 
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
