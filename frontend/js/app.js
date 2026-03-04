@@ -1,4 +1,4 @@
-import { throttle } from './utils.js';
+import { throttle, debounce } from './utils.js';
 import { api, API_BASE_URL } from './api.js';
 import {
     showToast,
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateProgressBarPosition();
 
     // Resize listener for progress bar positioning
-    window.addEventListener('resize', updateProgressBarPosition);
+    window.addEventListener('resize', debounce(updateProgressBarPosition, 100));
 
     // Close settings on click outside
     document.addEventListener('click', (event) => {
