@@ -1710,6 +1710,17 @@ def test_import_opml_empty_filename(client):
     assert "No file selected" in response.json["error"]
 
 
+def test_import_opml_txt_file_rejected(client):
+    """Test POST /api/opml/import with a .txt file is rejected."""
+    opml_content = "This is not an XML file but some text."
+    opml_file = (io.BytesIO(opml_content.encode("utf-8")), "invalid.txt")
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
+    assert response.status_code == 400
+    assert b"Invalid file type. Allowed: .opml, .xml" in response.data
+
+
 def test_import_opml_malformed_xml(client):
     """Test POST /api/opml/import with malformed XML."""
     with app.app_context():  # Ensure a tab exists
