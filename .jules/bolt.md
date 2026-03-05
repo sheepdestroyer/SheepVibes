@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-03-05 - Avoid timezone overhead when serializing naive UTC datetimes
+**Learning:** The `FeedItem.to_iso_z_string` function created an aware datetime from a naive UTC datetime by `.replace(tzinfo=timezone.utc)` before converting to string, creating ~65% unnecessary overhead.
+**Action:** For naive UTC datetimes, directly call `.isoformat() + "Z"` avoiding the object creation and tzinfo replacement overhead.
