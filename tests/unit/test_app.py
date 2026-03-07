@@ -2456,3 +2456,21 @@ def test_autosave_opml_with_temp_fs(tmp_path, client,
     written_data = backup_file_path.read_text(encoding="utf-8")
     assert "Autosave Test Tab" in written_data
     assert "http://example.com/autosave" in written_data
+
+
+def test_import_opml_txt_file_rejected(client):
+    """
+    Test that uploading a file with a .txt extension is rejected during OPML import.
+    This prevents weak file type validation.
+    """
+    # Create a mock .txt file
+    data = {"file": (io.BytesIO(b"dummy text content"), "test.txt")}
+
+    response = client.post(
+        "/api/opml/import",
+        data=data,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert response.json["error"] == "Invalid file type. Allowed: .opml, .xml"
