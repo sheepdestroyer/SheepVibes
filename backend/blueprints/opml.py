@@ -38,8 +38,8 @@ def _generate_opml_string(tabs=None):
 
     if tabs is None:
         # Eager load feeds to avoid N+1 queries
-        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(
-            Tab.order).all()
+        tabs = Tab.query.options(selectinload(
+            Tab.feeds)).order_by(Tab.order).all()
 
     for tab in tabs:
         # Skip tabs with no feeds
@@ -65,10 +65,9 @@ def _generate_opml_string(tabs=None):
 
     # Use unsafe_tostring because we are strictly generating XML, not parsing it.
     # We encode to utf-8 and decode to unicode to ensure a correct XML declaration.
-    opml_string = unsafe_tostring(opml_element,
-                                  encoding="utf-8",
-                                  method="xml",
-                                  xml_declaration=True).decode("utf-8")
+    opml_string = unsafe_tostring(
+        opml_element, encoding="utf-8", method="xml", xml_declaration=True
+    ).decode("utf-8")
 
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)
@@ -82,13 +81,12 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "No file part in the request"}), 400)
     opml_file = request.files["file"]
     if opml_file.filename == "":
-        return None, (jsonify({"error":
-                               "No file selected for uploading"}), 400)
+        return None, (jsonify({"error": "No file selected for uploading"}), 400)
     if not opml_file:
         return None, (jsonify({"error": "File object is empty"}), 400)
 
     # Basic security: check file extension
-    allowed_extensions = (".opml", ".xml", ".txt")
+    allowed_extensions = (".opml", ".xml")
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
         err_msg = f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
@@ -114,8 +112,8 @@ def import_opml():
     requested_tab_id_str = request.form.get("tab_id")
 
     # Call the service function
-    result, error_info = import_opml_service(opml_file.stream,
-                                             requested_tab_id_str)
+    result, error_info = import_opml_service(
+        opml_file.stream, requested_tab_id_str)
 
     if error_info:
         error_json, status_code = error_info
@@ -143,7 +141,8 @@ def export_opml():
 
     response = Response(opml_string, mimetype="application/xml")
     response.headers["Content-Disposition"] = (
-        'attachment; filename="sheepvibes_feeds.opml"')
+        'attachment; filename="sheepvibes_feeds.opml"'
+    )
 
     logger.info(
         "Successfully generated OPML export for %d feeds across %d tabs.",
@@ -178,12 +177,12 @@ def _get_autosave_directory():
                 abs_db_path = os.path.abspath(db_path)
                 data_dir = os.path.dirname(abs_db_path)
                 logger.debug(
-                    "Resolved autosave directory from SQLite path: %s",
-                    data_dir)
+                    "Resolved autosave directory from SQLite path: %s", data_dir
+                )
             except Exception:
                 logger.warning(
-                    "Could not resolve absolute path for SQLite DB: %s",
-                    db_path)
+                    "Could not resolve absolute path for SQLite DB: %s", db_path
+                )
 
     if not data_dir:
         # 3. Fall back to PROJECT_ROOT/data
@@ -193,7 +192,8 @@ def _get_autosave_directory():
 
     if not data_dir:
         logger.warning(
-            "Could not determine autosave directory. Skipping OPML autosave.")
+            "Could not determine autosave directory. Skipping OPML autosave."
+        )
         return None
 
     try:
@@ -234,8 +234,8 @@ def _write_atomically_with_lock(autosave_path, opml_string):
             try:
                 os.remove(temp_path)
             except OSError as e:
-                logger.warning("Failed to remove temporary file %s: %s",
-                               temp_path, e)
+                logger.warning(
+                    "Failed to remove temporary file %s: %s", temp_path, e)
     return False
 
 
