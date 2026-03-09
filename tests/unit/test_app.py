@@ -474,8 +474,12 @@ def test_add_feed_fetch_fails(mock_fetch, client, setup_tabs_and_feeds):
 def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     """Test POST /api/feeds with a duplicate URL."""
     mock_parsed_feed = MagicMock()
-    mock_parsed_feed.feed.get.side_effect = lambda key, default=None: "Test Feed" if key == "title" else default
-    mock_parsed_feed.feed = {"title": "Test Feed", "link": "http://example.com/url1"}
+    mock_parsed_feed.feed.get.side_effect = lambda key, default=None: (
+        "Test Feed" if key == "title" else default)
+    mock_parsed_feed.feed = {
+        "title": "Test Feed",
+        "link": "http://example.com/url1"
+    }
     mock_fetch.return_value = mock_parsed_feed
 
     tab1_id = setup_tabs_and_feeds["tab1_id"]
