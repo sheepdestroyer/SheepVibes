@@ -12,6 +12,7 @@ from ..constants import (
 )
 from ..extensions import db
 from ..feed_service import (
+    is_valid_feed_url,
     fetch_and_update_feed,
     fetch_feed,
     process_feed_entries,
@@ -35,6 +36,10 @@ def add_feed():
         return jsonify({"error": "Missing feed URL"}), 400
 
     feed_url = data["url"].strip()
+
+    if not is_valid_feed_url(feed_url):
+        return jsonify({"error": "Invalid feed URL scheme. Only HTTP and HTTPS are allowed."}), 400
+
     tab_id = data.get("tab_id")  # Optional tab ID
 
     # Determine target tab ID
@@ -197,6 +202,9 @@ def update_feed_url(feed_id):
         return jsonify({"error": "Missing or invalid feed URL"}), 400
 
     new_url = data["url"].strip()
+
+    if not is_valid_feed_url(new_url):
+        return jsonify({"error": "Invalid feed URL scheme. Only HTTP and HTTPS are allowed."}), 400
 
     # Check if the new URL is already used by another feed
     existing_feed = Feed.query.filter(
