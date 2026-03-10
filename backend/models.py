@@ -219,7 +219,8 @@ class FeedItem(db.Model):
             return dt_val.isoformat() + "Z"
 
         # Aware datetime (e.g. passed directly, not from DB), convert to UTC
-        return dt_val.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        return dt_val.astimezone(timezone.utc).isoformat().replace(
+            "+00:00", "Z")
 
     def to_dict(self):
         """Serializes the FeedItem object to a dictionary.
