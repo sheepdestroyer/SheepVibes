@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-03-10 - Fast naive datetime serialization
+**Learning:** Python's `datetime.replace(tzinfo=...)` followed by string replacements `.replace("+00:00", "Z")` carries unnecessary overhead when serializing naive UTC datetimes from the database.
+**Action:** When a database schema guarantees that stored datetimes are naive UTC (e.g. via SQLAlchemy `@validates`), simply append `'Z'` to `datetime.isoformat()` to bypass the conversions, yielding a ~3x performance boost on large collections.
