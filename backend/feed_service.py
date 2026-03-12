@@ -24,6 +24,7 @@ import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
 import sqlalchemy.exc
+from sqlalchemy import or_, false
 from dateutil import parser as date_parser
 from defusedxml.common import (
     DefusedXmlException,
@@ -1236,16 +1237,6 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     items_to_add = []
     batch_processed_guids = set()
 
-    # Optimization: Query only necessary columns to avoid loading full objects
-    # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (db.session.query(
-        FeedItem.id, FeedItem.guid, FeedItem.link,
-        FeedItem.title).filter_by(feed_id=feed_db_obj.id).all())
-
-    # Create lookup maps
-    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
-    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
-
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
         len(parsed_feed.entries),
@@ -1255,22 +1246,12 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
     # Pre-calculate dates to avoid double parsing and ensure consistency between
     # sorting and storage (e.g. if parse_published_time uses current time as fallback).
-    entries_with_dates = []
+    # Also collect candidate guids and links for optimized db querying.
+    candidate_guids = set()
+    candidate_links = set()
+    entries_with_dates_and_guids = []
+
     for entry in parsed_feed.entries:
-        entries_with_dates.append((entry, parse_published_time(entry)))
-
-    # Sort entries by published date (newest first).
-    # Our "First Wins" deduplication strategy (below) will preserve the version
-    # that appears first in the iteration. Sorting ensures the most recently
-    # published version is processed first and thus preserved in case of duplicates.
-    try:
-        entries_with_dates.sort(key=lambda x: x[1], reverse=True)
-    except Exception:  # pylint: disable=broad-exception-caught
-        # If sorting fails, proceed with original order.
-        logger.warning("Failed to sort entries for feed %s",
-                       _sanitize_for_log(feed_db_obj.name))
-
-    for entry, parsed_published in entries_with_dates:
         raw_link = entry.get("link")
         entry_link = validate_link_structure(raw_link)
 
@@ -1283,27 +1264,52 @@ def _collect_new_items(feed_db_obj, parsed_feed):
             continue
 
         # SECURITY & LOGIC: Generate a robust GUID if missing.
-        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
         if entry.get("id"):
             db_guid = entry.get("id")
         else:
-            # Create a synthetic GUID based on link and title to ensure uniqueness
-            # for items that share a link but have different content.
             unique_string = f"{entry_link}{entry.get('title', '')}"
-
             db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
 
+        candidate_guids.add(db_guid)
+        candidate_links.add(entry_link)
+        entries_with_dates_and_guids.append((entry, parse_published_time(entry), entry_link, db_guid))
+
+    # Optimization: Query only necessary columns to avoid loading full objects
+    base_query = db.session.query(
+        FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title
+    ).filter_by(feed_id=feed_db_obj.id)
+
+    num_candidates = len(candidate_guids) + len(candidate_links)
+
+    if num_candidates == 0:
+        base_query = base_query.filter(false())
+    elif num_candidates < 500:
+        base_query = base_query.filter(
+            or_(
+                FeedItem.guid.in_(candidate_guids),
+                FeedItem.link.in_(candidate_links)
+            )
+        )
+    # else: fetch all to avoid SQLite variable limits
+
+    items_tuple = base_query.all()
+
+    # Create lookup maps
+    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
+    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
+
+    # Sort entries by published date (newest first).
+    try:
+        entries_with_dates_and_guids.sort(key=lambda x: x[1], reverse=True)
+    except Exception:  # pylint: disable=broad-exception-caught
+        # If sorting fails, proceed with original order.
+        logger.warning("Failed to sort entries for feed %s",
+                       _sanitize_for_log(feed_db_obj.name))
+
+    for entry, parsed_published, entry_link, db_guid in entries_with_dates_and_guids:
         # Check existing
         existing_match = existing_items_by_guid.get(db_guid)
         if not existing_match:
-            # Minimal fallback: Check by link ONLY if we used link as GUID (legacy)
-            # or if we really want to strict de-dupe.
-            # But for now, let's rely on our robust GUID.
-            # We still check existing_items_by_link just in case we have old DB entries
-            # that were saved with just the link as GUID?
-            # Actually, standard behavior is to trust the GUID.
-            # If we change how GUID is generated, we might duplicate old items once.
-            # This is acceptable to fix the regression.
             existing_match = existing_items_by_link.get(entry_link)
 
         if existing_match:

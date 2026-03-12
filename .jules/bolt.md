@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-02-28 - Optimized feed updates with IN clauses
+**Learning:** The feed update process (`_collect_new_items`) previously fetched all existing feed items into memory for deduplication. This caused an O(N) memory and time bottleneck, scaling linearly with the number of retained feed items, even if only a few new items were available in the parsed feed.
+**Action:** Extract candidates (guids/links) from the incoming feed first, and use a SQLAlchemy `IN` clause with `or_` to query only the potentially conflicting items from the database. Fall back to the original fetch-all method only if the number of candidates is large (>=500) to avoid SQLite parameter limits (`>999`). When 0 items are available in the feed, use `sqlalchemy.false()` to ensure no db queries are run.
