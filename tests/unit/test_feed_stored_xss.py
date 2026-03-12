@@ -1,6 +1,8 @@
 import pytest
+
+from backend.app import app, db
 from backend.models import Feed, Tab
-from backend.app import db, app
+
 
 def test_add_feed_xss_prevention(client):
     """Test that attempting to add a feed with a malicious scheme is rejected."""
@@ -20,6 +22,7 @@ def test_add_feed_xss_prevention(client):
     with app.app_context():
         feed = Feed.query.filter_by(url=malicious_url).first()
         assert feed is None
+
 
 def test_update_feed_xss_prevention(client):
     """Test that attempting to update a feed URL to a malicious scheme is rejected."""
