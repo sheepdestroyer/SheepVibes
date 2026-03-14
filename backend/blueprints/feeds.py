@@ -14,9 +14,9 @@ from ..extensions import db
 from ..feed_service import (
     fetch_and_update_feed,
     fetch_feed,
+    is_valid_feed_url,
     process_feed_entries,
     update_all_feeds,
-    is_valid_feed_url,
 )
 from ..models import Feed, FeedItem, Tab
 from ..sse import announcer
