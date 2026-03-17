@@ -235,7 +235,7 @@ export function showEditFeedModal(feedId, currentUrl, currentName) {
     document.getElementById('edit-feed-id').value = feedId;
     document.getElementById('edit-feed-url').value = currentUrl;
     document.getElementById('edit-feed-name').value = currentName;
-    document.getElementById('edit-feed-error').style.display = 'none';
+    document.getElementById('edit-feed-error').classList.add('hidden');
     modal.classList.add('is-active');
 }
 

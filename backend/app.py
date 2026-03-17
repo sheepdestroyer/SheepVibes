@@ -205,7 +205,7 @@ if not app.config.get("TESTING"):
 CSP_POLICY = ("default-src 'self'; "
               "img-src * data:; "
               "script-src 'self'; "
-              "style-src 'self' 'unsafe-inline'; "
+              "style-src 'self'; "
               "connect-src 'self'; "
               "object-src 'none'; "
               "base-uri 'self'; "
@@ -240,8 +240,7 @@ def add_security_headers(response):
     # img-src * data: Allow images from any source (for feeds) and data URIs.
     # TODO(#299): Consider proxying images through backend to allow tightening this to 'self'.
     # script-src 'self': Only allow scripts from the same origin.
-    # style-src 'self' 'unsafe-inline': Allow styles from same origin and inline styles (required for current frontend).
-    # TODO(#298): Refactor frontend to remove inline styles and 'unsafe-inline' for better security.
+    # style-src 'self': Only allow styles from same origin.
     # connect-src 'self': Allow XHR/WebSockets to same origin.
     # object-src 'none': Block plugins (Flash, Java, etc.).
     # base-uri 'self': Prevents injection of <base> tag.
