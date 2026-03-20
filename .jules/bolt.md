@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-03-20 - Optimize single column extractions
+**Learning:** Extracting a single column (e.g., `Feed.url`) from the database using `Feed.query.all()` instantiates complete ORM objects which wastes CPU and memory overhead.
+**Action:** Use `Feed.query.with_entities(Feed.url).all()` instead of `Feed.query.all()` when only extracting a single column.
