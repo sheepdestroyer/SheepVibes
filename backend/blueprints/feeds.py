@@ -37,7 +37,8 @@ def add_feed():
     feed_url = data["url"].strip()
 
     if len(feed_url) > 500:
-        return jsonify({"error": "Feed URL must not exceed 500 characters"}), 400
+        return jsonify({"error":
+                        "Feed URL must not exceed 500 characters"}), 400
 
     tab_id = data.get("tab_id")  # Optional tab ID
 
@@ -47,7 +48,8 @@ def add_feed():
         default_tab = Tab.query.order_by(Tab.order).first()
         if not default_tab:
             # Cannot add feed if no tabs exist
-            return jsonify({"error": "Cannot add feed: No default tab found"}), 400
+            return jsonify({"error":
+                            "Cannot add feed: No default tab found"}), 400
         tab_id = default_tab.id
     else:
         # Verify the provided tab_id exists
@@ -75,8 +77,7 @@ def add_feed():
         )
     else:
         feed_name = parsed_feed.feed.get(
-            "title", feed_url
-        )  # Use URL as fallback if title missing
+            "title", feed_url)  # Use URL as fallback if title missing
         site_link = parsed_feed.feed.get("link")  # Get the website link
 
     # Truncate feed_name and site_link to their respective column lengths
@@ -120,7 +121,8 @@ def add_feed():
         if num_new_items > 0:
             invalidate_tab_feeds_cache(tab_id)
         else:
-            invalidate_tabs_cache()  # At least invalidate for unread count change potential
+            invalidate_tabs_cache(
+            )  # At least invalidate for unread count change potential
 
         logger.info(
             "Added new feed '%s' with id %s to tab %s.",
@@ -139,7 +141,9 @@ def add_feed():
             exc_info=True,
         )
         return (
-            jsonify({"error": "An internal error occurred while adding the feed."}),
+            jsonify(
+                {"error":
+                 "An internal error occurred while adding the feed."}),
             500,
         )
 
@@ -169,7 +173,8 @@ def delete_feed(feed_id):
             feed_id,
         )
         # OK
-        return jsonify({"message": f"Feed {feed_id} deleted successfully"}), 200
+        return jsonify({"message":
+                        f"Feed {feed_id} deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
         logger.error(
@@ -179,8 +184,10 @@ def delete_feed(feed_id):
             exc_info=True,
         )
         return (
-            jsonify(
-                {"error": "An internal error occurred while deleting the feed."}),
+            jsonify({
+                "error":
+                "An internal error occurred while deleting the feed."
+            }),
             500,
         )
 
@@ -200,21 +207,19 @@ def update_feed_url(feed_id):
 
     data = request.get_json()
     # Validate input
-    if (
-        not data
-        or "url" not in data
-        or not (isinstance(data["url"], str) and data["url"].strip())
-    ):
+    if (not data or "url" not in data
+            or not (isinstance(data["url"], str) and data["url"].strip())):
         return jsonify({"error": "Missing or invalid feed URL"}), 400
 
     new_url = data["url"].strip()
 
     if len(new_url) > 500:
-        return jsonify({"error": "Feed URL must not exceed 500 characters"}), 400
+        return jsonify({"error":
+                        "Feed URL must not exceed 500 characters"}), 400
 
     # Check if the new URL is already used by another feed
-    existing_feed = Feed.query.filter(
-        Feed.id != feed_id, Feed.url == new_url).first()
+    existing_feed = Feed.query.filter(Feed.id != feed_id,
+                                      Feed.url == new_url).first()
     if existing_feed:
         return (
             jsonify({"error": f"Feed with URL {new_url} already exists"}),
@@ -224,7 +229,8 @@ def update_feed_url(feed_id):
     custom_name = data.get("name", "").strip()
 
     if len(custom_name) > 200:
-        return jsonify({"error": "Feed name must not exceed 200 characters"}), 400
+        return jsonify({"error":
+                        "Feed name must not exceed 200 characters"}), 400
 
     try:
         # Attempt to fetch the feed to get its title (and verify accessibility/SSRF)
@@ -232,11 +238,8 @@ def update_feed_url(feed_id):
 
         if custom_name:
             new_name = custom_name
-            new_site_link = (
-                parsed_feed.feed.get("link")
-                if parsed_feed and parsed_feed.feed
-                else None
-            )
+            new_site_link = (parsed_feed.feed.get("link")
+                             if parsed_feed and parsed_feed.feed else None)
         elif not parsed_feed or not parsed_feed.feed:
             # If fetch fails and no custom name provided, use the URL as the name
             new_name = new_url
@@ -247,8 +250,7 @@ def update_feed_url(feed_id):
             )
         else:
             new_name = parsed_feed.feed.get(
-                "title", new_url
-            )  # Use URL as fallback if title missing
+                "title", new_url)  # Use URL as fallback if title missing
             new_site_link = parsed_feed.feed.get(
                 "link")  # Get the website link
 
@@ -302,10 +304,9 @@ def update_feed_url(feed_id):
         feed_data = feed.to_dict()
         # Include only recent feed items in the response (limit to DEFAULT_FEED_ITEMS_LIMIT)
         feed_data["items"] = [
-            item.to_dict()
-            for item in feed.items.order_by(
-                FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
-            ).limit(DEFAULT_FEED_ITEMS_LIMIT)
+            item.to_dict() for item in feed.items.order_by(
+                FeedItem.published_time.desc().nullslast(),
+                FeedItem.fetched_time.desc()).limit(DEFAULT_FEED_ITEMS_LIMIT)
         ]
         return jsonify(feed_data), 200  # OK
 
@@ -313,8 +314,10 @@ def update_feed_url(feed_id):
         db.session.rollback()
         logger.error("Error updating feed %s: %s", feed_id, e, exc_info=True)
         return (
-            jsonify(
-                {"error": "An internal error occurred while updating the feed."}),
+            jsonify({
+                "error":
+                "An internal error occurred while updating the feed."
+            }),
             500,
         )
 
@@ -344,31 +347,33 @@ def api_update_all_feeds():
             )
         # Announce the update to listening clients
         event_data = {
-            "feeds_processed": processed_count,
-            "new_items": new_items_count,
-            "affected_tab_ids": (
-                sorted(list(affected_tab_ids)) if affected_tab_ids else []
-            ),
+            "feeds_processed":
+            processed_count,
+            "new_items":
+            new_items_count,
+            "affected_tab_ids":
+            (sorted(list(affected_tab_ids)) if affected_tab_ids else []),
         }
         msg = f"data: {json.dumps(event_data)}\n\n"
         announcer.announce(msg=msg)
         return (
-            jsonify(
-                {
-                    "message": "All feeds updated successfully.",
-                    "feeds_processed": processed_count,
-                    "new_items": new_items_count,
-                }
-            ),
+            jsonify({
+                "message": "All feeds updated successfully.",
+                "feeds_processed": processed_count,
+                "new_items": new_items_count,
+            }),
             200,
         )
     except Exception as e:
         logger.error("Error during /api/feeds/update-all: %s",
-                     e, exc_info=True)
+                     e,
+                     exc_info=True)
         # Consistent error response with other parts of the API
         return (
-            jsonify(
-                {"error": "An internal error occurred while updating all feeds."}),
+            jsonify({
+                "error":
+                "An internal error occurred while updating all feeds."
+            }),
             500,
         )
 
@@ -396,11 +401,10 @@ def update_feed(feed_id):
             exc_info=True,
         )
         return (
-            jsonify(
-                {
-                    "error": f"An internal error occurred while manually updating feed {feed_id}."
-                }
-            ),
+            jsonify({
+                "error":
+                f"An internal error occurred while manually updating feed {feed_id}."
+            }),
             500,
         )
 
@@ -417,8 +421,10 @@ def get_feed_items(feed_id):
         limit = int(request.args.get("limit", DEFAULT_PAGINATION_LIMIT))
     except (ValueError, TypeError):
         return (
-            jsonify(
-                {"error": "Offset and limit parameters must be valid integers."}),
+            jsonify({
+                "error":
+                "Offset and limit parameters must be valid integers."
+            }),
             400,
         )
 
@@ -430,15 +436,9 @@ def get_feed_items(feed_id):
     limit = min(limit, MAX_PAGINATION_LIMIT)
 
     # Query the database for the items, ordered by date
-    items = (
-        FeedItem.query.filter_by(feed_id=feed_id)
-        .order_by(
-            FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
-        )
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    items = (FeedItem.query.filter_by(feed_id=feed_id).order_by(
+        FeedItem.published_time.desc().nullslast(),
+        FeedItem.fetched_time.desc()).offset(offset).limit(limit).all())
 
     # Return the items as a JSON response
     return jsonify([item.to_dict() for item in items])
@@ -473,13 +473,15 @@ def mark_item_read(item_id):
         return jsonify({"message": f"Item {item_id} marked as read"}), 200
     except Exception as e:
         db.session.rollback()
-        logger.error(
-            "Error marking item %s as read: %s", item_id, str(e), exc_info=True
-        )
+        logger.error("Error marking item %s as read: %s",
+                     item_id,
+                     str(e),
+                     exc_info=True)
         # Let 500 handler manage response (or return specific error)
         return (
-            jsonify(
-                {"error": "An internal error occurred while marking the item as read."}
-            ),
+            jsonify({
+                "error":
+                "An internal error occurred while marking the item as read."
+            }),
             500,
         )

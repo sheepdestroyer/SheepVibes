@@ -1,10 +1,12 @@
-import pytest
 import os
+
+import pytest
+
+from backend.app import app
+from backend.models import Feed, Tab, db
 
 os.environ["TESTING"] = "true"
 
-from backend.app import app
-from backend.models import db, Feed, Tab
 
 def test_add_feed_length():
     with app.test_client() as client:
@@ -19,5 +21,6 @@ def test_add_feed_length():
 
         with app.app_context():
             db.drop_all()
+
 
 test_add_feed_length()

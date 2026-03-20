@@ -1,10 +1,11 @@
-import pytest
 import os
 
-os.environ["TESTING"] = "true"
+import pytest
 
 from backend.app import app
-from backend.models import db, Tab
+from backend.models import Tab, db
+
+os.environ["TESTING"] = "true"
 
 
 def test_create_tab_length():
@@ -19,5 +20,6 @@ def test_create_tab_length():
 
         with app.app_context():
             db.drop_all()
+
 
 test_create_tab_length()
