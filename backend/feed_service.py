@@ -619,7 +619,10 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         return result, None
 
     # Optimization: Only fetch the 'url' column to avoid instantiating full Feed ORM objects
-    all_existing_feed_urls_set = {row[0] for row in Feed.query.with_entities(Feed.url).all()}
+    all_existing_feed_urls_set = {
+        row[0]
+        for row in Feed.query.with_entities(Feed.url).all()
+    }
 
     # Announce start
     announcer.announce(
