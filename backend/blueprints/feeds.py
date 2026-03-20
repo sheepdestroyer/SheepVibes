@@ -35,6 +35,10 @@ def add_feed():
         return jsonify({"error": "Missing feed URL"}), 400
 
     feed_url = data["url"].strip()
+
+    if len(feed_url) > 500:
+        return jsonify({"error": "Feed URL must not exceed 500 characters"}), 400
+
     tab_id = data.get("tab_id")  # Optional tab ID
 
     # Determine target tab ID
@@ -74,6 +78,13 @@ def add_feed():
             "title", feed_url
         )  # Use URL as fallback if title missing
         site_link = parsed_feed.feed.get("link")  # Get the website link
+
+    # Truncate feed_name and site_link to their respective column lengths
+    if feed_name and len(feed_name) > 200:
+        feed_name = feed_name[:200]
+
+    if site_link and len(site_link) > 500:
+        site_link = site_link[:500]
 
     try:
         # Create and save the new feed
@@ -198,6 +209,9 @@ def update_feed_url(feed_id):
 
     new_url = data["url"].strip()
 
+    if len(new_url) > 500:
+        return jsonify({"error": "Feed URL must not exceed 500 characters"}), 400
+
     # Check if the new URL is already used by another feed
     existing_feed = Feed.query.filter(
         Feed.id != feed_id, Feed.url == new_url).first()
@@ -208,6 +222,9 @@ def update_feed_url(feed_id):
         )  # Conflict
 
     custom_name = data.get("name", "").strip()
+
+    if len(custom_name) > 200:
+        return jsonify({"error": "Feed name must not exceed 200 characters"}), 400
 
     try:
         # Attempt to fetch the feed to get its title (and verify accessibility/SSRF)
@@ -234,6 +251,13 @@ def update_feed_url(feed_id):
             )  # Use URL as fallback if title missing
             new_site_link = parsed_feed.feed.get(
                 "link")  # Get the website link
+
+        # Truncate new_name and new_site_link to their respective column lengths
+        if new_name and len(new_name) > 200:
+            new_name = new_name[:200]
+
+        if new_site_link and len(new_site_link) > 500:
+            new_site_link = new_site_link[:500]
 
         # Update the feed
         original_url = feed.url

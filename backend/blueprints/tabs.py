@@ -58,6 +58,9 @@ def create_tab():
 
     tab_name = data["name"].strip()
 
+    if len(tab_name) > 100:
+        return jsonify({"error": "Tab name must not exceed 100 characters"}), 400
+
     # Check for duplicate tab name
     existing_tab = Tab.query.filter_by(name=tab_name).first()
     if existing_tab:
@@ -115,6 +118,9 @@ def rename_tab(tab_id):
         return jsonify({"error": "Missing or empty new tab name"}), 400
 
     new_name = data["name"].strip()
+
+    if len(new_name) > 100:
+        return jsonify({"error": "Tab name must not exceed 100 characters"}), 400
 
     # Check if the new name is already taken by another tab
     existing_tab = Tab.query.filter(Tab.id != tab_id,

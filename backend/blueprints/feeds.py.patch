@@ -1,0 +1,18 @@
+--- backend/blueprints/feeds.py
++++ backend/blueprints/feeds.py
+@@ -84,7 +84,7 @@
+     if feed_name and len(feed_name) > 200:
+         feed_name = feed_name[:200]
+-
++
+     if site_link and len(site_link) > 500:
+         site_link = site_link[:500]
+
+@@ -257,7 +257,7 @@
+         # Truncate new_name and new_site_link to their respective column lengths
+         if new_name and len(new_name) > 200:
+             new_name = new_name[:200]
+-
++
+         if new_site_link and len(new_site_link) > 500:
+             new_site_link = new_site_link[:500]
