@@ -35,6 +35,9 @@ def add_feed():
         return jsonify({"error": "Missing feed URL"}), 400
 
     feed_url = data["url"].strip()
+    if len(feed_url) > 500:
+        return jsonify({"error": "Feed URL cannot exceed 500 characters"}), 400
+
     tab_id = data.get("tab_id")  # Optional tab ID
 
     # Determine target tab ID
@@ -74,6 +77,12 @@ def add_feed():
             "title", feed_url
         )  # Use URL as fallback if title missing
         site_link = parsed_feed.feed.get("link")  # Get the website link
+
+    # Truncate length to prevent 500 DB errors
+    if feed_name:
+        feed_name = feed_name[:200]
+    if site_link:
+        site_link = site_link[:500]
 
     try:
         # Create and save the new feed
@@ -197,6 +206,8 @@ def update_feed_url(feed_id):
         return jsonify({"error": "Missing or invalid feed URL"}), 400
 
     new_url = data["url"].strip()
+    if len(new_url) > 500:
+        return jsonify({"error": "Feed URL cannot exceed 500 characters"}), 400
 
     # Check if the new URL is already used by another feed
     existing_feed = Feed.query.filter(
@@ -234,6 +245,12 @@ def update_feed_url(feed_id):
             )  # Use URL as fallback if title missing
             new_site_link = parsed_feed.feed.get(
                 "link")  # Get the website link
+
+        # Truncate length to prevent 500 DB errors
+        if new_name:
+            new_name = new_name[:200]
+        if new_site_link:
+            new_site_link = new_site_link[:500]
 
         # Update the feed
         original_url = feed.url
