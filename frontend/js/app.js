@@ -172,7 +172,7 @@ async function loadFeedsForTab(tabId) {
             const msg = document.createElement('div');
             msg.className = 'feed-widget empty-tab-message'; // Reuse class but add distinct marker
             msg.dataset.tabId = tabId;
-            msg.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
+            const p = document.createElement('p'); p.textContent = 'No feeds found for this tab. Add one using the form above!'; msg.appendChild(p);
             feedGrid.appendChild(msg);
         }
         loadedTabs.add(tabId);
