@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-03-23 - Avoid querySelectorAll caching micro-optimization
+**Learning:** Caching DOM elements in a JS Map (`widgetsByTab`) to avoid calling `querySelectorAll` during tab switches addresses a non-existent bottleneck. Querying the DOM doesn't trigger reflows, and syncing Map state with dynamic DOM nodes significantly increases code complexity.
+**Action:** Do not duplicate DOM state into Maps for simple element lookups, and ensure any performance optimizations have a measurable impact before adding unmaintainable sync logic.
