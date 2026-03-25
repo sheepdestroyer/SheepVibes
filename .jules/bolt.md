@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-02-20 - Optimized single-column retrieval
+**Learning:** Fetching full SQLAlchemy ORM objects (e.g. `Feed.query.all()`) just to extract a single column like a URL incurs significant memory and CPU overhead on large datasets.
+**Action:** Use `db.session.query(Model.column).all()` for high-performance single-column retrieval. Remember to unpack the tuple result: `{url for url, in query_result}`.
