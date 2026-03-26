@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-03-26 - Add database index on Feed url
+**Learning:** `Feed.url` is frequently queried to check for duplicates when adding new feeds or importing OPML, leading to full table scans.
+**Action:** Added `index=True` to the `url` column in the `Feed` model to enable indexed lookups, significantly speeding up existence checks.

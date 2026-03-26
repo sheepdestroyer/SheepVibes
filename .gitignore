@@ -52,4 +52,5 @@ Thumbs.db
 
 # Agent/Tool temporary files
 tests/artifacts/
+agent-tools/
 # (None for this PR to keep it focused)
