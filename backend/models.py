@@ -80,7 +80,7 @@ class Feed(db.Model):
         db.String(200),
         nullable=False)  # Name of the feed (often from feed title)
     url = db.Column(db.String(500),
-                    nullable=False)  # URL of the feed (the XML feed URL)
+                    nullable=False, index=True)  # URL of the feed (the XML feed URL)
     site_link = db.Column(
         db.String(500),
         nullable=True)  # URL of the feed's main website (HTML link)
