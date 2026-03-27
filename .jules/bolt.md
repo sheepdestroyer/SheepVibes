@@ -9,3 +9,6 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+## 2026-02-18 - Optimize OPML Import feed URL deduplication
+**Learning:** During OPML imports, creating a set of existing feed URLs by doing `Feed.query.all()` instantiates full SQLAlchemy ORM objects for every feed in the database, causing massive memory and CPU overhead when only the `url` column is needed.
+**Action:** Use `db.session.query(Feed.url).all()` and unpack the tuples (e.g., `{url for url, in query_result}`) to fetch only the needed column directly, bypassing ORM instantiation and drastically improving performance for large databases.
