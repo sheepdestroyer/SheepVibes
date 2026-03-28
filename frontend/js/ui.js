@@ -155,7 +155,9 @@ export function createFeedWidget(feed, callbacks) {
         });
         itemList.appendChild(fragment);
     } else {
-        itemList.innerHTML = '<li>No items found for this feed.</li>';
+        const li = document.createElement('li');
+        li.textContent = 'No items found for this feed.';
+        itemList.appendChild(li);
     }
 
     // Programmatically trigger a scroll event to handle cases where the initial
@@ -196,12 +198,20 @@ export function renderTabs(tabs, activeTabId, callbacks) {
     const renameTabButton = document.getElementById('rename-tab-button');
     const deleteTabButton = document.getElementById('delete-tab-button');
 
-    tabsContainer.innerHTML = '';
+    tabsContainer.textContent = '';
     if (!tabs || tabs.length === 0) {
-        tabsContainer.innerHTML = '<span>No tabs found.</span>';
+        const span = document.createElement('span');
+        span.textContent = 'No tabs found.';
+        tabsContainer.appendChild(span);
+
         renameTabButton.disabled = true;
         deleteTabButton.disabled = true;
-        feedGrid.innerHTML = '<p>Create a tab to get started!</p>';
+
+        feedGrid.textContent = '';
+        const p = document.createElement('p');
+        p.textContent = 'Create a tab to get started!';
+        feedGrid.appendChild(p);
+
         return { activeTabId: null };
     }
 
