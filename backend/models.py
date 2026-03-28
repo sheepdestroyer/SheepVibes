@@ -209,18 +209,15 @@ class FeedItem(db.Model):
         if dt_val is None:
             return None
 
-        # At this point, dt_val from DB is naive UTC due to the validator.
-        # If dt_val is directly passed (e.g. not from DB and still aware),
-        # it needs conversion.
+        # ⚡ Bolt Optimization: Fast path for naive UTC datetimes
+        # Since the database guarantees naive datetimes are UTC, we can
+        # bypass expensive timezone replacement and string manipulation.
         if dt_val.tzinfo is None:
-            # Naive datetime from DB (assumed UTC), make it aware UTC
-            dt_val_utc = dt_val.replace(tzinfo=timezone.utc)
-        else:
-            # Aware datetime (e.g. passed directly, not from DB), convert to UTC
-            dt_val_utc = dt_val.astimezone(timezone.utc)
+            return dt_val.isoformat() + "Z"
 
-        iso_string = dt_val_utc.isoformat()
-        return iso_string.replace("+00:00", "Z")
+        # Slow path for aware datetimes (e.g. from tests or external sources)
+        dt_val_utc = dt_val.astimezone(timezone.utc)
+        return dt_val_utc.isoformat().replace("+00:00", "Z")
 
     def to_dict(self):
         """Serializes the FeedItem object to a dictionary.
