@@ -14,6 +14,7 @@ from ..extensions import db
 from ..feed_service import (
     fetch_and_update_feed,
     fetch_feed,
+    is_valid_feed_url,
     process_feed_entries,
     update_all_feeds,
 )
@@ -36,6 +37,9 @@ def add_feed():
 
     feed_url = data["url"].strip()
     tab_id = data.get("tab_id")  # Optional tab ID
+
+    if not is_valid_feed_url(feed_url):
+        return jsonify({"error": "Invalid feed URL scheme or format"}), 400
 
     # Determine target tab ID
     if not tab_id:
@@ -197,6 +201,9 @@ def update_feed_url(feed_id):
         return jsonify({"error": "Missing or invalid feed URL"}), 400
 
     new_url = data["url"].strip()
+
+    if not is_valid_feed_url(new_url):
+        return jsonify({"error": "Invalid feed URL scheme or format"}), 400
 
     # Check if the new URL is already used by another feed
     existing_feed = Feed.query.filter(
