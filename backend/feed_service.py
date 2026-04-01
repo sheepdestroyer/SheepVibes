@@ -618,7 +618,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         )
         return result, None
 
-    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
+    all_existing_feed_urls_set = {url for url, in db.session.query(Feed.url).all()}
 
     # Announce start
     announcer.announce(
