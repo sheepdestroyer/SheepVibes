@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-03-01 - Minimized Layout Thrashing with DocumentFragment
+**Learning:** Calling `appendChild` inside a loop directly on an active DOM element (like `feedGrid`) triggers a reflow/repaint for every single item, causing layout thrashing and degrading UI performance, especially with many feeds.
+**Action:** Always batch DOM insertions using `document.createDocumentFragment()`. Append items to the fragment in the loop, then append the fragment to the active DOM element once. This ensures only a single reflow occurs.
