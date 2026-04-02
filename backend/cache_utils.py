@@ -86,3 +86,30 @@ def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
     if invalidate_tabs:
         # Also invalidate the main tabs list because unread counts will have changed.
         invalidate_tabs_cache()
+
+
+def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
+    """Invalidates multiple tabs' feed caches efficiently using get_many/set_many.
+
+    Args:
+        tab_ids (iterable): The IDs of the tabs to invalidate the cache for.
+        invalidate_tabs (bool): If True, also invalidates the main tabs list cache.
+    """
+    if not tab_ids:
+        return
+
+    keys = [get_tab_version_key(tab_id) for tab_id in tab_ids]
+    # get_many returns a list of values in the same order as the keys
+    versions = cache.get_many(*keys)
+
+    # Handle None values and increment
+    updates = {}
+    for i, key in enumerate(keys):
+        current_version = versions[i] if versions[i] is not None else 1
+        updates[key] = current_version + 1
+
+    cache.set_many(updates)
+    logger.info("Invalidated cache for multiple tabs: %s", tab_ids)
+
+    if invalidate_tabs:
+        invalidate_tabs_cache()
