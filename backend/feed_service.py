@@ -618,7 +618,9 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         )
         return result, None
 
-    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
+    # ⚡ BOLT OPTIMIZATION: Use single-column query for urls to avoid the overhead of instantiating full Feed objects.
+    # This is much faster and uses significantly less memory than `Feed.query.all()`.
+    all_existing_feed_urls_set = {url for url, in db.session.query(Feed.url).all()}
 
     # Announce start
     announcer.announce(
