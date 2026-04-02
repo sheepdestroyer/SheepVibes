@@ -57,8 +57,7 @@ def make_tab_feeds_cache_key(tab_id):
     # Only include parameters that are used by the endpoint in the cache key.
     used_params = ["limit"]
     sorted_query = sorted(
-        (k, v) for k, v in request.args.items(multi=True) if k in used_params
-    )
+        (k, v) for k, v in request.args.items(multi=True) if k in used_params)
     query_string = urllib.parse.urlencode(sorted_query)
     base_key = f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/"
     return f"{base_key}?{query_string}" if query_string else base_key
@@ -81,8 +80,41 @@ def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
     version_key = get_tab_version_key(tab_id)
     new_version = get_version(version_key) + 1
     cache.set(version_key, new_version)
-    logger.info("Invalidated cache for tab %s. New version: %s",
-                tab_id, new_version)
+    logger.info("Invalidated cache for tab %s. New version: %s", tab_id,
+                new_version)
+    if invalidate_tabs:
+        # Also invalidate the main tabs list because unread counts will have changed.
+        invalidate_tabs_cache()
+
+
+def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
+    """Invalidates multiple tabs' feed caches efficiently using batch operations.
+
+    Args:
+        tab_ids (list): A list of tab IDs to invalidate the cache for.
+        invalidate_tabs (bool): If True, also invalidates the main tabs list cache.
+    """
+    if not tab_ids:
+        return
+
+    version_keys = [get_tab_version_key(tab_id) for tab_id in tab_ids]
+
+    # Retrieve current versions in a single round-trip
+    current_versions = cache.get_many(*version_keys)
+
+    # Prepare dictionary of new versions
+    new_versions = {}
+    for key, current_version in zip(version_keys, current_versions):
+        # Default to 1 if version is not in cache yet
+        version = current_version if current_version is not None else 1
+        new_versions[key] = version + 1
+
+    # Set new versions in a single round-trip
+    cache.set_many(new_versions)
+
+    logger.info("Invalidated cache for multiple tabs. New versions: %s",
+                new_versions)
+
     if invalidate_tabs:
         # Also invalidate the main tabs list because unread counts will have changed.
         invalidate_tabs_cache()
