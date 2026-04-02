@@ -158,6 +158,7 @@ async function loadFeedsForTab(tabId) {
         placeholders.forEach(p => p.remove());
 
         if (feeds && feeds.length > 0) {
+            const fragment = document.createDocumentFragment();
             feeds.forEach(feed => {
                 const widget = createFeedWidget(feed, {
                     onEdit: (id, url, name) => showEditFeedModal(id, url, name),
@@ -165,8 +166,9 @@ async function loadFeedsForTab(tabId) {
                     onMarkItemRead: handleMarkItemRead,
                     onLoadMore: handleLoadMoreItems
                 });
-                feedGrid.appendChild(widget);
+                fragment.appendChild(widget);
             });
+            feedGrid.appendChild(fragment);
         } else {
             // Create an empty-state message container for this tab
             const msg = document.createElement('div');
