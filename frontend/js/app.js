@@ -21,6 +21,7 @@ const storedTabId = localStorage.getItem('activeTabId');
 let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
 let allTabs = [];
 const loadedTabs = new Set();
+const widgetsByTab = new Map();
 const ITEMS_PER_PAGE = 10;
 
 // --- Progress Fallback Helpers ---
@@ -124,22 +125,12 @@ async function switchTab(tabId) {
 }
 
 function toggleWidgetsVisibility() {
-    const feedGrid = document.getElementById('feed-grid');
-    const widgets = feedGrid.querySelectorAll('.feed-widget');
-
-    // Hide all first
-    widgets.forEach(widget => {
-        if (widget.dataset.tabId == activeTabId) {
-            widget.style.display = 'block';
-        } else {
-            widget.style.display = 'none';
-        }
-    });
-
-    // Handle "empty" message visibility (simplified)
-    // Ideally we would check if we HAVE feeds for this tab.
-    // We loaded them in loadFeedsForTab.
-    // If loadedTabs has it, but no widgets match -> empty.
+    for (const [tabId, widgets] of widgetsByTab.entries()) {
+        const isMatch = (tabId == activeTabId);
+        widgets.forEach(widget => {
+            widget.style.display = isMatch ? 'block' : 'none';
+        });
+    }
 }
 
 async function loadFeedsForTab(tabId) {
@@ -157,15 +148,17 @@ async function loadFeedsForTab(tabId) {
         );
         placeholders.forEach(p => p.remove());
 
+        const newWidgets = [];
         if (feeds && feeds.length > 0) {
             feeds.forEach(feed => {
                 const widget = createFeedWidget(feed, {
-                    onEdit: (id, url, name) => showEditFeedModal(id, url, name),
+                    onEdit: (fid, furl, fname) => showEditFeedModal(fid, furl, fname),
                     onDelete: handleDeleteFeed,
                     onMarkItemRead: handleMarkItemRead,
                     onLoadMore: handleLoadMoreItems
                 });
                 feedGrid.appendChild(widget);
+                newWidgets.push(widget);
             });
         } else {
             // Create an empty-state message container for this tab
@@ -174,7 +167,9 @@ async function loadFeedsForTab(tabId) {
             msg.dataset.tabId = tabId;
             msg.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
             feedGrid.appendChild(msg);
+            newWidgets.push(msg);
         }
+        widgetsByTab.set(tabId, newWidgets);
         loadedTabs.add(tabId);
         toggleWidgetsVisibility();
     } catch (error) {
@@ -224,7 +219,9 @@ async function handleDeleteTab() {
         await api.deleteTab(deletedTabId);
 
         // Surgically update the UI and state instead of a full reload
-        document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
+        const widgetsToRemove = widgetsByTab.get(deletedTabId) || [];
+        widgetsToRemove.forEach(w => w.remove());
+        widgetsByTab.delete(deletedTabId);
         loadedTabs.delete(deletedTabId);
         activeTabId = null;
 
@@ -270,7 +267,14 @@ async function handleDeleteFeed(feedId) {
     try {
         await api.deleteFeed(feedId);
         const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
-        if (widget) widget.remove();
+        if (widget) {
+            const tabId = parseInt(widget.dataset.tabId, 10);
+            widget.remove();
+            if (!isNaN(tabId) && widgetsByTab.has(tabId)) {
+                const arr = widgetsByTab.get(tabId);
+                widgetsByTab.set(tabId, arr.filter(w => w !== widget));
+            }
+        }
         showToast('Feed deleted.', 'success');
     } catch (e) {
         showToast(e.message, 'error');
@@ -293,6 +297,13 @@ async function handleEditFeedSubmit(e) {
                 onLoadMore: handleLoadMoreItems
             });
             oldWidget.replaceWith(newWidget);
+
+            const tabId = parseInt(oldWidget.dataset.tabId, 10);
+            if (!isNaN(tabId) && widgetsByTab.has(tabId)) {
+                const arr = widgetsByTab.get(tabId);
+                const idx = arr.indexOf(oldWidget);
+                if (idx !== -1) arr[idx] = newWidget;
+            }
         }
         closeEditFeedModal();
         showToast('Feed updated.', 'success');
@@ -419,13 +430,13 @@ async function handleLoadMoreItems(listElement) {
 // Helpers
 
 async function reloadTab(tabId) {
+    const widgetsToRemove = widgetsByTab.get(tabId) || [];
+    widgetsToRemove.forEach(w => w.remove());
+    widgetsByTab.delete(tabId);
+    loadedTabs.delete(tabId);
+
     if (activeTabId === tabId) {
-        // Remove existing for this tab
-        document.querySelectorAll(`.feed-widget[data-tab-id="${tabId}"]`).forEach(w => w.remove());
-        loadedTabs.delete(tabId);
         await loadFeedsForTab(tabId);
-    } else {
-        loadedTabs.delete(tabId);
     }
 }
 

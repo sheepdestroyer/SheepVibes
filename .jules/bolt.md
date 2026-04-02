@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2024-05-24 - Optimized frontend tab switching with DOM caching
+**Learning:** Calling querySelectorAll repeatedly during tab switching causes unnecessary layout thrashing and slows down UI responsiveness when a large number of widgets are present in the DOM.
+**Action:** Implement a Map to cache DOM elements grouped by tab ID. This limits iteration to only the cached elements, avoiding full-page query parsing and improving rendering times significantly.
