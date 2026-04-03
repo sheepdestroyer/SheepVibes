@@ -57,8 +57,7 @@ def make_tab_feeds_cache_key(tab_id):
     # Only include parameters that are used by the endpoint in the cache key.
     used_params = ["limit"]
     sorted_query = sorted(
-        (k, v) for k, v in request.args.items(multi=True) if k in used_params
-    )
+        (k, v) for k, v in request.args.items(multi=True) if k in used_params)
     query_string = urllib.parse.urlencode(sorted_query)
     base_key = f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/"
     return f"{base_key}?{query_string}" if query_string else base_key
@@ -81,8 +80,36 @@ def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
     version_key = get_tab_version_key(tab_id)
     new_version = get_version(version_key) + 1
     cache.set(version_key, new_version)
-    logger.info("Invalidated cache for tab %s. New version: %s",
-                tab_id, new_version)
+    logger.info("Invalidated cache for tab %s. New version: %s", tab_id,
+                new_version)
     if invalidate_tabs:
         # Also invalidate the main tabs list because unread counts will have changed.
+        invalidate_tabs_cache()
+
+
+def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
+    """Invalidates multiple tabs' feed caches and the main tabs list cache efficiently.
+
+    Args:
+        tab_ids (iterable): The IDs of the tabs to invalidate the cache for.
+        invalidate_tabs (bool): If True, also invalidates the main tabs list cache.
+    """
+    if not tab_ids:
+        return
+
+    # Use batch get and set to avoid roundtrips
+    keys = [get_tab_version_key(t_id) for t_id in tab_ids]
+    versions = cache.get_many(*keys)
+    new_data = {}
+
+    for key, t_id, version in zip(keys, tab_ids, versions):
+        new_version = (version if version is not None else 1) + 1
+        new_data[key] = new_version
+        logger.info("Invalidated cache for tab %s. New version: %s", t_id,
+                    new_version)
+
+    if new_data:
+        cache.set_many(new_data)
+
+    if invalidate_tabs:
         invalidate_tabs_cache()
