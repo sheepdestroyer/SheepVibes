@@ -5,6 +5,7 @@ from backend.cache_utils import (
     TABS_VERSION_KEY,
     get_tab_version_key,
     get_version,
+    invalidate_multiple_tabs_cache,
     invalidate_tab_feeds_cache,
     invalidate_tabs_cache,
     make_tab_feeds_cache_key,
@@ -139,3 +140,34 @@ def test_invalidate_tab_feeds_cache():
     assert get_version(get_tab_version_key(2)) == 2
     assert get_version(get_tab_version_key(1)) == 3
     assert get_version(TABS_VERSION_KEY) == 3
+
+
+def test_invalidate_multiple_tabs_cache():
+    """Test invalidate_multiple_tabs_cache increments versions correctly in batch."""
+    assert get_version(get_tab_version_key(1)) == 1
+    assert get_version(get_tab_version_key(2)) == 1
+    assert get_version(get_tab_version_key(3)) == 1
+    assert get_version(TABS_VERSION_KEY) == 1
+
+    # Invalidate 1 and 2
+    invalidate_multiple_tabs_cache([1, 2], invalidate_tabs=True)
+
+    assert get_version(get_tab_version_key(1)) == 2
+    assert get_version(get_tab_version_key(2)) == 2
+    assert get_version(get_tab_version_key(3)) == 1
+    assert get_version(TABS_VERSION_KEY) == 2
+
+    # Invalidate 2 and 3 without tabs invalidation
+    invalidate_multiple_tabs_cache([2, 3], invalidate_tabs=False)
+
+    assert get_version(get_tab_version_key(1)) == 2
+    assert get_version(get_tab_version_key(2)) == 3
+    assert get_version(get_tab_version_key(3)) == 2
+    assert get_version(TABS_VERSION_KEY) == 2
+
+    # Empty list should do nothing
+    invalidate_multiple_tabs_cache([])
+    assert get_version(get_tab_version_key(1)) == 2
+    assert get_version(get_tab_version_key(2)) == 3
+    assert get_version(get_tab_version_key(3)) == 2
+    assert get_version(TABS_VERSION_KEY) == 2

@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-04-03 - Optimized bulk cache invalidations
+**Learning:** Iterating through tab IDs and calling `cache.get`/`cache.set` individually for each tab's feed cache causes significant network round-trips to Redis, particularly impacting batch operations like OPML imports or `update_all_feeds`.
+**Action:** Utilize Redis batch operations via Flask-Caching's `get_many` and `set_many` to consolidate version increment checks for multiple cache keys into a single round-trip. Implemented this as `invalidate_multiple_tabs_cache` to replace iterative loops.
