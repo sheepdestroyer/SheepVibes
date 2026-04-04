@@ -34,9 +34,9 @@ from defusedxml.common import (
 from sqlalchemy.exc import IntegrityError
 
 from .cache_utils import (
+    invalidate_multiple_tabs_cache,
     invalidate_tab_feeds_cache,
     invalidate_tabs_cache,
-    invalidate_multiple_tabs_cache,
 )
 from .constants import (
     DEFAULT_OPML_IMPORT_TAB_NAME,

@@ -57,8 +57,7 @@ def make_tab_feeds_cache_key(tab_id):
     # Only include parameters that are used by the endpoint in the cache key.
     used_params = ["limit"]
     sorted_query = sorted(
-        (k, v) for k, v in request.args.items(multi=True) if k in used_params
-    )
+        (k, v) for k, v in request.args.items(multi=True) if k in used_params)
     query_string = urllib.parse.urlencode(sorted_query)
     base_key = f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/"
     return f"{base_key}?{query_string}" if query_string else base_key
@@ -81,8 +80,8 @@ def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
     version_key = get_tab_version_key(tab_id)
     new_version = get_version(version_key) + 1
     cache.set(version_key, new_version)
-    logger.info("Invalidated cache for tab %s. New version: %s",
-                tab_id, new_version)
+    logger.info("Invalidated cache for tab %s. New version: %s", tab_id,
+                new_version)
     if invalidate_tabs:
         # Also invalidate the main tabs list because unread counts will have changed.
         invalidate_tabs_cache()
@@ -109,7 +108,9 @@ def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
     for i, key in enumerate(version_keys):
         # get_many returns a list of values corresponding to the keys.
         # If a key is not found, it might return None for that position.
-        current_version = current_versions[i] if current_versions and i < len(current_versions) and current_versions[i] is not None else 1
+        current_version = (current_versions[i]
+                           if current_versions and i < len(current_versions)
+                           and current_versions[i] is not None else 1)
         new_versions_dict[key] = current_version + 1
 
     # Set new versions in one go
