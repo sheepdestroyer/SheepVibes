@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-02-17 - Optimized bulk cache invalidations
+**Learning:** Functions like `api_update_all_feeds` previously used a loop to iteratively invalidate caches for multiple tabs via `cache.set`, creating an O(N) bottleneck in Redis network round-trips.
+**Action:** Implemented `invalidate_multiple_tabs_cache` in `backend/cache_utils.py` that utilizes `cache.get_many` and `cache.set_many` to process version key incrementation for multiple tabs simultaneously, dropping network overhead from O(N) to O(1) for mass invalidations.
