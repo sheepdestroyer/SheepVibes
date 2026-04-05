@@ -620,7 +620,10 @@ def import_opml(opml_file_stream, requested_tab_id_str):
 
     # OPTIMIZATION: Querying only the 'url' column avoids full ORM object instantiation,
     # significantly saving memory and CPU compared to Feed.query.all().
-    all_existing_feed_urls_set = {url for url, in db.session.query(Feed.url).all()}
+    all_existing_feed_urls_set = {
+        url
+        for (url, ) in db.session.query(Feed.url).all()
+    }
 
     # Announce start
     announcer.announce(
