@@ -265,8 +265,12 @@ def setup_tabs_and_feeds(client):
         db.session.add_all([tab1, tab2])
         db.session.commit()  # Commit to get IDs
 
-        feed1 = Feed(tab_id=tab1.id, name="Feed 1", url="http://example.com/url1")
-        feed2 = Feed(tab_id=tab1.id, name="Feed 2", url="http://example.com/url2")
+        feed1 = Feed(tab_id=tab1.id,
+                     name="Feed 1",
+                     url="http://example.com/url1")
+        feed2 = Feed(tab_id=tab1.id,
+                     name="Feed 2",
+                     url="http://example.com/url2")
         feed3 = Feed(
             tab_id=tab2.id,
             name="Feed 3",
