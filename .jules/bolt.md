@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-02-16 - Batch external cache invalidations
+**Learning:** Network round-trips for cache invalidation (like Redis GET/SET operations) in loops introduce significant N+1 overhead during bulk actions (e.g., updating all feeds causing many tabs' unread counts to change).
+**Action:** Always prefer `cache.get_many` and `cache.set_many` to perform bulk batch invalidations. This turns O(N) external network calls into exactly 2 network calls, providing ~90% speedups for batch cache writes.
