@@ -34,7 +34,7 @@ from defusedxml.common import (
 from sqlalchemy.exc import IntegrityError
 
 from .cache_utils import (
-    invalidate_tab_feeds_cache,
+    invalidate_multiple_tabs_cache,
     invalidate_tabs_cache,
 )
 from .constants import (
@@ -578,11 +578,9 @@ def _invalidate_import_caches(affected_tab_ids_set):
     """Invalidates caches for all tabs affected by the import."""
     if not affected_tab_ids_set:
         return
-    for tab_id in affected_tab_ids_set:
-        invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
-    invalidate_tabs_cache()
+    invalidate_multiple_tabs_cache(affected_tab_ids_set, invalidate_tabs=True)
     logger.info(
-        "OPML import: Invalidated caches for tabs: %s.",
+        "OPML import: Bulk invalidated caches for tabs: %s.",
         affected_tab_ids_set,
     )
 
