@@ -1700,6 +1700,17 @@ def test_import_opml_no_file(client):
     assert "No file part" in response.json["error"]
 
 
+def test_import_opml_txt_file_rejected(client):
+    """Test POST /api/opml/import with a .txt file is rejected."""
+    opml_content = "This is a text file, not xml"
+    opml_file = (io.BytesIO(opml_content.encode("utf-8")), "test.txt")
+    response = client.post("/api/opml/import",
+                           data={"file": opml_file},
+                           content_type="multipart/form-data")
+    assert response.status_code == 400
+    assert "Invalid file type. Allowed: .opml, .xml" in response.json["error"]
+
+
 def test_import_opml_empty_filename(client):
     """Test POST /api/opml/import with an empty filename (simulates no file selected)."""
     opml_file = (io.BytesIO(b"content"), "")  # Empty filename
