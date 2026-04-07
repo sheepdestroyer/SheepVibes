@@ -71,6 +71,34 @@ def invalidate_tabs_cache():
     logger.info("Invalidated tabs cache. New version: %s", new_version)
 
 
+def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
+    """Invalidates the feed cache for multiple tabs efficiently.
+
+    Args:
+        tab_ids (iterable): An iterable of tab IDs to invalidate.
+        invalidate_tabs (bool): If True, also invalidates the main tabs list cache.
+    """
+    if not tab_ids:
+        return
+
+    # Convert to list to ensure generators aren't exhausted during multiple iterations
+    tab_ids_list = list(tab_ids)
+
+    version_keys = [get_tab_version_key(tab_id) for tab_id in tab_ids_list]
+    current_versions = cache.get_many(*version_keys)
+
+    updates = {}
+    for tab_id, key, version in zip(tab_ids_list, version_keys, current_versions):
+        new_version = (version if version is not None else 1) + 1
+        updates[key] = new_version
+        logger.info("Invalidated cache for tab %s. New version: %s", tab_id, new_version)
+
+    if updates:
+        cache.set_many(updates)
+
+    if invalidate_tabs:
+        invalidate_tabs_cache()
+
 def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
     """Invalidates a specific tab's feed cache and the main tabs list cache.
 
