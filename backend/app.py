@@ -146,7 +146,8 @@ def scheduled_feed_update():
                     )
                     # Invalidate the cache after updates
                     if new_items > 0 and affected_tab_ids:
-                        invalidate_multiple_tabs_cache(affected_tab_ids, invalidate_tabs=True)
+                        invalidate_multiple_tabs_cache(affected_tab_ids,
+                                                       invalidate_tabs=True)
                         logger.info(
                             "Granular bulk cache invalidation completed for affected tabs: %s",
                             affected_tab_ids,
