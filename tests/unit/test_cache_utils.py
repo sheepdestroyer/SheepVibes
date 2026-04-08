@@ -70,7 +70,10 @@ def test_make_tabs_cache_key():
         pytest.param(
             "/api/tabs/1/feeds",
             1,
-            {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
+            {
+                TABS_VERSION_KEY: 3,
+                get_tab_version_key(1): 4
+            },
             "view/tab/1/v4/tabs_v3/",
             [],
             id="custom_versions_no_query_params",
@@ -78,7 +81,10 @@ def test_make_tabs_cache_key():
         pytest.param(
             "/api/tabs/1/feeds?limit=10&other=ignored",
             1,
-            {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
+            {
+                TABS_VERSION_KEY: 3,
+                get_tab_version_key(1): 4
+            },
             "view/tab/1/v4/tabs_v3/?limit=10",
             ["other=ignored"],
             id="with_query_params",
@@ -89,16 +95,18 @@ def test_make_tabs_cache_key():
         pytest.param(
             "/api/tabs/1/feeds?limit=10&limit=20",
             1,
-            {TABS_VERSION_KEY: 3, get_tab_version_key(1): 4},
+            {
+                TABS_VERSION_KEY: 3,
+                get_tab_version_key(1): 4
+            },
             "view/tab/1/v4/tabs_v3/?limit=10&limit=20",
             [],
             id="multiple_values_for_query_param",
         ),
     ],
 )
-def test_make_tab_feeds_cache_key(
-    url, tab_id, cache_versions, expected_key, unexpected_parts
-):
+def test_make_tab_feeds_cache_key(url, tab_id, cache_versions, expected_key,
+                                  unexpected_parts):
     """Test make_tab_feeds_cache_key incorporates versions and query params."""
     for k, v in cache_versions.items():
         cache.set(k, v)
