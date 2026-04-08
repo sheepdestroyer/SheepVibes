@@ -57,8 +57,7 @@ def make_tab_feeds_cache_key(tab_id):
     # Only include parameters that are used by the endpoint in the cache key.
     used_params = ["limit"]
     sorted_query = sorted(
-        (k, v) for k, v in request.args.items(multi=True) if k in used_params
-    )
+        (k, v) for k, v in request.args.items(multi=True) if k in used_params)
     query_string = urllib.parse.urlencode(sorted_query)
     base_key = f"view/tab/{tab_id}/v{tab_version}/tabs_v{tabs_version}/"
     return f"{base_key}?{query_string}" if query_string else base_key
@@ -81,8 +80,35 @@ def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
     version_key = get_tab_version_key(tab_id)
     new_version = get_version(version_key) + 1
     cache.set(version_key, new_version)
-    logger.info("Invalidated cache for tab %s. New version: %s",
-                tab_id, new_version)
+    logger.info("Invalidated cache for tab %s. New version: %s", tab_id,
+                new_version)
+    if invalidate_tabs:
+        # Also invalidate the main tabs list because unread counts will have changed.
+        invalidate_tabs_cache()
+
+
+def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
+    """Invalidates the feed cache for multiple tabs in a single operation.
+
+    Args:
+        tab_ids (iterable): The IDs of the tabs to invalidate the cache for.
+        invalidate_tabs (bool): If True, also invalidates the main tabs list cache.
+    """
+    tab_ids = list(tab_ids)
+    if not tab_ids:
+        return
+
+    keys = [get_tab_version_key(tab_id) for tab_id in tab_ids]
+    values = cache.get_many(*keys)
+
+    updates = {}
+    for key, value in zip(keys, values):
+        updates[key] = (value if value is not None else 1) + 1
+
+    cache.set_many(updates)
+    logger.info("Invalidated cache for tabs %s. New versions: %s", tab_ids,
+                updates)
+
     if invalidate_tabs:
         # Also invalidate the main tabs list because unread counts will have changed.
         invalidate_tabs_cache()

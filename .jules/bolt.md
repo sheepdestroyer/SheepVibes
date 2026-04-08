@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-04-08 - Use get_many/set_many for bulk cache operations
+**Learning:** Calling `cache.set` iteratively in a loop causes significant performance overhead due to repeated round-trips for operations spanning multiple keys (e.g. invalidating multiple tabs cache).
+**Action:** Use `cache.get_many` and `cache.set_many` to process bulk cache invalidations. Also, wrap iterables (like sets) into a `list` before using them to build cache queries to avoid generator exhaustion bugs.
