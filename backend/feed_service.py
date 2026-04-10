@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     # Security Note: xml.etree.ElementTree is used here EXCLUSIVELY for type hinting.
     # All actual XML parsing in this module MUST use defusedxml.ElementTree (aliased as SafeET)
     # or defusedxml.sax to prevent XXE and other XML-based attacks.
-    from xml.etree.ElementTree import Element  # skipcq: BAN-B405
+    from xml.etree.ElementTree import Element  # noqa: F401  # skipcq: BAN-B405
 
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
 OpmlStackItem = tuple[list["Element"], int, str]
@@ -618,7 +618,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         )
         return result, None
 
-    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
+    all_existing_feed_urls_set = {url for url, in db.session.query(Feed.url).all()}
 
     # Announce start
     announcer.announce(
@@ -738,8 +738,10 @@ def _validate_xml_safety(content):
 
     Policy:
     - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration (required for many valid RSS feeds).
-    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against internal entity expansion (Billion Laughs) and external entity injection.
-    - forbid_external=True: STICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.
+    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense
+      against internal entity expansion (Billion Laughs) and external entity injection.
+    - forbid_external=True: STICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`),
+      preventing SSRF and file system access.
 
     Malformed XML or non-XML input that raises SAXParseException or UnicodeError
     is REJECTED (returns False) for safety.
@@ -1625,7 +1627,7 @@ def update_all_feeds():
     logger.info("Starting update process for %d feeds (Parallelized).",
                 total_feeds)
     announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"
+        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"  # noqa: E501
     )
 
     actual_workers = min(MAX_CONCURRENT_FETCHES,
@@ -1642,7 +1644,7 @@ def update_all_feeds():
             processed_count += 1
             status_msg = f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
             announcer.announce(
-                msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"
+                msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"  # noqa: E501
             )
 
             try:

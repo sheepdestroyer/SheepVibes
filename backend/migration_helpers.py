@@ -62,7 +62,8 @@ def safe_drop_constraint(
     """
     if constraint_name is None:
         logger.warning(
-            "Attempted to safe_drop_constraint with None name on table %s. This is a no-op; callers must provide an explicit constraint name.",
+            "Attempted to safe_drop_constraint with None name on table %s. This is a no-op; callers must provide an "
+            "explicit constraint name.",
             table_name,
         )
         return
