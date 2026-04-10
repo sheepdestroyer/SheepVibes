@@ -68,10 +68,10 @@ def safe_drop_constraint(
         )
         return
 
-    if not constraint_exists(table_name, constraint_name, type_,
-                             schema=schema):
-        logger.debug("Constraint %s not found on %s, skipping drop.",
-                     constraint_name, table_name)
+    if not constraint_exists(table_name, constraint_name, type_, schema=schema):
+        logger.debug(
+            "Constraint %s not found on %s, skipping drop.", constraint_name, table_name
+        )
         return
 
     # If we reach here, we should attempt to drop the constraint.
