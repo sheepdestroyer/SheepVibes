@@ -2,3 +2,7 @@
 **Vulnerability:** `feedparser` library relies on standard XML libraries which may be vulnerable to XXE (XML External Entity) attacks if not configured securely or if the environment defaults are insecure.
 **Learning:** Even if the current environment's Python version (e.g. 3.12) defaults to safe XML parsing, relying on implicit defaults is risky. Explicit validation using `defusedxml` is required for robust security.
 **Prevention:** Implemented a pre-validation step using `defusedxml.sax.parseString` to check for DTDs and entities before passing content to `feedparser`. This ensures XXE attacks are blocked regardless of the underlying parser's configuration.
+## 2024-05-24 - [Enforce Explicit URL Scheme Validation in Feeds API]
+**Vulnerability:** The endpoints `POST /api/feeds` and `PUT /api/feeds/<id>` lacked explicit scheme validation on user-provided `url` fields at the API boundary. While the underlying feed fetching mechanism (`fetch_feed`) handled URL parsing, malicious URL schemes like `javascript:` or `file:` could still be submitted and saved to the database.
+**Learning:** Depending entirely on downstream parsing logic or feed fetcher failure to validate URLs is insufficient. It can lead to Stored XSS or SSRF vulnerabilities if those URLs are rendered improperly on the frontend or processed unexpectedly elsewhere.
+**Prevention:** I explicitly enforced URL validation using `is_valid_feed_url` (which checks for `http` and `https` schemes) in `backend/blueprints/feeds.py` endpoints before attempting to fetch or save the feeds.
