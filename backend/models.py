@@ -75,7 +75,7 @@ class Feed(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     tab_id = db.Column(db.Integer, db.ForeignKey("tabs.id"),
-                       nullable=False)  # Foreign key to Tab
+                       nullable=False, index=True)  # Foreign key to Tab
     name = db.Column(
         db.String(200),
         nullable=False)  # Name of the feed (often from feed title)
