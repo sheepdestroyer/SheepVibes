@@ -406,8 +406,19 @@ def get_feed_items(feed_id):
     limit = min(limit, MAX_PAGINATION_LIMIT)
 
     # Query the database for the items, ordered by date
+    # Optimization: Query specific columns to avoid full ORM object instantiation
     items = (
-        FeedItem.query.filter_by(feed_id=feed_id)
+        db.session.query(
+            FeedItem.id,
+            FeedItem.feed_id,
+            FeedItem.title,
+            FeedItem.link,
+            FeedItem.published_time,
+            FeedItem.fetched_time,
+            FeedItem.is_read,
+            FeedItem.guid,
+        )
+        .filter_by(feed_id=feed_id)
         .order_by(
             FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
         )
@@ -416,8 +427,22 @@ def get_feed_items(feed_id):
         .all()
     )
 
-    # Return the items as a JSON response
-    return jsonify([item.to_dict() for item in items])
+    # Return the items as a JSON response directly mapping the row data
+    return jsonify(
+        [
+            {
+                "id": item.id,
+                "feed_id": item.feed_id,
+                "title": item.title,
+                "link": item.link,
+                "published_time": FeedItem.to_iso_z_string(item.published_time),
+                "fetched_time": FeedItem.to_iso_z_string(item.fetched_time),
+                "is_read": item.is_read,
+                "guid": item.guid,
+            }
+            for item in items
+        ]
+    )
 
 
 @items_bp.route("/<int:item_id>/read", methods=["POST"])
