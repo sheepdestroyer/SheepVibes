@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2024-04-18 - Optimized get_feed_items read-only serialization
+**Learning:** Using `FeedItem.query.all()` instantiates full SQLAlchemy ORM objects which includes expensive identity map tracking. This is pure overhead when we only need to serialize data for a JSON response.
+**Action:** Use `db.session.query(Column1, Column2, ...)` to query only the required columns and map the tuple-like results directly to dictionaries, bypassing the ORM layer for read-only lists.
