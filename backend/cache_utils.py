@@ -110,7 +110,8 @@ def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
     updates = {}
     for key, current_version in zip(version_keys, current_versions):
         # Default to 1 if not found, then increment
-        new_version = (current_version if current_version is not None else 1) + 1
+        new_version = (
+            current_version if current_version is not None else 1) + 1
         updates[key] = new_version
 
     # Set all new versions in a single round-trip
