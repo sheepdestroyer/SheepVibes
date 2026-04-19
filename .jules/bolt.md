@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-02-19 - Bulk cache invalidation with cache.get_many/set_many
+**Learning:** Iteratively querying and setting cache keys one-by-one inside a loop (e.g. `invalidate_tab_feeds_cache` inside a loop over `affected_tab_ids`) causes excessive overhead and round-trips to the cache backend (Redis/SimpleCache).
+**Action:** Use `cache.get_many(*keys)` to retrieve current versions in a single query, increment them, and `cache.set_many(mapping)` to update them in a single round-trip. This bulk operation reduces latency significantly, especially during processes that affect many entities simultaneously (like `api_update_all_feeds`). Ensure input iterables are cast to `list` to prevent generator exhaustion.
