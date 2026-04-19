@@ -105,7 +105,8 @@ def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
 
     new_versions_dict = {}
     for key, current_val in zip(version_keys, current_versions):
-        new_versions_dict[key] = (current_val if current_val is not None else 1) + 1
+        new_versions_dict[key] = (
+            current_val if current_val is not None else 1) + 1
 
     cache.set_many(new_versions_dict)
     logger.info("Invalidated cache for tabs %s.", tab_ids_list)
