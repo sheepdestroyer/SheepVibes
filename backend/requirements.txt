@@ -9,5 +9,5 @@ gunicorn
 Flask-Caching>=2.1.0
 redis
 Flask-CORS
-filelock==3.24.3
+filelock==3.29.0
 defusedxml==0.7.1  # Required for secure XML parsing (prevents XXE attacks)
