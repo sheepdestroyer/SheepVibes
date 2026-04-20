@@ -33,15 +33,18 @@ def get_tabs():
         return jsonify([])
 
     # Pre-calculate unread counts for all tabs in a single query to avoid N+1
-    unread_counts_query = (db.session.query(Feed.tab_id, func.count(
-        FeedItem.id)).join(FeedItem, Feed.id == FeedItem.feed_id).filter(
-            Feed.tab_id.in_(tab_ids),
-            FeedItem.is_read.is_(False)).group_by(Feed.tab_id))
+    unread_counts_query = (
+        db.session.query(Feed.tab_id, func.count(FeedItem.id))
+        .join(FeedItem, Feed.id == FeedItem.feed_id)
+        .filter(Feed.tab_id.in_(tab_ids), FeedItem.is_read.is_(False))
+        .group_by(Feed.tab_id)
+    )
     unread_counts = dict(unread_counts_query.all())
 
-    return jsonify([
-        tab.to_dict(unread_count=unread_counts.get(tab.id, 0)) for tab in tabs
-    ])
+    return jsonify(
+        [tab.to_dict(unread_count=unread_counts.get(tab.id, 0))
+         for tab in tabs]
+    )
 
 
 @tabs_bp.route("", methods=["POST"])
@@ -75,23 +78,19 @@ def create_tab():
         db.session.add(new_tab)
         db.session.commit()
         invalidate_tabs_cache()
-        logger.info("Created new tab '%s' with id %s.", new_tab.name,
-                    new_tab.id)
+        logger.info("Created new tab '%s' with id %s.",
+                    new_tab.name, new_tab.id)
         return jsonify(new_tab.to_dict(unread_count=0)), 201  # Created
     except IntegrityError:
         db.session.rollback()
-        logger.warning("Attempted to create a tab with a duplicate name '%s'",
-                       tab_name)
-        return jsonify({"error":
-                        f'Tab with name "{tab_name}" already exists'}), 409
+        logger.warning(
+            "Attempted to create a tab with a duplicate name '%s'", tab_name)
+        return jsonify({"error": f'Tab with name "{tab_name}" already exists'}), 409
     except Exception as e:
         db.session.rollback()
         logger.error("Error creating tab '%s': %s", tab_name, e, exc_info=True)
         return (
-            jsonify({
-                "error":
-                "An internal error occurred while creating the tab."
-            }),
+            jsonify({"error": "An internal error occurred while creating the tab."}),
             500,
         )
 
@@ -117,8 +116,8 @@ def rename_tab(tab_id):
     new_name = data["name"].strip()
 
     # Check if the new name is already taken by another tab
-    existing_tab = Tab.query.filter(Tab.id != tab_id,
-                                    Tab.name == new_name).first()
+    existing_tab = Tab.query.filter(
+        Tab.id != tab_id, Tab.name == new_name).first()
     if existing_tab:
         return (
             jsonify({"error": f'Tab name "{new_name}" is already in use'}),
@@ -130,28 +129,23 @@ def rename_tab(tab_id):
         tab.name = new_name
         db.session.commit()
         invalidate_tabs_cache()
-        logger.info("Renamed tab %s from '%s' to '%s'.", tab_id, original_name,
-                    new_name)
+        logger.info(
+            "Renamed tab %s from '%s' to '%s'.", tab_id, original_name, new_name
+        )
         return jsonify(tab.to_dict()), 200  # OK
     except IntegrityError:
         db.session.rollback()
         logger.warning(
-            "Failed to rename tab %s to '%s' due to duplicate name.", tab_id,
-            new_name)
-        return jsonify({"error":
-                        f'Tab name "{new_name}" is already in use'}), 409
+            "Failed to rename tab %s to '%s' due to duplicate name.", tab_id, new_name
+        )
+        return jsonify({"error": f'Tab name "{new_name}" is already in use'}), 409
     except Exception as e:
         db.session.rollback()
-        logger.error("Error renaming tab %s to '%s': %s",
-                     tab_id,
-                     new_name,
-                     str(e),
-                     exc_info=True)
+        logger.error(
+            "Error renaming tab %s to '%s': %s", tab_id, new_name, str(e), exc_info=True
+        )
         return (
-            jsonify({
-                "error":
-                "An internal error occurred while renaming the tab."
-            }),
+            jsonify({"error": "An internal error occurred while renaming the tab."}),
             500,
         )
 
@@ -175,10 +169,7 @@ def delete_tab(tab_id):
         db.session.rollback()
         logger.error("Error deleting tab %s: %s", tab_id, e, exc_info=True)
         return (
-            jsonify({
-                "error":
-                "An internal error occurred while deleting the tab."
-            }),
+            jsonify({"error": "An internal error occurred while deleting the tab."}),
             500,
         )
 
@@ -207,28 +198,36 @@ def get_feeds_for_tab(tab_id):
     feed_ids = [feed.id for feed in feeds]
 
     # Query 2: Get unread counts for all feeds in this tab to avoid N+1 queries.
-    unread_counts_query = (db.session.query(
-        FeedItem.feed_id, func.count(FeedItem.id)).filter(
-            FeedItem.feed_id.in_(feed_ids),
-            FeedItem.is_read.is_(False)).group_by(FeedItem.feed_id))
+    unread_counts_query = (
+        db.session.query(FeedItem.feed_id, func.count(FeedItem.id))
+        .filter(FeedItem.feed_id.in_(feed_ids), FeedItem.is_read.is_(False))
+        .group_by(FeedItem.feed_id)
+    )
     unread_counts = dict(unread_counts_query.all())
 
     # Query 3: Get the top N items for ALL those feeds in a single, efficient query.
     # Use a window function to rank items within each feed.
-    ranked_items_subq = (select(
-        FeedItem,
-        func.row_number().over(
-            partition_by=FeedItem.feed_id,
-            order_by=[
-                FeedItem.published_time.desc().nullslast(),
-                FeedItem.fetched_time.desc(),
-            ],
-        ).label("rank"),
-    ).filter(FeedItem.feed_id.in_(feed_ids)).subquery())
+    ranked_items_subq = (
+        select(
+            FeedItem,
+            func.row_number()
+            .over(
+                partition_by=FeedItem.feed_id,
+                order_by=[
+                    FeedItem.published_time.desc().nullslast(),
+                    FeedItem.fetched_time.desc(),
+                ],
+            )
+            .label("rank"),
+        )
+        .filter(FeedItem.feed_id.in_(feed_ids))
+        .subquery()
+    )
 
     # Select from the subquery to filter by the rank.
     top_items_query = select(ranked_items_subq).filter(
-        ranked_items_subq.c.rank <= limit)
+        ranked_items_subq.c.rank <= limit
+    )
 
     top_items_results = db.session.execute(top_items_query).all()
 
