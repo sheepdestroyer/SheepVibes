@@ -9,3 +9,7 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-04-20 - Avoid ORM objects for large list responses
+**Learning:** Using SQLAlchemy ORM models to retrieve large lists (like feed items in `get_feed_items`) introduces significant overhead due to object instantiation and tracking.
+**Action:** When returning large collections of read-only data, query specific columns directly as tuples and map them to dictionaries manually. This provides a measurable speedup by bypassing the ORM's heavy lifting.
