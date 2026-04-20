@@ -222,19 +222,32 @@ class FeedItem(db.Model):
         iso_string = dt_val_utc.isoformat()
         return iso_string.replace("+00:00", "Z")
 
+    @staticmethod
+    def tuple_to_dict(item_tuple):
+        """Serializes a FeedItem tuple directly to a dictionary.
+
+        Args:
+            item_tuple (tuple): A tuple containing the fields of a FeedItem.
+                It is expected to have the attributes corresponding to the model.
+
+        Returns:
+            dict: A dictionary representation of the feed item.
+        """
+        return {
+            "id": item_tuple.id,
+            "feed_id": item_tuple.feed_id,
+            "title": item_tuple.title,
+            "link": item_tuple.link,
+            "published_time": FeedItem.to_iso_z_string(item_tuple.published_time),
+            "fetched_time": FeedItem.to_iso_z_string(item_tuple.fetched_time),
+            "is_read": item_tuple.is_read,
+            "guid": item_tuple.guid,
+        }
+
     def to_dict(self):
         """Serializes the FeedItem object to a dictionary.
 
         Returns:
             dict: A dictionary representation of the feed item.
         """
-        return {
-            "id": self.id,
-            "feed_id": self.feed_id,
-            "title": self.title,
-            "link": self.link,
-            "published_time": FeedItem.to_iso_z_string(self.published_time),
-            "fetched_time": FeedItem.to_iso_z_string(self.fetched_time),
-            "is_read": self.is_read,
-            "guid": self.guid,
-        }
+        return FeedItem.tuple_to_dict(self)

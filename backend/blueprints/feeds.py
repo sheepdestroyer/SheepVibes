@@ -405,19 +405,36 @@ def get_feed_items(feed_id):
         return jsonify({"error": "Limit must be positive."}), 400
     limit = min(limit, MAX_PAGINATION_LIMIT)
 
-    # Query the database for the items, ordered by date
-    items = (
-        FeedItem.query.filter_by(feed_id=feed_id)
+    # Query the database for the items, ordered by date.
+    # We fetch only the required columns directly as tuples to avoid the overhead of
+    # creating full SQLAlchemy ORM objects for potentially hundreds of items.
+    query = (
+        db.session.query(
+            FeedItem.id,
+            FeedItem.feed_id,
+            FeedItem.title,
+            FeedItem.link,
+            FeedItem.published_time,
+            FeedItem.fetched_time,
+            FeedItem.is_read,
+            FeedItem.guid,
+        )
+        .filter_by(feed_id=feed_id)
         .order_by(
             FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
         )
         .offset(offset)
         .limit(limit)
-        .all()
     )
 
+    items = query.all()
+
+    # Construct the response correctly from the fetched tuples.
+    # This maps the keys identically to how `FeedItem.to_dict()` does, maintaining API compatibility.
+    response_items = [FeedItem.tuple_to_dict(item) for item in items]
+
     # Return the items as a JSON response
-    return jsonify([item.to_dict() for item in items])
+    return jsonify(response_items)
 
 
 @items_bp.route("/<int:item_id>/read", methods=["POST"])

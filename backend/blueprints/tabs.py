@@ -236,17 +236,7 @@ def get_feeds_for_tab(tab_id):
     items_by_feed = {}
     for item_row in top_items_results:
         # Directly serialize the row to a dict, avoiding ORM object creation.
-        item_dict = {
-            "id": item_row.id,
-            "feed_id": item_row.feed_id,
-            "title": item_row.title,
-            "link": item_row.link,
-            "published_time":
-            FeedItem.to_iso_z_string(item_row.published_time),
-            "fetched_time": FeedItem.to_iso_z_string(item_row.fetched_time),
-            "is_read": item_row.is_read,
-            "guid": item_row.guid,
-        }
+        item_dict = FeedItem.tuple_to_dict(item_row)
 
         feed_id = item_row.feed_id
         if feed_id not in items_by_feed:
