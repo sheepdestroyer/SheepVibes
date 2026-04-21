@@ -4,7 +4,11 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from ..cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
+from ..cache_utils import (
+    invalidate_multiple_tabs_cache,
+    invalidate_tab_feeds_cache,
+    invalidate_tabs_cache,
+)
 from ..constants import (
     DEFAULT_FEED_ITEMS_LIMIT,
     DEFAULT_PAGINATION_LIMIT,
@@ -311,8 +315,7 @@ def api_update_all_feeds():
             new_items_count,
         )
         if new_items_count > 0 and affected_tab_ids:
-            for tab_id in affected_tab_ids:
-                invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
+            invalidate_multiple_tabs_cache(affected_tab_ids)
             invalidate_tabs_cache()
             logger.info(
                 "Granular cache invalidation completed for affected tabs: %s",
