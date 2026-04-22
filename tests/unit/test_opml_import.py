@@ -74,9 +74,9 @@ def test_import_nested_opml(client, mocker):
                  return_value=True)
 
     data = {"file": (io.BytesIO(opml_content), "nested.opml")}
-    response = client.post("/api/opml/import",
-                           data=data,
-                           content_type="multipart/form-data")
+    response = client.post(
+        "/api/opml/import", data=data, content_type="multipart/form-data"
+    )
 
     assert response.status_code == 200
     result = response.get_json()
@@ -92,8 +92,9 @@ def test_import_nested_opml(client, mocker):
         assert sub_tech_tab is not None
 
         # Verify affected_tab_ids
-        assert {tech_tab.id, sub_tech_tab.id,
-                result["tab_id"]}.issubset(set(result["affected_tab_ids"]))
+        assert {tech_tab.id, sub_tech_tab.id, result["tab_id"]}.issubset(
+            set(result["affected_tab_ids"])
+        )
 
         # Check feeds
         hn_feed = Feed.query.filter_by(
@@ -158,7 +159,8 @@ def test_opml_import_skips_skipped_folder_types(client, mocker):
 
         # Assert that the feed in the skipped folder was not created
         skipped_feed = Feed.query.filter_by(
-            url="https://example.com/should-not-import.xml").first()
+            url="https://example.com/should-not-import.xml"
+        ).first()
         assert skipped_feed is None
 
 
@@ -248,8 +250,11 @@ def test_opml_import_skips_duplicate_feed_urls(client, mocker):
 
     with app.app_context():
         # Confirm that we still only have one feed per URL overall.
-        feeds_by_url = (Feed.query.with_entities(Feed.url, func.count(
-            Feed.id)).group_by(Feed.url).all())
+        feeds_by_url = (
+            Feed.query.with_entities(Feed.url, func.count(Feed.id))
+            .group_by(Feed.url)
+            .all()
+        )
 
         counts = dict(feeds_by_url)
         assert counts["https://example.com/existing.xml"] == 1
@@ -388,3 +393,20 @@ def test_import_malformed_opml(client):
 
     payload = response.get_json()
     assert "Malformed OPML file" in payload.get("error", "")
+
+
+def test_import_opml_txt_file_rejected(client):
+    """Test importing a .txt file is rejected."""
+    txt_content = b"This is just a text file, not an OPML."
+    data = {
+        "file": (io.BytesIO(txt_content), "feeds.txt"),
+    }
+    response = client.post(
+        "/api/opml/import",
+        data=data,
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert "Invalid file type. Allowed: .opml, .xml" in payload.get(
+        "error", "")
