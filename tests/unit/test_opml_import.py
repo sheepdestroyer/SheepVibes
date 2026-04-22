@@ -388,3 +388,18 @@ def test_import_malformed_opml(client):
 
     payload = response.get_json()
     assert "Malformed OPML file" in payload.get("error", "")
+
+def test_import_opml_txt_file_rejected(client):
+    """Test importing a .txt file is rejected."""
+    txt_content = b"This is just a text file, not an OPML."
+    data = {
+        "file": (io.BytesIO(txt_content), "feeds.txt"),
+    }
+    response = client.post(
+        "/api/opml/import",
+        data=data,
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert "Invalid file type. Allowed: .opml, .xml" in payload.get("error", "")
