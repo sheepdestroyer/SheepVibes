@@ -43,6 +43,21 @@ def test_import(client, mocker):
     logger.info("Test PASSED")
 
 
+def test_import_opml_txt_file_rejected(client):
+    """Test that OPML imports with a .txt extension are rejected."""
+    opml_content = b'<opml version="1.0"><body><outline text="Test Feed" xmlUrl="http://example.com/feed" /></body></opml>'
+
+    data = {"file": (io.BytesIO(opml_content), "test_feeds.txt")}
+    response = client.post(
+        "/api/opml/import",
+        data=data,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert "Invalid file type. Allowed: .opml, .xml" in response.get_json()["error"]
+
+
 def test_import_nested_opml(client, mocker):
     """Test importing an OPML with nested folders."""
     opml_content = b"""<?xml version="1.0" encoding="UTF-8"?>
