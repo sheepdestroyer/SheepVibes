@@ -3,6 +3,7 @@ import json
 import logging
 
 from flask import Blueprint, jsonify, request
+from sqlalchemy import select
 
 from ..cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
 from ..constants import (
@@ -406,18 +407,44 @@ def get_feed_items(feed_id):
     limit = min(limit, MAX_PAGINATION_LIMIT)
 
     # Query the database for the items, ordered by date
-    items = (
-        FeedItem.query.filter_by(feed_id=feed_id)
+    # Select specific columns to bypass ORM object instantiation for performance
+    items_query = (
+        select(
+            FeedItem.id,
+            FeedItem.feed_id,
+            FeedItem.title,
+            FeedItem.link,
+            FeedItem.published_time,
+            FeedItem.fetched_time,
+            FeedItem.is_read,
+            FeedItem.guid,
+        )
+        .filter_by(feed_id=feed_id)
         .order_by(
             FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
         )
         .offset(offset)
         .limit(limit)
-        .all()
     )
+    items = db.session.execute(items_query).all()
 
-    # Return the items as a JSON response
-    return jsonify([item.to_dict() for item in items])
+    # Construct the JSON response manually from the returned tuples
+    response_data = []
+    for item_row in items:
+        response_data.append(
+            {
+                "id": item_row.id,
+                "feed_id": item_row.feed_id,
+                "title": item_row.title,
+                "link": item_row.link,
+                "published_time": FeedItem.to_iso_z_string(item_row.published_time),
+                "fetched_time": FeedItem.to_iso_z_string(item_row.fetched_time),
+                "is_read": item_row.is_read,
+                "guid": item_row.guid,
+            }
+        )
+
+    return jsonify(response_data)
 
 
 @items_bp.route("/<int:item_id>/read", methods=["POST"])
