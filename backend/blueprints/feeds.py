@@ -3,6 +3,7 @@ import json
 import logging
 
 from flask import Blueprint, jsonify, request
+from sqlalchemy import select
 
 from ..cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
 from ..constants import (
@@ -405,19 +406,49 @@ def get_feed_items(feed_id):
         return jsonify({"error": "Limit must be positive."}), 400
     limit = min(limit, MAX_PAGINATION_LIMIT)
 
-    # Query the database for the items, ordered by date
-    items = (
-        FeedItem.query.filter_by(feed_id=feed_id)
+    # Query the database for the items, ordered by date.
+    # We select specific columns into tuples to bypass the expensive ORM instantiation entirely
+    stmt = (
+        select(
+            FeedItem.id,
+            FeedItem.feed_id,
+            FeedItem.title,
+            FeedItem.link,
+            FeedItem.published_time,
+            FeedItem.fetched_time,
+            FeedItem.is_read,
+            FeedItem.guid,
+        )
+        .filter_by(feed_id=feed_id)
         .order_by(
             FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
         )
         .offset(offset)
         .limit(limit)
-        .all()
     )
 
+    items = db.session.execute(stmt).all()
+
+    # Use local variable lookup for performance in the loop
+    to_iso_z = FeedItem.to_iso_z_string
+
+    # Map the resulting tuples directly to dictionaries
+    result = [
+        {
+            "id": row.id,
+            "feed_id": row.feed_id,
+            "title": row.title,
+            "link": row.link,
+            "published_time": to_iso_z(row.published_time),
+            "fetched_time": to_iso_z(row.fetched_time),
+            "is_read": row.is_read,
+            "guid": row.guid,
+        }
+        for row in items
+    ]
+
     # Return the items as a JSON response
-    return jsonify([item.to_dict() for item in items])
+    return jsonify(result)
 
 
 @items_bp.route("/<int:item_id>/read", methods=["POST"])
