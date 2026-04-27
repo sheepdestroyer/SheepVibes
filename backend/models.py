@@ -238,3 +238,24 @@ class FeedItem(db.Model):
             "is_read": self.is_read,
             "guid": self.guid,
         }
+
+    @staticmethod
+    def to_dict_from_row(row):
+        """Serializes a FeedItem row tuple directly to a dictionary to avoid ORM instantiation.
+
+        Args:
+            row: A SQLAlchemy Row object containing FeedItem columns.
+
+        Returns:
+            dict: A dictionary representation of the feed item.
+        """
+        return {
+            "id": row.id,
+            "feed_id": row.feed_id,
+            "title": row.title,
+            "link": row.link,
+            "published_time": FeedItem.to_iso_z_string(row.published_time),
+            "fetched_time": FeedItem.to_iso_z_string(row.fetched_time),
+            "is_read": row.is_read,
+            "guid": row.guid,
+        }

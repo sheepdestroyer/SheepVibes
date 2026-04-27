@@ -405,19 +405,31 @@ def get_feed_items(feed_id):
         return jsonify({"error": "Limit must be positive."}), 400
     limit = min(limit, MAX_PAGINATION_LIMIT)
 
-    # Query the database for the items, ordered by date
-    items = (
-        FeedItem.query.filter_by(feed_id=feed_id)
+    # Query the database for the items using specific columns to avoid full
+    # ORM object instantiation overhead, ordered by date
+    items_query = (
+        db.session.query(
+            FeedItem.id,
+            FeedItem.feed_id,
+            FeedItem.title,
+            FeedItem.link,
+            FeedItem.published_time,
+            FeedItem.fetched_time,
+            FeedItem.is_read,
+            FeedItem.guid,
+        )
+        .filter(FeedItem.feed_id == feed_id)
         .order_by(
             FeedItem.published_time.desc().nullslast(), FeedItem.fetched_time.desc()
         )
         .offset(offset)
         .limit(limit)
-        .all()
     )
 
-    # Return the items as a JSON response
-    return jsonify([item.to_dict() for item in items])
+    items = items_query.all()
+
+    # Map directly to dict to avoid expensive ORM instantiation for read-only serialization
+    return jsonify([FeedItem.to_dict_from_row(row) for row in items])
 
 
 @items_bp.route("/<int:item_id>/read", methods=["POST"])
