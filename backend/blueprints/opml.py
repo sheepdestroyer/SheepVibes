@@ -107,6 +107,10 @@ def _validate_opml_file_request():
 @opml_bp.route("/import", methods=["POST"])
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
+    # CSRF protection: require a specific header to prevent simple HTML form submissions
+    if request.headers.get("X-Requested-With") != "XMLHttpRequest":
+        return jsonify({"error": "Missing or invalid X-Requested-With header (CSRF protection)"}), 400
+
     opml_file, error_resp = _validate_opml_file_request()
     if error_resp:
         return error_resp

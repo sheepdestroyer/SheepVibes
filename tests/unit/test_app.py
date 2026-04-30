@@ -1605,7 +1605,7 @@ def test_import_opml_success(mock_fetch_update, client):
             "file": opml_file,
             "tab_id": str(tab_id)
         },
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     # Assert
@@ -1677,7 +1677,7 @@ def test_import_opml_with_duplicates(mock_fetch_update, client):
             "file": opml_file,
             "tab_id": str(tab_id)
         },
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -1695,7 +1695,7 @@ def test_import_opml_with_duplicates(mock_fetch_update, client):
 def test_import_opml_no_file(client):
     """Test POST /api/opml/import without a file."""
     response = client.post("/api/opml/import",
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
     assert response.status_code == 400
     assert "No file part" in response.json["error"]
 
@@ -1705,7 +1705,7 @@ def test_import_opml_empty_filename(client):
     opml_file = (io.BytesIO(b"content"), "")  # Empty filename
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
     assert response.status_code == 400
     assert "No file selected" in response.json["error"]
 
@@ -1721,7 +1721,7 @@ def test_import_opml_malformed_xml(client):
     opml_file = (io.BytesIO(opml_content.encode("utf-8")), "malformed.opml")
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
     assert response.status_code == 400
     assert "Malformed OPML file" in response.json["error"]
 
@@ -1750,7 +1750,7 @@ def test_import_opml_creates_default_tab_when_none_exist(
     # Act
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     # Assert
     assert response.status_code == 200
@@ -1814,7 +1814,7 @@ def test_import_opml_specific_tab(mock_fetch_update, client):
             "file": opml_file,
             "tab_id": str(tab2_id)
         },
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -1857,7 +1857,7 @@ def test_import_opml_default_tab_if_tab_id_not_provided(
     # Not providing 'tab_id' in the form data
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     assert response.status_code == 200
     json_data = response.json
@@ -1909,7 +1909,7 @@ def test_import_opml_missing_xmlurl_is_skipped(mock_fetch_update_unused,
             "file": opml_file,
             "tab_id": str(tab_id)
         },
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -1943,7 +1943,7 @@ def test_import_opml_no_body_tag(mock_fetch_update_unused, client):
     opml_file = (io.BytesIO(opml_content.encode("utf-8")), "no_body.opml")
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     assert response.status_code == 200  # Should still be a valid request
     json_data = response.json
@@ -1965,7 +1965,7 @@ def test_import_opml_empty_body_tag(mock_fetch_update_unused, client):
     opml_file = (io.BytesIO(opml_content.encode("utf-8")), "empty_body.opml")
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     assert response.status_code == 200
     json_data = response.json
@@ -2008,7 +2008,7 @@ def test_import_opml_nested_structure_creates_tabs_and_feeds(
     # Act: Import without specifying a tab_id, relying on default tab creation if none exist
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     # Assert
     assert response.status_code == 200
@@ -2078,7 +2078,7 @@ def test_import_opml_nested_folder_name_matches_existing_tab(
     )
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     assert response.status_code == 200
     json_data = response.json
@@ -2111,7 +2111,7 @@ def test_import_opml_empty_folder(mock_fetch_update_unused, client):
                  "empty_folder_import.opml")
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     assert response.status_code == 200
     json_data = response.json
@@ -2172,7 +2172,7 @@ def test_import_opml_folder_with_no_title_is_skipped_children_go_to_default(
             "file": opml_file,
             "tab_id": str(initial_tab_id)
         },
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -2227,7 +2227,7 @@ def test_import_opml_deletes_empty_default_imported_feeds_tab(
     )
     response = client.post("/api/opml/import",
                            data={"file": opml_file},
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     assert response.status_code == 200
     data = response.json

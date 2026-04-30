@@ -23,7 +23,7 @@ def test_import(client, mocker):
     # Mock the internal fetch_and_update_feed to avoid actual network calls
     mocker.patch("backend.feed_service.fetch_and_update_feed")
 
-    response = client.post(url, data=data, content_type="multipart/form-data")
+    response = client.post(url, data=data, content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     logger.info("Status Code: %s", response.status_code)
     assert response.status_code == 200
@@ -76,7 +76,7 @@ def test_import_nested_opml(client, mocker):
     data = {"file": (io.BytesIO(opml_content), "nested.opml")}
     response = client.post("/api/opml/import",
                            data=data,
-                           content_type="multipart/form-data")
+                           content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"})
 
     assert response.status_code == 200
     result = response.get_json()
@@ -140,7 +140,7 @@ def test_opml_import_skips_skipped_folder_types(client, mocker):
     response = client.post(
         "/api/opml/import",
         data=data,
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -184,7 +184,7 @@ def test_opml_import_skips_invalid_feed_urls(client, mocker):
     response = client.post(
         "/api/opml/import",
         data=data,
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -235,7 +235,7 @@ def test_opml_import_skips_duplicate_feed_urls(client, mocker):
     response = client.post(
         "/api/opml/import",
         data=data,
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -275,7 +275,7 @@ def test_opml_import_folder_only_no_outlines(client, mocker):
     response = client.post(
         "/api/opml/import",
         data=data,
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -303,7 +303,7 @@ def test_opml_import_no_outline_elements(client, mocker):
     response = client.post(
         "/api/opml/import",
         data=data,
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -345,7 +345,7 @@ def test_opml_import_anonymous_folder_with_feeds(client, mocker):
     response = client.post(
         "/api/opml/import",
         data=data,
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 200
@@ -381,7 +381,7 @@ def test_import_malformed_opml(client):
     response = client.post(
         "/api/opml/import",
         data=data,
-        content_type="multipart/form-data",
+        content_type="multipart/form-data", headers={"X-Requested-With": "XMLHttpRequest"},
     )
 
     assert response.status_code == 400
