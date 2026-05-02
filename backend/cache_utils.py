@@ -113,7 +113,10 @@ def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
 
     # cache.set_many expects a dictionary mapping keys to values
     cache.set_many(updates)
-    logger.info("Invalidated cache for %s tabs. New versions updated.", len(tab_ids_list))
+    logger.info(
+        "Invalidated cache for %s tabs. New versions updated.", len(
+            tab_ids_list)
+    )
 
     if invalidate_tabs:
         invalidate_tabs_cache()

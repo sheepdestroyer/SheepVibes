@@ -315,7 +315,8 @@ def api_update_all_feeds():
             new_items_count,
         )
         if new_items_count > 0 and affected_tab_ids:
-            invalidate_multiple_tabs_cache(affected_tab_ids, invalidate_tabs=False)
+            invalidate_multiple_tabs_cache(
+                affected_tab_ids, invalidate_tabs=False)
             invalidate_tabs_cache()
             logger.info(
                 "Granular cache invalidation completed for affected tabs: %s",
