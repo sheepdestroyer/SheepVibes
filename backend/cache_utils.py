@@ -119,7 +119,4 @@ def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
     if invalidate_tabs:
         invalidate_tabs_cache()
 
-    logger.info(
-        "Bulk invalidated cache for %d tabs.",
-        len(tab_ids_list)
-    )
+    logger.info("Bulk invalidated cache for %d tabs.", len(tab_ids_list))

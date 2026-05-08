@@ -4,7 +4,11 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from ..cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache, invalidate_multiple_tabs_cache
+from ..cache_utils import (
+    invalidate_multiple_tabs_cache,
+    invalidate_tab_feeds_cache,
+    invalidate_tabs_cache,
+)
 from ..constants import (
     DEFAULT_FEED_ITEMS_LIMIT,
     DEFAULT_PAGINATION_LIMIT,
