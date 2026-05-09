@@ -367,6 +367,27 @@ def test_opml_import_anonymous_folder_with_feeds(client, mocker):
         assert feed.tab_id == result["tab_id"]
 
 
+def test_import_opml_txt_file_rejected(client):
+    """Test that .txt files are rejected for OPML import."""
+    opml_content = b'<opml version="1.0"><body><outline text="Test" xmlUrl="http://example.com/feed" /></body></opml>'
+    opml_file = io.BytesIO(opml_content)
+
+    data = {"file": (opml_file, "test_feeds.txt")}
+
+    response = client.post(
+        "/api/opml/import",
+        data=data,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert "Invalid file type" in payload.get("error", "")
+    assert ".opml" in payload.get("error", "")
+    assert ".xml" in payload.get("error", "")
+    assert ".txt" not in payload.get("error", "")
+
+
 def test_import_malformed_opml(client):
     """Test importing a malformed OPML yields a parse error response."""
     malformed_opml = b"""<?xml version="1.0" encoding="UTF-8"?>
