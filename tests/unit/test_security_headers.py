@@ -20,6 +20,10 @@ def test_security_headers_present():
         assert response.headers.get("X-Frame-Options") == "SAMEORIGIN", (
             "X-Frame-Options header is missing or incorrect")
 
+        # X-XSS-Protection
+        assert response.headers.get("X-XSS-Protection") == "1; mode=block", (
+            "X-XSS-Protection header is missing or incorrect")
+
         # Referrer-Policy
         referrer = response.headers.get("Referrer-Policy")
         assert referrer is not None, "Referrer-Policy header is missing"

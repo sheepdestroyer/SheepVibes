@@ -257,6 +257,10 @@ def add_security_headers(response):
     # Prevents Clickjacking (redundant with CSP frame-ancestors but good for older browsers).
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
 
+    # X-XSS-Protection: 1; mode=block
+    # Enables cross-site scripting (XSS) filter built into most recent web browsers.
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
     # Referrer-Policy: strict-origin-when-cross-origin
     # Controls how much referrer information is sent.
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
