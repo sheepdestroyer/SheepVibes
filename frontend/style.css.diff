@@ -1,0 +1,13 @@
+<<<<<<< SEARCH
+#settings-menu.hidden {
+    display: none;
+}
+=======
+#settings-menu.hidden {
+    display: none;
+}
+
+.hidden {
+    display: none !important;
+}
+>>>>>>> REPLACE
