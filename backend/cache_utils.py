@@ -105,11 +105,11 @@ def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
     keys = [get_tab_version_key(t_id) for t_id in tab_ids_list]
 
     # Fetch current versions in a single round-trip
-    current_versions = cache.get_many(*keys)
+    current_versions = cache.get_many(keys)
 
     # Calculate new versions and create updates dictionary
     updates = {}
-    for key, current_v in zip(keys, current_versions):
+    for key, current_v in zip(keys, current_versions, strict=True):
         new_v = (current_v if current_v is not None else 1) + 1
         updates[key] = new_v
 

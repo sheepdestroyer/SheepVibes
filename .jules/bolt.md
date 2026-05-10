@@ -17,3 +17,7 @@
 ## 2026-04-26 - Optimize ORM Object Instantiation for Read-Only API
 **Learning:** Instantiating full SQLAlchemy ORM objects for lists that are immediately serialized to JSON (e.g., using `to_dict()`) introduces significant memory and CPU overhead.
 **Action:** For high-performance, read-only list endpoints like `get_feed_items`, bypass ORM object instantiation by querying specific columns into tuples (e.g., `db.session.execute(select(Model.col1, Model.col2))`) and manually mapping the tuples to dictionaries. This resulted in measurable speedups. Always use local variables for static methods within list comprehensions.
+
+## 2026-05-08 - Optimized bulk cache invalidation
+**Learning:** Iterative calls to `cache.set` during bulk operations (like updating multiple feeds) causes N round-trips to the cache server, creating a bottleneck.
+**Action:** Implemented `invalidate_multiple_tabs_cache` using `cache.get_many` and `cache.set_many` to batch fetching and updating of cache version keys, reducing N round-trips to O(1) operations.
