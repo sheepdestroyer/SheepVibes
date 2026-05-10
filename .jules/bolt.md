@@ -25,3 +25,10 @@
 ## 2026-05-08 - Optimized bulk cache invalidation
 **Learning:** Iterative calls to `cache.set` during bulk operations (like updating multiple feeds) causes N round-trips to the cache server, creating a bottleneck.
 **Action:** Implemented `invalidate_multiple_tabs_cache` using `cache.get_many` and `cache.set_many` to batch fetching and updating of cache version keys, reducing N round-trips to O(1) operations.
+## 2026-05-10 - Optimized cache.get_many bulk cache invalidation
+**Learning:** `cache.get_many` takes `*keys` as positional arguments instead of a list when using SimpleCache or equivalent. Providing a list like `cache.get_many(keys)` results in `unhashable type: 'list'`.
+**Action:** Unpack arguments for `get_many` using `*keys`.
+
+## 2026-05-10 - Optimized _save_items_individually
+**Learning:** `_save_items_individually` in `backend/feed_service.py` committed items individually, adding N database roundtrips on batch failures.
+**Action:** Replace `db.session.commit()` inside the recovery loop with `nested = db.session.begin_nested()`, `db.session.flush()`, `nested.commit()`, and roll back to `nested.rollback()` on error. After the loop, run a single `db.session.commit()`. This groups individual error-tolerant inserts into a single transaction block.
