@@ -13,3 +13,11 @@
 ## 2026-02-18 - Optimized datetime serialization
 **Learning:** Naive datetimes retrieved from the database are strictly guaranteed to be UTC due to model validators. Therefore, converting them back to aware UTC objects just to serialize them to an ISO string is redundant and computationally expensive when serializing thousands of FeedItems.
 **Action:** In `FeedItem.to_iso_z_string()`, simply appended `"Z"` to `dt_val.isoformat()` for naive datetimes. This bypasses `tzinfo` replacement and string replacement, yielding a ~3x performance speedup in object serialization.
+
+## 2026-04-13 - Add index to Feed.tab_id
+**Learning:** `backend/blueprints/tabs.py` makes frequent lookups via `Feed.query.filter_by(tab_id=tab_id).all()` to resolve feeds for a given tab. In SQLAlchemy models, defining a `db.ForeignKey` doesn't automatically create an index for that column on all databases (e.g. SQLite).
+**Action:** Explicitly add `index=True` to the foreign key `tab_id = db.Column(db.Integer, db.ForeignKey("tabs.id"), nullable=False, index=True)` to prevent full table scans on the `feeds` table during routine feed loading.
+
+## 2026-04-26 - Optimize ORM Object Instantiation for Read-Only API
+**Learning:** Instantiating full SQLAlchemy ORM objects for lists that are immediately serialized to JSON (e.g., using `to_dict()`) introduces significant memory and CPU overhead.
+**Action:** For high-performance, read-only list endpoints like `get_feed_items`, bypass ORM object instantiation by querying specific columns into tuples (e.g., `db.session.execute(select(Model.col1, Model.col2))`) and manually mapping the tuples to dictionaries. This resulted in measurable speedups. Always use local variables for static methods within list comprehensions.

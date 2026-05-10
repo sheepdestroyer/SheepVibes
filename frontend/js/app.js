@@ -21,6 +21,7 @@ const storedTabId = localStorage.getItem('activeTabId');
 let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
 let allTabs = [];
 const loadedTabs = new Set();
+const widgetsByTab = new Map(); // Cache to optimize widget visibility toggling. Keys are strictly integer tabIds.
 const ITEMS_PER_PAGE = 10;
 
 // --- Progress Fallback Helpers ---
@@ -124,38 +125,37 @@ async function switchTab(tabId) {
 }
 
 function toggleWidgetsVisibility() {
-    const feedGrid = document.getElementById('feed-grid');
-    const widgets = feedGrid.querySelectorAll('.feed-widget');
-
-    // Hide all first
-    widgets.forEach(widget => {
-        if (widget.dataset.tabId == activeTabId) {
-            widget.style.display = 'block';
-        } else {
-            widget.style.display = 'none';
-        }
-    });
-
-    // Handle "empty" message visibility (simplified)
-    // Ideally we would check if we HAVE feeds for this tab.
-    // We loaded them in loadFeedsForTab.
-    // If loadedTabs has it, but no widgets match -> empty.
+    // Optimized: Use the widgetsByTab cache instead of querySelectorAll
+    for (const [tabId, widgets] of widgetsByTab.entries()) {
+        const displayStyle = (tabId === activeTabId) ? 'block' : 'none';
+        widgets.forEach(widget => {
+            if (widget) {
+                widget.style.display = displayStyle;
+            }
+        });
+    }
 }
 
 async function loadFeedsForTab(tabId) {
     const feedGrid = document.getElementById('feed-grid');
+    const parsedTabId = parseInt(tabId, 10);
 
     // If already loaded, just return (toggleWidgetsVisibility handles display)
-    if (loadedTabs.has(tabId)) return;
+    if (loadedTabs.has(parsedTabId)) return;
 
     try {
-        const feeds = await api.getFeedsForTab(tabId);
+        const feeds = await api.getFeedsForTab(parsedTabId);
 
         // Remove ANY existing "no feeds" messages to be clean
         const placeholders = feedGrid.querySelectorAll(
-            `.empty-tab-message[data-tab-id="${tabId}"]`
+            `.empty-tab-message[data-tab-id="${parsedTabId}"]`
         );
         placeholders.forEach(p => p.remove());
+
+        if (!widgetsByTab.has(parsedTabId)) {
+            widgetsByTab.set(parsedTabId, []);
+        }
+        const tabWidgets = widgetsByTab.get(parsedTabId);
 
         if (feeds && feeds.length > 0) {
             feeds.forEach(feed => {
@@ -166,16 +166,18 @@ async function loadFeedsForTab(tabId) {
                     onLoadMore: handleLoadMoreItems
                 });
                 feedGrid.appendChild(widget);
+                tabWidgets.push(widget);
             });
         } else {
             // Create an empty-state message container for this tab
             const msg = document.createElement('div');
             msg.className = 'feed-widget empty-tab-message'; // Reuse class but add distinct marker
-            msg.dataset.tabId = tabId;
+            msg.dataset.tabId = parsedTabId;
             msg.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
             feedGrid.appendChild(msg);
+            tabWidgets.push(msg);
         }
-        loadedTabs.add(tabId);
+        loadedTabs.add(parsedTabId);
         toggleWidgetsVisibility();
     } catch (error) {
         console.error('Error loading feeds:', error);
@@ -220,11 +222,18 @@ async function handleRenameTab() {
 async function handleDeleteTab() {
     if (!activeTabId || !confirm("Delete this tab and all its feeds?")) return;
     try {
-        const deletedTabId = activeTabId;
+        const deletedTabId = parseInt(activeTabId, 10);
         await api.deleteTab(deletedTabId);
 
         // Surgically update the UI and state instead of a full reload
-        document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
+        if (widgetsByTab.has(deletedTabId)) {
+            widgetsByTab.get(deletedTabId).forEach(w => w.remove());
+            widgetsByTab.delete(deletedTabId);
+        } else {
+             // Fallback
+            document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
+        }
+
         loadedTabs.delete(deletedTabId);
         activeTabId = null;
 
@@ -270,7 +279,19 @@ async function handleDeleteFeed(feedId) {
     try {
         await api.deleteFeed(feedId);
         const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
-        if (widget) widget.remove();
+        if (widget) {
+            const tabId = parseInt(widget.dataset.tabId, 10);
+            widget.remove();
+
+            // Remove from cache
+            if (!isNaN(tabId) && widgetsByTab.has(tabId)) {
+                const tabWidgets = widgetsByTab.get(tabId);
+                const index = tabWidgets.indexOf(widget);
+                if (index > -1) {
+                    tabWidgets.splice(index, 1);
+                }
+            }
+        }
         showToast('Feed deleted.', 'success');
     } catch (e) {
         showToast(e.message, 'error');
@@ -293,6 +314,16 @@ async function handleEditFeedSubmit(e) {
                 onLoadMore: handleLoadMoreItems
             });
             oldWidget.replaceWith(newWidget);
+
+            // Update cache
+            const tabId = parseInt(oldWidget.dataset.tabId, 10);
+            if (!isNaN(tabId) && widgetsByTab.has(tabId)) {
+                const tabWidgets = widgetsByTab.get(tabId);
+                const index = tabWidgets.indexOf(oldWidget);
+                if (index > -1) {
+                    tabWidgets[index] = newWidget;
+                }
+            }
         }
         closeEditFeedModal();
         showToast('Feed updated.', 'success');
@@ -419,13 +450,21 @@ async function handleLoadMoreItems(listElement) {
 // Helpers
 
 async function reloadTab(tabId) {
-    if (activeTabId === tabId) {
-        // Remove existing for this tab
-        document.querySelectorAll(`.feed-widget[data-tab-id="${tabId}"]`).forEach(w => w.remove());
-        loadedTabs.delete(tabId);
-        await loadFeedsForTab(tabId);
+    const parsedTabId = parseInt(tabId, 10);
+
+    // Clear cache for this tab before reloading
+    if (widgetsByTab.has(parsedTabId)) {
+        widgetsByTab.get(parsedTabId).forEach(w => w.remove());
+        widgetsByTab.delete(parsedTabId);
     } else {
-        loadedTabs.delete(tabId);
+        // Fallback cleanup
+        document.querySelectorAll(`.feed-widget[data-tab-id="${parsedTabId}"]`).forEach(w => w.remove());
+    }
+
+    loadedTabs.delete(parsedTabId);
+
+    if (activeTabId === parsedTabId) {
+        await loadFeedsForTab(parsedTabId);
     }
 }
 
