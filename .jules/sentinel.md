@@ -3,7 +3,13 @@
 **Learning:** Even if the current environment's Python version (e.g. 3.12) defaults to safe XML parsing, relying on implicit defaults is risky. Explicit validation using `defusedxml` is required for robust security.
 **Prevention:** Implemented a pre-validation step using `defusedxml.sax.parseString` to check for DTDs and entities before passing content to `feedparser`. This ensures XXE attacks are blocked regardless of the underlying parser's configuration.
 
-## 2026-01-26 - Weak File Type Validation in OPML Import
-**Vulnerability:** The OPML import endpoint explicitly allowed `.txt` file extensions (`allowed_extensions = (".opml", ".xml", ".txt")`), opening up the application to weak file type validation attacks.
-**Learning:** Even internal toolings like OPML import/export need strict file extension validation to prevent users from uploading unexpected file types that could potentially exploit other vulnerabilities (e.g., if a .txt file contained malicious payload or was stored incorrectly). Only `.opml` and `.xml` are strictly necessary for OPML functionality.
-**Prevention:** Updated `allowed_extensions` in `backend/blueprints/opml.py` to strictly allow only `(".opml", ".xml")` and added a regression test `test_import_opml_txt_file_rejected` in `tests/unit/test_app.py` to enforce the rejection of `.txt` files in the future.
+## 2026-03-16 - Input Length Validation
+**Vulnerability:** Missing length limits on string inputs (e.g., tab names, feed URLs, feed names) could lead to Database Operational Errors (due to exceeding column lengths) or mild Denial of Service (DoS) by sending excessively large payloads.
+**Learning:** Database schema constraints (like `db.String(100)`) are not automatically enforced at the API layer in Flask/SQLAlchemy without explicit validation. Relying on the database to catch these errors leads to messy `500 Internal Server Error` responses and unnecessary database load.
+**Prevention:** Always implement explicit length validation at the API endpoint level (e.g., `if len(name) > 100: return 400`) before interacting with the database to ensure fail-safe and user-friendly `400 Bad Request` responses.
+
+## 2026-04-06 - DOM XSS Prevention Pattern
+**Vulnerability:** Use of `innerHTML` for rendering static messages (e.g., empty states) in the vanilla JS frontend creates an unnecessary risk of DOM-based XSS if those strings are ever refactored to include user input.
+**Learning:** In vanilla JavaScript without a framework to automatically escape content, relying on `innerHTML` violates the principle of defense-in-depth.
+**Prevention:** Adopt a strict project-wide pattern of using `document.createElement`, `.textContent`, and `.replaceChildren()` for all DOM updates, completely avoiding `innerHTML` even for hardcoded strings.
+

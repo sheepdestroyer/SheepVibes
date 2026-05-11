@@ -115,6 +115,14 @@ header h1 {
     background-color: #c82333;
 }
 
+.hidden {
+    display: none !important;
+}
+
+.error-message {
+    color: red;
+}
+
 /* Settings Menu */
 #settings-menu-container {
     position: relative;
