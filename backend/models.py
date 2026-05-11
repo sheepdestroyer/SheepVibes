@@ -77,13 +77,13 @@ class Feed(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     tab_id = db.Column(
-        db.Integer, db.ForeignKey("tabs.id"), nullable=False, index=True
+        db.Integer, db.ForeignKey("tabs.id"), nullable=False
     )  # Foreign key to Tab
     name = db.Column(
         db.String(200), nullable=False
     )  # Name of the feed (often from feed title)
     url = db.Column(
-        db.String(500), nullable=False
+        db.String(500), nullable=False, index=True
     )  # URL of the feed (the XML feed URL)
     site_link = db.Column(
         db.String(500), nullable=True
@@ -213,14 +213,14 @@ class FeedItem(db.Model):
         # If dt_val is directly passed (e.g. not from DB and still aware),
         # it needs conversion.
         if dt_val.tzinfo is None:
-            # OPTIMIZATION: Naive datetime from DB is guaranteed to be UTC.
-            # Directly append 'Z' to avoid expensive tzinfo replacement.
-            return dt_val.isoformat() + "Z"
+            # Naive datetime from DB (assumed UTC), make it aware UTC
+            dt_val_utc = dt_val.replace(tzinfo=timezone.utc)
         else:
             # Aware datetime (e.g. passed directly, not from DB), convert to UTC
             dt_val_utc = dt_val.astimezone(timezone.utc)
-            iso_string = dt_val_utc.isoformat()
-            return iso_string.replace("+00:00", "Z")
+
+        iso_string = dt_val_utc.isoformat()
+        return iso_string.replace("+00:00", "Z")
 
     def to_dict(self):
         """Serializes the FeedItem object to a dictionary.
