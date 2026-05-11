@@ -7,3 +7,9 @@
 **Vulnerability:** Missing length limits on string inputs (e.g., tab names, feed URLs, feed names) could lead to Database Operational Errors (due to exceeding column lengths) or mild Denial of Service (DoS) by sending excessively large payloads.
 **Learning:** Database schema constraints (like `db.String(100)`) are not automatically enforced at the API layer in Flask/SQLAlchemy without explicit validation. Relying on the database to catch these errors leads to messy `500 Internal Server Error` responses and unnecessary database load.
 **Prevention:** Always implement explicit length validation at the API endpoint level (e.g., `if len(name) > 100: return 400`) before interacting with the database to ensure fail-safe and user-friendly `400 Bad Request` responses.
+
+## 2026-04-06 - DOM XSS Prevention Pattern
+**Vulnerability:** Use of `innerHTML` for rendering static messages (e.g., empty states) in the vanilla JS frontend creates an unnecessary risk of DOM-based XSS if those strings are ever refactored to include user input.
+**Learning:** In vanilla JavaScript without a framework to automatically escape content, relying on `innerHTML` violates the principle of defense-in-depth.
+**Prevention:** Adopt a strict project-wide pattern of using `document.createElement`, `.textContent`, and `.replaceChildren()` for all DOM updates, completely avoiding `innerHTML` even for hardcoded strings.
+
