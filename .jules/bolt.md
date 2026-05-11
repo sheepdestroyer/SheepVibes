@@ -9,6 +9,11 @@
 ## 2026-02-14 - Optimized Tab.to_dict serialization
 **Learning:** `Tab.to_dict()` triggered a separate SQL query for unread counts, causing N+1 issues when serializing lists of tabs (e.g. in `get_tabs`).
 **Action:** Implemented the same pattern as `Feed.to_dict()`: accept an optional `unread_count` parameter. Updated `get_tabs` to pre-calculate counts in a single query and pass them to `to_dict`.
+
+## 2026-04-10 - Avoid ORM objects for single column sets
+**Learning:** Constructing sets of single column values using ORM mapping (e.g., `{feed.url for feed in Feed.query.all()}`) introduces massive overhead. My tests showed ~9.2x speedup by querying tuples instead.
+**Action:** Use single-column querying (e.g., `{url for url, in db.session.query(Feed.url).all()}`) for generating sets/lists of specific column values without loading full ORM models.
+
 ## 2026-05-09 - Bulk cache invalidation
 **Learning:** `api_update_all_feeds` iterated through a loop of `tab_ids` calling `cache.set` iteratively to invalidate each tab cache individually. This caused an N+1 problem with network round trips to the cache backend.
 **Action:** Replaced iterative invalidations with a bulk approach using `cache.get_many` and `cache.set_many` to fetch and increment multiple version keys in a single round-trip, significantly reducing overhead for multiple tabs.
@@ -28,6 +33,7 @@
 ## 2026-05-08 - Optimized bulk cache invalidation
 **Learning:** Iterative calls to `cache.set` during bulk operations (like updating multiple feeds) causes N round-trips to the cache server, creating a bottleneck.
 **Action:** Implemented `invalidate_multiple_tabs_cache` using `cache.get_many` and `cache.set_many` to batch fetching and updating of cache version keys, reducing N round-trips to O(1) operations.
+
 ## 2026-05-10 - Optimized cache.get_many bulk cache invalidation
 **Learning:** `cache.get_many` takes `*keys` as positional arguments instead of a list when using SimpleCache or equivalent. Providing a list like `cache.get_many(keys)` results in `unhashable type: 'list'`.
 **Action:** Unpack arguments for `get_many` using `*keys`.
@@ -35,3 +41,4 @@
 ## 2026-05-10 - Optimized _save_items_individually
 **Learning:** `_save_items_individually` in `backend/feed_service.py` committed items individually, adding N database roundtrips on batch failures.
 **Action:** Replace `db.session.commit()` inside the recovery loop with `nested = db.session.begin_nested()`, `db.session.flush()`, `nested.commit()`, and roll back to `nested.rollback()` on error. After the loop, run a single `db.session.commit()`. This groups individual error-tolerant inserts into a single transaction block.
+
