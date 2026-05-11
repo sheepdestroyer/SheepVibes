@@ -54,3 +54,4 @@ Thumbs.db
 tests/artifacts/
 agent-tools/
 # (None for this PR to keep it focused)
+agent-tools/
