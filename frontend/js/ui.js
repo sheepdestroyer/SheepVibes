@@ -155,7 +155,9 @@ export function createFeedWidget(feed, callbacks) {
         });
         itemList.appendChild(fragment);
     } else {
-        itemList.innerHTML = '<li>No items found for this feed.</li>';
+        const emptyLi = document.createElement('li');
+        emptyLi.textContent = 'No items found for this feed.';
+        itemList.replaceChildren(emptyLi);
     }
 
     // Programmatically trigger a scroll event to handle cases where the initial
@@ -196,12 +198,16 @@ export function renderTabs(tabs, activeTabId, callbacks) {
     const renameTabButton = document.getElementById('rename-tab-button');
     const deleteTabButton = document.getElementById('delete-tab-button');
 
-    tabsContainer.innerHTML = '';
+    tabsContainer.replaceChildren();
     if (!tabs || tabs.length === 0) {
-        tabsContainer.innerHTML = '<span>No tabs found.</span>';
+        const noTabsSpan = document.createElement('span');
+        noTabsSpan.textContent = 'No tabs found.';
+        tabsContainer.replaceChildren(noTabsSpan);
         renameTabButton.disabled = true;
         deleteTabButton.disabled = true;
-        feedGrid.innerHTML = '<p>Create a tab to get started!</p>';
+        const noFeedsP = document.createElement('p');
+        noFeedsP.textContent = 'Create a tab to get started!';
+        feedGrid.replaceChildren(noFeedsP);
         return { activeTabId: null };
     }
 
@@ -235,7 +241,7 @@ export function showEditFeedModal(feedId, currentUrl, currentName) {
     document.getElementById('edit-feed-id').value = feedId;
     document.getElementById('edit-feed-url').value = currentUrl;
     document.getElementById('edit-feed-name').value = currentName;
-    document.getElementById('edit-feed-error').style.display = 'none';
+    document.getElementById('edit-feed-error').classList.add('hidden');
     modal.classList.add('is-active');
 }
 
