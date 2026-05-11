@@ -573,6 +573,7 @@ def _invalidate_import_caches(affected_tab_ids_set):
     if not affected_tab_ids_set:
         return
     invalidate_multiple_tabs_cache(affected_tab_ids_set)
+    invalidate_tabs_cache()
     logger.info(
         "OPML import: Invalidated caches for tabs: %s.",
         affected_tab_ids_set,
@@ -1442,18 +1443,16 @@ def _save_items_individually(feed_db_obj, items_to_add):
 
     count = 0
     for item in items_to_add:
-        nested = db.session.begin_nested()
         try:
             db.session.add(item)
-            db.session.flush()
-            nested.commit()
+            db.session.commit()
             count += 1
             logger.debug(
                 "Individually added item: %s", _sanitize_for_log(
                     item.title[:50])
             )
         except IntegrityError as ie:
-            nested.rollback()
+            db.session.rollback()
             logger.error(
                 "Failed to add item '%s' for feed '%s' (link: %s, guid: %s): %s",
                 _sanitize_for_log(item.title[:100]),
@@ -1463,17 +1462,11 @@ def _save_items_individually(feed_db_obj, items_to_add):
                 _sanitize_for_log(str(ie)),
             )
         except sqlalchemy.exc.SQLAlchemyError:
-            nested.rollback()
+            db.session.rollback()
             logger.exception(
                 "Generic error adding item '%s'",
                 _sanitize_for_log(item.title[:100]),
             )
-
-    try:
-        db.session.commit()
-    except sqlalchemy.exc.SQLAlchemyError:
-        db.session.rollback()
-        logger.exception("Error during final commit in individual recovery.")
 
     if count > 0:
         logger.info(

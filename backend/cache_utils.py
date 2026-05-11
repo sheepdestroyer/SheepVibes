@@ -88,35 +88,19 @@ def invalidate_tab_feeds_cache(tab_id, invalidate_tabs=True):
         invalidate_tabs_cache()
 
 
-def invalidate_multiple_tabs_cache(tab_ids, invalidate_tabs=True):
-    """Optimized bulk cache invalidation for multiple tabs.
-
-    Args:
-        tab_ids (iterable): Iterable of tab IDs to invalidate.
-        invalidate_tabs (bool): If True, also invalidates the main tabs list cache.
-    """
+def invalidate_multiple_tabs_cache(tab_ids):
+    """Invalidates the cache for multiple tabs simultaneously using bulk operations."""
     tab_ids_list = list(tab_ids)
     if not tab_ids_list:
-        if invalidate_tabs:
-            invalidate_tabs_cache()
         return
 
-    # Create keys
-    keys = [get_tab_version_key(t_id) for t_id in tab_ids_list]
+    version_keys = [get_tab_version_key(tab_id) for tab_id in tab_ids_list]
+    versions = cache.get_many(*version_keys)
 
-    # Fetch current versions in a single round-trip
-    current_versions = cache.get_many(*keys)
+    new_versions = {
+        key: (version if version is not None else 1) + 1
+        for key, version in zip(version_keys, versions)
+    }
 
-    # Calculate new versions and create updates dictionary
-    updates = {}
-    for key, current_v in zip(keys, current_versions, strict=True):
-        new_v = (current_v if current_v is not None else 1) + 1
-        updates[key] = new_v
-
-    # Set all new versions in a single round-trip
-    cache.set_many(updates)
-
-    if invalidate_tabs:
-        invalidate_tabs_cache()
-
-    logger.info("Bulk invalidated cache for %d tabs.", len(tab_ids_list))
+    cache.set_many(new_versions)
+    logger.info("Invalidated cache for multiple tabs: %s", tab_ids_list)
