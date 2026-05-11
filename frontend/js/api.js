@@ -88,6 +88,9 @@ export const api = {
     exportOpml: () => fetchData('/api/opml/export', { method: 'GET' }, 'text'),
     importOpml: (formData) => fetchData('/api/opml/import', {
         method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
         body: formData
     })
 };
