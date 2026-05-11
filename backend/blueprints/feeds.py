@@ -4,7 +4,11 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from ..cache_utils import invalidate_tab_feeds_cache, invalidate_tabs_cache
+from ..cache_utils import (
+    invalidate_multiple_tabs_cache,
+    invalidate_tab_feeds_cache,
+    invalidate_tabs_cache,
+)
 from ..constants import (
     DEFAULT_FEED_ITEMS_LIMIT,
     DEFAULT_PAGINATION_LIMIT,
@@ -35,6 +39,11 @@ def add_feed():
         return jsonify({"error": "Missing feed URL"}), 400
 
     feed_url = data["url"].strip()
+
+    # Add length limit based on database column constraint
+    if len(feed_url) > 500:
+        return jsonify({"error": "Feed URL must not exceed 500 characters"}), 400
+
     tab_id = data.get("tab_id")  # Optional tab ID
 
     # Determine target tab ID
@@ -198,6 +207,10 @@ def update_feed_url(feed_id):
 
     new_url = data["url"].strip()
 
+    # Add length limit based on database column constraint
+    if len(new_url) > 500:
+        return jsonify({"error": "Feed URL must not exceed 500 characters"}), 400
+
     # Check if the new URL is already used by another feed
     existing_feed = Feed.query.filter(
         Feed.id != feed_id, Feed.url == new_url).first()
@@ -208,6 +221,10 @@ def update_feed_url(feed_id):
         )  # Conflict
 
     custom_name = data.get("name", "").strip()
+
+    # Add length limit based on database column constraint
+    if len(custom_name) > 200:
+        return jsonify({"error": "Feed name must not exceed 200 characters"}), 400
 
     try:
         # Attempt to fetch the feed to get its title (and verify accessibility/SSRF)
@@ -311,8 +328,7 @@ def api_update_all_feeds():
             new_items_count,
         )
         if new_items_count > 0 and affected_tab_ids:
-            for tab_id in affected_tab_ids:
-                invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
+            invalidate_multiple_tabs_cache(affected_tab_ids)
             invalidate_tabs_cache()
             logger.info(
                 "Granular cache invalidation completed for affected tabs: %s",
