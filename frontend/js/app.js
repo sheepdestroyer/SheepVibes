@@ -1,4 +1,4 @@
-import { throttle } from './utils.js';
+import { throttle, validateActiveTab } from './utils.js';
 import { api, API_BASE_URL } from './api.js';
 import {
     showToast,
@@ -85,11 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initializeTabs() {
     try {
         allTabs = await api.getTabs();
-
-        // Validation: if activeTabId is no longer in valid tabs, reset it
-        if (!allTabs.some(t => t.id === activeTabId)) {
-            activeTabId = allTabs.length > 0 ? allTabs[0].id : null;
-        }
+        activeTabId = validateActiveTab(allTabs, activeTabId);
 
         renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
 
@@ -130,9 +126,9 @@ function toggleWidgetsVisibility() {
     // Hide all first
     widgets.forEach(widget => {
         if (widget.dataset.tabId == activeTabId) {
-            widget.style.display = 'block';
+            widget.classList.remove('hidden');
         } else {
-            widget.style.display = 'none';
+            widget.classList.add('hidden');
         }
     });
 
