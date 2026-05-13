@@ -2,7 +2,9 @@
 
 import logging
 import os
-import xml.etree.ElementTree as ET
+from xml.etree.ElementTree import Element as UnsafeElement  # skipcq: BAN-B405
+from xml.etree.ElementTree import SubElement as UnsafeSubElement  # skipcq: BAN-B405
+from xml.etree.ElementTree import tostring as unsafe_tostring  # skipcq: BAN-B405
 
 from filelock import FileLock, Timeout
 from flask import Blueprint, Response, current_app, jsonify, request
@@ -26,11 +28,13 @@ def _generate_opml_string(tabs=None):
     Returns:
         tuple[str, int, int]: A tuple containing the OPML string, tab count, and feed count.
     """
-    opml_element = ET.Element("opml", version="2.0")
-    head_element = ET.SubElement(opml_element, "head")
-    title_element = ET.SubElement(head_element, "title")
+    # Security Note: We use xml.etree.ElementTree.Element/SubElement for XML generation,
+    # but use defusedxml.ElementTree for any parsing of untrusted data to prevent XXE.
+    opml_element = UnsafeElement("opml", version="2.0")
+    head_element = UnsafeSubElement(opml_element, "head")
+    title_element = UnsafeSubElement(head_element, "title")
     title_element.text = "SheepVibes Feeds"
-    body_element = ET.SubElement(opml_element, "body")
+    body_element = UnsafeSubElement(opml_element, "body")
 
     if tabs is None:
         # Eager load feeds to avoid N+1 queries
@@ -43,7 +47,7 @@ def _generate_opml_string(tabs=None):
             continue
 
         # Create a folder outline for the tab
-        folder_outline = ET.SubElement(body_element, "outline")
+        folder_outline = UnsafeSubElement(body_element, "outline")
         folder_outline.set("text", tab.name)
         folder_outline.set("title", tab.name)
         # Sort feeds by name for deterministic output because relation order is not guaranteed
@@ -51,7 +55,7 @@ def _generate_opml_string(tabs=None):
 
         # Add feeds for this tab
         for feed in sorted_feeds:
-            feed_outline = ET.SubElement(folder_outline, "outline")
+            feed_outline = UnsafeSubElement(folder_outline, "outline")
             feed_outline.set("text", feed.name)
             feed_outline.set("title", feed.name)
             feed_outline.set("xmlUrl", feed.url)
@@ -59,10 +63,11 @@ def _generate_opml_string(tabs=None):
             if feed.site_link:
                 feed_outline.set("htmlUrl", feed.site_link)
 
-    # Convert the XML tree to a string
-    opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode(
-        "utf-8"
-    )
+    # Use unsafe_tostring because we are strictly generating XML, not parsing it.
+    # We encode to utf-8 and decode to unicode to ensure a correct XML declaration.
+    opml_string = unsafe_tostring(
+        opml_element, encoding="utf-8", method="xml", xml_declaration=True
+    ).decode("utf-8")
 
     feed_count = sum(len(tab.feeds) for tab in tabs)
     tab_count = sum(1 for tab in tabs if tab.feeds)
@@ -81,17 +86,11 @@ def _validate_opml_file_request():
         return None, (jsonify({"error": "File object is empty"}), 400)
 
     # Basic security: check file extension
-    allowed_extensions = {".opml", ".xml", ".txt"}
+    allowed_extensions = (".opml", ".xml")
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
-        return None, (
-            jsonify(
-                {
-                    "error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-                }
-            ),
-            400,
-        )
+        err_msg = f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+        return None, (jsonify({"error": err_msg}), 400)
 
     # Basic security: check file size (5MB limit)
     opml_file.seek(0, os.SEEK_END)
@@ -106,6 +105,17 @@ def _validate_opml_file_request():
 @opml_bp.route("/import", methods=["POST"])
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
+    # CSRF protection: require a specific header to prevent simple HTML form submissions
+    if request.headers.get("X-Requested-With") != "XMLHttpRequest":
+        return (
+            jsonify(
+                {
+                    "error": "Missing or invalid X-Requested-With header (CSRF protection)"
+                }
+            ),
+            400,
+        )
+
     opml_file, error_resp = _validate_opml_file_request()
     if error_resp:
         return error_resp
