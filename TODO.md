@@ -83,6 +83,9 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Phase 4: Refinement, Persistence & Deployment
 
+*   [x] **Security Hardening:**
+    *   [x] Configure `SECRET_KEY` for secure session and token management.
+    *   [x] Implement security regression tests for configuration.
 *   [x] **Persistence:** Ensure the database file is stored in a persistent volume mapped into the Podman container. Update `Containerfile` accordingly.
 *   [x] **Error Handling:** Improve error handling on both backend (API responses) and frontend (network errors, parsing issues). Show user-friendly error messages.
 *   [x] **Configuration:** Allow basic configuration (e.g., feed update interval) via environment variables or a simple config file.
@@ -102,6 +105,11 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Add basic unit tests for backend logic (API endpoints).
     *   [ ] Consider basic end-to-end tests. (Deferred)
 *   [x] Finalize `Containerfile` for production readiness (non-root user, proper volume mounts, etc.).
+
+## Code Health & Maintenance
+
+*   [x] Fix `FeedItem.validate_datetime_utc` docstring and add regression tests.
+*   [x] Replace vulnerable XML parser with `defusedxml` and document security requirements.
 
 ## Code Review Completion
 

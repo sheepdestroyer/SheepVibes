@@ -2,10 +2,10 @@ import datetime  # For new tests, specifically for timezone object
 import io
 import json
 import os
-import xml.etree.ElementTree as ET
 from datetime import timezone  # For new tests
 from unittest.mock import MagicMock, patch
 
+import defusedxml.ElementTree as ET
 import pytest
 
 # Import the Flask app instance and db object
@@ -483,12 +483,7 @@ def test_add_feed_duplicate_url(mock_fetch, client, setup_tabs_and_feeds):
     mock_fetch.assert_not_called()  # Should check DB before fetching
 
 
-@patch(
-    "backend.blueprints.feeds.fetch_feed"
-)  # Also needs patch if fetch_feed is involved in error path
-def test_add_feed_invalid_tab(
-    mock_fetch_unused, client
-):  # mock_fetch_unused if not directly used but to be consistent
+def test_add_feed_invalid_tab(client):
     """Test POST /api/feeds with a non-existent tab_id."""
     response = client.post(
         "/api/feeds", json={"url": "some_url", "tab_id": 999})
@@ -1043,6 +1038,97 @@ def test_to_iso_z_string_static_method():
 
     # 4. Test with None input
     assert FeedItem.to_iso_z_string(None) is None
+
+
+class _NoOffsetTZ(datetime.tzinfo):
+    """Custom tzinfo where utcoffset() returns None (edge-case)."""
+
+    def utcoffset(self, dt):
+        return None
+
+    def tzname(self, dt):
+        return "NOTZ"
+
+    def dst(self, dt):
+        return None
+
+
+# DST-aware test: America/New_York during DST (EDT = UTC-4)
+# 2023-06-15 10:00 EDT => 2023-06-15 14:00 UTC
+_dst_tz = None
+try:
+    from zoneinfo import ZoneInfo
+
+    _dst_tz = ZoneInfo("America/New_York")
+except ImportError:
+    pass
+
+_no_offset_dt = datetime.datetime(2023, 6, 1, 8, 0, 0, tzinfo=_NoOffsetTZ())
+
+_VALIDATE_UTC_CASES = [
+    pytest.param(
+        datetime.datetime(2023, 1, 1, 12, 0, 0),
+        datetime.datetime(2023, 1, 1, 12, 0, 0),
+        True,  # expect_naive
+        id="naive_datetime",
+    ),
+    pytest.param(
+        datetime.datetime(
+            2023,
+            3,
+            15,
+            10,
+            0,
+            0,
+            tzinfo=datetime.timezone(datetime.timedelta(hours=-5)),
+        ),
+        datetime.datetime(2023, 3, 15, 15, 0, 0),
+        True,
+        id="aware_non_utc_fixed_offset",
+    ),
+    pytest.param(
+        datetime.datetime(2023, 5, 20, 14, 30, 0,
+                          tzinfo=datetime.timezone.utc),
+        datetime.datetime(2023, 5, 20, 14, 30, 0),
+        True,
+        id="aware_utc",
+    ),
+    pytest.param(None, None, None, id="none_input"),
+]
+
+# Add DST-aware case only when zoneinfo is available (Python 3.9+)
+if _dst_tz is not None:
+    _VALIDATE_UTC_CASES.append(
+        pytest.param(
+            datetime.datetime(2023, 6, 15, 10, 0, 0, tzinfo=_dst_tz),
+            datetime.datetime(2023, 6, 15, 14, 0, 0),
+            True,
+            id="aware_dst_america_new_york",
+        )
+    )
+
+# Edge-case: custom tzinfo with utcoffset() returning None
+# Current behavior: returned as-is (tzinfo still attached, not naive)
+_VALIDATE_UTC_CASES.append(
+    pytest.param(
+        _no_offset_dt,
+        _no_offset_dt,
+        False,  # expect_naive=False => tzinfo still attached
+        id="custom_tzinfo_utcoffset_none",
+    )
+)
+
+
+@pytest.mark.parametrize("input_dt, expected_dt, expect_naive", _VALIDATE_UTC_CASES)
+def test_validate_datetime_utc_validator(input_dt, expected_dt, expect_naive):
+    """Tests the FeedItem.validate_datetime_utc validator method."""
+    item = FeedItem()
+    result = item.validate_datetime_utc("published_time", input_dt)
+    assert result == expected_dt
+    if result is not None and expect_naive:
+        assert result.tzinfo is None
+    elif result is not None and not expect_naive:
+        assert result.tzinfo is not None
 
 
 # --- Tests for feed_service functions ---
@@ -2319,3 +2405,21 @@ def test_autosave_opml_with_temp_fs(tmp_path, client, setup_autosave_test_data):
     written_data = backup_file_path.read_text(encoding="utf-8")
     assert "Autosave Test Tab" in written_data
     assert "http://example.com/autosave" in written_data
+
+
+def test_import_opml_txt_file_rejected(client):
+    """
+    Test that uploading a file with a .txt extension is rejected during OPML import.
+    This prevents weak file type validation.
+    """
+    # Create a mock .txt file
+    data = {"file": (io.BytesIO(b"dummy text content"), "test.txt")}
+
+    response = client.post(
+        "/api/opml/import",
+        data=data,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert response.json["error"] == "Invalid file type. Allowed: .opml, .xml"

@@ -1,6 +1,19 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-02-23
+
+- **Security: Replace standard XML parser with `defusedxml`**
+  - Replaced `xml.etree.ElementTree` with `defusedxml.ElementTree` for all XML parsing operations in `backend/blueprints/opml.py` and `tests/unit/test_app.py`.
+  - Added security documentation to `AGENTS.md` and `README.md` to prevent future use of vulnerable XML parsers.
+  - Maintained `xml.etree.ElementTree` for XML generation in `backend/blueprints/opml.py` while ensuring all parsing is handled by `defusedxml`.
+
 ## 2026-02-22
+
+- **Fix: Added Missing SECRET_KEY Configuration**
+  - Resolved security vulnerability by configuring `SECRET_KEY` in `backend/app.py`.
+  - Implemented environment variable check with a secure fallback for development.
+  - Added a production warning log when the default development key is used.
+  - Added a new security regression test `tests/unit/test_secret_key.py`.
 
 - **Fix: Middle-click to mark as read**
   - Added `auxclick` event listener to feed item links in `frontend/js/ui.js` to ensure items are marked as read when opened via middle-click.
@@ -51,6 +64,11 @@
   - Updated GitHub workflow run-tests.yml to use Python 3.14
   - Updated Containerfile to use Python 3.14-slim base image
   - Updated documentation to reflect Python 3.14 migration
+
+- **Doc: Fix FeedItem.validate_datetime_utc Docstring**
+  - Updated the docstring for `FeedItem.validate_datetime_utc` in `backend/models.py` to accurately reflect its behavior (ensuring naive UTC objects for storage).
+  - Added unit test `test_validate_datetime_utc_validator` in `tests/unit/test_app.py` to verify the normalization logic for various datetime inputs.
+
 ## 2025-10-07
 
 - **Feat(frontend): Move unread counter to left of edit and close buttons**
