@@ -103,6 +103,11 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [ ] Consider basic end-to-end tests. (Deferred)
 *   [x] Finalize `Containerfile` for production readiness (non-root user, proper volume mounts, etc.).
 
+## Code Health & Maintenance
+
+*   [x] Fix `FeedItem.validate_datetime_utc` docstring and add regression tests.
+*   [x] Replace vulnerable XML parser with `defusedxml` and document security requirements.
+
 ## Code Review Completion
 
 *   [x] **PR #100 Review Comments Addressed:**

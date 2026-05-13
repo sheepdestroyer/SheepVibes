@@ -62,15 +62,16 @@ def safe_drop_constraint(
     """
     if constraint_name is None:
         logger.warning(
-            "Attempted to safe_drop_constraint with None name on table %s. This is a no-op; callers must provide an explicit constraint name.",
+            "Attempted to safe_drop_constraint with None name on table %s. This is a no-op; callers must provide an "
+            "explicit constraint name.",
             table_name,
         )
         return
 
-    if not constraint_exists(table_name, constraint_name, type_,
-                             schema=schema):
-        logger.debug("Constraint %s not found on %s, skipping drop.",
-                     constraint_name, table_name)
+    if not constraint_exists(table_name, constraint_name, type_, schema=schema):
+        logger.debug(
+            "Constraint %s not found on %s, skipping drop.", constraint_name, table_name
+        )
         return
 
     # If we reach here, we should attempt to drop the constraint.
