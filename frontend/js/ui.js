@@ -69,16 +69,36 @@ function createFeedItemElement(item, clickHandler) {
     return listItem;
 }
 
+function renderFeedItems(items, onMarkItemRead, feedId, tabId) {
+    const fragment = document.createDocumentFragment();
+    items.forEach(item => {
+        const listItem = createFeedItemElement(item, (li) => {
+            onMarkItemRead(item.id, li, feedId, tabId);
+        });
+        fragment.appendChild(listItem);
+    });
+    return fragment;
+}
+
 // --- Feed Widget ---
 
 export function createFeedWidget(feed, callbacks) {
-    const { onEdit, onDelete, onMarkItemRead, onLoadMore } = callbacks;
     const widget = document.createElement('div');
     widget.classList.add('feed-widget');
     widget.dataset.feedId = feed.id;
     widget.dataset.tabId = feed.tab_id;
 
-    // Header with buttons
+    const header = createWidgetHeader(feed, callbacks);
+    widget.appendChild(header);
+
+    const list = createWidgetList(feed, callbacks);
+    widget.appendChild(list);
+
+    return widget;
+}
+
+function createWidgetHeader(feed, callbacks) {
+    const { onEdit, onDelete } = callbacks;
     const buttonContainer = document.createElement('div');
     buttonContainer.classList.add('feed-widget-buttons');
 
@@ -123,11 +143,12 @@ export function createFeedWidget(feed, callbacks) {
     }
 
     titleElement.appendChild(buttonContainer);
-    widget.appendChild(titleElement);
+    return titleElement;
+}
 
-    // List
+function createWidgetList(feed, callbacks) {
+    const { onLoadMore, onMarkItemRead } = callbacks;
     const itemList = document.createElement('ul');
-    widget.appendChild(itemList);
 
     const items = feed.items || [];
     itemList.dataset.offset = items.length;
@@ -146,16 +167,14 @@ export function createFeedWidget(feed, callbacks) {
 
     // Render Items
     if (feed.items && feed.items.length > 0) {
-        const fragment = document.createDocumentFragment();
-        feed.items.forEach(item => {
-            const listItem = createFeedItemElement(item, (li) => {
-                onMarkItemRead(item.id, li, feed.id, feed.tab_id);
-            });
-            fragment.appendChild(listItem);
-        });
+
+        const fragment = renderFeedItems(feed.items, onMarkItemRead, feed.id, feed.tab_id);
+
         itemList.appendChild(fragment);
     } else {
-        itemList.innerHTML = '<li>No items found for this feed.</li>';
+        const emptyLi = document.createElement('li');
+        emptyLi.textContent = 'No items found for this feed.';
+        itemList.replaceChildren(emptyLi);
     }
 
     // Programmatically trigger a scroll event to handle cases where the initial
@@ -165,21 +184,18 @@ export function createFeedWidget(feed, callbacks) {
         itemList.dispatchEvent(new Event('scroll'));
     }, 0);
 
-    return widget;
+    return itemList;
 }
 
 export function appendItemsToFeedWidget(widgetList, items, callbacks) {
     const { onMarkItemRead } = callbacks;
-    const feedId = widgetList.dataset.feedId;
-    const tabId = widgetList.dataset.tabId;
-    const fragment = document.createDocumentFragment();
 
-    items.forEach(item => {
-        const listItem = createFeedItemElement(item, (li) => {
-            onMarkItemRead(item.id, li, feedId, tabId);
-        });
-        fragment.appendChild(listItem);
-    });
+    const feedId = widgetList.dataset.feedId;
+
+    const tabId = widgetList.dataset.tabId;
+
+    const fragment = renderFeedItems(items, onMarkItemRead, feedId, tabId);
+
     widgetList.appendChild(fragment);
 
     // Update offset
@@ -196,18 +212,22 @@ export function renderTabs(tabs, activeTabId, callbacks) {
     const renameTabButton = document.getElementById('rename-tab-button');
     const deleteTabButton = document.getElementById('delete-tab-button');
 
-    tabsContainer.innerHTML = '';
+    tabsContainer.replaceChildren();
     if (!tabs || tabs.length === 0) {
-        tabsContainer.innerHTML = '<span>No tabs found.</span>';
+        const noTabsSpan = document.createElement('span');
+        noTabsSpan.textContent = 'No tabs found.';
+        tabsContainer.replaceChildren(noTabsSpan);
         renameTabButton.disabled = true;
         deleteTabButton.disabled = true;
-        feedGrid.innerHTML = '<p>Create a tab to get started!</p>';
+        const noFeedsP = document.createElement('p');
+        noFeedsP.textContent = 'Create a tab to get started!';
+        feedGrid.replaceChildren(noFeedsP);
         return { activeTabId: null };
     }
 
-    tabs.sort((a, b) => a.order - b.order);
+    const sortedTabs = [...tabs].sort((a, b) => a.order - b.order);
 
-    tabs.forEach(tab => {
+    sortedTabs.forEach(tab => {
         const button = document.createElement('button');
         button.textContent = tab.name;
         button.dataset.tabId = tab.id;
@@ -235,7 +255,7 @@ export function showEditFeedModal(feedId, currentUrl, currentName) {
     document.getElementById('edit-feed-id').value = feedId;
     document.getElementById('edit-feed-url').value = currentUrl;
     document.getElementById('edit-feed-name').value = currentName;
-    document.getElementById('edit-feed-error').style.display = 'none';
+    document.getElementById('edit-feed-error').classList.add('hidden');
     modal.classList.add('is-active');
 }
 
