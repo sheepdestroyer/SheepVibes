@@ -8,6 +8,7 @@ import hashlib
 import http.client
 import ipaddress
 import json
+import itertools
 import logging  # Standard logging
 import os
 import socket
@@ -86,7 +87,7 @@ def _sanitize_for_log(text):
         return ""
     # Escape newlines/carriage returns, then remove non-printable characters
     text = str(text).replace("\n", "\\n").replace("\r", "\\r")
-    return "".join(ch for ch in text if ch.isprintable())[:200]
+    return "".join(itertools.islice(filter(str.isprintable, text), 200))
 
 
 def validate_link_structure(url, schemes=("http", "https")):
