@@ -1,0 +1,187 @@
+# SheepVibes Jules PR Workflow
+
+**Version:** 1.0.0
+**Date:** 2026-05-15
+**Status:** Enacted
+
+---
+
+## Purpose
+
+This document defines the mandatory process for handling PRs created by Google Jules (and other automated coding agents) in the `sheepdestroyer/SheepVibes` repository. It exists because previous attempts to manage Jules PRs via kanban boards failed when PRs were merged without completing the required review loop.
+
+**The golden rule:** A PR is NEVER merged until it has passed through every gate in the review loop with zero unresolved items.
+
+---
+
+## The Five-Gate Review Loop
+
+Every Jules PR must traverse these gates in order. No skips. No shortcuts.
+
+```
+INVENTORY -> DEDUPE -> REVIEW -> MERGE -> CLOSE-REDUNDANT
+```
+
+### Gate 1: Inventory
+
+Before creating a Jules session or opening a PR:
+
+1. **Check for duplicates:** Search open PRs and recently closed PRs for the same issue. If a PR already exists for this fix, do NOT create a new one.
+2. **Check the kanban board:** If a task for this issue already exists, update it rather than creating a duplicate.
+3. **Verify scope:** The issue must be a single, well-defined change. If the scope is vague, refine it before handing to Jules.
+4. **Check Jules sessions:** Query the Jules API for active/queued sessions targeting SheepVibes. Do not create overlapping sessions.
+
+### Gate 2: Dedupe
+
+After Jules creates a PR:
+
+1. **Compare against open PRs:** Does any existing PR solve the same problem? If yes, close the less-complete one.
+2. **Compare against closed PRs:** Was this already attempted and rejected? If yes, inspect why before proceeding.
+3. **Label the PR:** Apply labels `jules` and either `sentinel` (security) or `bolt` (performance) based on the agent type.
+4. **Create/update kanban task:** Add the PR to the sheepvibes kanban board with status `review`.
+
+### Gate 3: Review
+
+This is the most critical gate. A PR sits here until ALL of the following are true:
+
+- [ ] **0 unresolved review comments** on the PR (both human and bot).
+- [ ] **CI passes:** The full GitHub Actions workflow (`.github/workflows/run-tests.yml`) must be green.
+- [ ] **Tests pass locally:** Run `cd backend && python -m pytest -v` with a Redis container and `CACHE_REDIS_PORT` set.
+- [ ] **E2E smoke test:** The application starts, API endpoints respond, feed fetching works, and the frontend loads.
+- [ ] **Security scan:** For `sentinel` PRs, verify the fix addresses the stated vulnerability without introducing regressions.
+- [ ] **Performance validation:** For `bolt` PRs, confirm the optimization is measurable and does not sacrifice readability.
+- [ ] **Code review by human or Hermes agent:** At least one non-Jules reviewer must approve.
+
+**If review finds issues:**
+- Move the kanban task back to `review` (or `todo` if major rework is needed).
+- Post review comments on the PR.
+- If Jules needs to fix it, send a follow-up message to the Jules session (do NOT create a new session).
+- Re-run the review gate after fixes.
+
+### Gate 4: Merge
+
+A PR may ONLY be merged when:
+
+1. It has explicitly been moved to the `merge` column in the kanban board.
+2. All checkboxes in Gate 3 are satisfied.
+3. The merge is performed via GitHub's UI or `gh pr merge` with squash or merge commit (no fast-forward force-push).
+4. The merge commit message references the PR number.
+
+**Forbidden:** Merging from the Jules web UI, auto-merge, or bypassing branch protection.
+
+### Gate 5: Close-Redundant
+
+Immediately after merge:
+
+1. **Close the Jules session:** Use `DELETE https://jules.googleapis.com/v1alpha/sessions/{session_id}` (the `:close` endpoint is unreliable in v1alpha).
+2. **Delete the branch:** Remove the PR branch from origin.
+3. **Close duplicate PRs:** Any PRs that were superseded by this merge should be closed with a reference comment.
+4. **Update kanban:** Move the task to `done`.
+5. **Update docs:** If the change affects user-facing behavior, update `CHANGELOG.md` and `TODO.md`.
+
+---
+
+## Jules Session Creation Rules
+
+When creating a Jules session via API:
+
+```json
+{
+  "prompt": "Clear, single-scope task description",
+  "sourceContext": {
+    "source": "sources/github/sheepdestroyer/SheepVibes",
+    "githubRepoContext": { "startingBranch": "main" }
+  },
+  "automationMode": "AUTO_CREATE_PR",
+  "requirePlanApproval": true,
+  "title": "[area] Brief description"
+}
+```
+
+**Mandatory settings:**
+- `requirePlanApproval: true` — Never auto-approve plans. Plans must be reviewed before Jules proceeds.
+- `startingBranch: "main"` — Always branch from the current `main`.
+- Title prefix: `Sentinel:` for security fixes, `Bolt:` for performance, `Refactor:` for code cleanup, `Test:` for test additions.
+
+**Forbidden settings:**
+- `requirePlanApproval: false` — This is what caused the merge chaos.
+- Multiple unrelated tasks in a single prompt.
+
+---
+
+## Branch Naming Convention
+
+| Source | Branch name format |
+|--------|-------------------|
+| Jules sessions | `jules-<session-id>-<short-hash>` (auto-generated by Jules) |
+| Human / Hermes | `<type>/<description>-<hash>` |
+| Dependabot | `dependabot/<ecosystem>/<path>/<dependency>-<version>` (auto-generated) |
+
+Allowed types: `feat`, `fix`, `refactor`, `test`, `perf`, `security`, `docs`, `chore`.
+
+---
+
+## Dependabot Exception
+
+Dependabot PRs are **exempt** from the five-gate loop for minor version bumps (patch and minor releases). They may be merged after:
+
+1. CI passes.
+2. A quick skim confirms the bump is legitimate (no malicious package substitution).
+
+Major version bumps or dependency removals must go through the full loop.
+
+---
+
+## Failure and Escalation Handling
+
+| Scenario | Action |
+|----------|--------|
+| Jules session stuck in `AWAITING_USER_FEEDBACK` for >24h | Close the session. Reassess whether the task is still needed. |
+| PR review reveals architectural issues | Move back to `review`. If the fix requires a new approach, close the PR and start a new session with revised instructions. |
+| Jules creates a broken PR (tests fail, won't start) | Close the PR and the session. Document the failure in `.jules/bolt.md` or `.jules/sentinel.md`. |
+| Two Jules PRs address the same issue | Keep the better one. Close the other with a comment referencing the surviving PR. |
+| Force-push to `main` is required (emergency only) | Requires explicit user approval. Document the reason in the commit message and update this file. |
+
+---
+
+## Kanban Board Usage
+
+Board: `sheepvibes` (`~/.hermes/kanban/boards/sheepvibes/`)
+
+| Column | Meaning |
+|--------|---------|
+| `inventory` | New issues/PRs discovered, not yet triaged |
+| `dedupe` | Checking for duplicates and overlaps |
+| `review` | Under active review (code, tests, CI) |
+| `merge` | Approved, waiting for merge |
+| `done` | Merged and cleaned up |
+| `cancelled` | Abandoned or superseded |
+
+**Rules:**
+- Only ONE task may be `in_progress` (review) at a time per agent.
+- Tasks must not skip columns.
+- A task in `merge` that fails the final CI check moves back to `review`.
+
+---
+
+## Verification Checklist (for Agents)
+
+Before declaring any Jules-related task complete:
+
+- [ ] All open PRs for this issue have been inventoried.
+- [ ] Duplicate PRs have been closed.
+- [ ] The surviving PR has 0 unresolved comments.
+- [ ] CI is green.
+- [ ] Local test suite passes (`python -m pytest -v` with Redis).
+- [ ] E2E smoke test passes.
+- [ ] PR is merged via GitHub UI (not force-push).
+- [ ] Jules session is closed/deleted.
+- [ ] Branch is deleted.
+- [ ] Kanban board is updated.
+- [ ] `CHANGELOG.md` and `TODO.md` are updated if needed.
+
+---
+
+## History
+
+- **2026-05-15:** Enacted after the kanban-driven review process failed. Main was rolled back to `07e67b2` (2026-02-22), 36+ PRs were undone, 4 open PRs were closed, 253 Jules sessions were deleted, and this process was established to prevent recurrence.

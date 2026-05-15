@@ -122,3 +122,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [ ] User authentication.
 *   [ ] Keyword filtering/highlighting within feeds.
 *   [ ] More advanced configuration options per feed.
+
+## Process
+
+*   [x] **2026-05-15: Kanban cleanup and Jules workflow reset**
+  - [x] Rollback `main` to last known-good state (07e67b2).
+  - [x] Preserve Dependabot dependency bumps.
+  - [x] Close all open PRs bypassing the review loop.
+  - [x] Delete all active Jules sessions (253 removed).
+  - [x] Cancel stale kanban tasks.
+  - [x] Enact `docs/process/jules-pr-workflow.md` with five-gate review loop.
+  - [x] Validate full test suite passes at restored state.

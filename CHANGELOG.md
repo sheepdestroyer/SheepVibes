@@ -1,5 +1,16 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-05-15
+
+- **Process: Repository cleanup and new Jules PR workflow enacted**
+  - Rolled back `main` to `07e67b2` (2026-02-22, PR #323) to undo 36+ PRs merged without review.
+  - Preserved 5 Dependabot dependency bumps by cherry-picking them onto the clean tree.
+  - Closed 4 open PRs (#301, #316, #320, #332) with cleanup comments.
+  - Deleted 253 active/queued Jules sessions targeting SheepVibes via the Jules API.
+  - Cancelled 16 stale tasks on the SheepVibes kanban board.
+  - Enacted `docs/process/jules-pr-workflow.md` with mandatory five-gate review loop.
+  - Full test suite passes: 121 passed, 2 skipped.
+
 ## 2026-02-22
 
 - **Fix: Middle-click to mark as read**
