@@ -15,7 +15,9 @@ def test_import(client, mocker):
     logger.info("Testing OPML import at: %s", url)
 
     # Use an in-memory file object
-    opml_content = b'<opml version="1.0"><body><outline text="Test Feed" xmlUrl="http://example.com/feed" /></body></opml>'
+    opml_content = b'<opml version="1.0"><body>' \
+                   b'<outline text="Test Feed" xmlUrl="http://example.com/feed" />' \
+                   b'</body></opml>'
     opml_file = io.BytesIO(opml_content)
 
     data = {"file": (opml_file, "test_feeds.opml")}
@@ -388,3 +390,67 @@ def test_import_malformed_opml(client):
 
     payload = response.get_json()
     assert "Malformed OPML file" in payload.get("error", "")
+
+
+def test_import_missing_file_part(client):
+    """Test importing when the 'file' part is missing from the request."""
+    # Ensure CSRF bypass for tests if needed, though for client.post we might just need XMLHttpRequest
+    response = client.post("/api/opml/import", data={},
+                           content_type="multipart/form-data")
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "No file part in the request"}
+
+
+def test_import_empty_filename(client):
+    """Test importing a file with an empty filename."""
+    data = {"file": (io.BytesIO(b""), "")}
+    response = client.post("/api/opml/import", data=data,
+                           content_type="multipart/form-data")
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "No file selected for uploading"}
+
+
+def test_import_invalid_extension(client):
+    """Test importing a file with an invalid extension."""
+    data = {"file": (io.BytesIO(b"content"), "file.exe")}
+    response = client.post("/api/opml/import", data=data,
+                           content_type="multipart/form-data")
+    assert response.status_code == 400
+    assert "Invalid file type" in response.get_json()["error"]
+
+
+def test_import_file_too_large(client):
+    """Test importing a file that exceeds the size limit."""
+    large_content = b"a" * (5 * 1024 * 1024 + 10)  # slightly over 5MB
+    data = {"file": (io.BytesIO(large_content), "large.opml")}
+    response = client.post("/api/opml/import", data=data,
+                           content_type="multipart/form-data")
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "File is too large (max 5MB)"}
+
+
+def test_import_empty_file_object():
+    """Test importing when the file object itself evaluates to False."""
+    class FalsyFileStorage:
+        def __init__(self):
+            self.filename = "test.opml"
+
+        def __bool__(self):
+            return False
+
+        def close(self):
+            pass
+
+    with app.test_request_context('/api/opml/import', method='POST'):
+        # Mock the files dictionary directly
+        from flask import request
+        request._cached_files = {"file": FalsyFileStorage()}
+        request.files = request._cached_files
+
+        from backend.blueprints.opml import _validate_opml_file_request
+        opml_file, error_resp = _validate_opml_file_request()
+
+        assert opml_file is None
+        assert error_resp[1] == 400
+        assert error_resp[0].get_json() == {"error": "File object is empty"}
