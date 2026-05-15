@@ -583,6 +583,31 @@ def _invalidate_import_caches(affected_tab_ids_set):
     )
 
 
+def _finish_opml_import(
+    message,
+    imported_count,
+    skipped_count,
+    tab_id,
+    tab_name,
+    affected_tab_ids=None,
+):
+    """Helper to format OPML import result and announce completion."""
+    result = {
+        "message": message,
+        "imported_count": imported_count,
+        "skipped_count": skipped_count,
+        "tab_id": tab_id,
+        "tab_name": tab_name,
+    }
+    if affected_tab_ids is not None:
+        result["affected_tab_ids"] = list(affected_tab_ids)
+
+    announcer.announce(
+        msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+    )
+    return result, None
+
+
 def import_opml(opml_file_stream, requested_tab_id_str):
     """Imports feeds from an OPML file, sending progress via SSE."""
     root, error_resp = _parse_opml_root(opml_file_stream)
@@ -602,17 +627,13 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     opml_body = root.find("body")
     if opml_body is None:
         logger.warning("OPML import: No <body> element found.")
-        result = {
-            "message": "No feeds found in OPML (missing body).",
-            "imported_count": 0,
-            "skipped_count": 0,
-            "tab_id": top_level_target_tab_id,
-            "tab_name": top_level_target_tab_name,
-        }
-        announcer.announce(
-            msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+        return _finish_opml_import(
+            message="No feeds found in OPML (missing body).",
+            imported_count=0,
+            skipped_count=0,
+            tab_id=top_level_target_tab_id,
+            tab_name=top_level_target_tab_name,
         )
-        return result, None
 
     all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
 
@@ -649,43 +670,28 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     if not opml_body.findall("outline") and not state.newly_added_feeds_list:
         logger.info(
             "OPML import: No <outline> elements found in the OPML body.")
-        result = {
-            "message": "No feed entries or folders found in the OPML file.",
-            "imported_count": 0,
-            "skipped_count": 0,
-            "tab_id": top_level_target_tab_id,
-            "tab_name": top_level_target_tab_name,
-        }
-        announcer.announce(
-            msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+        return _finish_opml_import(
+            message="No feed entries or folders found in the OPML file.",
+            imported_count=0,
+            skipped_count=0,
+            tab_id=top_level_target_tab_id,
+            tab_name=top_level_target_tab_name,
         )
-        return result, None
 
     imported_final_count = state.imported_count
     skipped_final_count = state.skipped_count
 
-    result = {
-        "message":
-        f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
-        f"Tab: {top_level_target_tab_name}.",
-        "imported_count":
-        imported_final_count,
-        "skipped_count":
-        skipped_final_count,
-        "tab_id":
-        top_level_target_tab_id,
-        "tab_name":
-        top_level_target_tab_name,
-        "affected_tab_ids":
-        list(state.affected_tab_ids_set),
-    }
-
-    # Final 'complete' message for SSE
-    announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+    return _finish_opml_import(
+        message=(
+            f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
+            f"Tab: {top_level_target_tab_name}."
+        ),
+        imported_count=imported_final_count,
+        skipped_count=skipped_final_count,
+        tab_id=top_level_target_tab_id,
+        tab_name=top_level_target_tab_name,
+        affected_tab_ids=state.affected_tab_ids_set,
     )
-
-    return result, None
 
 
 MAX_FEED_RESPONSE_BYTES = 10 * 1024 * 1024  # 10MB cap for feed responses
