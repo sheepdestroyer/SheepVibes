@@ -1,11 +1,11 @@
 {
-  "name": "app",
+  "name": "sheepvibes-frontend",
   "version": "1.0.0",
   "description": "A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, designed to run in a Podman container.",
-  "main": "index.js",
+  "private": true,
   "directories": {
     "doc": "docs",
-    "test": "vitest run"
+    "test": "tests"
   },
   "scripts": {
     "test": "vitest run"
@@ -15,8 +15,8 @@
     "url": "git+https://github.com/sheepdestroyer/SheepVibes.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "sheepdestroyer",
+  "license": "GPL-3.0-or-later",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/sheepdestroyer/SheepVibes/issues"
