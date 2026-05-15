@@ -132,7 +132,11 @@ def rename_tab(tab_id):
         invalidate_tabs_cache()
         logger.info("Renamed tab %s from '%s' to '%s'.", tab_id, original_name,
                     new_name)
-        return jsonify(tab.to_dict()), 200  # OK
+        # Get unread count explicitly to avoid N+1 queries
+        unread_count = (db.session.query(db.func.count(
+            FeedItem.id)).join(Feed).filter(Feed.tab_id == tab.id,
+                                            FeedItem.is_read.is_(False)).scalar() or 0)
+        return jsonify(tab.to_dict(unread_count=unread_count)), 200  # OK
     except IntegrityError:
         db.session.rollback()
         logger.warning(

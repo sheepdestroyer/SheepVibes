@@ -117,7 +117,11 @@ def add_feed():
             new_feed.id,
             tab_id,
         )
-        return jsonify(new_feed.to_dict()), 201  # Created
+        # Get unread count explicitly to avoid N+1 queries in to_dict
+        unread_count = (db.session.query(db.func.count(
+            FeedItem.id)).filter(FeedItem.feed_id == new_feed.id,
+                                 FeedItem.is_read.is_(False)).scalar() or 0)
+        return jsonify(new_feed.to_dict(unread_count=unread_count)), 201  # Created
 
     except Exception as e:
         db.session.rollback()
@@ -275,7 +279,11 @@ def update_feed_url(feed_id):
         )
 
         # Return full feed data including items for frontend to update widget
-        feed_data = feed.to_dict()
+        # Get unread count explicitly to avoid N+1 queries in to_dict
+        unread_count = (db.session.query(db.func.count(
+            FeedItem.id)).filter(FeedItem.feed_id == feed.id,
+                                 FeedItem.is_read.is_(False)).scalar() or 0)
+        feed_data = feed.to_dict(unread_count=unread_count)
         # Include only recent feed items in the response (limit to DEFAULT_FEED_ITEMS_LIMIT)
         feed_data["items"] = [
             item.to_dict()
@@ -363,7 +371,11 @@ def update_feed(feed_id):
                 feed.id,
             )
 
-        return jsonify(feed.to_dict())
+        # Get unread count explicitly to avoid N+1 queries in to_dict
+        unread_count = (db.session.query(db.func.count(
+            FeedItem.id)).filter(FeedItem.feed_id == feed.id,
+                                 FeedItem.is_read.is_(False)).scalar() or 0)
+        return jsonify(feed.to_dict(unread_count=unread_count))
     except Exception as e:
         logger.error(
             "Error during manual update for feed %s: %s",
