@@ -1,5 +1,7 @@
 """Service module for fetching, parsing, and processing RSS/Atom feeds."""
 
+from __future__ import annotations
+
 # Import necessary libraries
 # Use dateutil for robust date parsing
 import concurrent.futures
@@ -15,10 +17,10 @@ import ssl
 import urllib.request
 from dataclasses import dataclass
 from datetime import timezone  # Specifically import timezone
-from typing import TYPE_CHECKING
 from urllib.parse import urljoin, urlparse
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
+from xml.etree.ElementTree import Element  # skipcq: BAN-B405
 
 import defusedxml.ElementTree as SafeET
 import defusedxml.sax
@@ -51,11 +53,9 @@ from .sse import announcer
 # Set up logger for this module
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element  # skipcq: BAN-B405
 
 # Type alias for the stack items: (list of XML elements, current_tab_id, current_tab_name)
-OpmlStackItem = tuple[list["Element"], int, str]
+OpmlStackItem = tuple[list[Element], int, str]
 
 
 @dataclass
