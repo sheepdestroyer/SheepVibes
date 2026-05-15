@@ -1,5 +1,5 @@
 import logging
-import urllib.parse
+import urllib.parse  # noqa: F401 - used for urlencode, ignore static check false positive
 
 from flask import request
 
