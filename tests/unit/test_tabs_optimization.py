@@ -187,3 +187,41 @@ def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
     assert result["unread_count"] == 0
     assert qc[
         0] <= 1, f"Expected at most one unread aggregate query, got {qc[0]}"
+
+def test_feed_to_dict_optimization(client):
+    """
+    Verify Feed.to_dict respects the unread_count override and does not issue
+    a database query when calculating the unread count.
+    """
+    tab = Tab(name="Tab for feed to_dict", order=100)
+    feed = Feed(name="Feed for feed to_dict", url="http://example.com/feed-to-dict", tab=tab)
+    db.session.add(tab)
+    db.session.add(feed)
+    db.session.commit()
+
+    db.session.refresh(feed)
+
+    with count_queries() as qc:
+        result = feed.to_dict(unread_count=50)
+
+    assert result["unread_count"] == 50
+    assert len(qc) == 0
+
+def test_feed_to_dict_db_lookup_fallback(client):
+    """
+    When no unread_count override is supplied, Feed.to_dict should default to 0
+    without querying the database, as per the N+1 optimization.
+    """
+    tab = Tab(name="Tab for feed to_dict db", order=100)
+    feed = Feed(name="Feed for feed to_dict db", url="http://example.com/feed-to-dict-db", tab=tab)
+    db.session.add(tab)
+    db.session.add(feed)
+    db.session.commit()
+
+    db.session.refresh(feed)
+
+    with count_queries() as qc:
+        result = feed.to_dict()
+
+    assert result["unread_count"] == 0
+    assert len(qc) == 0

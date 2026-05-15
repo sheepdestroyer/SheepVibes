@@ -105,12 +105,7 @@ class Feed(db.Model):
         Returns:
             dict: A dictionary representation of the feed, including the unread count.
         """
-        if unread_count is None:
-            # Calculate unread count for this specific feed
-            unread_count = (db.session.query(db.func.count(
-                FeedItem.id)).filter(FeedItem.feed_id == self.id,
-                                     FeedItem.is_read.is_(False)).scalar()
-                or 0)
+        unread_count = unread_count or 0
 
         return {
             "id":
