@@ -1533,6 +1533,38 @@ def _enforce_feed_limit(feed_db_obj):
             )
 
 
+def _commit_metadata(feed_db_obj):
+    """Commits metadata and existing item updates immediately.
+
+    This ensures they are preserved even if the batch insert of new items fails later.
+    """
+    try:
+        db.session.commit()
+        return True
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(
+            "Error committing metadata/existing items for feed %s",
+            _sanitize_for_log(feed_db_obj.name),
+        )
+        return False
+
+
+def _update_timestamp_no_new_items(feed_db_obj):
+    """Updates the feed timestamp when there are no new items."""
+    # last_updated_time is usually updated on successful commit of items,
+    # or here if there were no items but fetch succeeded.
+    feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+    try:
+        db.session.commit()
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(
+            "Error committing feed update (no new items) for %s",
+            _sanitize_for_log(feed_db_obj.name),
+        )
+
+
 def process_feed_entries(feed_db_obj, parsed_feed):
     """Processes entries from a parsed feed and adds new items to the database.
 
@@ -1554,33 +1586,14 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     _update_feed_metadata(feed_db_obj, parsed_feed)
     items_to_add = _collect_new_items(feed_db_obj, parsed_feed)
 
-    # Commit metadata and existing item updates immediately.
-    # This ensures they are preserved even if the batch insert of new items fails later.
-    try:
-        db.session.commit()
-    except sqlalchemy.exc.SQLAlchemyError:
-        db.session.rollback()
-        logger.exception(
-            "Error committing metadata/existing items for feed %s",
-            _sanitize_for_log(feed_db_obj.name),
-        )
+    if not _commit_metadata(feed_db_obj):
         # It's safer to stop processing this feed to avoid potential inconsistencies
         # if the metadata/update commit failed.
         return 0
 
     if not items_to_add:
         # If no new items, we are done.
-        # last_updated_time is usually updated on successful commit of items,
-        # or here if there were no items but fetch succeeded.
-        feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
-        try:
-            db.session.commit()
-        except sqlalchemy.exc.SQLAlchemyError:
-            db.session.rollback()
-            logger.exception(
-                "Error committing feed update (no new items) for %s",
-                _sanitize_for_log(feed_db_obj.name),
-            )
+        _update_timestamp_no_new_items(feed_db_obj)
         return 0
 
     committed_items_count = _save_items_to_db(feed_db_obj, items_to_add)
