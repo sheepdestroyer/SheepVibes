@@ -31,7 +31,8 @@ def _get_unread_count(feed_id):
     return (
         db.session.query(db.func.count(FeedItem.id))
         .filter(FeedItem.feed_id == feed_id, FeedItem.is_read.is_(False))
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
 
@@ -177,8 +178,7 @@ def delete_feed(feed_id):
             exc_info=True,
         )
         return (
-            jsonify(
-                {"error": "An internal error occurred while deleting the feed."}),
+            jsonify({"error": "An internal error occurred while deleting the feed."}),
             500,
         )
 
@@ -208,8 +208,7 @@ def update_feed_url(feed_id):
     new_url = data["url"].strip()
 
     # Check if the new URL is already used by another feed
-    existing_feed = Feed.query.filter(
-        Feed.id != feed_id, Feed.url == new_url).first()
+    existing_feed = Feed.query.filter(Feed.id != feed_id, Feed.url == new_url).first()
     if existing_feed:
         return (
             jsonify({"error": f"Feed with URL {new_url} already exists"}),
@@ -241,8 +240,7 @@ def update_feed_url(feed_id):
             new_name = parsed_feed.feed.get(
                 "title", new_url
             )  # Use URL as fallback if title missing
-            new_site_link = parsed_feed.feed.get(
-                "link")  # Get the website link
+            new_site_link = parsed_feed.feed.get("link")  # Get the website link
 
         # Update the feed
         original_url = feed.url
@@ -299,8 +297,7 @@ def update_feed_url(feed_id):
         db.session.rollback()
         logger.error("Error updating feed %s: %s", feed_id, e, exc_info=True)
         return (
-            jsonify(
-                {"error": "An internal error occurred while updating the feed."}),
+            jsonify({"error": "An internal error occurred while updating the feed."}),
             500,
         )
 
@@ -349,12 +346,10 @@ def api_update_all_feeds():
             200,
         )
     except Exception as e:
-        logger.error("Error during /api/feeds/update-all: %s",
-                     e, exc_info=True)
+        logger.error("Error during /api/feeds/update-all: %s", e, exc_info=True)
         # Consistent error response with other parts of the API
         return (
-            jsonify(
-                {"error": "An internal error occurred while updating all feeds."}),
+            jsonify({"error": "An internal error occurred while updating all feeds."}),
             500,
         )
 
@@ -404,8 +399,7 @@ def get_feed_items(feed_id):
         limit = int(request.args.get("limit", DEFAULT_PAGINATION_LIMIT))
     except (ValueError, TypeError):
         return (
-            jsonify(
-                {"error": "Offset and limit parameters must be valid integers."}),
+            jsonify({"error": "Offset and limit parameters must be valid integers."}),
             400,
         )
 
