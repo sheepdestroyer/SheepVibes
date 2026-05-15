@@ -174,6 +174,81 @@ def delete_feed(feed_id):
         )
 
 
+def _determine_feed_metadata(new_url, custom_name, parsed_feed):
+    """Determines the appropriate name and site link for a feed."""
+    if custom_name:
+        new_name = custom_name
+        new_site_link = (
+            parsed_feed.feed.get("link")
+            if parsed_feed and parsed_feed.feed
+            else None
+        )
+    elif not parsed_feed or not parsed_feed.feed:
+        # If fetch fails and no custom name provided, use the URL as the name
+        new_name = new_url
+        new_site_link = None
+        logger.warning(
+            "Could not fetch title for %s and no custom name provided, using URL as name.",
+            new_url,
+        )
+    else:
+        new_name = parsed_feed.feed.get(
+            "title", new_url
+        )  # Use URL as fallback if title missing
+        new_site_link = parsed_feed.feed.get("link")  # Get the website link
+
+    return new_name, new_site_link
+
+
+def _apply_feed_updates(feed, new_url, custom_name):
+    """Applies URL and metadata updates to a feed, handles cache and item processing."""
+    original_url = feed.url
+
+    # Attempt to fetch the feed to get its title (and verify accessibility/SSRF)
+    parsed_feed = fetch_feed(new_url)
+
+    new_name, new_site_link = _determine_feed_metadata(
+        new_url, custom_name, parsed_feed)
+
+    # Update the feed
+    feed.url = new_url
+    feed.name = new_name
+    feed.site_link = new_site_link
+    feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
+
+    db.session.commit()
+
+    # Invalidate cache for the feed's tab, as feed properties (name, url) have changed.
+    invalidate_tab_feeds_cache(feed.tab_id)
+    logger.info(
+        "Cache invalidated for tab %s after updating feed %s.",
+        feed.tab_id,
+        feed.id,
+    )
+
+    # Trigger update to fetch new items using the already fetched feed data
+    try:
+        if parsed_feed:
+            # Reuse the already fetched and parsed feed data to process entries,
+            # avoiding a redundant network call.
+            process_feed_entries(feed, parsed_feed)
+    except Exception as update_e:
+        # Log error during update but don't fail the operation
+        logger.error(
+            "Error updating feed %s after URL change: %s",
+            feed.id,
+            update_e,
+            exc_info=True,
+        )
+
+    logger.info(
+        "Updated feed %s from '%s' to '%s'.",
+        feed.id,
+        original_url,
+        new_url,
+    )
+
+
 @feeds_bp.route("/<int:feed_id>", methods=["PUT"])
 def update_feed_url(feed_id):
     """Updates a feed's URL and name.
@@ -210,69 +285,7 @@ def update_feed_url(feed_id):
     custom_name = data.get("name", "").strip()
 
     try:
-        # Attempt to fetch the feed to get its title (and verify accessibility/SSRF)
-        parsed_feed = fetch_feed(new_url)
-
-        if custom_name:
-            new_name = custom_name
-            new_site_link = (
-                parsed_feed.feed.get("link")
-                if parsed_feed and parsed_feed.feed
-                else None
-            )
-        elif not parsed_feed or not parsed_feed.feed:
-            # If fetch fails and no custom name provided, use the URL as the name
-            new_name = new_url
-            new_site_link = None
-            logger.warning(
-                "Could not fetch title for %s and no custom name provided, using URL as name.",
-                new_url,
-            )
-        else:
-            new_name = parsed_feed.feed.get(
-                "title", new_url
-            )  # Use URL as fallback if title missing
-            new_site_link = parsed_feed.feed.get(
-                "link")  # Get the website link
-
-        # Update the feed
-        original_url = feed.url
-        feed.url = new_url
-        feed.name = new_name
-        feed.site_link = new_site_link
-        feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
-
-        db.session.commit()
-
-        # Invalidate cache for the feed's tab, as feed properties (name, url) have changed.
-        invalidate_tab_feeds_cache(feed.tab_id)
-        logger.info(
-            "Cache invalidated for tab %s after updating feed %s.",
-            feed.tab_id,
-            feed.id,
-        )
-
-        # Trigger update to fetch new items using the already fetched feed data
-        try:
-            if parsed_feed:
-                # Reuse the already fetched and parsed feed data to process entries,
-                # avoiding a redundant network call.
-                process_feed_entries(feed, parsed_feed)
-        except Exception as update_e:
-            # Log error during update but don't fail the operation
-            logger.error(
-                "Error updating feed %s after URL change: %s",
-                feed.id,
-                update_e,
-                exc_info=True,
-            )
-
-        logger.info(
-            "Updated feed %s from '%s' to '%s'.",
-            feed_id,
-            original_url,
-            new_url,
-        )
+        _apply_feed_updates(feed, new_url, custom_name)
 
         # Return full feed data including items for frontend to update widget
         feed_data = feed.to_dict()
