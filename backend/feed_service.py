@@ -1095,6 +1095,90 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         return False, 0, feed_db_obj.tab_id
 
 
+def _build_safe_opener(safe_ip):
+    """Builds a urllib opener with custom handlers for IP pinning to prevent SSRF."""
+    http_handler = SafeHTTPHandler(safe_ip=safe_ip)
+    https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
+    redirect_handler = SafeRedirectHandler()
+    return urllib.request.build_opener(http_handler, https_handler, redirect_handler)
+
+
+def _download_feed_content(opener, feed_url):
+    """Executes the network request safely, enforcing size limits and basic zip bomb checks."""
+    req = urllib.request.Request(
+        feed_url,
+        headers={
+            "User-Agent": "SheepVibes/1.0",
+            "Accept-Encoding": "identity",  # Prevent Zip Bombs
+        },
+    )
+    url_opener = opener.open(req, timeout=10)
+
+    with url_opener as response:
+        # Check Content-Length header first
+        content_length = response.getheader("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                    logger.warning(
+                        "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                        _sanitize_for_log(content_length),
+                        MAX_FEED_RESPONSE_BYTES,
+                        _sanitize_for_log(feed_url),
+                    )
+                    return None
+            except (ValueError, TypeError):
+                # Malformed header; ignore and rely on read limit
+                logger.warning(
+                    "Ignored invalid Content-Length (%s) for feed %s",
+                    _sanitize_for_log(content_length),
+                    _sanitize_for_log(feed_url),
+                )
+
+        # Read limited amount + 1 byte to detect overflow
+        content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
+        if len(content) > MAX_FEED_RESPONSE_BYTES:
+            logger.warning(
+                "Feed rejected: Response size exceeds limit (%s) for %s",
+                MAX_FEED_RESPONSE_BYTES,
+                _sanitize_for_log(feed_url),
+            )
+            return None
+
+    # ZIP BOMB PROTECTION
+    # Even with 'Accept-Encoding: identity', some servers might send GZIP.
+    # We manually check for the GZIP magic header (\x1f\x8b) and reject.
+    if content.startswith(b"\x1f\x8b"):
+        logger.warning(
+            "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+            _sanitize_for_log(feed_url),
+        )
+        return None
+
+    return content
+
+
+def _parse_and_validate_feed(content, feed_url):
+    """Validates XML safety and parses the feed content."""
+    if not _validate_xml_safety(content):
+        # Sanitize URL for logging to prevent log injection
+        safe_log_url = _sanitize_for_log(feed_url)
+        logger.warning("Feed rejected due to security violation: %s",
+                       safe_log_url)
+        return None
+
+    parsed_feed = feedparser.parse(content)
+    # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
+    if parsed_feed.bozo:
+        # Check for bozo_exception and sanitize it (it can contain malicious input)
+        bozo_exc = parsed_feed.get("bozo_exception")
+        safe_exc_msg = _sanitize_for_log(
+            str(bozo_exc)) if bozo_exc else "Unknown"
+        logger.warning("Feed parsing warning: %s", safe_exc_msg)
+
+    return parsed_feed
+
+
 def fetch_feed(feed_url):
     """Fetches and parses a feed, preventing SSRF via IP pinning."""
     safe_ip, _ = validate_and_resolve_url(feed_url)
@@ -1104,89 +1188,17 @@ def fetch_feed(feed_url):
     logger.info("Fetching feed: %s", _sanitize_for_log(feed_url))
     try:
         # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
+        opener = _build_safe_opener(safe_ip)
 
-        # Register BOTH handlers to ensure safety during redirects (HTTPS -> HTTP or HTTP -> HTTPS)
-        # Both handlers utilize ip pinning via `safe_ip` (and `req.safe_ip` for redirects).
-        http_handler = SafeHTTPHandler(safe_ip=safe_ip)
-        https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
-        redirect_handler = SafeRedirectHandler()
-
-        # Build opener with all handlers
-        opener = urllib.request.build_opener(http_handler, https_handler,
-                                             redirect_handler)
-
-        req = urllib.request.Request(
-            feed_url,
-            headers={
-                "User-Agent": "SheepVibes/1.0",
-                "Accept-Encoding": "identity",  # Prevent Zip Bombs
-            },
-        )
-        url_opener = opener.open(req, timeout=10)
-
-        with url_opener as response:
-            # Check Content-Length header first
-            content_length = response.getheader("Content-Length")
-            if content_length:
-                try:
-                    if int(content_length) > MAX_FEED_RESPONSE_BYTES:
-                        logger.warning(
-                            "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
-                            _sanitize_for_log(content_length),
-                            MAX_FEED_RESPONSE_BYTES,
-                            _sanitize_for_log(feed_url),
-                        )
-                        return None
-                except (ValueError, TypeError):
-                    # Malformed header; ignore and rely on read limit
-                    logger.warning(
-                        "Ignored invalid Content-Length (%s) for feed %s",
-                        _sanitize_for_log(content_length),
-                        _sanitize_for_log(feed_url),
-                    )
-
-            # Read limited amount + 1 byte to detect overflow
-            content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
-            if len(content) > MAX_FEED_RESPONSE_BYTES:
-                logger.warning(
-                    "Feed rejected: Response size exceeds limit (%s) for %s",
-                    MAX_FEED_RESPONSE_BYTES,
-                    _sanitize_for_log(feed_url),
-                )
-                return None
-
-        # ZIP BOMB PROTECTION
-        # Even with 'Accept-Encoding: identity', some servers might send GZIP.
-        # We manually check for the GZIP magic header (\x1f\x8b) and reject.
-        if content.startswith(b"\x1f\x8b"):
-            logger.warning(
-                "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
-                _sanitize_for_log(feed_url),
-            )
+        content = _download_feed_content(opener, feed_url)
+        if not content:
             return None
 
-        if not _validate_xml_safety(content):
-            # Sanitize URL for logging to prevent log injection
-            safe_log_url = _sanitize_for_log(feed_url)
-            logger.warning("Feed rejected due to security violation: %s",
-                           safe_log_url)
-            return None
-
-        parsed_feed = feedparser.parse(content)
-        # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
-        if parsed_feed.bozo:
-            # Check for bozo_exception and sanitize it (it can contain malicious input)
-            bozo_exc = parsed_feed.get("bozo_exception")
-            safe_exc_msg = _sanitize_for_log(
-                str(bozo_exc)) if bozo_exc else "Unknown"
-            logger.warning("Feed parsing warning: %s", safe_exc_msg)
-
-        return parsed_feed
+        return _parse_and_validate_feed(content, feed_url)
 
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error fetching feed %s", _sanitize_for_log(feed_url))
         return None
-
 
 # --- Feed Processing Helpers ---
 
