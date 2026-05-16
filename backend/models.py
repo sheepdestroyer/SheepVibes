@@ -94,7 +94,7 @@ class Feed(db.Model):
 
         Args:
             unread_count (int, optional): The unread count for this feed.
-                                          If None, it will be queried from the DB.
+                                          If None, it defaults to 0.
 
         Returns:
             dict: A dictionary representation of the feed, including the unread count.
