@@ -1155,7 +1155,8 @@ def _parse_and_validate_feed(content, feed_url):
     if not _validate_xml_safety(content):
         # Sanitize URL for logging to prevent log injection
         safe_log_url = _sanitize_for_log(feed_url)
-        logger.warning("Feed rejected due to security violation: %s", safe_log_url)
+        logger.warning("Feed rejected due to security violation: %s",
+                       safe_log_url)
         return None
 
     parsed_feed = feedparser.parse(content)
@@ -1163,7 +1164,8 @@ def _parse_and_validate_feed(content, feed_url):
     if parsed_feed.bozo:
         # Check for bozo_exception and sanitize it (it can contain malicious input)
         bozo_exc = parsed_feed.get("bozo_exception")
-        safe_exc_msg = _sanitize_for_log(str(bozo_exc)) if bozo_exc else "Unknown"
+        safe_exc_msg = _sanitize_for_log(
+            str(bozo_exc)) if bozo_exc else "Unknown"
         logger.warning("Feed parsing warning: %s", safe_exc_msg)
 
     return parsed_feed
@@ -1189,7 +1191,6 @@ def fetch_feed(feed_url):
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error fetching feed %s", _sanitize_for_log(feed_url))
         return None
-
 
 # --- Feed Processing Helpers ---
 
@@ -1542,7 +1543,7 @@ def _enforce_feed_limit(feed_db_obj):
     chunk_size = DELETE_CHUNK_SIZE
     deleted_count = 0
     for i in range(0, len(ids_to_evict), chunk_size):
-        chunk = ids_to_evict[i : i + chunk_size]
+        chunk = ids_to_evict[i: i + chunk_size]
         deleted_count += (
             db.session.query(FeedItem)
             .filter(FeedItem.id.in_(chunk))

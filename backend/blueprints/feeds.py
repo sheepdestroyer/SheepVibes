@@ -26,55 +26,66 @@ feeds_bp = Blueprint("feeds", __name__, url_prefix="/api/feeds")
 items_bp = Blueprint("items", __name__, url_prefix="/api/items")
 
 
-@feeds_bp.route("", methods=["POST"])
-def add_feed():
-    """Adds a new feed to a specified tab (or the default tab)."""
-    data = request.get_json()
-    # Validate input
-    if not data or "url" not in data or not data["url"].strip():
-        return jsonify({"error": "Missing feed URL"}), 400
+def _get_unread_count(feed_id):
+    """Helper to fetch unread count for a single feed."""
+    return (
+        db.session.query(db.func.count(FeedItem.id))
+        .filter(FeedItem.feed_id == feed_id, FeedItem.is_read.is_(False))
+        .scalar()
+        or 0
+    )
 
-    feed_url = data["url"].strip()
-    tab_id = data.get("tab_id")  # Optional tab ID
 
-    # Determine target tab ID
+def _resolve_tab_id(tab_id):
+    """Resolves the tab ID, finding the default tab if none is provided.
+
+    Returns:
+        tuple: (resolved_tab_id, error_response)
+    """
     if not tab_id:
         # Find the first tab by order if no ID provided
         default_tab = Tab.query.order_by(Tab.order).first()
         if not default_tab:
             # Cannot add feed if no tabs exist
-            return jsonify({"error": "Cannot add feed: No default tab found"}), 400
-        tab_id = default_tab.id
-    else:
-        # Verify the provided tab_id exists
-        tab = db.session.get(Tab, tab_id)
-        if not tab:
-            return jsonify({"error": f"Tab with id {tab_id} not found"}), 404
+            return None, (
+                jsonify({"error": "Cannot add feed: No default tab found"}),
+                400,
+            )
+        return default_tab.id, None
 
-    # Check if feed URL already exists in the database
-    existing_feed = Feed.query.filter_by(url=feed_url).first()
-    if existing_feed:
-        return (
-            jsonify({"error": f"Feed with URL {feed_url} already exists"}),
-            409,
-        )  # Conflict
+    # Verify the provided tab_id exists
+    tab = db.session.get(Tab, tab_id)
+    if not tab:
+        return None, (jsonify({"error": f"Tab with id {tab_id} not found"}), 404)
 
-    # Attempt to fetch the feed to get its title
+    return tab_id, None
+
+
+def _get_feed_metadata(feed_url):
+    """Attempts to fetch the feed to get its title and link.
+
+    Returns:
+        tuple: (feed_name, site_link, parsed_feed)
+    """
     parsed_feed = fetch_feed(feed_url)
     if not parsed_feed or not parsed_feed.feed:
         # If fetch fails initially, use the URL as the name
-        feed_name = feed_url
-        site_link = None  # No website link if fetch failed
         logger.warning(
             "Could not fetch title for %s, using URL as name.",
             feed_url,
         )
-    else:
-        feed_name = parsed_feed.feed.get(
-            "title", feed_url
-        )  # Use URL as fallback if title missing
-        site_link = parsed_feed.feed.get("link")  # Get the website link
+        return feed_url, None, parsed_feed
 
+    feed_name = parsed_feed.feed.get(
+        "title", feed_url
+    )  # Use URL as fallback if title missing
+    site_link = parsed_feed.feed.get("link")  # Get the website link
+
+    return feed_name, site_link, parsed_feed
+
+
+def _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed):
+    """Creates a new feed in the database and processes its initial items."""
     try:
         # Create and save the new feed
         new_feed = Feed(
@@ -117,7 +128,7 @@ def add_feed():
             new_feed.id,
             tab_id,
         )
-        return jsonify(new_feed.to_dict()), 201  # Created
+        return jsonify(new_feed.to_dict(unread_count=0)), 201  # Created
 
     except Exception as e:
         db.session.rollback()
@@ -131,6 +142,29 @@ def add_feed():
             jsonify({"error": "An internal error occurred while adding the feed."}),
             500,
         )
+
+
+@feeds_bp.route("", methods=["POST"])
+def add_feed():
+    """Adds a new feed to a specified tab (or the default tab)."""
+    data = request.get_json()
+    if not data or "url" not in data or not data["url"].strip():
+        return jsonify({"error": "Missing feed URL"}), 400
+
+    feed_url = data["url"].strip()
+
+    # Check if feed URL already exists in the database
+    existing_feed = Feed.query.filter_by(url=feed_url).first()
+    if existing_feed:
+        return jsonify({"error": f"Feed with URL {feed_url} already exists"}), 409
+
+    tab_id, error_response = _resolve_tab_id(data.get("tab_id"))
+    if error_response:
+        return error_response
+
+    feed_name, site_link, parsed_feed = _get_feed_metadata(feed_url)
+
+    return _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed)
 
 
 @feeds_bp.route("/<int:feed_id>", methods=["DELETE"])
@@ -285,7 +319,8 @@ def update_feed_url(feed_id):
         _apply_feed_updates(feed, new_url, custom_name)
 
         # Return full feed data including items for frontend to update widget
-        feed_data = feed.to_dict()
+        unread_count = _get_unread_count(feed.id)
+        feed_data = feed.to_dict(unread_count=unread_count)
         # Include only recent feed items in the response (limit to DEFAULT_FEED_ITEMS_LIMIT)
         feed_data["items"] = [
             item.to_dict()
@@ -370,7 +405,8 @@ def update_feed(feed_id):
                 feed.id,
             )
 
-        return jsonify(feed.to_dict())
+        unread_count = _get_unread_count(feed.id)
+        return jsonify(feed.to_dict(unread_count=unread_count))
     except Exception as e:
         logger.error(
             "Error during manual update for feed %s: %s",
