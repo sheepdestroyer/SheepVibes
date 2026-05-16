@@ -15,7 +15,11 @@ def test_import(client, mocker):
     logger.info("Testing OPML import at: %s", url)
 
     # Use an in-memory file object
-    opml_content = b'<opml version="1.0"><body><outline text="Test Feed" xmlUrl="http://example.com/feed" /></body></opml>'
+    opml_content = (
+        b'<opml version="1.0"><body>'
+        b'<outline text="Test Feed" xmlUrl="http://example.com/feed" />'
+        b"</body></opml>"
+    )
     opml_file = io.BytesIO(opml_content)
 
     data = {"file": (opml_file, "test_feeds.opml")}
@@ -70,13 +74,12 @@ def test_import_nested_opml(client, mocker):
         return_value=("127.0.0.1", "example.com"),
     )
     # Mock _validate_xml_safety to always return True for test content
-    mocker.patch("backend.feed_service._validate_xml_safety",
-                 return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
 
     data = {"file": (io.BytesIO(opml_content), "nested.opml")}
-    response = client.post("/api/opml/import",
-                           data=data,
-                           content_type="multipart/form-data")
+    response = client.post(
+        "/api/opml/import", data=data, content_type="multipart/form-data"
+    )
 
     assert response.status_code == 200
     result = response.get_json()
@@ -92,22 +95,20 @@ def test_import_nested_opml(client, mocker):
         assert sub_tech_tab is not None
 
         # Verify affected_tab_ids
-        assert {tech_tab.id, sub_tech_tab.id,
-                result["tab_id"]}.issubset(set(result["affected_tab_ids"]))
+        assert {tech_tab.id, sub_tech_tab.id, result["tab_id"]}.issubset(
+            set(result["affected_tab_ids"])
+        )
 
         # Check feeds
-        hn_feed = Feed.query.filter_by(
-            url="https://news.ycombinator.com/rss").first()
+        hn_feed = Feed.query.filter_by(url="https://news.ycombinator.com/rss").first()
         assert hn_feed is not None
         assert hn_feed.tab_id == tech_tab.id
 
-        lobsters_feed = Feed.query.filter_by(
-            url="https://lobste.rs/rss").first()
+        lobsters_feed = Feed.query.filter_by(url="https://lobste.rs/rss").first()
         assert lobsters_feed is not None
         assert lobsters_feed.tab_id == sub_tech_tab.id
 
-        root_feed = Feed.query.filter_by(
-            url="https://root.example.com/rss").first()
+        root_feed = Feed.query.filter_by(url="https://root.example.com/rss").first()
         assert root_feed is not None
         # Root feed should be in the default import tab or top level tab
         assert root_feed.tab_id == result["tab_id"]
@@ -132,8 +133,7 @@ def test_opml_import_skips_skipped_folder_types(client, mocker):
 </opml>
 """.encode("utf-8")
 
-    mocker.patch("backend.feed_service._validate_xml_safety",
-                 return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
     mocker.patch("backend.feed_service.fetch_and_update_feed")
 
     data = {"file": (io.BytesIO(opml_content), "skipped_folder.opml")}
@@ -158,7 +158,8 @@ def test_opml_import_skips_skipped_folder_types(client, mocker):
 
         # Assert that the feed in the skipped folder was not created
         skipped_feed = Feed.query.filter_by(
-            url="https://example.com/should-not-import.xml").first()
+            url="https://example.com/should-not-import.xml"
+        ).first()
         assert skipped_feed is None
 
 
@@ -175,8 +176,7 @@ def test_opml_import_skips_invalid_feed_urls(client, mocker):
 </opml>
 """
 
-    mocker.patch("backend.feed_service._validate_xml_safety",
-                 return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
     # Ensure feeds are treated as invalid regardless of the specific URL-checking logic.
     mocker.patch("backend.feed_service.is_valid_feed_url", return_value=False)
 
@@ -225,8 +225,7 @@ def test_opml_import_skips_duplicate_feed_urls(client, mocker):
 </opml>
 """
 
-    mocker.patch("backend.feed_service._validate_xml_safety",
-                 return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
     # Let URL validation pass so duplicates are the only reason for skipping.
     mocker.patch("backend.feed_service.is_valid_feed_url", return_value=True)
     mocker.patch("backend.feed_service.fetch_and_update_feed")
@@ -248,8 +247,11 @@ def test_opml_import_skips_duplicate_feed_urls(client, mocker):
 
     with app.app_context():
         # Confirm that we still only have one feed per URL overall.
-        feeds_by_url = (Feed.query.with_entities(Feed.url, func.count(
-            Feed.id)).group_by(Feed.url).all())
+        feeds_by_url = (
+            Feed.query.with_entities(Feed.url, func.count(Feed.id))
+            .group_by(Feed.url)
+            .all()
+        )
 
         counts = dict(feeds_by_url)
         assert counts["https://example.com/existing.xml"] == 1
@@ -268,8 +270,7 @@ def test_opml_import_folder_only_no_outlines(client, mocker):
 </opml>
 """
 
-    mocker.patch("backend.feed_service._validate_xml_safety",
-                 return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
 
     data = {"file": (io.BytesIO(opml_content), "folders_only.opml")}
     response = client.post(
@@ -296,8 +297,7 @@ def test_opml_import_no_outline_elements(client, mocker):
 </opml>
 """
 
-    mocker.patch("backend.feed_service._validate_xml_safety",
-                 return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
 
     data = {"file": (io.BytesIO(opml_content), "no_outlines.opml")}
     response = client.post(
@@ -333,8 +333,7 @@ def test_opml_import_anonymous_folder_with_feeds(client, mocker):
     </opml>
     """
 
-    mocker.patch("backend.feed_service._validate_xml_safety",
-                 return_value=True)
+    mocker.patch("backend.feed_service._validate_xml_safety", return_value=True)
     mocker.patch("backend.feed_service.fetch_and_update_feed")
     mocker.patch(
         "backend.feed_service.validate_and_resolve_url",
@@ -388,3 +387,75 @@ def test_import_malformed_opml(client):
 
     payload = response.get_json()
     assert "Malformed OPML file" in payload.get("error", "")
+
+
+def test_import_missing_file_part(client):
+    """Test importing when the 'file' part is missing from the request."""
+    # Ensure CSRF bypass for tests if needed, though for client.post we might just need XMLHttpRequest
+    response = client.post(
+        "/api/opml/import", data={}, content_type="multipart/form-data"
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "No file part in the request"}
+
+
+def test_import_empty_filename(client):
+    """Test importing a file with an empty filename."""
+    data = {"file": (io.BytesIO(b""), "")}
+    response = client.post(
+        "/api/opml/import", data=data, content_type="multipart/form-data"
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "No file selected for uploading"}
+
+
+def test_import_invalid_extension(client):
+    """Test importing a file with an invalid extension."""
+    data = {"file": (io.BytesIO(b"content"), "file.exe")}
+    response = client.post(
+        "/api/opml/import", data=data, content_type="multipart/form-data"
+    )
+    assert response.status_code == 400
+    assert "Invalid file type" in response.get_json()["error"]
+
+
+def test_import_file_too_large(client):
+    """Test importing a file that exceeds the size limit."""
+    large_content = b"a" * (5 * 1024 * 1024 + 10)  # slightly over 5MB
+    data = {"file": (io.BytesIO(large_content), "large.opml")}
+    response = client.post(
+        "/api/opml/import", data=data, content_type="multipart/form-data"
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "File is too large (max 5MB)"}
+
+
+def test_import_empty_file_object():
+    """Test importing when the file object itself evaluates to False."""
+
+    class FalsyFileStorage:
+
+        def __init__(self):
+            self.filename = "test.opml"
+
+        def __bool__(self):
+            return False
+
+        def close(self):
+            pass
+
+    with app.test_request_context("/api/opml/import", method="POST"):
+        # Mock the files dictionary directly
+        from flask import request
+
+        request._cached_files = {"file": FalsyFileStorage()}
+        request.files = request._cached_files
+
+        from backend.blueprints.opml import _validate_opml_file_request
+
+        opml_file, error_resp = _validate_opml_file_request()
+
+        assert opml_file is None
+        assert error_resp[1] == 400
+        assert error_resp[0].get_json() == {"error": "File object is empty"}
