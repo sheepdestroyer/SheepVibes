@@ -11,8 +11,9 @@ def count_queries():
     """Context manager to count SQL queries executed within the block."""
     query_count = [0]
 
-    def before_cursor_execute(conn, cursor, statement, parameters, context,
-                              executemany):
+    def before_cursor_execute(
+        conn, cursor, statement, parameters, context, executemany
+    ):
         query_count[0] += 1
 
     event.listen(db.engine, "before_cursor_execute", before_cursor_execute)
@@ -33,9 +34,7 @@ def test_get_tabs_query_count_constant(client):
         for i in range(start_index, start_index + count):
             tab = Tab(name=f"Tab {i}", order=i)
             # Use relationship assignment
-            feed = Feed(name=f"Feed {i}",
-                        url=f"http://example.com/{i}",
-                        tab=tab)
+            feed = Feed(name=f"Feed {i}", url=f"http://example.com/{i}", tab=tab)
             item = FeedItem(
                 title=f"Item {i}",
                 link=f"http://example.com/{i}/item",
@@ -85,10 +84,9 @@ def test_tab_to_dict_optimization(client):
     # Build a tab with a related feed and item
     tab = Tab(name="Tab for to_dict", order=100)
     feed = Feed(name="Feed 1", url="http://example.com/feed-1", tab=tab)
-    item = FeedItem(title="Item 1",
-                    link="http://example.com/item-1",
-                    feed=feed,
-                    guid="guid-to-dict")
+    item = FeedItem(
+        title="Item 1", link="http://example.com/item-1", feed=feed, guid="guid-to-dict"
+    )
 
     db.session.add(tab)
     db.session.add(feed)
@@ -116,9 +114,7 @@ def test_tab_to_dict_without_unread_count_returns_zero(client):
     aggregate query to compute the unread count.
     """
     tab = Tab(name="Tab for DB lookup", order=10)
-    feed = Feed(name="Feed for DB lookup",
-                url="http://example.com/db",
-                tab=tab)
+    feed = Feed(name="Feed for DB lookup", url="http://example.com/db", tab=tab)
     unread_item = FeedItem(
         title="Unread",
         link="http://example.com/u",
@@ -156,9 +152,7 @@ def test_tab_to_dict_defaults_to_zero_queries(client):
     return unread_count == 0 and still use at most a single aggregate query.
     """
     tab = Tab(name="Tab with no unread", order=20)
-    feed = Feed(name="Feed with no unread",
-                url="http://example.com/zero",
-                tab=tab)
+    feed = Feed(name="Feed with no unread", url="http://example.com/zero", tab=tab)
     read_item_1 = FeedItem(
         title="Read 1",
         link="http://example.com/r1",
