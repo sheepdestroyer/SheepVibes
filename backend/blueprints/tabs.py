@@ -15,6 +15,92 @@ from ..models import Feed, FeedItem, Tab
 
 logger = logging.getLogger(__name__)
 
+
+def _validate_tab_name(data, exclude_tab_id=None, is_rename=False):
+    """Validates tab name input and checks for duplicates.
+
+    Returns:
+        tuple: (tab_name, error_response) where error_response is None if valid
+    """
+    error_prefix = "new " if is_rename else ""
+    if not data or "name" not in data or not data["name"].strip():
+        return None, (
+            jsonify({"error": f"Missing or empty {error_prefix}tab name"}),
+            400,
+        )
+
+    tab_name = data["name"].strip()
+
+    query = Tab.query.filter(Tab.name == tab_name)
+    if exclude_tab_id is not None:
+        query = query.filter(Tab.id != exclude_tab_id)
+
+    if query.first():
+        msg = (
+            f'Tab name "{tab_name}" is already in use'
+            if is_rename
+            else f'Tab with name "{tab_name}" already exists'
+        )
+        return None, (jsonify({"error": msg}), 409)
+
+    return tab_name, None
+
+
+def _get_unread_counts(feed_ids):
+    """Calculates unread counts for given feed IDs."""
+    unread_counts_query = (
+        db.session.query(FeedItem.feed_id, func.count(FeedItem.id))
+        .filter(FeedItem.feed_id.in_(feed_ids), FeedItem.is_read.is_(False))
+        .group_by(FeedItem.feed_id)
+    )
+    return dict(unread_counts_query.all())
+
+
+def _get_top_items_for_feeds(feed_ids, limit):
+    """Fetches the top items for given feed IDs up to the limit."""
+    ranked_items_subq = (
+        select(
+            FeedItem,
+            func.row_number()
+            .over(
+                partition_by=FeedItem.feed_id,
+                order_by=[
+                    FeedItem.published_time.desc().nullslast(),
+                    FeedItem.fetched_time.desc(),
+                ],
+            )
+            .label("rank"),
+        )
+        .filter(FeedItem.feed_id.in_(feed_ids))
+        .subquery()
+    )
+
+    top_items_query = select(ranked_items_subq).filter(
+        ranked_items_subq.c.rank <= limit
+    )
+
+    top_items_results = db.session.execute(top_items_query).all()
+
+    items_by_feed = {}
+    for item_row in top_items_results:
+        item_dict = {
+            "id": item_row.id,
+            "feed_id": item_row.feed_id,
+            "title": item_row.title,
+            "link": item_row.link,
+            "published_time": FeedItem.to_iso_z_string(item_row.published_time),
+            "fetched_time": FeedItem.to_iso_z_string(item_row.fetched_time),
+            "is_read": item_row.is_read,
+            "guid": item_row.guid,
+        }
+        feed_id = item_row.feed_id
+        if feed_id not in items_by_feed:
+            items_by_feed[feed_id] = []
+        items_by_feed[feed_id].append(item_dict)
+
+    return items_by_feed
+
+
 tabs_bp = Blueprint("tabs", __name__, url_prefix="/api/tabs")
 
 
@@ -54,19 +140,9 @@ def create_tab():
         A tuple containing a JSON response and the HTTP status code.
     """
     data = request.get_json()
-    # Validate input data
-    if not data or "name" not in data or not data["name"].strip():
-        return jsonify({"error": "Missing or empty tab name"}), 400
-
-    tab_name = data["name"].strip()
-
-    # Check for duplicate tab name
-    existing_tab = Tab.query.filter_by(name=tab_name).first()
-    if existing_tab:
-        return (
-            jsonify({"error": f'Tab with name "{tab_name}" already exists'}),
-            409,
-        )  # Conflict
+    tab_name, error_response = _validate_tab_name(data)
+    if error_response:
+        return error_response
 
     # Determine the order for the new tab (append to the end)
     max_order = db.session.query(db.func.max(Tab.order)).scalar()
@@ -106,19 +182,11 @@ def rename_tab(tab_id):
     tab = db.get_or_404(Tab, tab_id)
 
     data = request.get_json()
-    # Validate input data
-    if not data or "name" not in data or not data["name"].strip():
-        return jsonify({"error": "Missing or empty new tab name"}), 400
-
-    new_name = data["name"].strip()
-
-    # Check if the new name is already taken by another tab
-    existing_tab = Tab.query.filter(Tab.id != tab_id, Tab.name == new_name).first()
-    if existing_tab:
-        return (
-            jsonify({"error": f'Tab name "{new_name}" is already in use'}),
-            409,
-        )  # Conflict
+    new_name, error_response = _validate_tab_name(
+        data, exclude_tab_id=tab_id, is_rename=True
+    )
+    if error_response:
+        return error_response
 
     try:
         original_name = tab.name
@@ -129,13 +197,9 @@ def rename_tab(tab_id):
             "Renamed tab %s from '%s' to '%s'.", tab_id, original_name, new_name
         )
         # Get unread count explicitly to avoid N+1 queries
-        unread_count = (
-            db.session.query(db.func.count(FeedItem.id))
-            .join(Feed)
-            .filter(Feed.tab_id == tab.id, FeedItem.is_read.is_(False))
-            .scalar()
-            or 0
-        )
+        unread_count = (db.session.query(db.func.count(
+            FeedItem.id)).join(Feed).filter(Feed.tab_id == tab.id,
+                                            FeedItem.is_read.is_(False)).scalar() or 0)
         return jsonify(tab.to_dict(unread_count=unread_count)), 200  # OK
     except IntegrityError:
         db.session.rollback()
@@ -202,58 +266,10 @@ def get_feeds_for_tab(tab_id):
     feed_ids = [feed.id for feed in feeds]
 
     # Query 2: Get unread counts for all feeds in this tab to avoid N+1 queries.
-    unread_counts_query = (
-        db.session.query(FeedItem.feed_id, func.count(FeedItem.id))
-        .filter(FeedItem.feed_id.in_(feed_ids), FeedItem.is_read.is_(False))
-        .group_by(FeedItem.feed_id)
-    )
-    unread_counts = dict(unread_counts_query.all())
+    unread_counts = _get_unread_counts(feed_ids)
 
     # Query 3: Get the top N items for ALL those feeds in a single, efficient query.
-    # Use a window function to rank items within each feed.
-    ranked_items_subq = (
-        select(
-            FeedItem,
-            func.row_number()
-            .over(
-                partition_by=FeedItem.feed_id,
-                order_by=[
-                    FeedItem.published_time.desc().nullslast(),
-                    FeedItem.fetched_time.desc(),
-                ],
-            )
-            .label("rank"),
-        )
-        .filter(FeedItem.feed_id.in_(feed_ids))
-        .subquery()
-    )
-
-    # Select from the subquery to filter by the rank.
-    top_items_query = select(ranked_items_subq).filter(
-        ranked_items_subq.c.rank <= limit
-    )
-
-    top_items_results = db.session.execute(top_items_query).all()
-
-    # Group the fetched items by feed_id for efficient lookup.
-    items_by_feed = {}
-    for item_row in top_items_results:
-        # Directly serialize the row to a dict, avoiding ORM object creation.
-        item_dict = {
-            "id": item_row.id,
-            "feed_id": item_row.feed_id,
-            "title": item_row.title,
-            "link": item_row.link,
-            "published_time": FeedItem.to_iso_z_string(item_row.published_time),
-            "fetched_time": FeedItem.to_iso_z_string(item_row.fetched_time),
-            "is_read": item_row.is_read,
-            "guid": item_row.guid,
-        }
-
-        feed_id = item_row.feed_id
-        if feed_id not in items_by_feed:
-            items_by_feed[feed_id] = []
-        items_by_feed[feed_id].append(item_dict)
+    items_by_feed = _get_top_items_for_feeds(feed_ids, limit)
 
     # Build the final response, combining feeds with their items.
     response_data = []
