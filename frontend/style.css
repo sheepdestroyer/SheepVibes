@@ -517,10 +517,6 @@ header h1 {
     background-color: #f0f0f0;
     border-bottom: 1px solid #ddd;
     text-align: center;
-    position: sticky;
-    top: 0;
-    /* Dynamically adjusted by JavaScript in ui.js */
-    z-index: 999;
 }
 
 #progress-status {
@@ -638,4 +634,17 @@ header h1 {
 
 .modal.is-busy-shaking .modal-content {
     animation: shake 0.82s cubic-bezier(.36, .07, .19, .97) both;
+}
+.error-text {
+    color: red;
+}
+
+.sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.hidden {
+    display: none !important;
 }

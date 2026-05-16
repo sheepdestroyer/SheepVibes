@@ -1430,9 +1430,8 @@ def _save_items_to_db(feed_db_obj, items_to_add):
     return committed_count
 
 
-def _save_items_individually(feed_db_obj, items_to_add):
-    """Helper to save items one by one after a batch failure."""
-    # Ensure last_updated_time is updated even if items fail
+def _update_feed_last_updated(feed_db_obj):
+    """Update last_updated_time for a feed even if item insertion fails."""
     try:
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         db.session.add(feed_db_obj)
@@ -1442,19 +1441,21 @@ def _save_items_individually(feed_db_obj, items_to_add):
             "Error updating last_updated_time for feed '%s' after batch failure",
             _sanitize_for_log(feed_db_obj.name),
         )
-        db.session.rollback()  # Rollback if updating last_updated_time fails
+        db.session.rollback()
 
+
+def _insert_items_with_nested_transactions(feed_db_obj, items_to_add):
+    """Insert items one by one using nested transactions for better performance."""
     count = 0
     for item in items_to_add:
         try:
-            db.session.add(item)
-            db.session.commit()
+            with db.session.begin_nested():
+                db.session.add(item)
             count += 1
             logger.debug(
                 "Individually added item: %s", _sanitize_for_log(item.title[:50])
             )
         except IntegrityError as ie:
-            db.session.rollback()
             logger.error(
                 "Failed to add item '%s' for feed '%s' (link: %s, guid: %s): %s",
                 _sanitize_for_log(item.title[:100]),
@@ -1464,25 +1465,40 @@ def _save_items_individually(feed_db_obj, items_to_add):
                 _sanitize_for_log(str(ie)),
             )
         except sqlalchemy.exc.SQLAlchemyError:
-            db.session.rollback()
             logger.exception(
                 "Generic error adding item '%s'",
                 _sanitize_for_log(item.title[:100]),
             )
 
     if count > 0:
-        logger.info(
-            "Recovered %s items individually for feed: %s",
-            count,
-            _sanitize_for_log(feed_db_obj.name),
-        )
+        try:
+            db.session.commit()
+            logger.info(
+                "Recovered %s items individually for feed: %s",
+                count,
+                _sanitize_for_log(feed_db_obj.name),
+            )
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+            logger.exception(
+                "Failed to commit recovered items for feed: %s",
+                _sanitize_for_log(feed_db_obj.name),
+            )
+            return 0
     else:
+        db.session.rollback()
         logger.info(
             "No items added individually for feed: %s",
             _sanitize_for_log(feed_db_obj.name),
         )
 
     return count
+
+
+def _save_items_individually(feed_db_obj, items_to_add):
+    """Helper to save items one by one after a batch failure."""
+    _update_feed_last_updated(feed_db_obj)
+    return _insert_items_with_nested_transactions(feed_db_obj, items_to_add)
 
 
 def _enforce_feed_limit(feed_db_obj):
@@ -1549,6 +1565,39 @@ def _enforce_feed_limit(feed_db_obj):
             )
 
 
+def _commit_with_rollback(error_msg, feed_name):
+    """Helper to safely commit the db session with rollback on failure."""
+    # Extract properties before commit to avoid DetachedInstanceError or expired session issues after rollback
+    safe_name = _sanitize_for_log(feed_name)
+    try:
+        db.session.commit()
+        return True
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(error_msg, safe_name)
+        return False
+
+
+def _commit_metadata(feed_db_obj):
+    """Commits metadata and existing item updates immediately.
+
+    This ensures they are preserved even if the batch insert of new items fails later.
+    """
+    return _commit_with_rollback(
+        "Error committing metadata/existing items for feed %s", feed_db_obj.name
+    )
+
+
+def _update_timestamp_no_new_items(feed_db_obj):
+    """Updates the feed timestamp when there are no new items."""
+    # last_updated_time is usually updated on successful commit of items,
+    # or here if there were no items but fetch succeeded.
+    feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
+    _commit_with_rollback(
+        "Error committing feed update (no new items) for %s", feed_db_obj.name
+    )
+
+
 def process_feed_entries(feed_db_obj, parsed_feed):
     """Processes entries from a parsed feed and adds new items to the database.
 
@@ -1570,33 +1619,14 @@ def process_feed_entries(feed_db_obj, parsed_feed):
     _update_feed_metadata(feed_db_obj, parsed_feed)
     items_to_add = _collect_new_items(feed_db_obj, parsed_feed)
 
-    # Commit metadata and existing item updates immediately.
-    # This ensures they are preserved even if the batch insert of new items fails later.
-    try:
-        db.session.commit()
-    except sqlalchemy.exc.SQLAlchemyError:
-        db.session.rollback()
-        logger.exception(
-            "Error committing metadata/existing items for feed %s",
-            _sanitize_for_log(feed_db_obj.name),
-        )
+    if not _commit_metadata(feed_db_obj):
         # It's safer to stop processing this feed to avoid potential inconsistencies
         # if the metadata/update commit failed.
         return 0
 
     if not items_to_add:
         # If no new items, we are done.
-        # last_updated_time is usually updated on successful commit of items,
-        # or here if there were no items but fetch succeeded.
-        feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
-        try:
-            db.session.commit()
-        except sqlalchemy.exc.SQLAlchemyError:
-            db.session.rollback()
-            logger.exception(
-                "Error committing feed update (no new items) for %s",
-                _sanitize_for_log(feed_db_obj.name),
-            )
+        _update_timestamp_no_new_items(feed_db_obj)
         return 0
 
     committed_items_count = _save_items_to_db(feed_db_obj, items_to_add)
