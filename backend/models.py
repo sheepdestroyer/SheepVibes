@@ -36,7 +36,7 @@ class Tab(db.Model):
 
         Args:
             unread_count (int, optional): The unread count for this tab.
-                                          If None, defaults to 0 to avoid implicit N+1 queries.
+                                          If None, it will be queried from the DB.
 
         Returns:
             dict: A dictionary representation of the tab, including the unread count.
