@@ -385,24 +385,14 @@ def _get_or_create_default_import_tab():
             "OPML import: Failed to create or find default tab '%s' after race.",
             default_tab_name,
         )
-        return (
-            None,
-            None,
-            False,
-            ({"error": "Failed to create a default tab for import."}, 500),
-        )
+        return None, None, False, ({"error": "Failed to create a default tab for import."}, 500)
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
         logger.exception(
             "OPML import: Failed to create default tab '%s'",
             default_tab_name,
         )
-        return (
-            None,
-            None,
-            False,
-            ({"error": "Failed to create a default tab for import."}, 500),
-        )
+        return None, None, False, ({"error": "Failed to create a default tab for import."}, 500)
 
 
 def _determine_target_tab(requested_tab_id_str):
@@ -419,9 +409,7 @@ def _determine_target_tab(requested_tab_id_str):
     was_created = False
 
     if not target_tab_id:
-        target_tab_id, target_tab_name, was_created, error_response = (
-            _get_or_create_default_import_tab()
-        )
+        target_tab_id, target_tab_name, was_created, error_response = _get_or_create_default_import_tab()
         if error_response:
             return None, None, False, error_response
 
@@ -429,12 +417,7 @@ def _determine_target_tab(requested_tab_id_str):
         logger.error(
             "OPML import: Critical error - failed to determine a top-level target tab."
         )
-        return (
-            None,
-            None,
-            False,
-            ({"error": "Failed to determine a target tab for import."}, 500),
-        )
+        return None, None, False, ({"error": "Failed to determine a target tab for import."}, 500)
 
     return target_tab_id, target_tab_name, was_created, None
 
