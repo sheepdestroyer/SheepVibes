@@ -26,6 +26,16 @@ feeds_bp = Blueprint("feeds", __name__, url_prefix="/api/feeds")
 items_bp = Blueprint("items", __name__, url_prefix="/api/items")
 
 
+def _get_unread_count(feed_id):
+    """Helper to fetch unread count for a single feed."""
+    return (
+        db.session.query(db.func.count(FeedItem.id))
+        .filter(FeedItem.feed_id == feed_id, FeedItem.is_read.is_(False))
+        .scalar()
+        or 0
+    )
+
+
 @feeds_bp.route("", methods=["POST"])
 def add_feed():
     """Adds a new feed to a specified tab (or the default tab)."""
@@ -117,7 +127,7 @@ def add_feed():
             new_feed.id,
             tab_id,
         )
-        return jsonify(new_feed.to_dict()), 201  # Created
+        return jsonify(new_feed.to_dict(unread_count=0)), 201  # Created
 
     except Exception as e:
         db.session.rollback()
@@ -285,7 +295,8 @@ def update_feed_url(feed_id):
         _apply_feed_updates(feed, new_url, custom_name)
 
         # Return full feed data including items for frontend to update widget
-        feed_data = feed.to_dict()
+        unread_count = _get_unread_count(feed.id)
+        feed_data = feed.to_dict(unread_count=unread_count)
         # Include only recent feed items in the response (limit to DEFAULT_FEED_ITEMS_LIMIT)
         feed_data["items"] = [
             item.to_dict()
@@ -370,7 +381,8 @@ def update_feed(feed_id):
                 feed.id,
             )
 
-        return jsonify(feed.to_dict())
+        unread_count = _get_unread_count(feed.id)
+        return jsonify(feed.to_dict(unread_count=unread_count))
     except Exception as e:
         logger.error(
             "Error during manual update for feed %s: %s",
