@@ -327,118 +327,103 @@ def _process_opml_outlines_iterative(
     return state
 
 
+def _get_requested_tab(requested_tab_id_str):
+    if not requested_tab_id_str:
+        return None, None
+    try:
+        tab_id_val = int(requested_tab_id_str)
+        tab_obj = db.session.get(Tab, tab_id_val)
+        if tab_obj:
+            return tab_obj.id, tab_obj.name
+        logger.warning(
+            "OPML import: Requested tab_id %s not found. Will use default logic.",
+            tab_id_val,
+        )
+    except ValueError:
+        logger.warning(
+            "OPML import: Invalid tab_id format '%s'. Will use default logic.",
+            _sanitize_for_log(requested_tab_id_str),
+        )
+    return None, None
+
+
+def _get_or_create_default_import_tab():
+    default_tab_obj = Tab.query.order_by(Tab.order).first()
+    if default_tab_obj:
+        return default_tab_obj.id, default_tab_obj.name, False, None
+
+    logger.info(
+        "OPML import: No tabs exist. Creating a default tab for top-level feeds."
+    )
+    default_tab_name = DEFAULT_OPML_IMPORT_TAB_NAME
+    temp_tab_check = Tab.query.filter_by(name=default_tab_name).first()
+    if temp_tab_check:
+        return temp_tab_check.id, temp_tab_check.name, False, None
+
+    new_tab = Tab(name=default_tab_name, order=0)
+    db.session.add(new_tab)
+    try:
+        db.session.commit()
+        logger.info(
+            "OPML import: Created default tab '%s' (ID: %s).",
+            new_tab.name,
+            new_tab.id,
+        )
+        invalidate_tabs_cache()
+        return new_tab.id, new_tab.name, True, None
+    except sqlalchemy.exc.IntegrityError:
+        db.session.rollback()
+        logger.info(
+            "OPML import: Race condition on default tab creation. Re-fetching tab '%s'.",
+            default_tab_name,
+        )
+        refetched_tab = Tab.query.filter_by(name=default_tab_name).first()
+        if refetched_tab:
+            return refetched_tab.id, refetched_tab.name, False, None
+
+        logger.error(
+            "OPML import: Failed to create or find default tab '%s' after race.",
+            default_tab_name,
+        )
+        return (
+            None,
+            None,
+            False,
+            ({"error": "Failed to create a default tab for import."}, 500),
+        )
+    except sqlalchemy.exc.SQLAlchemyError:
+        db.session.rollback()
+        logger.exception(
+            "OPML import: Failed to create default tab '%s'",
+            default_tab_name,
+        )
+        return (
+            None,
+            None,
+            False,
+            ({"error": "Failed to create a default tab for import."}, 500),
+        )
+
+
 def _determine_target_tab(requested_tab_id_str):
     """
     Determines the target tab for OPML import.
     Returns:
-        tuple: (tab_id, tab_name, was_created)
+        tuple: (tab_id, tab_name, was_created, error_response)
         - tab_id (int): The ID of the target tab.
         - tab_name (str): The name of the target tab.
         - was_created (bool): True if a new default tab was created, False otherwise.
         - error_response (tuple): (json_response, status_code) if an error occurred, else None.
     """
-    target_tab_id = None
-    target_tab_name = None
+    target_tab_id, target_tab_name = _get_requested_tab(requested_tab_id_str)
     was_created = False
 
-    if requested_tab_id_str:
-        try:
-            tab_id_val = int(requested_tab_id_str)
-            tab_obj = db.session.get(Tab, tab_id_val)
-            if tab_obj:
-                target_tab_id = tab_obj.id
-                target_tab_name = tab_obj.name
-            else:
-                logger.warning(
-                    "OPML import: Requested tab_id %s not found. Will use default logic.",
-                    tab_id_val,
-                )
-        except ValueError:
-            logger.warning(
-                "OPML import: Invalid tab_id format '%s'. Will use default logic.",
-                _sanitize_for_log(requested_tab_id_str),
-            )
-
     if not target_tab_id:
-        default_tab_obj = Tab.query.order_by(Tab.order).first()
-        if default_tab_obj:
-            target_tab_id = default_tab_obj.id
-            target_tab_name = default_tab_obj.name
-        else:
-            logger.info(
-                "OPML import: No tabs exist. Creating a default tab for top-level feeds."
-            )
-            default_tab_name_for_creation = DEFAULT_OPML_IMPORT_TAB_NAME
-            temp_tab_check = Tab.query.filter_by(
-                name=default_tab_name_for_creation
-            ).first()
-            if temp_tab_check:
-                target_tab_id = temp_tab_check.id
-                target_tab_name = temp_tab_check.name
-            else:
-                newly_created_default_tab = Tab(
-                    name=default_tab_name_for_creation, order=0
-                )
-                db.session.add(newly_created_default_tab)
-                try:
-                    # Since this is the start of the import, we can safely commit the new tab
-                    # without worrying about partial feed state (none exists yet).
-                    db.session.commit()
-
-                    logger.info(
-                        "OPML import: Created default tab '%s' (ID: %s).",
-                        newly_created_default_tab.name,
-                        newly_created_default_tab.id,
-                    )
-                    invalidate_tabs_cache()
-                    target_tab_id = newly_created_default_tab.id
-                    target_tab_name = newly_created_default_tab.name
-                    was_created = True
-                except sqlalchemy.exc.IntegrityError:
-                    db.session.rollback()
-                    # No need to expunge here as rollback clears the session
-                    logger.info(
-                        "OPML import: Race condition on default tab creation. Re-fetching tab '%s'.",
-                        default_tab_name_for_creation,
-                    )
-                    # Another process likely created it. Fetch it.
-                    refetched_tab = Tab.query.filter_by(
-                        name=default_tab_name_for_creation
-                    ).first()
-                    if refetched_tab:
-                        target_tab_id = refetched_tab.id
-                        target_tab_name = refetched_tab.name
-                        # was_created remains False, as this process didn't create it.
-                    else:
-                        # This is an unexpected state, but we should fail gracefully.
-                        logger.error(
-                            "OPML import: Failed to create or find default tab '%s' after race.",
-                            default_tab_name_for_creation,
-                        )
-                        return (
-                            None,
-                            None,
-                            False,
-                            (
-                                {"error": "Failed to create a default tab for import."},
-                                500,
-                            ),
-                        )
-                except sqlalchemy.exc.SQLAlchemyError:
-                    db.session.rollback()
-                    logger.exception(
-                        "OPML import: Failed to create default tab '%s'",
-                        default_tab_name_for_creation,
-                    )
-                    return (
-                        None,
-                        None,
-                        False,
-                        (
-                            {"error": "Failed to create a default tab for import."},
-                            500,
-                        ),
-                    )
+        target_tab_id, target_tab_name, was_created, error_response = (
+            _get_or_create_default_import_tab()
+        )
+        if error_response:
+            return None, None, False, error_response
 
     if not target_tab_id:
         logger.error(
@@ -574,6 +559,31 @@ def _invalidate_import_caches(affected_tab_ids_set):
     )
 
 
+def _finish_opml_import(
+    message,
+    imported_count,
+    skipped_count,
+    tab_id,
+    tab_name,
+    affected_tab_ids=None,
+):
+    """Helper to format OPML import result and announce completion."""
+    result = {
+        "message": message,
+        "imported_count": imported_count,
+        "skipped_count": skipped_count,
+        "tab_id": tab_id,
+        "tab_name": tab_name,
+    }
+    if affected_tab_ids is not None:
+        result["affected_tab_ids"] = list(affected_tab_ids)
+
+    announcer.announce(
+        msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+    )
+    return result, None
+
+
 def import_opml(opml_file_stream, requested_tab_id_str):
     """Imports feeds from an OPML file, sending progress via SSE."""
     root, error_resp = _parse_opml_root(opml_file_stream)
@@ -593,17 +603,13 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     opml_body = root.find("body")
     if opml_body is None:
         logger.warning("OPML import: No <body> element found.")
-        result = {
-            "message": "No feeds found in OPML (missing body).",
-            "imported_count": 0,
-            "skipped_count": 0,
-            "tab_id": top_level_target_tab_id,
-            "tab_name": top_level_target_tab_name,
-        }
-        announcer.announce(
-            msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+        return _finish_opml_import(
+            message="No feeds found in OPML (missing body).",
+            imported_count=0,
+            skipped_count=0,
+            tab_id=top_level_target_tab_id,
+            tab_name=top_level_target_tab_name,
         )
-        return result, None
 
     all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
 
@@ -640,37 +646,28 @@ def import_opml(opml_file_stream, requested_tab_id_str):
 
     if not opml_body.findall("outline") and not state.newly_added_feeds_list:
         logger.info("OPML import: No <outline> elements found in the OPML body.")
-        result = {
-            "message": "No feed entries or folders found in the OPML file.",
-            "imported_count": 0,
-            "skipped_count": 0,
-            "tab_id": top_level_target_tab_id,
-            "tab_name": top_level_target_tab_name,
-        }
-        announcer.announce(
-            msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+        return _finish_opml_import(
+            message="No feed entries or folders found in the OPML file.",
+            imported_count=0,
+            skipped_count=0,
+            tab_id=top_level_target_tab_id,
+            tab_name=top_level_target_tab_name,
         )
-        return result, None
 
     imported_final_count = state.imported_count
     skipped_final_count = state.skipped_count
 
-    result = {
-        "message": f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
-        f"Tab: {top_level_target_tab_name}.",
-        "imported_count": imported_final_count,
-        "skipped_count": skipped_final_count,
-        "tab_id": top_level_target_tab_id,
-        "tab_name": top_level_target_tab_name,
-        "affected_tab_ids": list(state.affected_tab_ids_set),
-    }
-
-    # Final 'complete' message for SSE
-    announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress_complete', 'status': result['message']})}\n\n"
+    return _finish_opml_import(
+        message=(
+            f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
+            f"Tab: {top_level_target_tab_name}."
+        ),
+        imported_count=imported_final_count,
+        skipped_count=skipped_final_count,
+        tab_id=top_level_target_tab_id,
+        tab_name=top_level_target_tab_name,
+        affected_tab_ids=state.affected_tab_ids_set,
     )
-
-    return result, None
 
 
 MAX_FEED_RESPONSE_BYTES = 10 * 1024 * 1024  # 10MB cap for feed responses
@@ -1087,6 +1084,88 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
         return False, 0, feed_db_obj.tab_id
 
 
+def _build_safe_opener(safe_ip):
+    """Builds a urllib opener with custom handlers for IP pinning to prevent SSRF."""
+    http_handler = SafeHTTPHandler(safe_ip=safe_ip)
+    https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
+    redirect_handler = SafeRedirectHandler()
+    return urllib.request.build_opener(http_handler, https_handler, redirect_handler)
+
+
+def _download_feed_content(opener, feed_url):
+    """Executes the network request safely, enforcing size limits and basic zip bomb checks."""
+    req = urllib.request.Request(
+        feed_url,
+        headers={
+            "User-Agent": "SheepVibes/1.0",
+            "Accept-Encoding": "identity",  # Prevent Zip Bombs
+        },
+    )
+    url_opener = opener.open(req, timeout=10)
+
+    with url_opener as response:
+        # Check Content-Length header first
+        content_length = response.getheader("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                    logger.warning(
+                        "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                        _sanitize_for_log(content_length),
+                        MAX_FEED_RESPONSE_BYTES,
+                        _sanitize_for_log(feed_url),
+                    )
+                    return None
+            except (ValueError, TypeError):
+                # Malformed header; ignore and rely on read limit
+                logger.warning(
+                    "Ignored invalid Content-Length (%s) for feed %s",
+                    _sanitize_for_log(content_length),
+                    _sanitize_for_log(feed_url),
+                )
+
+        # Read limited amount + 1 byte to detect overflow
+        content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
+        if len(content) > MAX_FEED_RESPONSE_BYTES:
+            logger.warning(
+                "Feed rejected: Response size exceeds limit (%s) for %s",
+                MAX_FEED_RESPONSE_BYTES,
+                _sanitize_for_log(feed_url),
+            )
+            return None
+
+    # ZIP BOMB PROTECTION
+    # Even with 'Accept-Encoding: identity', some servers might send GZIP.
+    # We manually check for the GZIP magic header (\x1f\x8b) and reject.
+    if content.startswith(b"\x1f\x8b"):
+        logger.warning(
+            "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+            _sanitize_for_log(feed_url),
+        )
+        return None
+
+    return content
+
+
+def _parse_and_validate_feed(content, feed_url):
+    """Validates XML safety and parses the feed content."""
+    if not _validate_xml_safety(content):
+        # Sanitize URL for logging to prevent log injection
+        safe_log_url = _sanitize_for_log(feed_url)
+        logger.warning("Feed rejected due to security violation: %s", safe_log_url)
+        return None
+
+    parsed_feed = feedparser.parse(content)
+    # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
+    if parsed_feed.bozo:
+        # Check for bozo_exception and sanitize it (it can contain malicious input)
+        bozo_exc = parsed_feed.get("bozo_exception")
+        safe_exc_msg = _sanitize_for_log(str(bozo_exc)) if bozo_exc else "Unknown"
+        logger.warning("Feed parsing warning: %s", safe_exc_msg)
+
+    return parsed_feed
+
+
 def fetch_feed(feed_url):
     """Fetches and parses a feed, preventing SSRF via IP pinning."""
     safe_ip, _ = validate_and_resolve_url(feed_url)
@@ -1096,83 +1175,13 @@ def fetch_feed(feed_url):
     logger.info("Fetching feed: %s", _sanitize_for_log(feed_url))
     try:
         # Prevent TOCTOU: Use custom handlers to force connection to safe_ip
+        opener = _build_safe_opener(safe_ip)
 
-        # Register BOTH handlers to ensure safety during redirects (HTTPS -> HTTP or HTTP -> HTTPS)
-        # Both handlers utilize ip pinning via `safe_ip` (and `req.safe_ip` for redirects).
-        http_handler = SafeHTTPHandler(safe_ip=safe_ip)
-        https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
-        redirect_handler = SafeRedirectHandler()
-
-        # Build opener with all handlers
-        opener = urllib.request.build_opener(
-            http_handler, https_handler, redirect_handler
-        )
-
-        req = urllib.request.Request(
-            feed_url,
-            headers={
-                "User-Agent": "SheepVibes/1.0",
-                "Accept-Encoding": "identity",  # Prevent Zip Bombs
-            },
-        )
-        url_opener = opener.open(req, timeout=10)
-
-        with url_opener as response:
-            # Check Content-Length header first
-            content_length = response.getheader("Content-Length")
-            if content_length:
-                try:
-                    if int(content_length) > MAX_FEED_RESPONSE_BYTES:
-                        logger.warning(
-                            "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
-                            _sanitize_for_log(content_length),
-                            MAX_FEED_RESPONSE_BYTES,
-                            _sanitize_for_log(feed_url),
-                        )
-                        return None
-                except (ValueError, TypeError):
-                    # Malformed header; ignore and rely on read limit
-                    logger.warning(
-                        "Ignored invalid Content-Length (%s) for feed %s",
-                        _sanitize_for_log(content_length),
-                        _sanitize_for_log(feed_url),
-                    )
-
-            # Read limited amount + 1 byte to detect overflow
-            content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
-            if len(content) > MAX_FEED_RESPONSE_BYTES:
-                logger.warning(
-                    "Feed rejected: Response size exceeds limit (%s) for %s",
-                    MAX_FEED_RESPONSE_BYTES,
-                    _sanitize_for_log(feed_url),
-                )
-                return None
-
-        # ZIP BOMB PROTECTION
-        # Even with 'Accept-Encoding: identity', some servers might send GZIP.
-        # We manually check for the GZIP magic header (\x1f\x8b) and reject.
-        if content.startswith(b"\x1f\x8b"):
-            logger.warning(
-                "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
-                _sanitize_for_log(feed_url),
-            )
+        content = _download_feed_content(opener, feed_url)
+        if not content:
             return None
 
-        if not _validate_xml_safety(content):
-            # Sanitize URL for logging to prevent log injection
-            safe_log_url = _sanitize_for_log(feed_url)
-            logger.warning("Feed rejected due to security violation: %s", safe_log_url)
-            return None
-
-        parsed_feed = feedparser.parse(content)
-        # feedparser.parse(bytes) doesn't set bozo for network errors, but we handled network above.
-        if parsed_feed.bozo:
-            # Check for bozo_exception and sanitize it (it can contain malicious input)
-            bozo_exc = parsed_feed.get("bozo_exception")
-            safe_exc_msg = _sanitize_for_log(str(bozo_exc)) if bozo_exc else "Unknown"
-            logger.warning("Feed parsing warning: %s", safe_exc_msg)
-
-        return parsed_feed
+        return _parse_and_validate_feed(content, feed_url)
 
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error fetching feed %s", _sanitize_for_log(feed_url))
