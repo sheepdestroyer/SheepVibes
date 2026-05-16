@@ -1418,9 +1418,8 @@ def _save_items_to_db(feed_db_obj, items_to_add):
     return committed_count
 
 
-def _save_items_individually(feed_db_obj, items_to_add):
-    """Helper to save items one by one after a batch failure."""
-    # Ensure last_updated_time is updated even if items fail
+def _update_feed_last_updated(feed_db_obj):
+    """Update last_updated_time for a feed even if item insertion fails."""
     try:
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         db.session.add(feed_db_obj)
@@ -1430,19 +1429,21 @@ def _save_items_individually(feed_db_obj, items_to_add):
             "Error updating last_updated_time for feed '%s' after batch failure",
             _sanitize_for_log(feed_db_obj.name),
         )
-        db.session.rollback()  # Rollback if updating last_updated_time fails
+        db.session.rollback()
 
+
+def _insert_items_with_nested_transactions(feed_db_obj, items_to_add):
+    """Insert items one by one using nested transactions for better performance."""
     count = 0
     for item in items_to_add:
         try:
-            db.session.add(item)
-            db.session.commit()
+            with db.session.begin_nested():
+                db.session.add(item)
             count += 1
             logger.debug(
                 "Individually added item: %s", _sanitize_for_log(item.title[:50])
             )
         except IntegrityError as ie:
-            db.session.rollback()
             logger.error(
                 "Failed to add item '%s' for feed '%s' (link: %s, guid: %s): %s",
                 _sanitize_for_log(item.title[:100]),
@@ -1452,25 +1453,40 @@ def _save_items_individually(feed_db_obj, items_to_add):
                 _sanitize_for_log(str(ie)),
             )
         except sqlalchemy.exc.SQLAlchemyError:
-            db.session.rollback()
             logger.exception(
                 "Generic error adding item '%s'",
                 _sanitize_for_log(item.title[:100]),
             )
 
     if count > 0:
-        logger.info(
-            "Recovered %s items individually for feed: %s",
-            count,
-            _sanitize_for_log(feed_db_obj.name),
-        )
+        try:
+            db.session.commit()
+            logger.info(
+                "Recovered %s items individually for feed: %s",
+                count,
+                _sanitize_for_log(feed_db_obj.name),
+            )
+        except sqlalchemy.exc.SQLAlchemyError:
+            db.session.rollback()
+            logger.exception(
+                "Failed to commit recovered items for feed: %s",
+                _sanitize_for_log(feed_db_obj.name),
+            )
+            return 0
     else:
+        db.session.rollback()
         logger.info(
             "No items added individually for feed: %s",
             _sanitize_for_log(feed_db_obj.name),
         )
 
     return count
+
+
+def _save_items_individually(feed_db_obj, items_to_add):
+    """Helper to save items one by one after a batch failure."""
+    _update_feed_last_updated(feed_db_obj)
+    return _insert_items_with_nested_transactions(feed_db_obj, items_to_add)
 
 
 def _enforce_feed_limit(feed_db_obj):
