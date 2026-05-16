@@ -12,6 +12,7 @@ import ipaddress
 import itertools
 import json
 import logging  # Standard logging
+import operator
 import os
 import socket
 import ssl
@@ -1253,16 +1254,16 @@ def _collect_new_items(feed_db_obj, parsed_feed):
 
     # Pre-calculate dates to avoid double parsing and ensure consistency between
     # sorting and storage (e.g. if parse_published_time uses current time as fallback).
-    entries_with_dates = []
-    for entry in parsed_feed.entries:
-        entries_with_dates.append((entry, parse_published_time(entry)))
+    entries_with_dates = [
+        (entry, parse_published_time(entry)) for entry in parsed_feed.entries
+    ]
 
     # Sort entries by published date (newest first).
     # Our "First Wins" deduplication strategy (below) will preserve the version
     # that appears first in the iteration. Sorting ensures the most recently
     # published version is processed first and thus preserved in case of duplicates.
     try:
-        entries_with_dates.sort(key=lambda x: x[1], reverse=True)
+        entries_with_dates.sort(key=operator.itemgetter(1), reverse=True)
     except Exception:  # pylint: disable=broad-exception-caught
         # If sorting fails, proceed with original order.
         logger.warning(
