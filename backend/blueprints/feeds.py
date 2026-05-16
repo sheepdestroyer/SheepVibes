@@ -47,7 +47,10 @@ def _resolve_tab_id(tab_id):
         default_tab = Tab.query.order_by(Tab.order).first()
         if not default_tab:
             # Cannot add feed if no tabs exist
-            return None, (jsonify({"error": "Cannot add feed: No default tab found"}), 400)
+            return None, (
+                jsonify({"error": "Cannot add feed: No default tab found"}),
+                400,
+            )
         return default_tab.id, None
 
     # Verify the provided tab_id exists
@@ -73,7 +76,9 @@ def _get_feed_metadata(feed_url):
         )
         return feed_url, None, parsed_feed
 
-    feed_name = parsed_feed.feed.get("title", feed_url)  # Use URL as fallback if title missing
+    feed_name = parsed_feed.feed.get(
+        "title", feed_url
+    )  # Use URL as fallback if title missing
     site_link = parsed_feed.feed.get("link")  # Get the website link
 
     return feed_name, site_link, parsed_feed
