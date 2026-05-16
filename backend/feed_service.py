@@ -977,6 +977,7 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
         # Handle relative redirects by joining with original URL
         absolute_newurl = urljoin(req.full_url, newurl)
 
