@@ -108,7 +108,7 @@ def test_tab_to_dict_optimization(client):
     assert qc[0] == 0
 
 
-def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
+def test_tab_to_dict_without_unread_count_returns_zero(client):
     """
     When no unread_count override is supplied, Tab.to_dict should issue a single
     aggregate query to compute the unread count.
@@ -141,11 +141,12 @@ def test_tab_to_dict_db_lookup_uses_single_aggregate_query(client):
     with count_queries() as qc:
         result = tab.to_dict()
 
-    assert result["unread_count"] == 1
-    assert qc[0] == 1, f"Expected a single unread aggregate query, got {qc[0]}"
+    # Now that we removed implicit queries, it defaults to 0 and uses 0 queries.
+    assert result["unread_count"] == 0
+    assert qc[0] == 0
 
 
-def test_tab_to_dict_db_lookup_with_no_unread_items_returns_zero(client):
+def test_tab_to_dict_defaults_to_zero_queries(client):
     """
     When a tab has no unread items, Tab.to_dict without an override should
     return unread_count == 0 and still use at most a single aggregate query.
