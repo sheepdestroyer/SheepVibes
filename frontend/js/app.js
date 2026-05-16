@@ -130,9 +130,9 @@ function toggleWidgetsVisibility() {
     // Hide all first
     widgets.forEach(widget => {
         if (widget.dataset.tabId == activeTabId) {
-            widget.style.display = 'block';
+            widget.classList.remove('hidden');
         } else {
-            widget.style.display = 'none';
+            widget.classList.add('hidden');
         }
     });
 
