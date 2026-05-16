@@ -36,20 +36,12 @@ class Tab(db.Model):
 
         Args:
             unread_count (int, optional): The unread count for this tab.
-                                          If None, it will be queried from the DB.
+                                          If None, defaults to 0 to avoid implicit N+1 queries.
 
         Returns:
             dict: A dictionary representation of the tab, including the unread count.
         """
-        if unread_count is None:
-            # Calculate total unread count for all feeds within this tab
-            unread_count = (
-                db.session.query(db.func.count(FeedItem.id))
-                .join(Feed)
-                .filter(Feed.tab_id == self.id, FeedItem.is_read.is_(False))
-                .scalar()
-                or 0
-            )
+        unread_count = unread_count or 0
 
         return {
             "id": self.id,
