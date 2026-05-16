@@ -31,7 +31,8 @@ def _get_unread_count(feed_id):
     return (
         db.session.query(db.func.count(FeedItem.id))
         .filter(FeedItem.feed_id == feed_id, FeedItem.is_read.is_(False))
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
 
