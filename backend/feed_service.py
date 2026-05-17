@@ -218,13 +218,15 @@ def _get_or_create_nested_tab(folder_name):
 
 def _process_folder_node(
     element_name,
-    folder_type_attr,
-    child_outlines,
+    outline_element,
     current_tab_id,
     current_tab_name,
     state: OpmlImportState,
 ):
     """Processes a folder node (non-feed outline) from the OPML."""
+    folder_type_attr = outline_element.get("type")
+    child_outlines = list(outline_element)
+
     if folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
         logger.info(
             "OPML import: Skipping folder '%s' and its children (type: %s).",
@@ -274,8 +276,7 @@ def _process_single_outline_node(
     else:
         _process_folder_node(
             element_name,
-            outline_element.get("type"),
-            list(outline_element),
+            outline_element,
             current_tab_id,
             current_tab_name,
             state,
@@ -716,8 +717,8 @@ def _validate_xml_safety(content):
 
     Policy:
     - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration (required for many valid RSS feeds).
-    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against internal entity expansion (Billion Laughs) and external entity injection.
-    - forbid_external=True: STICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.
+    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against internal entity expansion (Billion Laughs) and external entity injection.  # noqa: E501
+    - forbid_external=True: STICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.  # noqa: E501
 
     Malformed XML or non-XML input that raises SAXParseException or UnicodeError
     is REJECTED (returns False) for safety.
@@ -1669,7 +1670,7 @@ def update_all_feeds():
 
     logger.info("Starting update process for %d feeds (Parallelized).", total_feeds)
     announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"
+        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"  # noqa: E501
     )
 
     actual_workers = min(MAX_CONCURRENT_FETCHES, total_feeds) if all_feeds else 1
@@ -1683,7 +1684,7 @@ def update_all_feeds():
             processed_count += 1
             status_msg = f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
             announcer.announce(
-                msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"
+                msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"  # noqa: E501
             )
 
             try:
