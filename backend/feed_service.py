@@ -236,7 +236,8 @@ def _process_folder_node(
 
     if element_name and child_outlines:
         try:
-            nested_tab_id, nested_tab_name = _get_or_create_nested_tab(element_name)
+            nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
+                element_name)
             state.stack.append(
                 (list(reversed(child_outlines)), nested_tab_id, nested_tab_name)
             )
@@ -470,7 +471,8 @@ def _parse_opml_root(opml_stream):
         root = tree.getroot()
         return root, None
     except SafeET.ParseError as e:
-        logger.error("OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
+        logger.error(
+            "OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
         return None, (
             {"error": "Malformed OPML file. Please check the file format."},
             400,
@@ -511,7 +513,8 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
                 progress_val = 100
 
             # Only announce if significant progress or first/last
-            should_announce = i == 0 or i == total_to_fetch - 1 or (i + 1) % 5 == 0
+            should_announce = i == 0 or i == total_to_fetch - \
+                1 or (i + 1) % 5 == 0
 
             if should_announce:
                 event_data = {
@@ -645,7 +648,8 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     )
 
     if not opml_body.findall("outline") and not state.newly_added_feeds_list:
-        logger.info("OPML import: No <outline> elements found in the OPML body.")
+        logger.info(
+            "OPML import: No <outline> elements found in the OPML body.")
         return _finish_opml_import(
             message="No feed entries or folders found in the OPML file.",
             imported_count=0,
@@ -733,7 +737,8 @@ def _validate_xml_safety(content):
             forbid_external=True,
         )
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
-        logger.error("XML Security Violation detected: %s", _sanitize_for_log(str(e)))
+        logger.error("XML Security Violation detected: %s",
+                     _sanitize_for_log(str(e)))
         return False
     except (SAXParseException, UnicodeError) as e:
         # SECURITY HARDENING: Fail closed on malformed XML.
@@ -984,7 +989,8 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         safe_ip, _ = validate_and_resolve_url(absolute_newurl)
         if not safe_ip:
             logger.warning(
-                "Blocked unsafe redirect to: %s", _sanitize_for_log(absolute_newurl)
+                "Blocked unsafe redirect to: %s", _sanitize_for_log(
+                    absolute_newurl)
             )
             raise urllib.error.HTTPError(
                 absolute_newurl, code, "Blocked unsafe redirect", headers, fp
@@ -1152,7 +1158,8 @@ def _parse_and_validate_feed(content, feed_url):
     if not _validate_xml_safety(content):
         # Sanitize URL for logging to prevent log injection
         safe_log_url = _sanitize_for_log(feed_url)
-        logger.warning("Feed rejected due to security violation: %s", safe_log_url)
+        logger.warning(
+            "Feed rejected due to security violation: %s", safe_log_url)
         return None
 
     parsed_feed = feedparser.parse(content)
@@ -1160,7 +1167,8 @@ def _parse_and_validate_feed(content, feed_url):
     if parsed_feed.bozo:
         # Check for bozo_exception and sanitize it (it can contain malicious input)
         bozo_exc = parsed_feed.get("bozo_exception")
-        safe_exc_msg = _sanitize_for_log(str(bozo_exc)) if bozo_exc else "Unknown"
+        safe_exc_msg = _sanitize_for_log(
+            str(bozo_exc)) if bozo_exc else "Unknown"
         logger.warning("Feed parsing warning: %s", safe_exc_msg)
 
     return parsed_feed
@@ -1227,22 +1235,95 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
         feed_db_obj.site_link = new_site_link
 
 
+def _get_existing_items_lookups(feed_db_obj):
+    """Fetches existing DB items and returns lookup maps by GUID and link."""
+    items_tuple = (
+        db.session.query(FeedItem.id, FeedItem.guid,
+                         FeedItem.link, FeedItem.title)
+        .filter_by(feed_id=feed_db_obj.id)
+        .all()
+    )
+    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
+    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
+    return existing_items_by_guid, existing_items_by_link
+
+
+def _preprocess_entries(parsed_feed, feed_name):
+    """Parses dates and sorts entries newest-first to preserve earliest duplicates."""
+    entries_with_dates = []
+    for entry in parsed_feed.entries:
+        entries_with_dates.append((entry, parse_published_time(entry)))
+
+    try:
+        entries_with_dates.sort(key=lambda x: x[1], reverse=True)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.warning("Failed to sort entries for feed %s",
+                       _sanitize_for_log(feed_name))
+
+    return entries_with_dates
+
+
+def _process_single_entry(
+    entry,
+    parsed_published,
+    feed_db_obj,
+    existing_items_by_guid,
+    existing_items_by_link,
+    batch_processed_guids
+):
+    """Processes a single entry, checking for duplicates and updating existing."""
+    raw_link = entry.get("link")
+    entry_link = validate_link_structure(raw_link)
+
+    if not entry_link:
+        logger.warning(
+            "Skipping entry titled '%s' for feed '%s' due to missing link.",
+            _sanitize_for_log(entry.get("title", "[No Title]")[:100]),
+            _sanitize_for_log(feed_db_obj.name),
+        )
+        return None
+
+    if entry.get("id"):
+        db_guid = entry.get("id")
+    else:
+        unique_string = f"{entry_link}{entry.get('title', '')}"
+        db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+
+    existing_match = existing_items_by_guid.get(db_guid)
+    if not existing_match:
+        existing_match = existing_items_by_link.get(entry_link)
+
+    if existing_match:
+        _update_existing_item(
+            feed_db_obj,
+            existing_match,
+            entry.get("title", "[No Title]"),
+            entry_link,
+        )
+        return None
+
+    if _is_batch_duplicate(db_guid, batch_processed_guids, feed_db_obj.name):
+        return None
+
+    if db_guid:
+        batch_processed_guids.add(db_guid)
+
+    return FeedItem(
+        feed_id=feed_db_obj.id,
+        title=entry.get("title", "[No Title]"),
+        link=entry_link,
+        published_time=parsed_published,
+        guid=db_guid,
+    )
+
+
 def _collect_new_items(feed_db_obj, parsed_feed):
     """Identifies new items to add and updates existing ones."""
     items_to_add = []
     batch_processed_guids = set()
 
-    # Optimization: Query only necessary columns to avoid loading full objects
-    # item[1] is guid, item[2] is link, item[3] is title
-    items_tuple = (
-        db.session.query(FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title)
-        .filter_by(feed_id=feed_db_obj.id)
-        .all()
-    )
-
-    # Create lookup maps
-    existing_items_by_guid = {it.guid: it for it in items_tuple if it.guid}
-    existing_items_by_link = {it.link: it for it in items_tuple if it.link}
+    existing_items_by_guid, existing_items_by_link = _get_existing_items_lookups(
+        feed_db_obj)
 
     logger.info(
         "Processing %s entries for feed: %s (ID: %s)",
@@ -1251,89 +1332,19 @@ def _collect_new_items(feed_db_obj, parsed_feed):
         feed_db_obj.id,
     )
 
-    # Pre-calculate dates to avoid double parsing and ensure consistency between
-    # sorting and storage (e.g. if parse_published_time uses current time as fallback).
-    entries_with_dates = []
-    for entry in parsed_feed.entries:
-        entries_with_dates.append((entry, parse_published_time(entry)))
-
-    # Sort entries by published date (newest first).
-    # Our "First Wins" deduplication strategy (below) will preserve the version
-    # that appears first in the iteration. Sorting ensures the most recently
-    # published version is processed first and thus preserved in case of duplicates.
-    try:
-        entries_with_dates.sort(key=lambda x: x[1], reverse=True)
-    except Exception:  # pylint: disable=broad-exception-caught
-        # If sorting fails, proceed with original order.
-        logger.warning(
-            "Failed to sort entries for feed %s", _sanitize_for_log(feed_db_obj.name)
-        )
+    entries_with_dates = _preprocess_entries(parsed_feed, feed_db_obj.name)
 
     for entry, parsed_published in entries_with_dates:
-        raw_link = entry.get("link")
-        entry_link = validate_link_structure(raw_link)
-
-        if not entry_link:
-            logger.warning(
-                "Skipping entry titled '%s' for feed '%s' due to missing link.",
-                _sanitize_for_log(entry.get("title", "[No Title]")[:100]),
-                _sanitize_for_log(feed_db_obj.name),
-            )
-            continue
-
-        # SECURITY & LOGIC: Generate a robust GUID if missing.
-        # Fallback to hash of link+title to distinguish items pointing to same URL (e.g. Kernel versions).
-        if entry.get("id"):
-            db_guid = entry.get("id")
-        else:
-            # Create a synthetic GUID based on link and title to ensure uniqueness
-            # for items that share a link but have different content.
-            unique_string = f"{entry_link}{entry.get('title', '')}"
-
-            db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
-
-        # Check existing
-        existing_match = existing_items_by_guid.get(db_guid)
-        if not existing_match:
-            # Minimal fallback: Check by link ONLY if we used link as GUID (legacy)
-            # or if we really want to strict de-dupe.
-            # But for now, let's rely on our robust GUID.
-            # We still check existing_items_by_link just in case we have old DB entries
-            # that were saved with just the link as GUID?
-            # Actually, standard behavior is to trust the GUID.
-            # If we change how GUID is generated, we might duplicate old items once.
-            # This is acceptable to fix the regression.
-            existing_match = existing_items_by_link.get(entry_link)
-
-        if existing_match:
-            _update_existing_item(
-                feed_db_obj,
-                existing_match,
-                entry.get("title", "[No Title]"),
-                entry_link,
-            )
-            continue
-
-        # Check batch duplicates
-        if _is_batch_duplicate(
-            db_guid,
-            batch_processed_guids,
-            feed_db_obj.name,
-        ):
-            continue
-
-        if db_guid:
-            batch_processed_guids.add(db_guid)
-
-        items_to_add.append(
-            FeedItem(
-                feed_id=feed_db_obj.id,
-                title=entry.get("title", "[No Title]"),
-                link=entry_link,
-                published_time=parsed_published,
-                guid=db_guid,
-            )
+        new_item = _process_single_entry(
+            entry,
+            parsed_published,
+            feed_db_obj,
+            existing_items_by_guid,
+            existing_items_by_link,
+            batch_processed_guids
         )
+        if new_item:
+            items_to_add.append(new_item)
 
     return items_to_add
 
@@ -1450,7 +1461,8 @@ def _insert_items_with_nested_transactions(feed_db_obj, items_to_add):
                 db.session.add(item)
             count += 1
             logger.debug(
-                "Individually added item: %s", _sanitize_for_log(item.title[:50])
+                "Individually added item: %s", _sanitize_for_log(
+                    item.title[:50])
             )
         except IntegrityError as ie:
             logger.error(
@@ -1539,7 +1551,7 @@ def _enforce_feed_limit(feed_db_obj):
     chunk_size = DELETE_CHUNK_SIZE
     deleted_count = 0
     for i in range(0, len(ids_to_evict), chunk_size):
-        chunk = ids_to_evict[i : i + chunk_size]
+        chunk = ids_to_evict[i: i + chunk_size]
         deleted_count += (
             db.session.query(FeedItem)
             .filter(FeedItem.id.in_(chunk))
@@ -1666,12 +1678,14 @@ def update_all_feeds():
     total_new_items = 0
     affected_tab_ids = set()
 
-    logger.info("Starting update process for %d feeds (Parallelized).", total_feeds)
+    logger.info(
+        "Starting update process for %d feeds (Parallelized).", total_feeds)
     announcer.announce(
         msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"
     )
 
-    actual_workers = min(MAX_CONCURRENT_FETCHES, total_feeds) if all_feeds else 1
+    actual_workers = min(MAX_CONCURRENT_FETCHES,
+                         total_feeds) if all_feeds else 1
     with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
         future_to_feed = {
             executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds
