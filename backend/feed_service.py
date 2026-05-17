@@ -491,7 +491,7 @@ def _parse_opml_root(opml_stream):
         )
 
 
-def _announce_fetch_progress(index, total, feed_name):
+def _announce_fetch_progress(index: int, total: int, feed_name: str) -> None:
     """Announces progress for feed fetching during OPML import."""
     status_msg = f"Fetching new feed {index + 1}/{total}: {feed_name}"
 
@@ -514,7 +514,7 @@ def _announce_fetch_progress(index, total, feed_name):
         announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
 
 
-def _fetch_single_new_feed(feed_obj):
+def _fetch_single_new_feed(feed_obj: Feed) -> None:
     """Fetches a single newly added feed safely."""
     if feed_obj.id:
         try:
