@@ -12,6 +12,7 @@ import ipaddress
 import itertools
 import json
 import logging  # Standard logging
+import operator
 import os
 import socket
 import ssl
@@ -218,13 +219,15 @@ def _get_or_create_nested_tab(folder_name):
 
 def _process_folder_node(
     element_name,
-    folder_type_attr,
-    child_outlines,
+    outline_element,
     current_tab_id,
     current_tab_name,
     state: OpmlImportState,
 ):
     """Processes a folder node (non-feed outline) from the OPML."""
+    folder_type_attr = outline_element.get("type")
+    child_outlines = list(outline_element)
+
     if folder_type_attr and folder_type_attr in SKIPPED_FOLDER_TYPES:
         logger.info(
             "OPML import: Skipping folder '%s' and its children (type: %s).",
@@ -236,7 +239,8 @@ def _process_folder_node(
 
     if element_name and child_outlines:
         try:
-            nested_tab_id, nested_tab_name = _get_or_create_nested_tab(element_name)
+            nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
+                element_name)
             state.stack.append(
                 (list(reversed(child_outlines)), nested_tab_id, nested_tab_name)
             )
@@ -274,8 +278,7 @@ def _process_single_outline_node(
     else:
         _process_folder_node(
             element_name,
-            outline_element.get("type"),
-            list(outline_element),
+            outline_element,
             current_tab_id,
             current_tab_name,
             state,
@@ -470,7 +473,8 @@ def _parse_opml_root(opml_stream):
         root = tree.getroot()
         return root, None
     except SafeET.ParseError as e:
-        logger.error("OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
+        logger.error(
+            "OPML import failed: Malformed XML. Error: %s", e, exc_info=True)
         return None, (
             {"error": "Malformed OPML file. Please check the file format."},
             400,
@@ -484,6 +488,47 @@ def _parse_opml_root(opml_stream):
         return None, (
             {"error": "Could not parse OPML file. Please check the file format."},
             400,
+        )
+
+
+def _announce_fetch_progress(index: int, total: int, feed_name: str) -> None:
+    """Announces progress for feed fetching during OPML import."""
+    status_msg = f"Fetching new feed {index + 1}/{total}: {feed_name}"
+
+    if total > 0:
+        progress_val = OPML_IMPORT_PROCESSING_WEIGHT + (
+            (index + 1) * OPML_IMPORT_FETCHING_WEIGHT // total
+        )
+    else:
+        progress_val = 100
+
+    should_announce = index == 0 or index == total - 1 or (index + 1) % 5 == 0
+
+    if should_announce:
+        event_data = {
+            "type": "progress",
+            "status": status_msg,
+            "value": progress_val,
+            "max": 100,
+        }
+        announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
+
+
+def _fetch_single_new_feed(feed_obj: Feed) -> None:
+    """Fetches a single newly added feed safely."""
+    if feed_obj.id:
+        try:
+            fetch_and_update_feed(feed_obj.id)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception(
+                "OPML import: Error fetching for new feed %s (ID: %s)",
+                feed_obj.name,
+                feed_obj.id,
+            )
+    else:
+        logger.error(
+            "OPML import: Feed '%s' missing ID after commit.",
+            _sanitize_for_log(feed_obj.name),
         )
 
 
@@ -501,41 +546,9 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
 
         total_to_fetch = len(newly_added_feeds_list)
         for i, feed_obj in enumerate(newly_added_feeds_list):
-            status_msg = f"Fetching new feed {i + 1}/{total_to_fetch}: {feed_obj.name}"
-            # Phase 2 value: Processing Weight to 100
-            if total_to_fetch > 0:
-                progress_val = OPML_IMPORT_PROCESSING_WEIGHT + (
-                    (i + 1) * OPML_IMPORT_FETCHING_WEIGHT // total_to_fetch
-                )
-            else:
-                progress_val = 100
+            _announce_fetch_progress(i, total_to_fetch, feed_obj.name)
+            _fetch_single_new_feed(feed_obj)
 
-            # Only announce if significant progress or first/last
-            should_announce = i == 0 or i == total_to_fetch - 1 or (i + 1) % 5 == 0
-
-            if should_announce:
-                event_data = {
-                    "type": "progress",
-                    "status": status_msg,
-                    "value": progress_val,
-                    "max": 100,
-                }
-                announcer.announce(msg=f"data: {json.dumps(event_data)}\n\n")
-
-            if feed_obj.id:
-                try:
-                    fetch_and_update_feed(feed_obj.id)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logger.exception(
-                        "OPML import: Error fetching for new feed %s (ID: %s)",
-                        feed_obj.name,
-                        feed_obj.id,
-                    )
-            else:
-                logger.error(
-                    "OPML import: Feed '%s' missing ID after commit.",
-                    _sanitize_for_log(feed_obj.name),
-                )
         return True, None
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
@@ -645,7 +658,8 @@ def import_opml(opml_file_stream, requested_tab_id_str):
     )
 
     if not opml_body.findall("outline") and not state.newly_added_feeds_list:
-        logger.info("OPML import: No <outline> elements found in the OPML body.")
+        logger.info(
+            "OPML import: No <outline> elements found in the OPML body.")
         return _finish_opml_import(
             message="No feed entries or folders found in the OPML file.",
             imported_count=0,
@@ -716,8 +730,8 @@ def _validate_xml_safety(content):
 
     Policy:
     - forbid_dtd=False: Allows the presence of a `<!DOCTYPE ...>` declaration (required for many valid RSS feeds).
-    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against internal entity expansion (Billion Laughs) and external entity injection.
-    - forbid_external=True: STICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.
+    - forbid_entities=True: STRICTLY blocks any `<!ENTITY ...>` declarations within the DTD. This is the primary defense against internal entity expansion (Billion Laughs) and external entity injection.  # noqa: E501
+    - forbid_external=True: STICTLY blocks all external DTDs or external entity references (e.g., `SYSTEM "..."`), preventing SSRF and file system access.  # noqa: E501
 
     Malformed XML or non-XML input that raises SAXParseException or UnicodeError
     is REJECTED (returns False) for safety.
@@ -733,7 +747,8 @@ def _validate_xml_safety(content):
             forbid_external=True,
         )
     except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden) as e:
-        logger.error("XML Security Violation detected: %s", _sanitize_for_log(str(e)))
+        logger.error("XML Security Violation detected: %s",
+                     _sanitize_for_log(str(e)))
         return False
     except (SAXParseException, UnicodeError) as e:
         # SECURITY HARDENING: Fail closed on malformed XML.
@@ -977,6 +992,7 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
         # Handle relative redirects by joining with original URL
         absolute_newurl = urljoin(req.full_url, newurl)
 
@@ -984,7 +1000,8 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         safe_ip, _ = validate_and_resolve_url(absolute_newurl)
         if not safe_ip:
             logger.warning(
-                "Blocked unsafe redirect to: %s", _sanitize_for_log(absolute_newurl)
+                "Blocked unsafe redirect to: %s", _sanitize_for_log(
+                    absolute_newurl)
             )
             raise urllib.error.HTTPError(
                 absolute_newurl, code, "Blocked unsafe redirect", headers, fp
@@ -1152,7 +1169,8 @@ def _parse_and_validate_feed(content, feed_url):
     if not _validate_xml_safety(content):
         # Sanitize URL for logging to prevent log injection
         safe_log_url = _sanitize_for_log(feed_url)
-        logger.warning("Feed rejected due to security violation: %s", safe_log_url)
+        logger.warning(
+            "Feed rejected due to security violation: %s", safe_log_url)
         return None
 
     parsed_feed = feedparser.parse(content)
@@ -1160,7 +1178,8 @@ def _parse_and_validate_feed(content, feed_url):
     if parsed_feed.bozo:
         # Check for bozo_exception and sanitize it (it can contain malicious input)
         bozo_exc = parsed_feed.get("bozo_exception")
-        safe_exc_msg = _sanitize_for_log(str(bozo_exc)) if bozo_exc else "Unknown"
+        safe_exc_msg = _sanitize_for_log(
+            str(bozo_exc)) if bozo_exc else "Unknown"
         logger.warning("Feed parsing warning: %s", safe_exc_msg)
 
     return parsed_feed
@@ -1230,7 +1249,8 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
 def _get_existing_items_lookups(feed_db_obj):
     """Fetches existing DB items and returns lookup maps by GUID and link."""
     items_tuple = (
-        db.session.query(FeedItem.id, FeedItem.guid, FeedItem.link, FeedItem.title)
+        db.session.query(FeedItem.id, FeedItem.guid,
+                         FeedItem.link, FeedItem.title)
         .filter_by(feed_id=feed_db_obj.id)
         .all()
     )
@@ -1241,12 +1261,12 @@ def _get_existing_items_lookups(feed_db_obj):
 
 def _preprocess_entries(parsed_feed, feed_name):
     """Parses dates and sorts entries newest-first to preserve earliest duplicates."""
-    entries_with_dates = []
-    for entry in parsed_feed.entries:
-        entries_with_dates.append((entry, parse_published_time(entry)))
+    entries_with_dates = [
+        (entry, parse_published_time(entry)) for entry in parsed_feed.entries
+    ]
 
     try:
-        entries_with_dates.sort(key=lambda x: x[1], reverse=True)
+        entries_with_dates.sort(key=operator.itemgetter(1), reverse=True)
     except Exception:  # pylint: disable=broad-exception-caught
         logger.warning(
             "Failed to sort entries for feed %s", _sanitize_for_log(feed_name)
@@ -1454,7 +1474,8 @@ def _insert_items_with_nested_transactions(feed_db_obj, items_to_add):
                 db.session.add(item)
             count += 1
             logger.debug(
-                "Individually added item: %s", _sanitize_for_log(item.title[:50])
+                "Individually added item: %s", _sanitize_for_log(
+                    item.title[:50])
             )
         except IntegrityError as ie:
             logger.error(
@@ -1543,7 +1564,7 @@ def _enforce_feed_limit(feed_db_obj):
     chunk_size = DELETE_CHUNK_SIZE
     deleted_count = 0
     for i in range(0, len(ids_to_evict), chunk_size):
-        chunk = ids_to_evict[i : i + chunk_size]
+        chunk = ids_to_evict[i: i + chunk_size]
         deleted_count += (
             db.session.query(FeedItem)
             .filter(FeedItem.id.in_(chunk))
@@ -1670,12 +1691,14 @@ def update_all_feeds():
     total_new_items = 0
     affected_tab_ids = set()
 
-    logger.info("Starting update process for %d feeds (Parallelized).", total_feeds)
+    logger.info(
+        "Starting update process for %d feeds (Parallelized).", total_feeds)
     announcer.announce(
-        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"
+        msg=f"data: {json.dumps({'type': 'progress', 'status': 'Starting feed refresh...', 'value': 0, 'max': total_feeds})}\n\n"  # noqa: E501
     )
 
-    actual_workers = min(MAX_CONCURRENT_FETCHES, total_feeds) if all_feeds else 1
+    actual_workers = min(MAX_CONCURRENT_FETCHES,
+                         total_feeds) if all_feeds else 1
     with concurrent.futures.ThreadPoolExecutor(max_workers=actual_workers) as executor:
         future_to_feed = {
             executor.submit(_fetch_feed_content, feed.url): feed for feed in all_feeds
@@ -1686,7 +1709,7 @@ def update_all_feeds():
             processed_count += 1
             status_msg = f"({processed_count}/{total_feeds}) Checking: {feed_obj.name}"
             announcer.announce(
-                msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"
+                msg=f"data: {json.dumps({'type': 'progress', 'status': status_msg, 'value': processed_count, 'max': total_feeds})}\n\n"  # noqa: E501
             )
 
             try:
