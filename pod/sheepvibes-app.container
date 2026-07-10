@@ -8,7 +8,7 @@ ContainerName=sheepvibes-app
 Image=ghcr.io/sheepdestroyer/sheepvibes:latest
 Pod=sheepvibespod.pod
 Volume=sheepvibes-db.volume:/app/data
-Volume=/mnt/DATA/boy/SheepVibes/frontend:/app/frontend:ro
+Volume=/mnt/DATA/boy/prod/SheepVibes/frontend:/app/frontend:ro
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
 Environment=CACHE_REDIS_URL=redis://localhost:6379/0
 Environment=FLASK_APP=backend.app
