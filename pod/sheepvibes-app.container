@@ -10,6 +10,10 @@ Pod=sheepvibespod.pod
 Volume=sheepvibes-db.volume:/app/data
 Volume=/mnt/DATA/boy/prod/SheepVibes/frontend:/app/frontend:ro
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
+HealthCmd=python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/')"
+HealthInterval=15s
+HealthTimeout=5s
+HealthRetries=3
 Environment=CACHE_REDIS_URL=redis://localhost:6379/0
 Environment=FLASK_APP=backend.app
 Environment=PYTHONPATH=/app
