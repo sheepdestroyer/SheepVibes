@@ -139,5 +139,4 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
   - [x] Cancel stale kanban tasks.
   - [x] Enact `docs/process/jules-pr-workflow.md` with five-gate review loop.
   - [x] Validate full test suite passes at restored state.
-
 *   [x] **2026-08-05: Remove non-portable host volume mount from Quadlet config** (PR #500)

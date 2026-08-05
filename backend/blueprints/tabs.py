@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from ..cache_utils import (
+    invalidate_tab_feeds_cache,
     invalidate_tabs_cache,
     make_tab_feeds_cache_key,
     make_tabs_cache_key,
@@ -231,6 +232,7 @@ def delete_tab(tab_id):
     try:
         tab_name = tab.name
         # Associated feeds/items are deleted due to cascade settings in the model
+        invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
         db.session.delete(tab)
         db.session.commit()
         invalidate_tabs_cache()

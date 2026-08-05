@@ -129,17 +129,37 @@ OPML_AUTOSAVE_INTERVAL_MINUTES = int(
 @scheduler.scheduled_job("interval", minutes=UPDATE_INTERVAL_MINUTES, id="update_feeds")
 def scheduled_feed_update():
     """Scheduled job to periodically update all feeds in the database."""
+    data_dir = app.config.get("DATA_DIR") or os.environ.get("DATA_DIR")
+    if not data_dir:
+        db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+        if db_uri.startswith("sqlite:///"):
+            db_path = db_uri.replace("sqlite:///", "")
+            if db_path != ":memory:":
+                try:
+                    data_dir = os.path.dirname(os.path.abspath(db_path))
+                except Exception:
+                    pass
+    if not data_dir:
+        project_root = app.config.get(
+            "PROJECT_ROOT",
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
+        )
+        data_dir = os.path.join(project_root, "data")
+
+    os.makedirs(data_dir, exist_ok=True)
+    lock_path = os.path.join(data_dir, "feed_update.lock")
+
     # Use a file lock to ensure only one worker runs this job
-    lock = FileLock("feed_update.lock")
+    lock = FileLock(lock_path)
     try:
         with lock.acquire(timeout=1):  # Non-blocking attempt
             # Need app context to access database within the scheduled job
             with app.app_context():
-                logger.info(
-                    "Running scheduled feed update (every %s minutes)",
-                    UPDATE_INTERVAL_MINUTES,
-                )
                 try:
+                    logger.info(
+                        "Running scheduled feed update (every %s minutes)",
+                        UPDATE_INTERVAL_MINUTES,
+                    )
                     feeds_updated, new_items, affected_tab_ids = update_all_feeds()
                     logger.info(
                         "Scheduled update completed: %s feeds updated, %s new items",
@@ -170,6 +190,8 @@ def scheduled_feed_update():
                     logger.error(
                         "Error during scheduled feed update: %s", e, exc_info=True
                     )
+                finally:
+                    db.session.remove()
     except Timeout:
         # Lock acquisition failed (another worker is running the job), just skip
         pass
