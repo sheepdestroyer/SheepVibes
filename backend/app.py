@@ -351,6 +351,8 @@ def stream():
 if __name__ == "__main__":
     # Start the Flask development server for local testing.
     is_debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
-    logger.info("Starting Flask app (Debug mode: %s)", is_debug_mode)
-    app.run(host="127.0.0.1", port=5000, debug=is_debug_mode)  # nosec B104
+    server_port = int(os.environ.get("PORT", "5000"))
+    logger.info("Starting Flask app on port %d (Debug mode: %s)", server_port, is_debug_mode)
+    app.run(host="127.0.0.1", port=server_port, debug=is_debug_mode)  # nosec B104
     logger.info("SheepVibes application finished.")
+
