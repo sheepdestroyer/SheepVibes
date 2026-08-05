@@ -13,16 +13,16 @@
     <div class="sticky-nav">
     <header>
         <h1>SheepVibes</h1>
-        <nav id="tabs-container">
+        <nav id="tabs-container" role="tablist">
             <!-- Tabs will be loaded here -->
         </nav>
         <div id="tab-management-buttons">
-            <button id="add-tab-button" title="Add New Tab">+</button>
-            <button id="rename-tab-button" title="Rename Active Tab">Rename</button>
-            <button id="delete-tab-button" title="Delete Active Tab">-</button>
+            <button id="add-tab-button" title="Add New Tab" aria-label="Add New Tab">+</button>
+            <button id="rename-tab-button" title="Rename Active Tab" aria-label="Rename Active Tab">Rename</button>
+            <button id="delete-tab-button" title="Delete Active Tab" aria-label="Delete Active Tab">-</button>
         </div>
         <div id="settings-menu-container">
-            <button id="settings-button">⚙️</button>
+            <button id="settings-button" aria-label="Settings">⚙️</button>
             <div id="settings-menu" class="hidden">
                 <div id="add-feed-section">
                     <input type="text" id="feed-url-input" placeholder="Enter feed URL">
@@ -41,7 +41,7 @@
         <progress id="progress-bar" value="0" max="100"></progress>
     </div>
     </div>
-    <main id="feed-grid">
+    <main id="feed-grid" role="tabpanel">
         <!-- Feed widgets will be loaded here -->
     </main>
 

@@ -17,6 +17,16 @@ a:hover {
     text-decoration: underline;
 }
 
+/* Focus-visible styles for interactive controls */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid #005a9c;
+    outline-offset: 2px;
+}
+
 /* Header Styles */
 header {
     background-color: #f8f9fa;
@@ -321,11 +331,15 @@ header h1 {
 .feed-widget .edit-feed-button,
 .feed-widget .delete-feed-button {
     background: #6c757d;
+    background-clip: padding-box;
     color: white;
-    border: none;
+    border: 10px solid transparent;
     border-radius: 50%;
-    width: 18px;
-    height: 18px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
     font-size: 11px;
     cursor: pointer;
     opacity: 0.6;
@@ -413,7 +427,7 @@ header h1 {
     /* Hidden by default */
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: 2000;
 }
 
 .modal.is-active {
@@ -568,7 +582,7 @@ header h1 {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    z-index: 2000;
+    z-index: 3000;
     display: flex;
     flex-direction: column;
     align-items: flex-end;

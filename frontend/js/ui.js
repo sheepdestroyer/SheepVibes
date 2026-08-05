@@ -1,4 +1,4 @@
-import { formatDate, throttle } from './utils.js';
+import { formatDate, throttle, sanitizeUrl } from './utils.js';
 
 const SCROLL_BUFFER = 200; // Pixels from bottom to trigger load
 const SCROLL_THROTTLE = 200; // ms
@@ -42,6 +42,22 @@ export function createBadge(count) {
     return null;
 }
 
+export function updateUnreadCount(element) {
+    if (!element) return;
+    const badge = element.querySelector('.unread-count-badge');
+    if (badge) {
+        const count = parseInt(badge.textContent, 10);
+        if (!isNaN(count)) {
+            const newCount = count - 1;
+            if (newCount > 0) {
+                badge.textContent = newCount;
+            } else {
+                badge.remove();
+            }
+        }
+    }
+}
+
 // --- Feed Item ---
 
 function createFeedItemElement(item, clickHandler) {
@@ -50,7 +66,7 @@ function createFeedItemElement(item, clickHandler) {
     listItem.classList.add(item.is_read ? 'read' : 'unread');
 
     const link = document.createElement('a');
-    link.href = item.link;
+    link.href = sanitizeUrl(item.link);
     link.textContent = item.title;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
@@ -86,6 +102,7 @@ export function createFeedWidget(feed, callbacks) {
     editButton.classList.add('edit-feed-button');
     editButton.textContent = '✎';
     editButton.title = 'Edit Feed';
+    editButton.setAttribute('aria-label', 'Edit Feed');
     editButton.addEventListener('click', (e) => {
         e.stopPropagation();
         onEdit(feed.id, feed.url, feed.name);
@@ -96,6 +113,7 @@ export function createFeedWidget(feed, callbacks) {
     deleteButton.classList.add('delete-feed-button');
     deleteButton.textContent = 'X';
     deleteButton.title = 'Delete Feed';
+    deleteButton.setAttribute('aria-label', 'Delete Feed');
     deleteButton.addEventListener('click', (e) => {
         e.stopPropagation();
         onDelete(feed.id);
@@ -108,7 +126,7 @@ export function createFeedWidget(feed, callbacks) {
 
     if (feedLinkUrl) {
         const titleLink = document.createElement('a');
-        titleLink.href = feedLinkUrl;
+        titleLink.href = sanitizeUrl(feedLinkUrl);
         titleLink.target = '_blank';
         titleLink.rel = 'noopener noreferrer';
         titleLink.appendChild(titleTextNode);
@@ -137,12 +155,19 @@ export function createFeedWidget(feed, callbacks) {
     itemList.dataset.allItemsLoaded = 'false';
 
     // Infinite Scroll: Per-widget implementation
-    itemList.addEventListener('scroll', throttle(() => {
-        // Check if scrolled near bottom
+    const onScroll = () => {
+        if (itemList.dataset.allItemsLoaded === 'true') {
+            itemList.removeEventListener('scroll', throttledScroll);
+            return;
+        }
+        if (itemList.offsetParent === null) return;
+
         if (itemList.scrollTop + itemList.clientHeight >= itemList.scrollHeight - SCROLL_BUFFER) {
             onLoadMore(itemList);
         }
-    }, SCROLL_THROTTLE));
+    };
+    const throttledScroll = throttle(onScroll, SCROLL_THROTTLE);
+    itemList.addEventListener('scroll', throttledScroll);
 
     // Render Items
     if (feed.items && feed.items.length > 0) {
@@ -211,7 +236,11 @@ export function renderTabs(tabs, activeTabId, callbacks) {
         const button = document.createElement('button');
         button.textContent = tab.name;
         button.dataset.tabId = tab.id;
-        button.classList.toggle('active', tab.id == activeTabId);
+        const isActive = tab.id == activeTabId;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('role', 'tab');
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        button.setAttribute('aria-controls', 'feed-grid');
         button.addEventListener('click', () => onSwitchTab(tab.id));
 
         const badge = createBadge(tab.unread_count);
