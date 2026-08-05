@@ -3,7 +3,7 @@
 export const API_BASE_URL =
     (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) ||
     window.API_BASE_URL ||
-    '';
+    (window.location.pathname.startsWith('/sheepvibes') ? '/sheepvibes' : '');
 
 /**
  * Fetches data from the specified API endpoint.

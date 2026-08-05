@@ -2,6 +2,9 @@
 
 ## 2026-08-05
 
+- **Fix: Remove non-portable host volume mount** (PR #500)
+  - Removed hardcoded host volume mount `Volume=/mnt/DATA/boy/prod/SheepVibes/frontend:/app/frontend:ro` from `pod/sheepvibes-app.container`.
+
 - **Fix: Frontend UX, Accessibility, and State Management** (PR #515)
   - **Utils**: Updated `throttle` trailing-edge execution with `try ... finally` to ensure `isThrottled = false` is always reset even if callback throws.
   - **Accessibility**: Added `role="tabpanel"` to `#feed-grid` container for complete WAI-ARIA tab semantics.
