@@ -22,10 +22,15 @@ export function throttle(callback, delay) {
         const checkTrailing = () => {
             setTimeout(() => {
                 if (lastArgs) {
-                    callback.apply(lastThis, lastArgs);
+                    const args = lastArgs;
+                    const ctx = lastThis;
                     lastArgs = null;
                     lastThis = null;
-                    checkTrailing();
+                    try {
+                        callback.apply(ctx, args);
+                    } finally {
+                        checkTrailing();
+                    }
                 } else {
                     isThrottled = false;
                 }

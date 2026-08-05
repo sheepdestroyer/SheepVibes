@@ -331,11 +331,15 @@ header h1 {
 .feed-widget .edit-feed-button,
 .feed-widget .delete-feed-button {
     background: #6c757d;
+    background-clip: padding-box;
     color: white;
-    border: none;
+    border: 10px solid transparent;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
     font-size: 11px;
     cursor: pointer;
     opacity: 0.6;

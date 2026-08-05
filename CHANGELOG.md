@@ -2,6 +2,11 @@
 
 ## 2026-08-05
 
+- **Fix: Frontend UX, Accessibility, and State Management** (PR #515)
+  - **Utils**: Updated `throttle` trailing-edge execution with `try ... finally` to ensure `isThrottled = false` is always reset even if callback throws.
+  - **Accessibility**: Added `role="tabpanel"` to `#feed-grid` container for complete WAI-ARIA tab semantics.
+  - **CSS**: Enhanced icon buttons (`.edit-feed-button`, `.delete-feed-button`) touch targets to minimum `44px x 44px` using transparent border padding while keeping visual icon sizes balanced.
+
 - **Infra: Infrastructure, Script Hardening, and CI Parity Improvements**
   - **Tests**: Moved `os.environ["TESTING"] = "true"` above app imports in `tests/conftest.py`, replaced example IP with RFC 5737 `192.0.2.1`, and added `db.session.rollback()` and `cache.clear()` to teardown.
   - **Pytest**: Added `pythonpath = .`, `testpaths = tests`, and `addopts = -v --strict-markers` to `tests/pytest.ini`.

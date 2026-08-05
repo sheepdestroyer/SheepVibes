@@ -45,4 +45,30 @@ describe('throttle', () => {
 
         vi.useRealTimers();
     });
+
+    it('resets isThrottled on trailing edge even if callback throws an error', () => {
+        vi.useFakeTimers();
+        const callback = vi.fn((val) => {
+            if (val === 'error') {
+                throw new Error('Callback failed');
+            }
+        });
+        const throttled = throttle(callback, 200);
+
+        throttled('first');
+        expect(callback).toHaveBeenCalledWith('first');
+
+        throttled('error');
+
+        expect(() => {
+            vi.advanceTimersByTime(200);
+        }).toThrow('Callback failed');
+
+        vi.advanceTimersByTime(200);
+
+        throttled('third');
+        expect(callback).toHaveBeenCalledWith('third');
+
+        vi.useRealTimers();
+    });
 });
