@@ -549,12 +549,6 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
             _announce_fetch_progress(i, total_to_fetch, feed_obj.name)
             _fetch_single_new_feed(feed_obj)
 
-            else:
-                logger.error(
-                    "OPML import: Feed '%s' missing ID after commit.",
-                    _sanitize_for_log(feed_obj.name),
-                )
->>>>>>> e481f7c (🧹 Refactor _collect_new_items to fix Long Function issue)
         return True, None
     except sqlalchemy.exc.SQLAlchemyError:
         db.session.rollback()
