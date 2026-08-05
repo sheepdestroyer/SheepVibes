@@ -110,6 +110,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] Filter XML 1.0 invalid control characters in OPML export.
 *   [x] Add security unit test suite in `tests/unit/test_security.py`.
 
+
 ## Frontend Security Hardening
 
 *   [x] Implement `sanitizeUrl(url)` helper function permitting only `http:`, `https:`, `/`, and `mailto:` schemes in `frontend/js/utils.js`.

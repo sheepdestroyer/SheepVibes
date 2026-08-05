@@ -2,21 +2,12 @@
 
 ## 2026-08-05
 
-- **Fix: Remove non-portable host volume mount** (PR #500)
-  - Removed hardcoded host volume mount `Volume=/mnt/DATA/boy/prod/SheepVibes/frontend:/app/frontend:ro` from `pod/sheepvibes-app.container`.
+- **Fix: Frontend Security - XSS Sanitization, REST Parameter Encoding, and Download Links** (PR #518)
+  - **URL Sanitization**: Created `sanitizeUrl` helper in `frontend/js/utils.js` permitting only `http://`, `https://`, `/`, or `mailto:` schemes and returning `#` for unsafe schemes (`javascript:`, `data:`). Applied `sanitizeUrl` to `item.link` in `createFeedItemElement` and `feedLinkUrl` in `createFeedWidget` in `frontend/js/ui.js`.
+  - **REST Parameter Encoding**: Wrapped dynamic path and query parameters (`tabId`, `feedId`, `itemId`, `offset`, `limit`) in `encodeURIComponent()` across `frontend/js/api.js`.
+  - **Download Anchor Security**: Added `rel="noopener noreferrer"` attribute to dynamic OPML export anchor element in `frontend/js/app.js`.
+  - **Frontend Unit Tests**: Added unit test suites `frontend/js/utils.test.js` and `frontend/js/api.test.js`, and expanded `frontend/js/ui.test.js` to test URL sanitization and parameter encoding.
 
-- **Fix: Frontend UX, Accessibility, and State Management** (PR #515)
-  - **Utils**: Updated `throttle` trailing-edge execution with `try ... finally` to ensure `isThrottled = false` is always reset even if callback throws.
-  - **Accessibility**: Added `role="tabpanel"` to `#feed-grid` container for complete WAI-ARIA tab semantics.
-  - **CSS**: Enhanced icon buttons (`.edit-feed-button`, `.delete-feed-button`) touch targets to minimum `44px x 44px` using transparent border padding while keeping visual icon sizes balanced.
-
-- **Fix: Backend Reliability (ORM Rollback Detachment, Database Indexing, and Cache Invalidation)** (PR #511)
-  - **ORM Session Rollback**: Pre-extracted `tab_id = feed_db_obj.tab_id` in `_process_fetch_result` to prevent `DetachedInstanceError` on session rollback.
-  - **Database Indexing**: Added `index=True` to `Feed.tab_id` in `backend/models.py`.
-  - **App & Scheduler Reliability**: Resolved `FileLock` path relative to app root data directory and added `db.session.remove()` in `scheduled_feed_update`'s `finally` block in `backend/app.py`.
-  - **Cache Invalidation**: Added `invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)` call in `delete_tab` (`backend/blueprints/tabs.py`) prior to deleting the tab.
-  - **Feed Creation Accuracy**: Updated `_create_and_process_feed` (`backend/blueprints/feeds.py`) to return the actual unread count when `num_new_items > 0`.
-  - **Test Suite**: Added unit test coverage in `tests/unit/test_backend_reliability.py`.
 
 - **Infra: Infrastructure, Script Hardening, and CI Parity Improvements**
   - **Tests**: Moved `os.environ["TESTING"] = "true"` above app imports in `tests/conftest.py`, replaced example IP with RFC 5737 `192.0.2.1`, and added `db.session.rollback()` and `cache.clear()` to teardown.

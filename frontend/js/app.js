@@ -325,6 +325,7 @@ async function handleExportOpml() {
         const a = document.createElement('a');
         a.href = url;
         a.download = 'sheepvibes_feeds.opml';
+        a.rel = 'noopener noreferrer';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
