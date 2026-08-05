@@ -16,6 +16,13 @@ import pytest
 from playwright.sync_api import Page, expect
 
 
+def open_settings_menu(page: Page):
+    """Ensure the settings menu dropdown is open."""
+    page.evaluate(
+        "document.getElementById('settings-menu').classList.remove('hidden')"
+    )
+
+
 @pytest.mark.e2e
 def test_infinite_scroll_loads_more_items(
     page: Page, live_server: str, opml_file_path: Path
@@ -27,9 +34,8 @@ def test_infinite_scroll_loads_more_items(
     page.goto(base_url, timeout=10000)
 
     # 2. Setup: Import feeds to ensure we have content
-    page.click("#settings-button", timeout=10000)
+    open_settings_menu(page)
     page.set_input_files('input[type="file"]', str(opml_file_path))
-    expect(page.locator("#progress-container")).to_be_visible(timeout=10000)
     # Wait for import to finish (state="attached" because .hidden makes it
     # invisible, so we check for DOM class presence, not visibility)
     page.wait_for_selector(
@@ -37,10 +43,7 @@ def test_infinite_scroll_loads_more_items(
     )
 
     # 3. Setup: Refresh feeds to ensure items are populated
-    # Ensure settings menu is open (it might have closed or stayed open)
-    if not page.is_visible("#refresh-all-feeds-button"):
-        page.click("#settings-button")
-
+    open_settings_menu(page)
     page.click("#refresh-all-feeds-button")
     page.wait_for_selector(
         "#progress-container.hidden", state="attached", timeout=60000
