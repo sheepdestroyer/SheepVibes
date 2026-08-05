@@ -43,10 +43,21 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
-    - name: Run Pytest
+    - name: Run unit tests
       env:
         CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
         PYTHONPATH: .
       run: |
-        python -m pytest -c tests/pytest.ini tests/ -v
+        python -m pytest -c tests/pytest.ini tests/unit -v
 
+    - name: Install Playwright browsers
+      run: |
+        python -m playwright install chromium --with-deps
+
+    - name: Run E2E tests
+      env:
+        CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+        E2E_SERVER_PORT: 5099
+        PYTHONPATH: .
+      run: |
+        python -m pytest -c tests/pytest.ini tests/e2e -v --browser chromium
