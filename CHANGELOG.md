@@ -24,6 +24,11 @@
   - **CI Workflow**: Updated `.github/workflows/run-tests.yml` to use dynamic Redis port mapping `${{ job.services.redis.ports['6379'] }}`, stable action versions (`actions/checkout@v4`, `actions/setup-python@v5`), and `PYTHONPATH: .`.
   - **Containerfile**: Added container `HEALTHCHECK` and `--chown=appuser:appuser` to all `COPY` instructions.
   - **Scripts**: Standardized strict shell flags (`set -euo pipefail` / `set -eu`), removed deprecated `FLASK_ENV` references, and properly quoted variable expansions and arrays across shell scripts.
+- **Fix: Backend Security - Feed URL Validation, SSL SNI Port Handling, and OPML Export Sanitization**
+  - **Feed URL Scheme Validation**: Enforced http/https URL scheme validation using `is_valid_feed_url` in `add_feed` and `update_feed_url` endpoints.
+  - **SSL SNI Port Handling**: Extracted host name without port (`self.host.split(":")[0]`) for `server_hostname` in `SafeHTTPSConnection.connect()`.
+  - **OPML Control Char Sanitization**: Filtered XML 1.0 invalid control characters in `backend/blueprints/opml.py` before building OPML export string.
+  - **Security Unit Tests**: Added unit test suite in `tests/unit/test_security.py` verifying scheme rejection, SSL SNI host handling, and OPML control character filtering.
 
 ## 2026-05-15
 
