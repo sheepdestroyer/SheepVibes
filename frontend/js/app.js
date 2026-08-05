@@ -10,7 +10,8 @@ import {
     showProgress,
     updateProgress,
     hideProgress,
-    updateProgressBarPosition
+    updateProgressBarPosition,
+    updateUnreadCount
 } from './ui.js';
 
 const PROGRESS_FALLBACK_TIMEOUT_MS = 15000;
@@ -18,7 +19,8 @@ let progressFallbackTimeoutId = null;
 
 // State
 const storedTabId = localStorage.getItem('activeTabId');
-let activeTabId = storedTabId !== null ? parseInt(storedTabId, 10) : null;
+const parsedTabId = storedTabId !== null ? parseInt(storedTabId, 10) : NaN;
+let activeTabId = !isNaN(parsedTabId) ? parsedTabId : null;
 let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
@@ -227,6 +229,7 @@ async function handleDeleteTab() {
         document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
         loadedTabs.delete(deletedTabId);
         activeTabId = null;
+        localStorage.removeItem('activeTabId');
 
         await initializeTabs(); // Still need this to re-render the tab list properly
         showToast('Tab deleted.', 'success');
@@ -377,19 +380,6 @@ async function handleMarkItemRead(itemId, liElement, feedId, tabId) {
         updateUnreadCount(document.querySelector(`button[data-tab-id="${tabId}"]`));
     } catch (e) {
         console.error('Failed to mark read', e);
-    }
-}
-
-function updateUnreadCount(element) {
-    if (!element) return;
-    const badge = element.querySelector('.unread-count-badge');
-    if (badge) {
-        const newCount = parseInt(badge.textContent, 10) - 1;
-        if (newCount > 0) {
-            badge.textContent = newCount;
-        } else {
-            badge.remove();
-        }
     }
 }
 

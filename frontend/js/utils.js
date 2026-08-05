@@ -6,14 +6,33 @@
  */
 export function throttle(callback, delay) {
     let isThrottled = false;
+    let lastArgs = null;
+    let lastThis = null;
+
     return function (...args) {
-        if (!isThrottled) {
-            callback.apply(this, args);
-            isThrottled = true;
-            setTimeout(() => {
-                isThrottled = false;
-            }, delay);
+        if (isThrottled) {
+            lastArgs = args;
+            lastThis = this;
+            return;
         }
+
+        callback.apply(this, args);
+        isThrottled = true;
+
+        const checkTrailing = () => {
+            setTimeout(() => {
+                if (lastArgs) {
+                    callback.apply(lastThis, lastArgs);
+                    lastArgs = null;
+                    lastThis = null;
+                    checkTrailing();
+                } else {
+                    isThrottled = false;
+                }
+            }, delay);
+        };
+
+        checkTrailing();
     };
 }
 
@@ -26,8 +45,10 @@ export function formatDate(isoString) {
     if (!isoString) return 'No date';
     try {
         const date = new Date(isoString);
+        if (isNaN(date.getTime())) return 'Invalid date';
         const now = new Date();
-        const diffSeconds = Math.round((now - date) / 1000);
+        const rawDiffSeconds = Math.round((now - date) / 1000);
+        const diffSeconds = Math.max(0, rawDiffSeconds);
         const diffMinutes = Math.round(diffSeconds / 60);
         const diffHours = Math.round(diffMinutes / 60);
         const diffDays = Math.round(diffHours / 24);
@@ -43,3 +64,27 @@ export function formatDate(isoString) {
         return 'Invalid date';
     }
 }
+
+/**
+ * Sanitizes a URL to ensure it uses an allowed scheme (http, https, /, mailto).
+ * Returns '#' if the scheme is unsafe (e.g. javascript:, data:).
+ * @param {string} url - The URL to sanitize.
+ * @returns {string} The sanitized URL or '#'.
+ */
+export function sanitizeUrl(url) {
+    if (!url || typeof url !== 'string') return '#';
+    const trimmed = url.trim();
+    if (trimmed.startsWith('/')) {
+        return trimmed;
+    }
+    const lower = trimmed.toLowerCase();
+    if (
+        lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.startsWith('mailto:')
+    ) {
+        return trimmed;
+    }
+    return '#';
+}
+

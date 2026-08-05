@@ -58,31 +58,31 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
     }),
-    updateTab: (id, name) => fetchData(`/api/tabs/${id}`, {
+    updateTab: (tabId, name) => fetchData(`/api/tabs/${encodeURIComponent(tabId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
     }),
-    deleteTab: (id) => fetchData(`/api/tabs/${id}`, { method: 'DELETE' }),
+    deleteTab: (tabId) => fetchData(`/api/tabs/${encodeURIComponent(tabId)}`, { method: 'DELETE' }),
 
     // Feeds
-    getFeedsForTab: (tabId) => fetchData(`/api/tabs/${tabId}/feeds`),
+    getFeedsForTab: (tabId) => fetchData(`/api/tabs/${encodeURIComponent(tabId)}/feeds`),
     addFeed: (url, tabId) => fetchData('/api/feeds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, tab_id: tabId })
     }),
-    updateFeed: (id, url, name) => fetchData(`/api/feeds/${id}`, {
+    updateFeed: (feedId, url, name) => fetchData(`/api/feeds/${encodeURIComponent(feedId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, name })
     }),
-    deleteFeed: (id) => fetchData(`/api/feeds/${id}`, { method: 'DELETE' }),
+    deleteFeed: (feedId) => fetchData(`/api/feeds/${encodeURIComponent(feedId)}`, { method: 'DELETE' }),
     updateAllFeeds: () => fetchData('/api/feeds/update-all', { method: 'POST' }),
 
     // Items
-    getFeedItems: (feedId, offset, limit) => fetchData(`/api/feeds/${feedId}/items?offset=${offset}&limit=${limit}`),
-    markItemRead: (itemId) => fetchData(`/api/items/${itemId}/read`, { method: 'POST' }),
+    getFeedItems: (feedId, offset, limit) => fetchData(`/api/feeds/${encodeURIComponent(feedId)}/items?offset=${encodeURIComponent(offset)}&limit=${encodeURIComponent(limit)}`),
+    markItemRead: (itemId) => fetchData(`/api/items/${encodeURIComponent(itemId)}/read`, { method: 'POST' }),
 
     // OPML
     exportOpml: () => fetchData('/api/opml/export', { method: 'GET' }, 'text'),
