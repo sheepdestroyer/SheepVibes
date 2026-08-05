@@ -2,19 +2,16 @@
 
 ## 2026-08-05
 
-- **Fix: E2E Playwright Infrastructure** (PR #520, Issue #519)
-  - Created `tests/e2e/conftest.py` with auto-managed Flask server lifecycle (`live_server` fixture), viewport config (1920x1080), and configurable port via `PORT` env var.
-  - Applied reviewer feedback: replaced `preexec_fn=os.setsid` with `start_new_session=True` in `subprocess.Popen` for cross-platform compatibility.
-  - Set `stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL` in `subprocess.Popen` to prevent OS pipe buffer deadlock on long server runs.
-  - Added `TEST_BASE_URL` env var detection in `live_server` fixture to yield URL directly without starting a local subprocess when pre-configured.
-  - Fixed `wait_for_selector('#progress-container.hidden')` bug: changed from default `state='visible'` to `state='attached'` since `.hidden` CSS class makes elements invisible.
-  - Moved misplaced `tests/unit/test_progress.py` to `tests/e2e/test_progress.py` (it's a Playwright browser test, not a unit test).
-  - Added `tests/unit/test_e2e_conftest.py` unit tests for `live_server` fixture logic and Popen parameters.
-  - Removed `@pytest.mark.skipif(CI)` — e2e tests now run in CI with headless Chromium.
-  - Updated CI workflow: split into unit + e2e steps, added `playwright install chromium --with-deps`.
-  - Registered `e2e` pytest marker for selective test execution.
-  - Generalized from the AI-DIVORCE project's proven headless Chromium setup.
-
+- **Release: All 13 Open Pull Requests Merged & Verified**
+  - **E2E Infrastructure** (PR #520, Issue #519): Created `tests/e2e/conftest.py` with `live_server` fixture (Flask subprocess management, `start_new_session=True`, `DEVNULL` streams, `TEST_BASE_URL` override support) and 1920x1080 viewport. Integrated Playwright headless Chromium into CI.
+  - **Frontend Security** (PR #518): URL scheme allowlist sanitization (`sanitizeUrl`), parameter encoding (`encodeURIComponent`), and download link `rel="noopener noreferrer"`.
+  - **Backend Security** (PR #517): Feed URL scheme validation (`http:`, `https:`), RFC 6066 SSL SNI port handling, and XML 1.0 control character filtering.
+  - **Infrastructure & CI Parity** (PR #516): Dynamic Redis port handling, pinned GitHub Action tags, `Containerfile` `HEALTHCHECK`/`chown`, strict shell execution flags.
+  - **Frontend UX & Accessibility** (PR #515): WAI-ARIA tab semantics (`role="tabpanel"` on `#feed-grid`), `try...finally` throttle error handling, minimum 44px touch targets.
+  - **Backend Reliability** (PR #513): Pre-extracted `tab_id` preventing `DetachedInstanceError` on rollback, `Feed.tab_id` DB index, cache invalidation on tab deletion, background scheduler session cleanup.
+  - **Subpath Routing & Quadlet Port Fix** (PR #500): Fixed subpath API routing and Quadlet configuration.
+  - **Code Refactoring** (PR #488): Refactored `_collect_new_items` in `backend/feed_service.py` to fix long function issue.
+  - **Dependency Updates** (PRs #508, #507, #503, #499, #495): Upgraded `filelock` (3.32.2), `feedparser` (6.0.14), `actions/setup-python` (v7), `flask-caching` (>=2.4.1), and `apscheduler` (3.11.3).
 
 ## 2026-05-15
 
