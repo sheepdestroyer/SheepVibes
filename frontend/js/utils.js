@@ -93,4 +93,3 @@ export function sanitizeUrl(url) {
     }
     return '#';
 }
-

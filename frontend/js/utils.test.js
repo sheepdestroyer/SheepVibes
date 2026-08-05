@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi } from 'vitest';
-import { formatDate, throttle } from './utils.js';
+import { formatDate, throttle, sanitizeUrl } from './utils.js';
 
 describe('formatDate', () => {
     it('returns "No date" for null or empty input', () => {
@@ -70,5 +70,36 @@ describe('throttle', () => {
         expect(callback).toHaveBeenCalledWith('third');
 
         vi.useRealTimers();
+    });
+});
+
+describe('sanitizeUrl', () => {
+    it('allows valid http and https URLs', () => {
+        expect(sanitizeUrl('http://example.com')).toBe('http://example.com');
+        expect(sanitizeUrl('https://example.com/feed.xml')).toBe('https://example.com/feed.xml');
+    });
+
+    it('allows relative URLs starting with /', () => {
+        expect(sanitizeUrl('/api/feed')).toBe('/api/feed');
+        expect(sanitizeUrl('/index.html')).toBe('/index.html');
+    });
+
+    it('allows mailto URLs', () => {
+        expect(sanitizeUrl('mailto:user@example.com')).toBe('mailto:user@example.com');
+    });
+
+    it('blocks dangerous schemes like javascript: and data:', () => {
+        expect(sanitizeUrl('javascript:alert(1)')).toBe('#');
+        expect(sanitizeUrl('JAVASCRIPT:alert("xss")')).toBe('#');
+        expect(sanitizeUrl('data:text/html,<script>alert(1)</script>')).toBe('#');
+        expect(sanitizeUrl('vbscript:msgbox(1)')).toBe('#');
+        expect(sanitizeUrl('file:///etc/passwd')).toBe('#');
+    });
+
+    it('returns # for invalid or empty inputs', () => {
+        expect(sanitizeUrl(null)).toBe('#');
+        expect(sanitizeUrl(undefined)).toBe('#');
+        expect(sanitizeUrl('')).toBe('#');
+        expect(sanitizeUrl(123)).toBe('#');
     });
 });
