@@ -15,6 +15,7 @@ export function throttle(callback, delay) {
             lastThis = this;
             return;
         }
+        }
 
         callback.apply(this, args);
         isThrottled = true;

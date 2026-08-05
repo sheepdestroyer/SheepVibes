@@ -8,7 +8,6 @@ ContainerName=sheepvibes-app
 Image=ghcr.io/sheepdestroyer/sheepvibes:latest
 Pod=sheepvibespod.pod
 Volume=sheepvibes-db.volume:/app/data
-Volume=/mnt/DATA/boy/prod/SheepVibes/frontend:/app/frontend:ro
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
 HealthCmd=python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/')"
 HealthInterval=15s
