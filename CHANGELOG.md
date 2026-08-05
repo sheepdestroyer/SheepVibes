@@ -2,24 +2,15 @@
 
 ## 2026-08-05
 
-- **Fix: Frontend Security - XSS Sanitization, REST Parameter Encoding, and Download Links** (PR #518)
-  - **URL Sanitization**: Created `sanitizeUrl` helper in `frontend/js/utils.js` permitting only `http://`, `https://`, `/`, or `mailto:` schemes and returning `#` for unsafe schemes (`javascript:`, `data:`). Applied `sanitizeUrl` to `item.link` in `createFeedItemElement` and `feedLinkUrl` in `createFeedWidget` in `frontend/js/ui.js`.
-  - **REST Parameter Encoding**: Wrapped dynamic path and query parameters (`tabId`, `feedId`, `itemId`, `offset`, `limit`) in `encodeURIComponent()` across `frontend/js/api.js`.
-  - **Download Anchor Security**: Added `rel="noopener noreferrer"` attribute to dynamic OPML export anchor element in `frontend/js/app.js`.
-  - **Frontend Unit Tests**: Added unit test suites `frontend/js/utils.test.js` and `frontend/js/api.test.js`, and expanded `frontend/js/ui.test.js` to test URL sanitization and parameter encoding.
+- **Fix: E2E Playwright Infrastructure** (PR #520, Issue #519)
+  - Created `tests/e2e/conftest.py` with auto-managed Flask server lifecycle (`live_server` fixture), viewport config (1920x1080), and configurable port via `PORT` env var.
+  - Fixed `wait_for_selector('#progress-container.hidden')` bug: changed from default `state='visible'` to `state='attached'` since `.hidden` CSS class makes elements invisible.
+  - Moved misplaced `tests/unit/test_progress.py` to `tests/e2e/test_progress.py` (it's a Playwright browser test, not a unit test).
+  - Removed `@pytest.mark.skipif(CI)` — e2e tests now run in CI with headless Chromium.
+  - Updated CI workflow: split into unit + e2e steps, added `playwright install chromium --with-deps`.
+  - Registered `e2e` pytest marker for selective test execution.
+  - Generalized from the AI-DIVORCE project's proven headless Chromium setup.
 
-
-- **Infra: Infrastructure, Script Hardening, and CI Parity Improvements**
-  - **Tests**: Moved `os.environ["TESTING"] = "true"` above app imports in `tests/conftest.py`, replaced example IP with RFC 5737 `192.0.2.1`, and added `db.session.rollback()` and `cache.clear()` to teardown.
-  - **Pytest**: Added `pythonpath = .`, `testpaths = tests`, and `addopts = -v --strict-markers` to `tests/pytest.ini`.
-  - **CI Workflow**: Updated `.github/workflows/run-tests.yml` to use dynamic Redis port mapping `${{ job.services.redis.ports['6379'] }}`, stable action versions (`actions/checkout@v4`, `actions/setup-python@v5`), and `PYTHONPATH: .`.
-  - **Containerfile**: Added container `HEALTHCHECK` and `--chown=appuser:appuser` to all `COPY` instructions.
-  - **Scripts**: Standardized strict shell flags (`set -euo pipefail` / `set -eu`), removed deprecated `FLASK_ENV` references, and properly quoted variable expansions and arrays across shell scripts.
-- **Fix: Backend Security - Feed URL Validation, SSL SNI Port Handling, and OPML Export Sanitization**
-  - **Feed URL Scheme Validation**: Enforced http/https URL scheme validation using `is_valid_feed_url` in `add_feed` and `update_feed_url` endpoints.
-  - **SSL SNI Port Handling**: Extracted host name without port (`self.host.split(":")[0]`) for `server_hostname` in `SafeHTTPSConnection.connect()`.
-  - **OPML Control Char Sanitization**: Filtered XML 1.0 invalid control characters in `backend/blueprints/opml.py` before building OPML export string.
-  - **Security Unit Tests**: Added unit test suite in `tests/unit/test_security.py` verifying scheme rejection, SSL SNI host handling, and OPML control character filtering.
 
 ## 2026-05-15
 

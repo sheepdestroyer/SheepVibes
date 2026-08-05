@@ -100,7 +100,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] **Testing:**
     *   [x] Add basic unit tests for backend logic (feed parsing, database interactions).
     *   [x] Add basic unit tests for backend logic (API endpoints).
-    *   [ ] Consider basic end-to-end tests. (Deferred)
+    *   [x] Consider basic end-to-end tests. (Implemented: Playwright headless Chrome with auto-managed Flask server, PR #520)
 *   [x] Finalize `Containerfile` for production readiness (non-root user, proper volume mounts, etc.).
 
 ## Backend Security Hardening
