@@ -69,7 +69,12 @@ def live_server():
 
     The server runs in a subprocess with TESTING=true and an isolated
     SQLite database. It is automatically terminated after the session.
+    If TEST_BASE_URL is set in os.environ, yield that URL directly.
     """
+    if "TEST_BASE_URL" in os.environ:
+        yield os.environ["TEST_BASE_URL"]
+        return
+
     project_root = Path(__file__).resolve().parents[2]  # tests/e2e -> project root
 
     # Use the same Python interpreter that is running pytest
@@ -89,32 +94,34 @@ def live_server():
         [python, "-m", "backend.app"],
         cwd=str(project_root),
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        # Use process group so we can kill the entire tree
-        preexec_fn=os.setsid,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
     )
 
     # Wait for server to accept connections
     if not _wait_for_server("127.0.0.1", E2E_SERVER_PORT, E2E_SERVER_TIMEOUT):
-        # Capture output for debugging
         proc.terminate()
-        stdout, _ = proc.communicate(timeout=5)
-        output = stdout.decode("utf-8", errors="replace") if stdout else "(no output)"
         pytest.fail(
             f"Flask server failed to start on port {E2E_SERVER_PORT} "
-            f"within {E2E_SERVER_TIMEOUT}s.\nServer output:\n{output}"
+            f"within {E2E_SERVER_TIMEOUT}s."
         )
 
     yield E2E_BASE_URL
 
     # Teardown: kill the entire process group
     try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        if hasattr(os, "killpg"):
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        else:
+            proc.terminate()
         proc.wait(timeout=5)
     except (ProcessLookupError, subprocess.TimeoutExpired):
         try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            if hasattr(os, "killpg"):
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            else:
+                proc.kill()
         except ProcessLookupError:
             pass
 
