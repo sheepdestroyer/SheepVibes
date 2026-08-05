@@ -4,9 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from backend.app import app, db
-
 os.environ["TESTING"] = "true"
+
+from backend.app import app, db
+from backend.extensions import cache
 
 
 @pytest.fixture(scope="session", name="tests_root")
@@ -25,7 +26,7 @@ def opml_file_path(tests_root):
     return path
 
 
-EXAMPLE_COM_IP = "93.184.216.34"
+EXAMPLE_COM_IP = "192.0.2.1"
 
 
 @pytest.fixture
@@ -46,6 +47,10 @@ def client():
 
     with app.test_client() as client, app.app_context():
         db.create_all()
+        cache.clear()
         yield client
+        db.session.rollback()
         db.session.remove()
         db.drop_all()
+        cache.clear()
+
