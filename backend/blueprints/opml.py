@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import xml.etree.ElementTree as ET
 
 from filelock import FileLock, Timeout
@@ -14,6 +15,17 @@ from ..models import Tab
 
 opml_bp = Blueprint("opml", __name__, url_prefix="/api/opml")
 logger = logging.getLogger(__name__)
+
+# Match invalid XML 1.0 control characters (0x00-0x08, 0x0B-0x0C, 0x0E-0x1F)
+r_pat = r"[\x00-\x08\x0b\x0c\x0e-\x1f]"
+_XML_INVALID_CHAR_RE = re.compile(r_pat)
+
+
+def _sanitize_xml_text(text):
+    """Filters out XML 1.0 invalid control characters from text."""
+    if not text:
+        return text if text is not None else ""
+    return _XML_INVALID_CHAR_RE.sub("", str(text))
 
 
 def _generate_opml_string(tabs=None):
@@ -44,20 +56,23 @@ def _generate_opml_string(tabs=None):
 
         # Create a folder outline for the tab
         folder_outline = ET.SubElement(body_element, "outline")
-        folder_outline.set("text", tab.name)
-        folder_outline.set("title", tab.name)
+        folder_name = _sanitize_xml_text(tab.name)
+        folder_outline.set("text", folder_name)
+        folder_outline.set("title", folder_name)
         # Sort feeds by name for deterministic output because relation order is not guaranteed
         sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
 
         # Add feeds for this tab
         for feed in sorted_feeds:
             feed_outline = ET.SubElement(folder_outline, "outline")
-            feed_outline.set("text", feed.name)
-            feed_outline.set("title", feed.name)
-            feed_outline.set("xmlUrl", feed.url)
+            feed_name = _sanitize_xml_text(feed.name)
+            feed_url = _sanitize_xml_text(feed.url)
+            feed_outline.set("text", feed_name)
+            feed_outline.set("title", feed_name)
+            feed_outline.set("xmlUrl", feed_url)
             feed_outline.set("type", "rss")
             if feed.site_link:
-                feed_outline.set("htmlUrl", feed.site_link)
+                feed_outline.set("htmlUrl", _sanitize_xml_text(feed.site_link))
 
     # Convert the XML tree to a string
     opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode(

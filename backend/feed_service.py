@@ -906,10 +906,11 @@ class SafeHTTPSConnection(http.client.HTTPSConnection):
         if self._context is None:
             self._context = ssl.create_default_context()
 
+        server_hostname = self.host.split(":")[0] if self.host else self.host
         self.sock = self._context.wrap_socket(
             self.sock,
-            # This ensures SNI and Cert Check match the Host, not the IP
-            server_hostname=self.host,
+            # This ensures SNI and Cert Check match the Host (without port), not the IP
+            server_hostname=server_hostname,
         )
 
 

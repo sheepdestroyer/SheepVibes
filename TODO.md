@@ -103,6 +103,21 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [ ] Consider basic end-to-end tests. (Deferred)
 *   [x] Finalize `Containerfile` for production readiness (non-root user, proper volume mounts, etc.).
 
+## Backend Security Hardening
+
+*   [x] Validate feed URL schemes (`http:`, `https:`) in `add_feed` and `update_feed_url` endpoints.
+*   [x] Strip port from host for SSL SNI `server_hostname` extraction in `SafeHTTPSConnection.connect()`.
+*   [x] Filter XML 1.0 invalid control characters in OPML export.
+*   [x] Add security unit test suite in `tests/unit/test_security.py`.
+
+## Frontend Security Hardening
+
+*   [x] Implement `sanitizeUrl(url)` helper function permitting only `http:`, `https:`, `/`, and `mailto:` schemes in `frontend/js/utils.js`.
+*   [x] Apply `sanitizeUrl` to feed item links and widget title links in `frontend/js/ui.js`.
+*   [x] Wrap dynamic path and query parameters (`tabId`, `feedId`, `itemId`, `offset`, `limit`) in `encodeURIComponent()` in `frontend/js/api.js`.
+*   [x] Add `rel="noopener noreferrer"` to dynamic OPML export download link in `frontend/js/app.js`.
+*   [x] Add unit test coverage for frontend URL sanitization and parameter encoding in `frontend/js/utils.test.js`, `frontend/js/api.test.js`, and `frontend/js/ui.test.js`.
+
 ## Code Review Completion
 
 *   [x] **PR #100 Review Comments Addressed:**
