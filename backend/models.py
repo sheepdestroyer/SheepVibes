@@ -68,7 +68,7 @@ class Feed(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     tab_id = db.Column(
-        db.Integer, db.ForeignKey("tabs.id"), nullable=False
+        db.Integer, db.ForeignKey("tabs.id"), nullable=False, index=True
     )  # Foreign key to Tab
     name = db.Column(
         db.String(200), nullable=False

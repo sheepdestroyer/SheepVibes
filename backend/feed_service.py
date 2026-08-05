@@ -1056,13 +1056,14 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     Returns:
         tuple: (success, new_items_count, tab_id)
     """
+    tab_id = feed_db_obj.tab_id
     if not parsed_feed:
         logger.error(
             "Fetching content for feed '%s' (ID: %s) failed (None returned).",
             _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
         )
-        return False, 0, feed_db_obj.tab_id
+        return False, 0, tab_id
 
     # Handle cases where feed is fetched but has no entries (common for new or empty feeds)
     if not parsed_feed.entries:
@@ -1083,12 +1084,12 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
                 _sanitize_for_log(feed_name),
             )
             # Still, the fetch itself might be considered a "success" in terms of reachability
-        return True, 0, feed_db_obj.tab_id
+        return True, 0, tab_id
 
     try:
         new_items = process_feed_entries(feed_db_obj, parsed_feed)
         # process_feed_entries handles its own logging and commits for items and last_updated_time.
-        return True, new_items, feed_db_obj.tab_id
+        return True, new_items, tab_id
     except Exception:  # pylint: disable=broad-exception-caught
         # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
         feed_name = feed_db_obj.name
@@ -1099,7 +1100,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
             _sanitize_for_log(feed_name),
             feed_id,
         )
-        return False, 0, feed_db_obj.tab_id
+        return False, 0, tab_id
 
 
 def _build_safe_opener(safe_ip):

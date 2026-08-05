@@ -128,7 +128,7 @@ def _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed
             new_feed.id,
             tab_id,
         )
-        return jsonify(new_feed.to_dict(unread_count=0)), 201  # Created
+        return jsonify(new_feed.to_dict(unread_count=num_new_items if num_new_items > 0 else 0)), 201  # Created
 
     except Exception as e:
         db.session.rollback()
