@@ -3,7 +3,7 @@
 # Script to manage the SheepVibes container (start, stop, restart).
 # Assumes 'podman' is used. Replace with 'docker' if needed.
 
-set -e # Exit immediately if a command exits with a non-zero status.
+set -euo pipefail
 
 # --- Configuration ---
 IMAGE_NAME="sheepvibes-app"
@@ -19,12 +19,12 @@ CONTAINER_CMD="podman"
 
 # Function to check if container exists
 container_exists() {
-  $CONTAINER_CMD ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"
+  "$CONTAINER_CMD" ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$" || return 1
 }
 
 # Function to check if container is running
 container_is_running() {
-  $CONTAINER_CMD ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"
+  "$CONTAINER_CMD" ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$" || return 1
 }
 
 # --- Command Logic ---
@@ -35,18 +35,18 @@ start_container() {
       echo "Container $CONTAINER_NAME is already running."
     else
       echo "Container $CONTAINER_NAME exists but is stopped. Starting..."
-      $CONTAINER_CMD start "$CONTAINER_NAME"
+      "$CONTAINER_CMD" start "$CONTAINER_NAME"
       echo "Container $CONTAINER_NAME started."
     fi
   else
     echo "Container $CONTAINER_NAME does not exist. Creating and starting..."
     # Check if volume exists, create if not
-    if ! $CONTAINER_CMD volume inspect "$VOLUME_NAME" &> /dev/null; then
+    if ! "$CONTAINER_CMD" volume inspect "$VOLUME_NAME" &> /dev/null; then
         echo "Volume $VOLUME_NAME not found. Creating..."
-        $CONTAINER_CMD volume create "$VOLUME_NAME"
+        "$CONTAINER_CMD" volume create "$VOLUME_NAME"
     fi
     
-    $CONTAINER_CMD run \
+    "$CONTAINER_CMD" run \
       -d \
       --name "$CONTAINER_NAME" \
       -p "127.0.0.1:${HOST_PORT}:${CONTAINER_PORT}" \
@@ -62,7 +62,7 @@ stop_container() {
   echo "--- Stopping container $CONTAINER_NAME ---"
   if container_is_running; then
     echo "Stopping container $CONTAINER_NAME..."
-    $CONTAINER_CMD stop "$CONTAINER_NAME"
+    "$CONTAINER_CMD" stop "$CONTAINER_NAME"
     echo "Container $CONTAINER_NAME stopped."
   elif container_exists; then
     echo "Container $CONTAINER_NAME exists but is already stopped."
@@ -84,7 +84,7 @@ if [ "$#" -ne 1 ]; then
   exit 1
 fi
 
-COMMAND=$1
+COMMAND="$1"
 
 case "$COMMAND" in
   start)
@@ -104,3 +104,4 @@ case "$COMMAND" in
 esac
 
 exit 0
+

@@ -125,7 +125,13 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-05: Infrastructure, Script Hardening, and CI Parity Improvements**
+  - [x] Hardened test isolation in `tests/conftest.py` and configured pytest settings in `tests/pytest.ini`.
+  - [x] Updated GitHub Actions workflow `run-tests.yml` with dynamic Redis port mapping, stable action tags (`v4`/`v5`), and `PYTHONPATH: .`.
+  - [x] Added `HEALTHCHECK` and `--chown=appuser:appuser` to `Containerfile`.
+  - [x] Standardized shell scripts with strict flags (`set -euo pipefail`/`set -eu`), removed `FLASK_ENV`, and quoted expansions.
 *   [x] **2026-05-15: Kanban cleanup and Jules workflow reset**
+
   - [x] Rollback `main` to last known-good state (07e67b2).
   - [x] Preserve Dependabot dependency bumps.
   - [x] Close all open PRs bypassing the review loop.

@@ -1,6 +1,16 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-08-05
+
+- **Infra: Infrastructure, Script Hardening, and CI Parity Improvements**
+  - **Tests**: Moved `os.environ["TESTING"] = "true"` above app imports in `tests/conftest.py`, replaced example IP with RFC 5737 `192.0.2.1`, and added `db.session.rollback()` and `cache.clear()` to teardown.
+  - **Pytest**: Added `pythonpath = .`, `testpaths = tests`, and `addopts = -v --strict-markers` to `tests/pytest.ini`.
+  - **CI Workflow**: Updated `.github/workflows/run-tests.yml` to use dynamic Redis port mapping `${{ job.services.redis.ports['6379'] }}`, stable action versions (`actions/checkout@v4`, `actions/setup-python@v5`), and `PYTHONPATH: .`.
+  - **Containerfile**: Added container `HEALTHCHECK` and `--chown=appuser:appuser` to all `COPY` instructions.
+  - **Scripts**: Standardized strict shell flags (`set -euo pipefail` / `set -eu`), removed deprecated `FLASK_ENV` references, and properly quoted variable expansions and arrays across shell scripts.
+
 ## 2026-05-15
+
 
 - **Process: Repository cleanup and new Jules PR workflow enacted**
   - Rolled back `main` to `07e67b2` (2026-02-22, PR #323) to undo 36+ PRs merged without review.

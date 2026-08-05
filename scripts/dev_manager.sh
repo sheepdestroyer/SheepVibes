@@ -120,10 +120,10 @@ do_up() {
     echo "--- SheepVibes Dev Environment Setup (Runtime: $CMD_BASE) ---"
 
     # 1. Check/Build Image
-    local BUILD_FLAGS=""
+    local BUILD_FLAGS=()
     if [[ "$REBUILD" == true ]]; then
         echo "Force rebuild requested."
-        BUILD_FLAGS="--no-cache"
+        BUILD_FLAGS+=("--no-cache")
     fi
 
     echo "Checking for image $APP_IMAGE_NAME..."
@@ -137,10 +137,11 @@ do_up() {
         local PROJECT_ROOT
         PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
-        (cd "$PROJECT_ROOT" && "$CMD" build $BUILD_FLAGS -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
+        (cd "$PROJECT_ROOT" && "$CMD" build "${BUILD_FLAGS[@]}" -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else
         echo "Image exists. Skipping build. (Use --rebuild to force rebuild)"
     fi
+
 
     # 2. Clean up existing dev pod and leftover containers
     if "$CMD" pod exists "$POD_NAME" 2>/dev/null; then

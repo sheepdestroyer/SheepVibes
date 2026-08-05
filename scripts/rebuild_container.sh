@@ -4,7 +4,7 @@
 # Assumes 'podman' is used. Replace with 'docker' if needed.
 # Assumes the local image will be named 'sheepvibes-app'.
 
-set -e # Exit immediately if a command exits with a non-zero status.
+set -euo pipefail
 
 IMAGE_NAME="localhost/sheepvibes-app"
 # Use podman or docker
@@ -20,7 +20,8 @@ echo "--- Building new image ($IMAGE_NAME) ---"
 # Build the new image from the project root
 cd "$PROJECT_ROOT" || exit 1
 echo "Building image $IMAGE_NAME from Containerfile in $(pwd)..."
-$CONTAINER_CMD build -t "$IMAGE_NAME" -f Containerfile .
+"$CONTAINER_CMD" build -t "$IMAGE_NAME" -f Containerfile .
+
 
 echo "--- Build complete for image $IMAGE_NAME ---"
 echo "If you are using systemd, restart the service to apply changes:"

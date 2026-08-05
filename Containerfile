@@ -16,7 +16,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 WORKDIR /app
 
 # Copy the requirements file into the container at /app
-COPY backend/requirements.txt .
+COPY --chown=appuser:appuser backend/requirements.txt .
 
 # Install dependencies into the virtual environment
 RUN pip install --no-cache-dir -r requirements.txt
@@ -50,5 +50,9 @@ ENV DATABASE_PATH=/app/data/sheepvibes.db \
     FLASK_RUN_HOST=0.0.0.0
 # Note: FLASK_DEBUG should be 0 or unset for production
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/')" || exit 1
+
 # Run the entrypoint script which handles migrations and starts the app
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+
