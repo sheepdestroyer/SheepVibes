@@ -141,6 +141,12 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-06: Production Feed Refresh Investigation & Fix**
+  - [x] Fixed deduplication logic bug in `_process_single_entry` where link matching overwrote items with distinct GUIDs.
+  - [x] Increased feed download timeout to 20 seconds (`DEFAULT_FEED_FETCH_TIMEOUT`).
+  - [x] Updated deprecated/broken feed URLs for Phoronix, Techno-Science, and NYT World News in `test_feeds.opml` and production database.
+  - [x] Rebuilt container image, restarted systemd service, and verified 53/53 feeds successfully refresh in production.
+
 *   [x] **2026-08-05: Playwright E2E Infrastructure (PR #520)**
   - [x] Implemented `live_server` fixture with `start_new_session=True` and `DEVNULL` streams.
   - [x] Added `TEST_BASE_URL` env var detection to bypass local subprocess server when provided.

@@ -1,5 +1,16 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-08-06
+
+- **Fix: Prod feed refresh investigation & resolution**
+  - **Deduplication Logic Fix**: Fixed a bug in `_process_single_entry` in `backend/feed_service.py` where fallback link-matching (`existing_items_by_link`) hijacked existing DB items with distinct GUIDs when feed entries shared a common URL (e.g., `Kernel.org`). Now, candidate items matched by link are only updated if their GUID matches or is undefined, allowing new items with distinct GUIDs to be properly inserted.
+  - **Network Timeout Extension**: Increased `DEFAULT_FEED_FETCH_TIMEOUT` in `backend/feed_service.py` from 10s to 20s (configurable via `FEED_FETCH_TIMEOUT`), resolving timeout failures for slower feeds like *Dumbing of Age*.
+  - **Production DB Feed URL Updates**: Updated broken/deprecated feed URLs in `tests/test_feeds.opml` and the production database:
+    - *Phoronix* (ID 92): Updated from stale Feedburner URL `http://feeds.feedburner.com/Phoronix` to direct RSS URL `https://www.phoronix.com/rss.php`.
+    - *Techno-Science.net* (ID 58): Updated from 404 URL `http://www.techno-science.net/include/news.rss` to active URL `https://www.techno-science.net/include/news.xml`.
+    - *NYT World News* (ID 77): Updated from dead proxy host `rssproxy.migor.org` to direct RSS URL `https://rss.nytimes.com/services/xml/rss/nyt/World.xml`.
+  - **Validation & Container Rebuild**: Rebuilt the container image, restarted `sheepvibes-app.service`, and verified 100% success rate (53/53 feeds updated, 798+ new items added). Added unit tests in `tests/unit/test_feed.py`.
+
 ## 2026-08-05
 
 - **Release: All 13 Open Pull Requests Merged & Verified**
