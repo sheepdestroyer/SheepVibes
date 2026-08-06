@@ -935,3 +935,51 @@ def test_fetch_feed_toctou_prevention_http(mocker):
     has_safe_handler = any(isinstance(
         h, feed_service.SafeHTTPHandler) for h in args)
     assert has_safe_handler, "SafeHTTPHandler should be used for HTTP requests"
+
+
+def test_kernel_org_subsequent_update_adds_new_items(db_setup, mocker):
+    """Test that subsequent updates to feeds with shared links (e.g. Kernel.org) insert new items rather than overwriting."""
+    tab = Tab(name="Tech", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Kernel Org Feed", url="http://dummy.kernel.org/feed", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    # Initial 2 items
+    entry1 = MockFeedEntry(title="Kernel 1", link="https://www.kernel.org/", guid="kernel.guid.1", published="2024-01-01T10:00:00Z")
+    entry2 = MockFeedEntry(title="Kernel 2", link="https://www.kernel.org/", guid="kernel.guid.2", published="2024-01-02T10:00:00Z")
+    mock_feed_1 = MockParsedFeed(feed_title="Kernel Updates", entries=[entry1, entry2])
+    
+    count1 = feed_service.process_feed_entries(feed_obj, mock_feed_1)
+    assert count1 == 2
+    assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 2
+
+    # Subsequent update with entry3 having a new GUID but same link
+    entry3 = MockFeedEntry(title="Kernel 3", link="https://www.kernel.org/", guid="kernel.guid.3", published="2024-01-03T10:00:00Z")
+    mock_feed_2 = MockParsedFeed(feed_title="Kernel Updates", entries=[entry1, entry2, entry3])
+
+    count2 = feed_service.process_feed_entries(feed_obj, mock_feed_2)
+    assert count2 == 1, "Subsequent update with new GUID should add 1 new item"
+    
+    items = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
+    assert len(items) == 3
+    guids_in_db = {it.guid for it in items}
+    assert guids_in_db == {"kernel.guid.1", "kernel.guid.2", "kernel.guid.3"}
+
+
+def test_download_feed_content_timeout(mocker):
+    """Test that _download_feed_content uses the configured DEFAULT_FEED_FETCH_TIMEOUT."""
+    mock_opener = MagicMock()
+    mock_response = MagicMock()
+    mock_response.getheader.return_value = None
+    mock_response.read.return_value = b"<rss></rss>"
+    mock_response.__enter__.return_value = mock_response
+    mock_opener.open.return_value = mock_response
+
+    res = feed_service._download_feed_content(mock_opener, "https://example.com/feed")
+    assert res == b"<rss></rss>"
+    mock_opener.open.assert_called_once()
+    _, kwargs = mock_opener.open.call_args
+    assert kwargs.get("timeout") == feed_service.DEFAULT_FEED_FETCH_TIMEOUT
+

@@ -1112,6 +1112,9 @@ def _build_safe_opener(safe_ip):
     return urllib.request.build_opener(http_handler, https_handler, redirect_handler)
 
 
+DEFAULT_FEED_FETCH_TIMEOUT = int(os.environ.get("FEED_FETCH_TIMEOUT", 20))
+
+
 def _download_feed_content(opener, feed_url):
     """Executes the network request safely, enforcing size limits and basic zip bomb checks."""
     req = urllib.request.Request(
@@ -1121,7 +1124,7 @@ def _download_feed_content(opener, feed_url):
             "Accept-Encoding": "identity",  # Prevent Zip Bombs
         },
     )
-    url_opener = opener.open(req, timeout=10)
+    url_opener = opener.open(req, timeout=DEFAULT_FEED_FETCH_TIMEOUT)
 
     with url_opener as response:
         # Check Content-Length header first
@@ -1305,7 +1308,9 @@ def _process_single_entry(
 
     existing_match = existing_items_by_guid.get(db_guid)
     if not existing_match:
-        existing_match = existing_items_by_link.get(entry_link)
+        candidate = existing_items_by_link.get(entry_link)
+        if candidate and (candidate.guid is None or candidate.guid == entry_link or candidate.guid == db_guid):
+            existing_match = candidate
 
     if existing_match:
         _update_existing_item(
