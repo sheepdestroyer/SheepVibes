@@ -46,6 +46,16 @@ function _clearProgressFallback() {
 // --- Initialization ---
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Night Mode initialization
+    const nightModeEnabled = localStorage.getItem('nightMode') === 'enabled';
+    const nightModeSwitch = document.getElementById('night-mode-switch');
+    if (nightModeSwitch) {
+        nightModeSwitch.checked = nightModeEnabled;
+    }
+    if (nightModeEnabled) {
+        document.body.classList.add('night-mode');
+    }
+
     // Setup event listeners
     document.getElementById('add-tab-button').addEventListener('click', handleAddTab);
     document.getElementById('rename-tab-button').addEventListener('click', handleRenameTab);
@@ -56,6 +66,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('export-opml-button').addEventListener('click', handleExportOpml);
     document.getElementById('import-opml-button').addEventListener('click', () => document.getElementById('opml-file-input').click());
     document.getElementById('opml-file-input').addEventListener('change', handleImportOpmlFileSelect);
+    if (nightModeSwitch) {
+        nightModeSwitch.addEventListener('change', handleNightModeToggle);
+    }
 
     // Modal listeners
     document.getElementById('edit-feed-modal-close-button').addEventListener('click', closeEditFeedModal);
@@ -466,4 +479,13 @@ function initializeSSE() {
     };
 }
 
+function handleNightModeToggle(e) {
+    if (e.target.checked) {
+        document.body.classList.add('night-mode');
+        localStorage.setItem('nightMode', 'enabled');
+    } else {
+        document.body.classList.remove('night-mode');
+        localStorage.setItem('nightMode', 'disabled');
+    }
+}
 

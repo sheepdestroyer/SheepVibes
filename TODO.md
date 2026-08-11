@@ -69,6 +69,11 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] **Tab Management (Frontend UI):**
     *   [x] Add UI elements for creating, deleting, and renaming tabs.
     *   [x] Implement JS to interact with the corresponding API endpoints and update the UI.
+*   [x] **Night Mode / Dark Theme:**
+    *   [x] Add switch checkbox in settings menu.
+    *   [x] Define CSS styles for .night-mode theme overrides.
+    *   [x] Implement JavaScript theme-switching logic and localStorage persistence.
+    *   [x] Add comprehensive Playwright E2E test suite.
 *   [x] **Dynamic Updates (Backend-driven):**
     *   [x] The backend uses `APScheduler` to automatically fetch feed updates on a regular, configurable interval.
     *   [x] The backend pushes notifications to connected clients using Server-Sent Events (SSE) when updates are complete.

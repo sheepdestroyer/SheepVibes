@@ -1,5 +1,14 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-08-11
+
+- **Feat: Night Mode / Dark Theme**
+  - **Switch in Settings**: Added a "Night Mode" checkbox under settings.
+  - **Theme Styles (.night-mode)**: Wrote extensive CSS overrides for light colors, headers, tabs, settings dropdown, widgets, progress bar, and modal dialogues to render elegant dark interfaces.
+  - **Theme Switching & Persistence**: Implemented a JS theme-switcher that updates DOM classes on check/uncheck and persists user state across session reloads via `localStorage`.
+  - **E2E Testing**: Added automated Playwright E2E tests for verification of toggling behavior and state persistence in `tests/e2e/test_night_mode.py`.
+  - **Fix**: Resolved a pre-existing syntax error/extra brace in `frontend/js/utils.js` within the `throttle` helper, allowing frontend modules to load successfully.
+
 ## 2026-08-06
 
 - **Fix: Prod feed refresh investigation & resolution**
