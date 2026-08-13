@@ -23,3 +23,10 @@ updates:
     schedule:
       interval: "daily"
     target-branch: "main"
+
+  # Enable version updates for Docker / Containerfile
+  - package-ecosystem: "docker"
+    directory: "/" # Location of Containerfile
+    schedule:
+      interval: "daily"
+    target-branch: "main"
