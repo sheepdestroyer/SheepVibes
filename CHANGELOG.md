@@ -1,5 +1,12 @@
 ## 2026-08-14
 
+- **Test(e2e): Comprehensive Playwright E2E Test Suite for Feed Comments Links**
+  - **Comprehensive E2E Coverage (`tests/e2e/test_comments_links.py`)**: Added full browser end-to-end integration tests using Playwright Chromium and `live_server` subprocess.
+  - **DOM & Attribute Validation**: Verified rendered discussion thread primary links, secondary `[article]` links, attribute presence/absence (`target="_blank"`, `rel="noopener noreferrer"`, `title`, `aria-label`), suppression of `[article]` for Ask HN (`comments_url == link`), and fallback for feeds without comments.
+  - **User Interaction & Read State**: Validated primary link click, secondary `[article]` link click, and middle-click (`auxclick`) triggering item read status (`li.read`), unread badge decrement, duplicate click prevention, and complete badge removal on zero count.
+  - **Accessibility & Night Mode Themes**: Validated ARIA semantics, title tooltips, and WCAG AA contrast colors in light (`#005a9c`) and night (`#58a6ff`) modes.
+  - **Verification**: 100% test pass rate across Vitest (25/25), Pytest unit tests (166/166), and Playwright E2E suite (9/9).
+
 - **Feat: Hacker News & Feed Comments Thread Link Support**
   - **Backend Data Model & Extraction**: Added `comments_url` column to `FeedItem` model, database migration (`8e59ae7a1c5b`), and feed parsing support in `backend/feed_service.py` to extract and validate `<comments>` tags (RSS 2.0) and `rel="replies"` links (Atom).
   - **API Serialization**: Updated `FeedItem.to_dict()` and `_get_top_items_for_feeds` in `backend/blueprints/tabs.py` to return `comments_url`.
