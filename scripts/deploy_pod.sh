@@ -9,9 +9,9 @@ SYSTEMD_USER_DIR="${HOME}/.config/containers/systemd"
 QUADLET_FILES=(
     "sheepvibespod.pod"
     "sheepvibes-app.container"
-    "sheepvibes-redis.container"
+    "sheepvibes-valkey.container"
     "sheepvibes-db.volume"
-    "sheepvibes-redis.volume"
+    "sheepvibes-valkey.volume"
 )
 # Base URL for the directory containing the pod file in the repository
 QUADLET_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/"
@@ -53,8 +53,8 @@ if [ -d "${SYSTEMD_USER_DIR}" ]; then
             cleanup_opts+=( -o -name "$file" )
         fi
     done
-    # Add network wildcard and legacy volume name
-    cleanup_opts+=( -o -name 'sheepvibes-*.network' -o -name 'sheepvibes-redis-data.volume' )
+    # Add network wildcard and legacy volume names (including legacy redis volume names)
+    cleanup_opts+=( -o -name 'sheepvibes-*.network' -o -name 'sheepvibes-redis.container' -o -name 'sheepvibes-redis.volume' -o -name 'sheepvibes-redis-data.volume' )
 
     # Remove old monolithic pod file and any files matching the new names
     find "${SYSTEMD_USER_DIR}" -maxdepth 1 \
@@ -96,10 +96,10 @@ echo ""
 # --- User Instructions ---
 POD_SERVICE_NAME="sheepvibespod-pod.service" # Generated from sheepvibespod.pod
 DB_VOLUME_NAME="systemd-sheepvibes-db"
-REDIS_VOLUME_NAME="systemd-sheepvibes-redis"
+VALKEY_VOLUME_NAME="systemd-sheepvibes-valkey"
 
 echo "Quadlet files deployed to ${SYSTEMD_USER_DIR}."
-echo "The application will use Podman-managed volumes '${DB_VOLUME_NAME}' and '${REDIS_VOLUME_NAME}' for persistence."
+echo "The application will use Podman-managed volumes '${DB_VOLUME_NAME}' and '${VALKEY_VOLUME_NAME}' for persistence."
 echo ""
 echo "Next steps:"
 echo "1. Reload systemd to recognize the new/updated Quadlet files:"
@@ -118,7 +118,7 @@ echo ""
 echo "4. Check the status of the pod and its components:"
 echo "   systemctl --user status ${POD_SERVICE_NAME}"
 echo "5. Inspect the auto-created volumes:"
-echo "   podman volume inspect ${DB_VOLUME_NAME} ${REDIS_VOLUME_NAME}"
+echo "   podman volume inspect ${DB_VOLUME_NAME} ${VALKEY_VOLUME_NAME}"
 echo ""
 echo "6. View logs for the entire pod (follow for real-time updates):"
 echo "   journalctl --user -u ${POD_SERVICE_NAME} -f"

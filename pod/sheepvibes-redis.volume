@@ -1,4 +1,0 @@
-[Unit]
-Description=SheepVibes Redis Volume
-
-[Volume]

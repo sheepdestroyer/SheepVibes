@@ -17,15 +17,15 @@ jobs:
       contents: read
 
     services:
-      # Start a Redis service container for the job
-      redis:
-        image: redis:alpine
+      # Start a Valkey service container for the job
+      valkey:
+        image: docker.io/valkey/valkey:9.1.1-alpine
         # Expose port 6379 on the service container to be mapped to the host
         ports:
           - 6379:6379
-        # Health check for a passwordless Redis service.
+        # Health check for a passwordless Valkey service.
         options: >-
-          --health-cmd "redis-cli ping"
+          --health-cmd "valkey-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -47,7 +47,8 @@ jobs:
 
     - name: Run unit tests
       env:
-        CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+        CACHE_VALKEY_PORT: ${{ job.services.valkey.ports['6379'] }}
+        CACHE_REDIS_PORT: ${{ job.services.valkey.ports['6379'] }}
         PYTHONPATH: .
       run: |
         python -m pytest -c tests/pytest.ini tests/unit -v
@@ -58,7 +59,8 @@ jobs:
 
     - name: Run E2E tests
       env:
-        CACHE_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+        CACHE_VALKEY_PORT: ${{ job.services.valkey.ports['6379'] }}
+        CACHE_REDIS_PORT: ${{ job.services.valkey.ports['6379'] }}
         E2E_SERVER_PORT: 5099
         PYTHONPATH: .
       run: |

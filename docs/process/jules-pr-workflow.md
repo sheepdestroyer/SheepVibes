@@ -46,7 +46,7 @@ This is the most critical gate. A PR sits here until ALL of the following are tr
 
 - [ ] **0 unresolved review comments** on the PR (both human and bot).
 - [ ] **CI passes:** The full GitHub Actions workflow (`.github/workflows/run-tests.yml`) must be green.
-- [ ] **Tests pass locally:** Run `cd backend && python -m pytest -v` with a Redis container and `CACHE_REDIS_PORT` set.
+- [ ] **Tests pass locally:** Run `cd backend && python -m pytest -v` with a Valkey container and `CACHE_VALKEY_PORT` set.
 - [ ] **E2E smoke test:** The application starts, API endpoints respond, feed fetching works, and the frontend loads.
 - [ ] **Security scan:** For `sentinel` PRs, verify the fix addresses the stated vulnerability without introducing regressions.
 - [ ] **Performance validation:** For `bolt` PRs, confirm the optimization is measurable and does not sacrifice readability.
@@ -172,7 +172,7 @@ Before declaring any Jules-related task complete:
 - [ ] Duplicate PRs have been closed.
 - [ ] The surviving PR has 0 unresolved comments.
 - [ ] CI is green.
-- [ ] Local test suite passes (`python -m pytest -v` with Redis).
+- [ ] Local test suite passes (`python -m pytest -v` with Valkey).
 - [ ] E2E smoke test passes.
 - [ ] PR is merged via GitHub UI (not force-push).
 - [ ] Jules session is closed/deleted.

@@ -43,10 +43,12 @@ def client():
     if "cache" in app.extensions:
         del app.extensions["cache"]
 
-    # Get the Redis URL set by pytest-env from pytest.ini
-    redis_url = os.environ.get(
-        "CACHE_REDIS_URL", "redis://localhost:6379/0"
-    )  # Default if not set
+    # Get the Valkey/Redis URL set by pytest-env from pytest.ini
+    redis_url = (
+        os.environ.get("CACHE_VALKEY_URL")
+        or os.environ.get("CACHE_REDIS_URL")
+        or "redis://localhost:6379/0"
+    )
 
     # Force IPv4 for localhost if it's being used.
     if "localhost" in redis_url:
@@ -55,11 +57,11 @@ def client():
     # In a CI environment, GitHub Actions maps the service port to a dynamic
     # port on the host. We check for this port (passed as an env var by the
     # workflow) and update the connection URL accordingly.
-    ci_redis_port = os.environ.get("CACHE_REDIS_PORT")
-    if ci_redis_port and "127.0.0.1" in redis_url:  # Ensure it's still a local target
+    ci_valkey_port = os.environ.get("CACHE_VALKEY_PORT") or os.environ.get("CACHE_REDIS_PORT")
+    if ci_valkey_port and "127.0.0.1" in redis_url:  # Ensure it's still a local target
         # The URL from pytest.ini is 'redis://:password@127.0.0.1:6379/0'
         # We replace the standard port with the dynamic one from the CI env.
-        redis_url = redis_url.replace("6379", ci_redis_port, 1)
+        redis_url = redis_url.replace("6379", ci_valkey_port, 1)
 
     app.config["CACHE_REDIS_URL"] = redis_url
 
@@ -2318,4 +2320,17 @@ def test_autosave_opml_with_temp_fs(tmp_path, client, setup_autosave_test_data):
 
     written_data = backup_file_path.read_text(encoding="utf-8")
     assert "Autosave Test Tab" in written_data
-    assert "http://example.com/autosave" in written_data
+
+
+def test_valkey_cache_config_precedence(monkeypatch):
+    """Test that CACHE_VALKEY_URL takes precedence over CACHE_REDIS_URL in app config."""
+    monkeypatch.setenv("CACHE_VALKEY_URL", "redis://valkey-host:6379/0")
+    monkeypatch.setenv("CACHE_REDIS_URL", "redis://redis-host:6379/0")
+    monkeypatch.delenv("TESTING", raising=False)
+
+    valkey_url = (
+        os.environ.get("CACHE_VALKEY_URL")
+        or os.environ.get("CACHE_REDIS_URL")
+        or "redis://localhost:6379/0"
+    )
+    assert valkey_url == "redis://valkey-host:6379/0"

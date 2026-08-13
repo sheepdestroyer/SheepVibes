@@ -23,15 +23,15 @@ fi
 echo "Activating virtual environment..."
 source "$VENV_DIR/bin/activate"
 
-# Check if Redis server is running by using the installed 'redis' Python package
-echo "Checking Redis connection..."
+# Check if Valkey server is running by using the installed 'redis' Python package (wire-compatible)
+echo "Checking Valkey connection..."
 if ! python -c "import redis; redis.Redis(decode_responses=True).ping()" &> /dev/null; then
-    echo "Error: Cannot connect to Redis server. Is it running?"
-    echo "Please start Redis (e.g., 'podman run -d -p 6379:6379 redis:alpine') before running the development server."
+    echo "Error: Cannot connect to Valkey server. Is it running?"
+    echo "Please start Valkey (e.g., 'podman run -d -p 6379:6379 docker.io/valkey/valkey:9.1.1-alpine') before running the development server."
     deactivate
     exit 1
 fi
-echo "Redis connection successful."
+echo "Valkey connection successful."
 
 # Check if Flask is installed within the virtual environment
 if ! pip show flask &> /dev/null; then

@@ -119,14 +119,14 @@ This section describes how to set up SheepVibes for local development.
 
 ### Running Locally with Podman (Development Manager)
 
-The `scripts/dev_manager.sh` script simplifies managing the development environment (App + Redis + Persistence).
+The `scripts/dev_manager.sh` script simplifies managing the development environment (App + Valkey + Persistence).
 
 1.  **Start the Dev Environment**:
     ```bash
     ./scripts/dev_manager.sh up [port] [--prod]
     # Example: ./scripts/dev_manager.sh up 5003 --prod
     ```
-    This will build the image (if needed), create a pod, start Redis, and launch the Backend App.
+    This will build the image (if needed), create a pod, start Valkey, and launch the Backend App.
     - **Default**: Debug Mode (Flask Development Server) with **Hot Reloading**.
     - **--prod**: Production Mode (Gunicorn) with debug disabled.
     The app is exposed on the specified port (default 5002).
@@ -150,9 +150,9 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
     podman network create sheepvibes-dev-network
     ```
 
-2.  **Start Redis Container**:
+2.  **Start Valkey Container**:
     ```bash
-    podman run -d --name sheepvibes-redis-dev --network sheepvibes-dev-network docker.io/library/redis:alpine
+    podman run -d --name sheepvibes-valkey-dev --network sheepvibes-dev-network docker.io/valkey/valkey:9.1.1-alpine
     ```
 
 3.  **Run the Application Container**:
@@ -163,7 +163,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
         -p 127.0.0.1:5001:5000 \
         -v ./dev_data:/app/data:Z \
         -e DATABASE_PATH=/app/data/sheepvibes.db \
-        -e CACHE_REDIS_URL=redis://sheepvibes-redis-dev:6379/0 \
+        -e CACHE_VALKEY_URL=redis://sheepvibes-valkey-dev:6379/0 \
         -e FLASK_APP=backend.app \
         -e PYTHONPATH=/app \
         -e UPDATE_INTERVAL_MINUTES=15 \
@@ -175,7 +175,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 ### Direct Backend/Frontend Development
 
 1.  **Prerequisites**:
-    *   A running Redis server.
+    *   A running Valkey server.
 
 2.  **Set up Backend Virtual Environment**:
     *   Navigate to the `backend` directory: `cd sheepvibes/backend`
@@ -193,7 +193,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 
 *   `DATABASE_PATH`: The path to the SQLite database file.
 *   `UPDATE_INTERVAL_MINUTES`: The interval in minutes for checking for feed updates.
-*   `CACHE_REDIS_URL`: The URL for the Redis server.
+*   `CACHE_VALKEY_URL`: The URL for the Valkey server.
 *   `FLASK_APP`: The path to the Flask application.
 *   `PYTHONPATH`: The Python module search path.
 *   `FLASK_RUN_HOST`: The host for the Flask development server.

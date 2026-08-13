@@ -10,10 +10,9 @@ from backend import feed_service
 @pytest.fixture(autouse=True)
 def _set_cache_redis_port(monkeypatch):
     # Keep CI-configurable value; fall back to a non-default test port if unset.
-    monkeypatch.setenv(
-        "CACHE_REDIS_PORT",
-        os.environ.get("CACHE_REDIS_PORT", "6380"),
-    )
+    port = os.environ.get("CACHE_VALKEY_PORT") or os.environ.get("CACHE_REDIS_PORT", "6380")
+    monkeypatch.setenv("CACHE_VALKEY_PORT", port)
+    monkeypatch.setenv("CACHE_REDIS_PORT", port)
 
 
 def test_fetch_feed_blocks_external_dtd(mock_network, caplog):

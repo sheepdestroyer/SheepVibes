@@ -22,11 +22,10 @@ from backend.models import Feed, FeedItem, Tab, db  # <--- Added FeedItem import
 
 @pytest.fixture(autouse=True)
 def _set_cache_redis_port(monkeypatch):
-    """Ensure CACHE_REDIS_PORT is set for tests."""
-    monkeypatch.setenv(
-        "CACHE_REDIS_PORT",
-        os.environ.get("CACHE_REDIS_PORT", "6380"),
-    )
+    """Ensure CACHE_VALKEY_PORT and CACHE_REDIS_PORT are set for tests."""
+    port = os.environ.get("CACHE_VALKEY_PORT") or os.environ.get("CACHE_REDIS_PORT", "6380")
+    monkeypatch.setenv("CACHE_VALKEY_PORT", port)
+    monkeypatch.setenv("CACHE_REDIS_PORT", port)
 
 
 # Set up logging to console

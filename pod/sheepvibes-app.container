@@ -1,7 +1,7 @@
 [Unit]
 Description=SheepVibes App Container
-After=sheepvibes-redis.container
-Requires=sheepvibes-redis.container
+After=sheepvibes-valkey.container
+Requires=sheepvibes-valkey.container
 
 [Container]
 ContainerName=sheepvibes-app
@@ -13,6 +13,7 @@ HealthCmd=python3 -c "import urllib.request; urllib.request.urlopen('http://127.
 HealthInterval=15s
 HealthTimeout=5s
 HealthRetries=3
+Environment=CACHE_VALKEY_URL=redis://localhost:6379/0
 Environment=CACHE_REDIS_URL=redis://localhost:6379/0
 Environment=FLASK_APP=backend.app
 Environment=PYTHONPATH=/app

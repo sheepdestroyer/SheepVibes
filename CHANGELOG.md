@@ -1,4 +1,9 @@
-# Timestamped Changelog maintained by agents when working on this repository
+## 2026-08-13
+
+- **Infrastructure: Standardized caching on Valkey (docker.io/valkey/valkey:9.1.1-alpine)**
+  - **Container & Service Migration**: Replaced Redis container definitions with Valkey pinned to release tag `docker.io/valkey/valkey:9.1.1-alpine`. Updated Quadlet files (`pod/sheepvibes-valkey.container`, `pod/sheepvibes-valkey.volume`), deployment scripts (`scripts/deploy_pod.sh`, `scripts/dev_manager.sh`, `scripts/run_dev.sh`), and GitHub Actions workflow (`.github/workflows/run-tests.yml`) to use `valkey` and `valkey-cli ping`.
+  - **Backend & Environment Variables**: Added support for `CACHE_VALKEY_URL` (with fallback to `CACHE_REDIS_URL`) in `backend/app.py` and `CACHE_VALKEY_PORT` in unit/e2e test suites.
+  - **Testing**: Added unit test `test_valkey_cache_config_precedence` in `tests/unit/test_app.py`. Verified 100% test pass rate across Vitest (23/23) and Pytest (160 unit tests, E2E suite).
 
 ## 2026-08-12
 

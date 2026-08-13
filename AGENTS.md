@@ -18,7 +18,7 @@
 7. Only then will the task be completed, and changes be submitted / committed.
 
 ### Tooling for Agents
-- **`scripts/dev_manager.sh`**: Use this script to easily spin up a full development environment (App + Redis) in a pod for integration testing or verification.
+- **`scripts/dev_manager.sh`**: Use this script to easily spin up a full development environment (App + Valkey) in a pod for integration testing or verification.
   - `up [port] [--prod]`: Starts the environment (use `--prod` for Gunicorn).
   - `down [--clean]`: Stops it (use `--clean` to wipe data).
 
@@ -30,18 +30,18 @@ Automated environments, such as those used by Google's Jules, operate in restric
 
 ### Key Configuration Points for Automated Agents:
 
-1.  **Service Containerization**: The tests require a running Redis service for caching checks. In the GitHub Actions workflow, this is accomplished using the `services` block to start a `redis:alpine` container. Your environment must provide a Redis container accessible to the test runner.
+1.  **Service Containerization**: The tests require a running Valkey service for caching checks. In the GitHub Actions workflow, this is accomplished using the `services` block to start a `docker.io/valkey/valkey:9.1.1-alpine` container. Your environment must provide a Valkey container accessible to the test runner.
 
-2.  **Dynamic Port Handling**: In CI systems, you cannot assume Redis will be available on `localhost:6379`. The service container's port `6379` will be mapped to a *dynamic port* on the host runner. The GitHub Actions workflow retrieves this port using `${{ job.services.redis.ports['6379'] }}`.
+2.  **Dynamic Port Handling**: In CI systems, you cannot assume Valkey will be available on `localhost:6379`. The service container's port `6379` will be mapped to a *dynamic port* on the host runner. The GitHub Actions workflow retrieves this port using `${{ job.services.valkey.ports['6379'] }}`.
 
-3.  **Environment Variable**: The test suite (`backend/test_app.py`) is explicitly configured to look for the `CACHE_REDIS_PORT` environment variable. If this variable is set, it will override the default Redis port and allow the tests to connect to the dynamically mapped port of the Redis service container.
+3.  **Environment Variable**: The test suite (`backend/test_app.py`) is explicitly configured to look for the `CACHE_VALKEY_PORT` environment variable. If this variable is set, it will override the default Valkey port and allow the tests to connect to the dynamically mapped port of the Valkey service container.
 
 ### Actionable Steps for Automated Agents:
 
 To successfully run the backend tests, please follow this procedure, which mirrors our CI workflow:
 
-1.  **Start a Redis service container** within your environment, and **Identify the host port** that has been dynamically mapped to the container's internal port `6379`.
-2.  **Set the `CACHE_REDIS_PORT` environment variable** to this dynamically assigned port number.
+1.  **Start a Valkey service container** within your environment, and **Identify the host port** that has been dynamically mapped to the container's internal port `6379`.
+2.  **Set the `CACHE_VALKEY_PORT` environment variable** to this dynamically assigned port number.
 3.  Navigate to the `backend` directory, and **Install dependencies**: `cd backend && pip install -r requirements.txt -r requirements-dev.txt`.
 4.  **Run the tests** using the command: `python -m pytest -v`.
 

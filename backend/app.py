@@ -99,8 +99,10 @@ else:
 
     # --- Cache Configuration for non-testing ---
     app.config["CACHE_TYPE"] = "RedisCache"
-    app.config["CACHE_REDIS_URL"] = os.environ.get(
-        "CACHE_REDIS_URL", "redis://localhost:6379/0"
+    app.config["CACHE_REDIS_URL"] = (
+        os.environ.get("CACHE_VALKEY_URL")
+        or os.environ.get("CACHE_REDIS_URL")
+        or "redis://localhost:6379/0"
     )
 
 # Enable URI parsing for SQLite connections globally

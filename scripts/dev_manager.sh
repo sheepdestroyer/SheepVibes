@@ -4,10 +4,10 @@ set -euo pipefail
 # --- Configuration (Overridable via environment variables) ---
 readonly POD_NAME="${DEV_POD_NAME:-sheepvibes-dev-pod}"
 readonly APP_CONTAINER_NAME="${DEV_APP_CONTAINER:-sheepvibes-dev-app}"
-readonly REDIS_CONTAINER_NAME="${DEV_REDIS_CONTAINER:-sheepvibes-dev-redis}"
+readonly VALKEY_CONTAINER_NAME="${DEV_VALKEY_CONTAINER:-${DEV_REDIS_CONTAINER:-sheepvibes-dev-valkey}}"
 readonly APP_IMAGE_NAME="${DEV_APP_IMAGE:-localhost/sheepvibes-app}"
-readonly REDIS_IMAGE="${DEV_REDIS_IMAGE:-redis:7-alpine}"
-readonly REDIS_URL_INTERNAL="${DEV_REDIS_URL_INTERNAL:-redis://localhost:6379/0}"
+readonly VALKEY_IMAGE="${DEV_VALKEY_IMAGE:-${DEV_REDIS_IMAGE:-docker.io/valkey/valkey:9.1.1-alpine}}"
+readonly VALKEY_URL_INTERNAL="${DEV_VALKEY_URL_INTERNAL:-${DEV_REDIS_URL_INTERNAL:-redis://localhost:6379/0}}"
 readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
 readonly CONTAINER_PORT="${DEV_CONTAINER_PORT:-5000}"
 readonly DEFAULT_HOST_PORT="${DEV_DEFAULT_HOST_PORT:-5002}"
@@ -67,9 +67,9 @@ remove_containers() {
     echo "Ensuring containers are removed..."
     # Attempt using --ignore if supported (Podman 4.0+)
     if "$CMD" rm --help 2>&1 | grep -q -w "\-\-ignore"; then
-        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME"
+        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$VALKEY_CONTAINER_NAME"
     else
-        "$CMD" rm -f "$APP_CONTAINER_NAME" "$REDIS_CONTAINER_NAME" 2>/dev/null || true
+        "$CMD" rm -f "$APP_CONTAINER_NAME" "$VALKEY_CONTAINER_NAME" 2>/dev/null || true
     fi
 }
 
@@ -155,8 +155,8 @@ do_up() {
     echo "Creating pod '$POD_NAME' on port ${HOST_PORT}..."
     "$CMD" pod create --name "$POD_NAME" -p "${HOST_PORT}:${CONTAINER_PORT}"
 
-    echo "Starting Redis ($REDIS_IMAGE)..."
-    "$CMD" run -d --pod "$POD_NAME" --name "$REDIS_CONTAINER_NAME" "$REDIS_IMAGE"
+    echo "Starting Valkey ($VALKEY_IMAGE)..."
+    "$CMD" run -d --pod "$POD_NAME" --name "$VALKEY_CONTAINER_NAME" "$VALKEY_IMAGE"
 
     local DEBUG_VAL=1
     local MODE_MSG="DEVELOPMENT mode (Flask Debug)..."
@@ -168,7 +168,8 @@ do_up() {
 
     echo "Starting App..."
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
-        -e CACHE_REDIS_URL="$REDIS_URL_INTERNAL" \
+        -e CACHE_VALKEY_URL="$VALKEY_URL_INTERNAL" \
+        -e CACHE_REDIS_URL="$VALKEY_URL_INTERNAL" \
         -e FLASK_DEBUG="$DEBUG_VAL" \
         -e CORS_ALLOWED_ORIGINS="http://localhost:${HOST_PORT},http://127.0.0.1:${HOST_PORT}" \
         -v "${VOLUME_NAME}:/app/data:Z" \
