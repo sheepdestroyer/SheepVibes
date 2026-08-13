@@ -2397,3 +2397,103 @@ def test_get_feed_items_and_tab_feeds_include_comments_url(client, setup_tabs_an
     assert matching_tab_item is not None
     assert matching_tab_item["comments_url"] == "https://news.ycombinator.com/item?id=8888"
     assert matching_tab_item["link"] == "https://example.com/story-123"
+
+
+def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disable=unused-argument
+    """Directly test _get_top_items_for_feeds in backend.blueprints.tabs for comments_url."""
+    from backend.blueprints.tabs import _get_top_items_for_feeds
+    from datetime import datetime, timezone
+
+    with app.app_context():
+        tab = Tab(name="Serialization Tab", order=1)
+        db.session.add(tab)
+        db.session.commit()
+        feed = Feed(name="Serialization Feed", url="https://example.com/rss", tab_id=tab.id)
+        db.session.add(feed)
+        db.session.commit()
+
+        item1 = FeedItem(
+            feed_id=feed.id,
+            title="Item 1 (With Comments)",
+            link="https://example.com/article1",
+            comments_url="https://news.ycombinator.com/item?id=101",
+            guid="guid-101",
+            published_time=datetime(2026, 8, 14, 1, 0, 0, tzinfo=timezone.utc),
+        )
+        item2 = FeedItem(
+            feed_id=feed.id,
+            title="Item 2 (Without Comments)",
+            link="https://example.com/article2",
+            comments_url=None,
+            guid="guid-102",
+            published_time=datetime(2026, 8, 14, 0, 50, 0, tzinfo=timezone.utc),
+        )
+        item3 = FeedItem(
+            feed_id=feed.id,
+            title="Item 3 (Comments == Link)",
+            link="https://news.ycombinator.com/item?id=103",
+            comments_url="https://news.ycombinator.com/item?id=103",
+            guid="guid-103",
+            published_time=datetime(2026, 8, 14, 0, 40, 0, tzinfo=timezone.utc),
+        )
+        db.session.add_all([item1, item2, item3])
+        db.session.commit()
+
+        items_by_feed = _get_top_items_for_feeds([feed.id], limit=5)
+        assert feed.id in items_by_feed
+        results = items_by_feed[feed.id]
+        assert len(results) == 3
+
+        assert results[0]["title"] == "Item 1 (With Comments)"
+        assert results[0]["comments_url"] == "https://news.ycombinator.com/item?id=101"
+        assert results[0]["link"] == "https://example.com/article1"
+
+        assert results[1]["title"] == "Item 2 (Without Comments)"
+        assert results[1]["comments_url"] is None
+        assert results[1]["link"] == "https://example.com/article2"
+
+        assert results[2]["title"] == "Item 3 (Comments == Link)"
+        assert results[2]["comments_url"] == "https://news.ycombinator.com/item?id=103"
+        assert results[2]["link"] == "https://news.ycombinator.com/item?id=103"
+
+
+def test_feed_items_pagination_comments_url_preservation(client, setup_tabs_and_feeds):
+    """Test pagination limits and offsets in /api/feeds/<feed_id>/items preserving comments_url."""
+    from datetime import datetime, timezone
+
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    with app.app_context():
+        # Clear existing items for this feed
+        FeedItem.query.filter_by(feed_id=feed_id).delete()
+        for i in range(5):
+            db.session.add(
+                FeedItem(
+                    feed_id=feed_id,
+                    title=f"Paginated Item {i}",
+                    link=f"https://example.com/item-{i}",
+                    comments_url=f"https://news.ycombinator.com/item?id={i + 1000}" if i % 2 == 0 else None,
+                    guid=f"paginated-guid-{i}",
+                    published_time=datetime(2026, 8, 14, 0, 50 - i, 0, tzinfo=timezone.utc),
+                )
+            )
+        db.session.commit()
+
+    # Page 1: limit 2, offset 0
+    resp1 = client.get(f"/api/feeds/{feed_id}/items?limit=2&offset=0")
+    assert resp1.status_code == 200
+    page1 = resp1.json
+    assert len(page1) == 2
+    assert page1[0]["title"] == "Paginated Item 0"
+    assert page1[0]["comments_url"] == "https://news.ycombinator.com/item?id=1000"
+    assert page1[1]["title"] == "Paginated Item 1"
+    assert page1[1]["comments_url"] is None
+
+    # Page 2: limit 2, offset 2
+    resp2 = client.get(f"/api/feeds/{feed_id}/items?limit=2&offset=2")
+    assert resp2.status_code == 200
+    page2 = resp2.json
+    assert len(page2) == 2
+    assert page2[0]["title"] == "Paginated Item 2"
+    assert page2[0]["comments_url"] == "https://news.ycombinator.com/item?id=1002"
+    assert page2[1]["title"] == "Paginated Item 3"
+    assert page2[1]["comments_url"] is None

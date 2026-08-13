@@ -937,7 +937,7 @@ def test_fetch_feed_toctou_prevention_http(mocker):
 
 
 def test_kernel_org_subsequent_update_adds_new_items(db_setup, mocker):
-    """Test that subsequent updates to feeds with shared links (e.g. Kernel.org) insert new items rather than overwriting."""
+    """Test that subsequent updates to feeds with shared links (e.g. Kernel.org) insert new items."""
     tab = Tab(name="Tech", order=1)
     db.session.add(tab)
     db.session.commit()
@@ -946,21 +946,27 @@ def test_kernel_org_subsequent_update_adds_new_items(db_setup, mocker):
     db.session.commit()
 
     # Initial 2 items
-    entry1 = MockFeedEntry(title="Kernel 1", link="https://www.kernel.org/", guid="kernel.guid.1", published="2024-01-01T10:00:00Z")
-    entry2 = MockFeedEntry(title="Kernel 2", link="https://www.kernel.org/", guid="kernel.guid.2", published="2024-01-02T10:00:00Z")
+    entry1 = MockFeedEntry(
+        title="Kernel 1", link="https://www.kernel.org/", guid="kernel.guid.1", published="2024-01-01T10:00:00Z"
+    )
+    entry2 = MockFeedEntry(
+        title="Kernel 2", link="https://www.kernel.org/", guid="kernel.guid.2", published="2024-01-02T10:00:00Z"
+    )
     mock_feed_1 = MockParsedFeed(feed_title="Kernel Updates", entries=[entry1, entry2])
-    
+
     count1 = feed_service.process_feed_entries(feed_obj, mock_feed_1)
     assert count1 == 2
     assert FeedItem.query.filter_by(feed_id=feed_obj.id).count() == 2
 
     # Subsequent update with entry3 having a new GUID but same link
-    entry3 = MockFeedEntry(title="Kernel 3", link="https://www.kernel.org/", guid="kernel.guid.3", published="2024-01-03T10:00:00Z")
+    entry3 = MockFeedEntry(
+        title="Kernel 3", link="https://www.kernel.org/", guid="kernel.guid.3", published="2024-01-03T10:00:00Z"
+    )
     mock_feed_2 = MockParsedFeed(feed_title="Kernel Updates", entries=[entry1, entry2, entry3])
 
     count2 = feed_service.process_feed_entries(feed_obj, mock_feed_2)
     assert count2 == 1, "Subsequent update with new GUID should add 1 new item"
-    
+
     items = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
     assert len(items) == 3
     guids_in_db = {it.guid for it in items}
@@ -1115,3 +1121,274 @@ def test_update_existing_item_with_comments_url(db_setup):  # pylint: disable=un
     assert updated_item.title == "Updated Title"
     assert updated_item.comments_url == "https://news.ycombinator.com/item?id=9999"
 
+
+def test_hacker_news_real_xml_feedparser_parsing(db_setup):  # pylint: disable=unused-argument
+    """Test full parsing and DB ingestion of real-world Hacker News RSS 2.0 XML."""
+    import feedparser  # pylint: disable=import-outside-toplevel
+
+    hn_rss_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Hacker News</title>
+    <link>https://news.ycombinator.com/</link>
+    <description>Links for the intellectually curious, something that you might find interesting.</description>
+    <item>
+      <title>Show HN: SheepVibes – Self-hosted feed aggregator</title>
+      <link>https://github.com/sheepdestroyer/SheepVibes</link>
+      <pubDate>Fri, 14 Aug 2026 00:00:00 +0000</pubDate>
+      <comments>https://news.ycombinator.com/item?id=49289112</comments>
+      <description><![CDATA[<a href="https://news.ycombinator.com/item?id=49289112">Comments</a>]]></description>
+    </item>
+    <item>
+      <title>Ask HN: How do you organize your personal feeds?</title>
+      <link>https://news.ycombinator.com/item?id=49289200</link>
+      <pubDate>Fri, 14 Aug 2026 00:10:00 +0000</pubDate>
+      <comments>https://news.ycombinator.com/item?id=49289200</comments>
+      <description><![CDATA[<a href="https://news.ycombinator.com/item?id=49289200">Comments</a>]]></description>
+    </item>
+  </channel>
+</rss>"""
+    parsed = feedparser.parse(hn_rss_xml)
+    tab = Tab(name="News HN XML", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Hacker News XML Feed", url="https://news.ycombinator.com/rss", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    count = feed_service.process_feed_entries(feed_obj, parsed)
+    assert count == 2
+
+    items = FeedItem.query.filter_by(feed_id=feed_obj.id).order_by(FeedItem.published_time.asc()).all()
+    assert len(items) == 2
+
+    story_item = items[0]
+    assert story_item.title == "Show HN: SheepVibes – Self-hosted feed aggregator"
+    assert story_item.link == "https://github.com/sheepdestroyer/SheepVibes"
+    assert story_item.comments_url == "https://news.ycombinator.com/item?id=49289112"
+
+    ask_item = items[1]
+    assert ask_item.title == "Ask HN: How do you organize your personal feeds?"
+    assert ask_item.link == "https://news.ycombinator.com/item?id=49289200"
+    assert ask_item.comments_url == "https://news.ycombinator.com/item?id=49289200"
+
+
+def test_lobsters_real_xml_feedparser_parsing(db_setup):  # pylint: disable=unused-argument
+    """Test full parsing and DB ingestion of real-world Lobsters RSS 2.0 XML."""
+    import feedparser  # pylint: disable=import-outside-toplevel
+
+    lobsters_rss_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Lobsters</title>
+    <link>https://lobste.rs/</link>
+    <description></description>
+    <item>
+      <title>PostgreSQL 18 Features and Improvements</title>
+      <link>https://brandur.org/postgres-18</link>
+      <guid isPermaLink="false">https://lobste.rs/s/xyz123/postgresql_18_features</guid>
+      <author>brandur</author>
+      <pubDate>Fri, 14 Aug 2026 00:30:00 +0000</pubDate>
+      <comments>https://lobste.rs/s/xyz123/postgresql_18_features</comments>
+      <description><![CDATA[<p><a href="https://lobste.rs/s/xyz123/postgres">Comments</a></p>]]></description>
+    </item>
+    <item>
+      <title>Tell Lobsters: Favorite SQL Migrations Tool?</title>
+      <link>https://lobste.rs/s/abc456/tell_lobsters_favorite_sql_migrations</link>
+      <guid isPermaLink="false">https://lobste.rs/s/abc456/tell_lobsters_favorite_sql_migrations</guid>
+      <author>jcs</author>
+      <pubDate>Fri, 14 Aug 2026 01:00:00 +0000</pubDate>
+      <comments>https://lobste.rs/s/abc456/tell_lobsters_favorite_sql_migrations</comments>
+      <description><![CDATA[<p><a href="https://lobste.rs/s/abc456/tell">Comments</a></p>]]></description>
+    </item>
+  </channel>
+</rss>"""
+    parsed = feedparser.parse(lobsters_rss_xml)
+    tab = Tab(name="Tech Lobsters XML", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Lobsters XML Feed", url="https://lobste.rs/rss", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    count = feed_service.process_feed_entries(feed_obj, parsed)
+    assert count == 2
+
+    items = FeedItem.query.filter_by(feed_id=feed_obj.id).order_by(FeedItem.published_time.asc()).all()
+    assert len(items) == 2
+
+    story = items[0]
+    assert story.title == "PostgreSQL 18 Features and Improvements"
+    assert story.link == "https://brandur.org/postgres-18"
+    assert story.comments_url == "https://lobste.rs/s/xyz123/postgresql_18_features"
+    assert story.guid == "https://lobste.rs/s/xyz123/postgresql_18_features"
+
+    tell_post = items[1]
+    assert tell_post.title == "Tell Lobsters: Favorite SQL Migrations Tool?"
+    assert tell_post.link == "https://lobste.rs/s/abc456/tell_lobsters_favorite_sql_migrations"
+    assert tell_post.comments_url == "https://lobste.rs/s/abc456/tell_lobsters_favorite_sql_migrations"
+    assert tell_post.guid == "https://lobste.rs/s/abc456/tell_lobsters_favorite_sql_migrations"
+
+
+def test_atom_feed_discussion_and_comments_rel_links(db_setup, mocker):  # pylint: disable=unused-argument
+    """Test Atom feeds with rel='discussion', rel='comments', and multiple link relations."""
+    entry_discussion = MockFeedEntry(
+        title="Atom Discussion Link",
+        link="https://example.com/article-1",
+        links=[
+            {"rel": "alternate", "href": "https://example.com/article-1"},
+            {"rel": "discussion", "href": "https://example.com/discussions/123"},
+        ],
+        published="2026-08-14T01:00:00Z",
+    )
+    entry_comments = MockFeedEntry(
+        title="Atom Comments Link",
+        link="https://example.com/article-2",
+        links=[
+            {"rel": "alternate", "href": "https://example.com/article-2"},
+            {"rel": "comments", "href": "https://example.com/comments/456"},
+        ],
+        published="2026-08-14T01:05:00Z",
+    )
+    entry_fallback = MockFeedEntry(
+        title="Atom Multiple Links with Malformed Candidate",
+        link="https://example.com/article-3",
+        links=[
+            {"rel": "replies", "href": "javascript:alert(1)"},
+            {"rel": "replies", "href": ""},
+            {"rel": "enclosure", "href": "https://example.com/media.mp3"},
+        ],
+        published="2026-08-14T01:10:00Z",
+    )
+    mock_feed = MockParsedFeed(
+        feed_title="Atom Link Variations",
+        entries=[entry_discussion, entry_comments, entry_fallback],
+    )
+    mocker.patch("backend.feed_service.feedparser.parse", return_value=mock_feed)
+
+    tab = Tab(name="Atom Tab", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Atom Feed Variations", url="https://example.com/atom-var.xml", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    count = feed_service.process_feed_entries(feed_obj, mock_feed)
+    assert count == 3
+
+    items = {it.title: it for it in FeedItem.query.filter_by(feed_id=feed_obj.id).all()}
+    assert items["Atom Discussion Link"].comments_url == "https://example.com/discussions/123"
+    assert items["Atom Comments Link"].comments_url == "https://example.com/comments/456"
+    assert items["Atom Multiple Links with Malformed Candidate"].comments_url is None
+
+
+def test_malformed_and_edge_case_comments_urls(db_setup, mocker):  # pylint: disable=unused-argument
+    """Test feeds with non-string, whitespace, protocol-relative, or unsafe comment URLs."""
+    entries = [
+        MockFeedEntry(
+            title="Int Comments", link="https://example.com/1",
+            comments=12345, published="2026-08-14T01:00:00Z",
+        ),
+        MockFeedEntry(
+            title="Dict Comments", link="https://example.com/2",
+            comments={"url": "https://example.com"}, published="2026-08-14T01:01:00Z",
+        ),
+        MockFeedEntry(
+            title="List Comments", link="https://example.com/3",
+            comments=["https://example.com"], published="2026-08-14T01:02:00Z",
+        ),
+        MockFeedEntry(
+            title="Whitespace Comments", link="https://example.com/4",
+            comments="   \t\n  ", published="2026-08-14T01:03:00Z",
+        ),
+        MockFeedEntry(
+            title="Data Scheme", link="https://example.com/5",
+            comments="data:text/html,<script>alert(1)</script>", published="2026-08-14T01:04:00Z",
+        ),
+        MockFeedEntry(
+            title="File Scheme", link="https://example.com/6",
+            comments="file:///etc/passwd", published="2026-08-14T01:05:00Z",
+        ),
+        MockFeedEntry(
+            title="FTP Scheme", link="https://example.com/7",
+            comments="ftp://example.com/comments", published="2026-08-14T01:06:00Z",
+        ),
+        MockFeedEntry(
+            title="Mailto Scheme", link="https://example.com/8",
+            comments="mailto:user@example.com", published="2026-08-14T01:07:00Z",
+        ),
+        MockFeedEntry(
+            title="Protocol Relative", link="https://example.com/9",
+            comments="//example.com/comments", published="2026-08-14T01:08:00Z",
+        ),
+        MockFeedEntry(
+            title="No Netloc", link="https://example.com/10",
+            comments="https://", published="2026-08-14T01:09:00Z",
+        ),
+    ]
+    mock_feed = MockParsedFeed(feed_title="Malformed Edge Feed", entries=entries)
+    mocker.patch("backend.feed_service.feedparser.parse", return_value=mock_feed)
+
+    tab = Tab(name="Edge Tab", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Edge Feed", url="https://example.com/edge.xml", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    count = feed_service.process_feed_entries(feed_obj, mock_feed)
+    assert count == 10
+
+    items = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
+    for item in items:
+        assert item.comments_url is None, f"Expected None for {item.title}, got {item.comments_url}"
+
+
+def test_database_update_idempotency_and_omitted_comments(db_setup):  # pylint: disable=unused-argument
+    """Test idempotency: comments_url is preserved when omitted upstream and updated when changed."""
+    tab = Tab(name="Idempotency Tab", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Idempotency Feed", url="https://example.com/feed.xml", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    # Step 1: Initial item with comments_url
+    entry1 = MockFeedEntry(
+        title="HN Story",
+        link="https://example.com/story-1",
+        guid="hn-guid-1",
+        comments="https://news.ycombinator.com/item?id=111",
+        published="2026-08-14T00:00:00Z",
+    )
+    feed_service.process_feed_entries(feed_obj, MockParsedFeed(feed_title="Idempotency Feed", entries=[entry1]))
+
+    item = FeedItem.query.filter_by(feed_id=feed_obj.id, guid="hn-guid-1").first()
+    assert item.comments_url == "https://news.ycombinator.com/item?id=111"
+
+    # Step 2: Feed refresh where comments tag is temporarily omitted / missing (comments=None)
+    entry_omitted = MockFeedEntry(
+        title="HN Story",
+        link="https://example.com/story-1",
+        guid="hn-guid-1",
+        comments=None,
+        published="2026-08-14T00:00:00Z",
+    )
+    feed_service.process_feed_entries(feed_obj, MockParsedFeed(feed_title="Idempotency Feed", entries=[entry_omitted]))
+
+    # Must retain original comments_url and NOT overwrite with None
+    item_recheck = FeedItem.query.filter_by(feed_id=feed_obj.id, guid="hn-guid-1").first()
+    assert item_recheck.comments_url == "https://news.ycombinator.com/item?id=111"
+
+    # Step 3: Feed refresh where comments_url is updated to a new URL
+    entry_updated = MockFeedEntry(
+        title="HN Story",
+        link="https://example.com/story-1",
+        guid="hn-guid-1",
+        comments="https://news.ycombinator.com/item?id=222",
+        published="2026-08-14T00:00:00Z",
+    )
+    feed_service.process_feed_entries(feed_obj, MockParsedFeed(feed_title="Idempotency Feed", entries=[entry_updated]))
+
+    item_updated = FeedItem.query.filter_by(feed_id=feed_obj.id, guid="hn-guid-1").first()
+    assert item_updated.comments_url == "https://news.ycombinator.com/item?id=222"

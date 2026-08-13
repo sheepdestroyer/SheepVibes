@@ -147,17 +147,22 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
-*   [x] **2026-08-14: Playwright E2E Test Suite for Feed Comments Links**
-  - [x] Implemented comprehensive Playwright E2E test suite in `tests/e2e/test_comments_links.py`.
-  - [x] Added tests for DOM structure and attribute verification (`target`, `rel`, `title`, `aria-label`), Ask HN suppression (`comments_url == link`), standard feed fallback, primary discussion link click & read state updates, secondary `[article]` link click & read state updates, middle-click `auxclick` interaction, unread badge removal upon zero count, and Night Mode styling & WCAG AA color restoration.
-  - [x] Verified 100% test pass rate across Vitest frontend unit tests (25/25), Pytest backend unit tests (166/166), and Playwright E2E tests (9/9).
+*   [x] **2026-08-14: Comprehensive Unit & E2E Test Suite for Comments Links**
+  - [x] Implemented comprehensive Playwright E2E test suite in `tests/e2e/test_comments_links.py` (9/9 E2E tests).
+  - [x] Added comprehensive unit test suite across Pytest backend and Vitest frontend:
+    - RSS 2.0 real XML parsing for Hacker News and Lobsters feeds (story posts vs. ask/self-posts).
+    - Atom link rel variations (`replies`, `discussion`, `comments`).
+    - Malformed and unsafe URL filtering (non-string, whitespace, non-http/https schemes).
+    - Database update idempotency and upstream omitted-comments preservation.
+    - API serialization and pagination comments_url preservation in `FeedItem.to_dict()` and `_get_top_items_for_feeds`.
+    - Frontend Vitest suite covering discussion links, secondary article links, URL sanitization, and click/middle-click mark-as-read handlers.
+  - [x] Verified 100% test pass rate across Vitest (36/36), Pytest unit (173/173), and Playwright E2E (9/9).
 
 *   [x] **2026-08-14: Hacker News & Feed Comments Thread Link Support**
   - [x] Extended `FeedItem` model and added migration `8e59ae7a1c5b` for `comments_url` field.
   - [x] Implemented feed parser comments extraction and URL structure validation in `backend/feed_service.py` supporting RSS 2.0 `<comments>` and Atom `rel="replies"`.
   - [x] Updated API serializers in `backend/models.py` and `backend/blueprints/tabs.py`.
   - [x] Implemented UI rendering in `frontend/js/ui.js` and `frontend/style.css` to make discussion thread primary/default and provide a secondary `[article]` link with unread status marking on click/middle-click.
-  - [x] Added unit tests across Pytest backend and Vitest frontend; verified 100% test pass rate across Vitest (25/25), Pytest unit (166/166), and Playwright E2E (9/9).
 
 *   [x] **2026-08-13: Documentation Overhaul & Automated Release Workflow**
   - [x] Published GitHub Releases for `v0.26` (Valkey standardization) and `v0.27` (Night Mode, WCAG AA contrast, and Dependabot updates).

@@ -11,7 +11,7 @@
   - **Backend Data Model & Extraction**: Added `comments_url` column to `FeedItem` model, database migration (`8e59ae7a1c5b`), and feed parsing support in `backend/feed_service.py` to extract and validate `<comments>` tags (RSS 2.0) and `rel="replies"` links (Atom).
   - **API Serialization**: Updated `FeedItem.to_dict()` and `_get_top_items_for_feeds` in `backend/blueprints/tabs.py` to return `comments_url`.
   - **Frontend UI & Accessibility**: When comments thread URL is present and differs from article link, the primary item title link opens the discussion thread (default/primary), and a secondary `[article]` link opens the original article. Added full click and middle-click (`auxclick`) mark-as-read handlers, URL sanitization, and WCAG AA contrast styling in light and night modes.
-  - **Testing**: Added unit tests in `tests/unit/test_feed.py`, `tests/unit/test_app.py`, and `frontend/js/ui.test.js`. Verified 100% test pass rate across Vitest (25/25), Pytest unit tests (166/166), and Playwright E2E suite (3/3).
+  - **Testing**: Added comprehensive unit tests in `tests/unit/test_feed.py`, `tests/unit/test_app.py`, and `frontend/js/ui.test.js` covering real-world Hacker News & Lobsters RSS XML parsing, Atom `replies`/`discussion`/`comments` links, malformed URL rejection, DB update idempotency, API serialization/pagination, and frontend click/middle-click mark-as-read interactions. Verified 100% test pass rate across Vitest (36/36), Pytest unit tests (173/173), and Playwright E2E suite (3/3).
 
 ## 2026-08-13
 
