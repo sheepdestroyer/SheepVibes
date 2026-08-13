@@ -46,7 +46,10 @@ This is the most critical gate. A PR sits here until ALL of the following are tr
 
 - [ ] **0 unresolved review comments** on the PR (both human and bot).
 - [ ] **CI passes:** The full GitHub Actions workflow (`.github/workflows/run-tests.yml`) must be green.
-- [ ] **Tests pass locally:** Run `cd backend && python -m pytest -v` with a Valkey container and `CACHE_VALKEY_PORT` set.
+- [ ] **Tests pass locally:**
+  - Backend unit tests: `python -m pytest -c tests/pytest.ini tests/unit -v` (with Valkey container and `CACHE_VALKEY_PORT` set).
+  - Frontend unit tests: `npm test` (Vitest).
+  - End-to-end suite: `python -m pytest -c tests/pytest.ini tests/e2e -v --browser chromium`.
 - [ ] **E2E smoke test:** The application starts, API endpoints respond, feed fetching works, and the frontend loads.
 - [ ] **Security scan:** For `sentinel` PRs, verify the fix addresses the stated vulnerability without introducing regressions.
 - [ ] **Performance validation:** For `bolt` PRs, confirm the optimization is measurable and does not sacrifice readability.
@@ -69,7 +72,7 @@ A PR may ONLY be merged when:
 
 **Forbidden:** Merging from the Jules web UI, auto-merge, or bypassing branch protection.
 
-### Gate 5: Close-Redundant
+### Gate 5: Close-Redundant & Release
 
 Immediately after merge:
 
@@ -78,6 +81,7 @@ Immediately after merge:
 3. **Close duplicate PRs:** Any PRs that were superseded by this merge should be closed with a reference comment.
 4. **Update kanban:** Move the task to `done`.
 5. **Update docs:** If the change affects user-facing behavior, update `CHANGELOG.md` and `TODO.md`.
+6. **Tag & Release:** If cutting a new release, create and push an annotated tag `v*.*` (e.g. `v0.28`), which automatically triggers `.github/workflows/release.yml` to publish container images to GHCR and create the GitHub Release notes.
 
 ---
 
@@ -172,13 +176,14 @@ Before declaring any Jules-related task complete:
 - [ ] Duplicate PRs have been closed.
 - [ ] The surviving PR has 0 unresolved comments.
 - [ ] CI is green.
-- [ ] Local test suite passes (`python -m pytest -v` with Valkey).
+- [ ] Local test suite passes (Pytest unit `tests/unit`, Vitest `npm test`, and Playwright `tests/e2e`).
 - [ ] E2E smoke test passes.
-- [ ] PR is merged via GitHub UI (not force-push).
+- [ ] PR is merged via GitHub UI or `gh pr merge` (not force-push).
 - [ ] Jules session is closed/deleted.
 - [ ] Branch is deleted.
 - [ ] Kanban board is updated.
-- [ ] `CHANGELOG.md` and `TODO.md` are updated if needed.
+- [ ] `CHANGELOG.md` and `TODO.md` are updated.
+- [ ] Version tag `v*.*` pushed if cutting a release.
 
 ---
 
