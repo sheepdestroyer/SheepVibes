@@ -982,3 +982,136 @@ def test_download_feed_content_timeout(mocker):
     _, kwargs = mock_opener.open.call_args
     assert kwargs.get("timeout") == feed_service.DEFAULT_FEED_FETCH_TIMEOUT
 
+
+def test_hacker_news_comments_url_processing(db_setup, mocker):  # pylint: disable=unused-argument
+    """Test that Hacker News RSS feed items with comments tag extract both article link and comments URL."""
+    entry1 = MockFeedEntry(
+        title="HN Story With Comments",
+        link="https://blog.google/technology/ai/gemini-flash/",
+        comments="https://news.ycombinator.com/item?id=49289112",
+        published="2026-08-14T00:00:00Z",
+    )
+    entry2 = MockFeedEntry(
+        title="HN Ask Post",
+        link="https://news.ycombinator.com/item?id=49289200",
+        comments="https://news.ycombinator.com/item?id=49289200",
+        published="2026-08-14T00:05:00Z",
+    )
+    mock_feed = MockParsedFeed(feed_title="Hacker News", entries=[entry1, entry2])
+    mocker.patch("backend.feed_service.feedparser.parse", return_value=mock_feed)
+
+    tab = Tab(name="News", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Hacker News", url="https://news.ycombinator.com/rss", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    count = feed_service.process_feed_entries(feed_obj, mock_feed)
+    assert count == 2
+
+    items = FeedItem.query.filter_by(feed_id=feed_obj.id).all()
+    assert len(items) == 2
+    items_by_title = {it.title: it for it in items}
+
+    # First item has distinct link and comments URL
+    story_item = items_by_title["HN Story With Comments"]
+    assert story_item.link == "https://blog.google/technology/ai/gemini-flash/"
+    assert story_item.comments_url == "https://news.ycombinator.com/item?id=49289112"
+
+    # Second item has matching link and comments URL
+    ask_item = items_by_title["HN Ask Post"]
+    assert ask_item.link == "https://news.ycombinator.com/item?id=49289200"
+    assert ask_item.comments_url == "https://news.ycombinator.com/item?id=49289200"
+
+
+def test_atom_feed_replies_link_comments_url_processing(db_setup, mocker):  # pylint: disable=unused-argument
+    """Test that Atom feeds with link rel='replies' extract comments_url."""
+    entry = MockFeedEntry(
+        title="Atom Post with Replies",
+        link="https://example.com/blog/post-1",
+        links=[
+            {"rel": "alternate", "href": "https://example.com/blog/post-1"},
+            {"rel": "replies", "href": "https://example.com/blog/post-1/comments"},
+        ],
+        published="2026-08-14T01:00:00Z",
+    )
+    mock_feed = MockParsedFeed(feed_title="Atom Feed", entries=[entry])
+    mocker.patch("backend.feed_service.feedparser.parse", return_value=mock_feed)
+
+    tab = Tab(name="Tech", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Tech Atom", url="https://example.com/atom.xml", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    count = feed_service.process_feed_entries(feed_obj, mock_feed)
+    assert count == 1
+
+    item = FeedItem.query.filter_by(feed_id=feed_obj.id).first()
+    assert item.link == "https://example.com/blog/post-1"
+    assert item.comments_url == "https://example.com/blog/post-1/comments"
+
+
+def test_invalid_comments_url_filtered(db_setup, mocker):  # pylint: disable=unused-argument
+    """Test that invalid/unsafe comments schemes are rejected and stored as None."""
+    entry = MockFeedEntry(
+        title="Unsafe Comments Entry",
+        link="https://example.com/post",
+        comments="javascript:alert(document.cookie)",
+        published="2026-08-14T01:00:00Z",
+    )
+    mock_feed = MockParsedFeed(feed_title="Security Feed", entries=[entry])
+    mocker.patch("backend.feed_service.feedparser.parse", return_value=mock_feed)
+
+    tab = Tab(name="Sec", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Sec Feed", url="https://example.com/sec.xml", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    count = feed_service.process_feed_entries(feed_obj, mock_feed)
+    assert count == 1
+
+    item = FeedItem.query.filter_by(feed_id=feed_obj.id).first()
+    assert item.link == "https://example.com/post"
+    assert item.comments_url is None
+
+
+def test_update_existing_item_with_comments_url(db_setup):  # pylint: disable=unused-argument
+    """Test that existing items are updated with comments_url if previously missing or changed."""
+    tab = Tab(name="News", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="HN Feed", url="https://news.ycombinator.com/rss", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    # Initial feed item without comments_url
+    entry1 = MockFeedEntry(
+        title="Initial Title",
+        link="https://example.com/story",
+        guid="story-guid-1",
+        published="2026-08-14T00:00:00Z",
+    )
+    feed_service.process_feed_entries(feed_obj, MockParsedFeed(feed_title="HN Feed", entries=[entry1]))
+
+    item = FeedItem.query.filter_by(feed_id=feed_obj.id, guid="story-guid-1").first()
+    assert item.comments_url is None
+
+    # Subsequent update providing comments_url
+    entry2 = MockFeedEntry(
+        title="Updated Title",
+        link="https://example.com/story",
+        guid="story-guid-1",
+        comments="https://news.ycombinator.com/item?id=9999",
+        published="2026-08-14T00:00:00Z",
+    )
+    feed_service.process_feed_entries(feed_obj, MockParsedFeed(feed_title="HN Feed", entries=[entry2]))
+
+    updated_item = FeedItem.query.filter_by(feed_id=feed_obj.id, guid="story-guid-1").first()
+    assert updated_item.title == "Updated Title"
+    assert updated_item.comments_url == "https://news.ycombinator.com/item?id=9999"
+

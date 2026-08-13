@@ -138,6 +138,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 ## Future Considerations
 
 *   [x] Import/Export OPML feed lists. (Refactored for robustness, SSE progress, and XSS prevention)
+*   [x] Hacker News & discussion thread link support with secondary article links.
 *   [ ] Widget resizing/reordering (drag and drop).
 *   [ ] Different widget view types (e.g., list vs. expanded).
 *   [ ] User authentication.
@@ -145,6 +146,13 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [ ] More advanced configuration options per feed.
 
 ## Process
+
+*   [x] **2026-08-14: Hacker News & Feed Comments Thread Link Support**
+  - [x] Extended `FeedItem` model and added migration `8e59ae7a1c5b` for `comments_url` field.
+  - [x] Implemented feed parser comments extraction and URL structure validation in `backend/feed_service.py` supporting RSS 2.0 `<comments>` and Atom `rel="replies"`.
+  - [x] Updated API serializers in `backend/models.py` and `backend/blueprints/tabs.py`.
+  - [x] Implemented UI rendering in `frontend/js/ui.js` and `frontend/style.css` to make discussion thread primary/default and provide a secondary `[article]` link with unread status marking on click/middle-click.
+  - [x] Added unit tests across Pytest backend and Vitest frontend; verified 100% test pass rate across Vitest (25/25), Pytest unit (166/166), and Playwright E2E (3/3).
 
 *   [x] **2026-08-13: Documentation Overhaul & Automated Release Workflow**
   - [x] Published GitHub Releases for `v0.26` (Valkey standardization) and `v0.27` (Night Mode, WCAG AA contrast, and Dependabot updates).

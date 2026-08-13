@@ -2334,3 +2334,66 @@ def test_valkey_cache_config_precedence(monkeypatch):
         or "redis://localhost:6379/0"
     )
     assert valkey_url == "redis://valkey-host:6379/0"
+
+
+def test_feed_item_to_dict_includes_comments_url():
+    """Test that FeedItem.to_dict() includes comments_url when present and None when absent."""
+    item_with_comments = FeedItem(
+        id=1,
+        feed_id=10,
+        title="HN Story",
+        link="https://example.com/article",
+        comments_url="https://news.ycombinator.com/item?id=12345",
+        guid="hn-12345",
+    )
+    d1 = item_with_comments.to_dict()
+    assert d1["comments_url"] == "https://news.ycombinator.com/item?id=12345"
+    assert d1["link"] == "https://example.com/article"
+
+    item_without_comments = FeedItem(
+        id=2,
+        feed_id=10,
+        title="Plain Story",
+        link="https://example.com/plain",
+        guid="plain-guid",
+    )
+    d2 = item_without_comments.to_dict()
+    assert d2["comments_url"] is None
+    assert d2["link"] == "https://example.com/plain"
+
+
+def test_get_feed_items_and_tab_feeds_include_comments_url(client, setup_tabs_and_feeds):
+    """Test that GET /api/feeds/<feed_id>/items and GET /api/tabs/<tab_id>/feeds return comments_url."""
+    tab_id = setup_tabs_and_feeds["tab1_id"]
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    with app.app_context():
+        item = FeedItem(
+            feed_id=feed_id,
+            title="HN Story With Discussion",
+            link="https://example.com/story-123",
+            comments_url="https://news.ycombinator.com/item?id=8888",
+            guid="guid_comments_test_1",
+        )
+        db.session.add(item)
+        db.session.commit()
+
+    # Verify /api/feeds/<feed_id>/items endpoint
+    response = client.get(f"/api/feeds/{feed_id}/items")
+    assert response.status_code == 200
+    items = response.json
+    matching = next((it for it in items if it["guid"] == "guid_comments_test_1"), None)
+    assert matching is not None
+    assert matching["comments_url"] == "https://news.ycombinator.com/item?id=8888"
+    assert matching["link"] == "https://example.com/story-123"
+
+    # Verify /api/tabs/<tab_id>/feeds endpoint
+    tab_response = client.get(f"/api/tabs/{tab_id}/feeds")
+    assert tab_response.status_code == 200
+    feeds = tab_response.json
+    feed_data = next((f for f in feeds if f["id"] == feed_id), None)
+    assert feed_data is not None
+    matching_tab_item = next((it for it in feed_data["items"] if it["guid"] == "guid_comments_test_1"), None)
+    assert matching_tab_item is not None
+    assert matching_tab_item["comments_url"] == "https://news.ycombinator.com/item?id=8888"
+    assert matching_tab_item["link"] == "https://example.com/story-123"

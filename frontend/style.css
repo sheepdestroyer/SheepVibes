@@ -286,6 +286,25 @@ header h1 {
     margin-bottom: 3px;
 }
 
+.feed-widget li a.item-article-link {
+    display: inline;
+    font-size: 0.95em;
+    font-weight: 500;
+    color: #005a9c;
+    margin: 0;
+    text-decoration: none;
+}
+
+.feed-widget li.unread a.item-article-link,
+.feed-widget li.read a.item-article-link {
+    font-weight: 500;
+    color: #005a9c;
+}
+
+.feed-widget li a.item-article-link:hover {
+    text-decoration: underline;
+}
+
 .feed-widget li span {
     display: block;
     font-size: 0.8em;
@@ -784,6 +803,11 @@ body.night-mode .feed-widget li.unread a {
 
 body.night-mode .feed-widget li.read a {
     color: #a0a0a0;
+}
+
+body.night-mode .feed-widget li.unread a.item-article-link,
+body.night-mode .feed-widget li.read a.item-article-link {
+    color: #58a6ff;
 }
 
 body.night-mode .feed-widget li span {

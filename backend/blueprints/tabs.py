@@ -89,6 +89,7 @@ def _get_top_items_for_feeds(feed_ids, limit):
             "feed_id": item_row.feed_id,
             "title": item_row.title,
             "link": item_row.link,
+            "comments_url": item_row.comments_url,
             "published_time": FeedItem.to_iso_z_string(item_row.published_time),
             "fetched_time": FeedItem.to_iso_z_string(item_row.fetched_time),
             "is_read": item_row.is_read,

@@ -95,7 +95,7 @@ def validate_link_structure(url, schemes=("http", "https")):
     Validates a URL structure for legitimate schemes and network location.
     Returns the cleaned URL if valid, or None if invalid.
     """
-    if not url:
+    if not url or not isinstance(url, str):
         return None
     cleaned = url.strip()
     try:
@@ -1252,11 +1252,25 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
         feed_db_obj.site_link = new_site_link
 
 
+def _extract_comments_url(entry):
+    """Extracts and validates comments URL from a feed entry (RSS or Atom)."""
+    raw_comments = entry.get("comments")
+    if not raw_comments and entry.get("links"):
+        for lk in entry.get("links", []):
+            if isinstance(lk, dict) and lk.get("rel") in ("replies", "discussion", "comments") and lk.get("href"):
+                raw_comments = lk.get("href")
+                break
+    if raw_comments:
+        return validate_link_structure(raw_comments)
+    return None
+
+
 def _get_existing_items_lookups(feed_db_obj):
     """Fetches existing DB items and returns lookup maps by GUID and link."""
     items_tuple = (
         db.session.query(FeedItem.id, FeedItem.guid,
-                         FeedItem.link, FeedItem.title)
+                         FeedItem.link, FeedItem.title,
+                         FeedItem.comments_url)
         .filter_by(feed_id=feed_db_obj.id)
         .all()
     )
@@ -1300,6 +1314,8 @@ def _process_single_entry(
         )
         return None
 
+    entry_comments_url = _extract_comments_url(entry)
+
     if entry.get("id"):
         db_guid = entry.get("id")
     else:
@@ -1318,6 +1334,7 @@ def _process_single_entry(
             existing_match,
             entry.get("title", "[No Title]"),
             entry_link,
+            entry_comments_url,
         )
         return None
 
@@ -1331,6 +1348,7 @@ def _process_single_entry(
         feed_id=feed_db_obj.id,
         title=entry.get("title", "[No Title]"),
         link=entry_link,
+        comments_url=entry_comments_url,
         published_time=parsed_published,
         guid=db_guid,
     )
@@ -1368,17 +1386,19 @@ def _collect_new_items(feed_db_obj, parsed_feed):
     return items_to_add
 
 
-def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link):
-    """Updates an existing item if title or link changed.
+def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_link, entry_comments_url=None):
+    """Updates an existing item if title, link, or comments_url changed.
 
     Args:
         feed_db_obj (Feed): The database feed object.
-        existing_item_data (Row): Tuple-like object with existing item ID, title, and link.
+        existing_item_data (Row): Tuple-like object with existing item ID, title, link, comments_url.
         entry_title (str): New title from the feed entry.
         entry_link (str): New link from the feed entry.
+        entry_comments_url (str, optional): New comments URL from the feed entry.
     """
     existing_title = existing_item_data.title
     existing_link = existing_item_data.link
+    existing_comments_url = getattr(existing_item_data, "comments_url", None)
 
     updates = {}
     if entry_title and entry_title != existing_title:
@@ -1386,6 +1406,9 @@ def _update_existing_item(feed_db_obj, existing_item_data, entry_title, entry_li
 
     if entry_link and entry_link != existing_link:
         updates["link"] = entry_link
+
+    if entry_comments_url is not None and entry_comments_url != existing_comments_url:
+        updates["comments_url"] = entry_comments_url
 
     if updates:
         logger.info(

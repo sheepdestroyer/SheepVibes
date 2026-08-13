@@ -138,6 +138,7 @@ class FeedItem(db.Model):
     )  # Add index
     title = db.Column(db.String, nullable=False)
     link = db.Column(db.String, nullable=False)
+    comments_url = db.Column(db.String, nullable=True)
     published_time = db.Column(db.DateTime, nullable=True, index=True)  # Add index
     fetched_time = db.Column(
         db.DateTime, nullable=False, default=lambda: datetime.datetime.now(timezone.utc)
@@ -211,6 +212,7 @@ class FeedItem(db.Model):
             "feed_id": self.feed_id,
             "title": self.title,
             "link": self.link,
+            "comments_url": self.comments_url,
             "published_time": FeedItem.to_iso_z_string(self.published_time),
             "fetched_time": FeedItem.to_iso_z_string(self.fetched_time),
             "is_read": self.is_read,

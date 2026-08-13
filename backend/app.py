@@ -114,7 +114,9 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Initialize extensions
 db.init_app(app)
-migrate = Migrate(app, db)
+migrate = Migrate(
+    app, db, directory=os.path.join(os.path.dirname(__file__), "migrations")
+)
 cache.init_app(app)
 
 # Register Blueprints
