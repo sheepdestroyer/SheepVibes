@@ -1,8 +1,8 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi } from 'vitest';
-import { formatDate, throttle, sanitizeUrl } from './utils.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { formatDate, throttle, sanitizeUrl, getStorageItem, setStorageItem, removeStorageItem } from './utils.js';
 
 describe('formatDate', () => {
     it('returns "No date" for null or empty input', () => {
@@ -103,3 +103,45 @@ describe('sanitizeUrl', () => {
         expect(sanitizeUrl(123)).toBe('#');
     });
 });
+
+describe('localStorage helpers', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('getStorageItem reads value or returns null on error', () => {
+        localStorage.setItem('testKey', 'testVal');
+        expect(getStorageItem('testKey')).toBe('testVal');
+        expect(getStorageItem('nonExistentKey')).toBeNull();
+
+        const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+            throw new Error('Access denied');
+        });
+        expect(getStorageItem('testKey')).toBeNull();
+        getItemSpy.mockRestore();
+    });
+
+    it('setStorageItem stores value or handles errors gracefully', () => {
+        setStorageItem('newKey', 'newVal');
+        expect(localStorage.getItem('newKey')).toBe('newVal');
+
+        const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new Error('Quota exceeded');
+        });
+        expect(() => setStorageItem('failKey', 'failVal')).not.toThrow();
+        setItemSpy.mockRestore();
+    });
+
+    it('removeStorageItem removes value or handles errors gracefully', () => {
+        localStorage.setItem('remKey', 'val');
+        removeStorageItem('remKey');
+        expect(localStorage.getItem('remKey')).toBeNull();
+
+        const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+            throw new Error('Access denied');
+        });
+        expect(() => removeStorageItem('remKey')).not.toThrow();
+        removeItemSpy.mockRestore();
+    });
+});
+

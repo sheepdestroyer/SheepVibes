@@ -110,11 +110,11 @@ header h1 {
 }
 
 #tab-management-buttons #add-tab-button {
-    background-color: #007bff;
+    background-color: #005a9c;
 }
 
 #tab-management-buttons #add-tab-button:hover {
-    background-color: #0056b3;
+    background-color: #004070;
 }
 
 #tab-management-buttons #delete-tab-button {
@@ -350,7 +350,9 @@ header h1 {
 }
 
 .feed-widget:hover .edit-feed-button,
-.feed-widget:hover .delete-feed-button {
+.feed-widget:hover .delete-feed-button,
+.edit-feed-button:focus-visible,
+.delete-feed-button:focus-visible {
     opacity: 1;
 }
 
@@ -497,12 +499,12 @@ header h1 {
 }
 
 #save-feed-button {
-    background-color: #007bff;
+    background-color: #005a9c;
     color: white;
 }
 
 #save-feed-button:hover {
-    background-color: #0056b3;
+    background-color: #004070;
 }
 
 #cancel-edit-button {
@@ -661,4 +663,180 @@ header h1 {
 
 .hidden {
     display: none !important;
+}
+
+/* Night Mode Section in Settings */
+#night-mode-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px 8px;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+    color: #333;
+}
+
+#night-mode-section label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    width: 100%;
+}
+
+#night-mode-section input[type="checkbox"] {
+    cursor: pointer;
+}
+
+/* Night Mode Colors */
+body.night-mode {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+body.night-mode a {
+    color: #4da3ff;
+}
+
+body.night-mode button:focus-visible,
+body.night-mode a:focus-visible,
+body.night-mode input:focus-visible,
+body.night-mode select:focus-visible,
+body.night-mode textarea:focus-visible {
+    outline-color: #4da3ff;
+}
+
+/* Header */
+body.night-mode header {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border-bottom-color: #2d2d2d;
+}
+
+body.night-mode header h1 {
+    color: #4da3ff;
+}
+
+/* Tabs */
+body.night-mode #tabs-container button {
+    color: #b0b0b0;
+}
+
+body.night-mode #tabs-container button:hover {
+    color: #4da3ff;
+    border-bottom-color: #444;
+}
+
+body.night-mode #tabs-container button.active {
+    color: #4da3ff;
+    border-bottom-color: #4da3ff;
+}
+
+/* Settings Menu */
+body.night-mode #settings-menu {
+    background-color: #1e1e1e;
+    border-color: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.night-mode #settings-menu #add-feed-section {
+    border-bottom-color: #2d2d2d;
+}
+
+body.night-mode #night-mode-section {
+    border-bottom-color: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.night-mode #settings-menu input[type="text"] {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.night-mode #settings-menu button {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.night-mode #settings-menu button:hover {
+    background-color: #383838;
+}
+
+/* Feed Grid / Widgets */
+body.night-mode .feed-widget {
+    background-color: #1e1e1e;
+    border-color: #2d2d2d;
+}
+
+body.night-mode .feed-widget h2 {
+    background-color: #252525;
+    border-bottom-color: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.night-mode .feed-widget li.unread a {
+    color: #e0e0e0;
+}
+
+body.night-mode .feed-widget li.read a {
+    color: #a0a0a0;
+}
+
+body.night-mode .feed-widget li span {
+    color: #a0a0a0;
+}
+
+/* Progress Container */
+body.night-mode #progress-container {
+    background-color: #252525;
+    border-bottom-color: #2d2d2d;
+}
+
+body.night-mode #progress-status {
+    color: #e0e0e0;
+}
+
+body.night-mode #progress-bar {
+    background-color: #333;
+}
+
+body.night-mode #progress-bar::-webkit-progress-bar {
+    background-color: #333;
+}
+
+/* Modals */
+body.night-mode .modal-content {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+}
+
+body.night-mode .modal h2 {
+    color: #e0e0e0;
+}
+
+body.night-mode .form-group input {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.night-mode .form-group input[readonly] {
+    background-color: #151515;
+    color: #a0a0a0;
+}
+
+body.night-mode .form-group small {
+    color: #a0a0a0;
+}
+
+body.night-mode .modal-close-button {
+    color: #e0e0e0;
+}
+
+body.night-mode .modal-close-button:hover {
+    color: #fff;
 }

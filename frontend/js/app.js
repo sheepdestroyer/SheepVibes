@@ -1,4 +1,4 @@
-import { throttle } from './utils.js';
+import { throttle, getStorageItem, setStorageItem } from './utils.js';
 import { api, API_BASE_URL } from './api.js';
 import {
     showToast,
@@ -17,8 +17,19 @@ import {
 const PROGRESS_FALLBACK_TIMEOUT_MS = 15000;
 let progressFallbackTimeoutId = null;
 
+// Immediate Night Mode application to prevent FOUC
+if (getStorageItem('nightMode') === 'enabled') {
+    if (document.body) {
+        document.body.classList.add('night-mode');
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (document.body) document.body.classList.add('night-mode');
+        });
+    }
+}
+
 // State
-const storedTabId = localStorage.getItem('activeTabId');
+const storedTabId = getStorageItem('activeTabId');
 const parsedTabId = storedTabId !== null ? parseInt(storedTabId, 10) : NaN;
 let activeTabId = !isNaN(parsedTabId) ? parsedTabId : null;
 let allTabs = [];
@@ -46,21 +57,33 @@ function _clearProgressFallback() {
 // --- Initialization ---
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Night Mode initialization
+    const nightModeEnabled = getStorageItem('nightMode') === 'enabled';
+    const nightModeSwitch = document.getElementById('night-mode-switch');
+    if (nightModeSwitch) {
+        nightModeSwitch.checked = nightModeEnabled;
+        nightModeSwitch.setAttribute('aria-checked', nightModeEnabled ? 'true' : 'false');
+        nightModeSwitch.addEventListener('change', handleNightModeToggle);
+    }
+    if (nightModeEnabled && document.body) {
+        document.body.classList.add('night-mode');
+    }
+
     // Setup event listeners
-    document.getElementById('add-tab-button').addEventListener('click', handleAddTab);
-    document.getElementById('rename-tab-button').addEventListener('click', handleRenameTab);
-    document.getElementById('delete-tab-button').addEventListener('click', handleDeleteTab);
-    document.getElementById('settings-button').addEventListener('click', toggleSettingsMenu);
-    document.getElementById('add-feed-button').addEventListener('click', handleAddFeed);
-    document.getElementById('refresh-all-feeds-button').addEventListener('click', handleRefreshAllFeeds);
-    document.getElementById('export-opml-button').addEventListener('click', handleExportOpml);
-    document.getElementById('import-opml-button').addEventListener('click', () => document.getElementById('opml-file-input').click());
-    document.getElementById('opml-file-input').addEventListener('change', handleImportOpmlFileSelect);
+    document.getElementById('add-tab-button')?.addEventListener('click', handleAddTab);
+    document.getElementById('rename-tab-button')?.addEventListener('click', handleRenameTab);
+    document.getElementById('delete-tab-button')?.addEventListener('click', handleDeleteTab);
+    document.getElementById('settings-button')?.addEventListener('click', toggleSettingsMenu);
+    document.getElementById('add-feed-button')?.addEventListener('click', handleAddFeed);
+    document.getElementById('refresh-all-feeds-button')?.addEventListener('click', handleRefreshAllFeeds);
+    document.getElementById('export-opml-button')?.addEventListener('click', handleExportOpml);
+    document.getElementById('import-opml-button')?.addEventListener('click', () => document.getElementById('opml-file-input')?.click());
+    document.getElementById('opml-file-input')?.addEventListener('change', handleImportOpmlFileSelect);
 
     // Modal listeners
-    document.getElementById('edit-feed-modal-close-button').addEventListener('click', closeEditFeedModal);
-    document.getElementById('cancel-edit-button').addEventListener('click', closeEditFeedModal);
-    document.getElementById('edit-feed-form').addEventListener('submit', handleEditFeedSubmit);
+    document.getElementById('edit-feed-modal-close-button')?.addEventListener('click', closeEditFeedModal);
+    document.getElementById('cancel-edit-button')?.addEventListener('click', closeEditFeedModal);
+    document.getElementById('edit-feed-form')?.addEventListener('submit', handleEditFeedSubmit);
 
     // Initial load
     await initializeTabs();
@@ -74,7 +97,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('click', (event) => {
         const settingsMenu = document.getElementById('settings-menu');
         const settingsButton = document.getElementById('settings-button');
-        if (!settingsMenu.classList.contains('hidden') &&
+        if (settingsMenu && settingsButton &&
+            !settingsMenu.classList.contains('hidden') &&
             !settingsMenu.contains(event.target) &&
             !settingsButton.contains(event.target)) {
             settingsMenu.classList.add('hidden');
@@ -111,7 +135,7 @@ async function initializeTabs() {
 async function switchTab(tabId) {
     if (tabId === activeTabId) return;
     activeTabId = tabId;
-    localStorage.setItem('activeTabId', tabId);
+    setStorageItem('activeTabId', tabId);
 
     // Update UI active state and re-render tabs logic
     renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
@@ -229,7 +253,7 @@ async function handleDeleteTab() {
         document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
         loadedTabs.delete(deletedTabId);
         activeTabId = null;
-        localStorage.removeItem('activeTabId');
+        removeStorageItem('activeTabId');
 
         await initializeTabs(); // Still need this to re-render the tab list properly
         showToast('Tab deleted.', 'success');
@@ -466,4 +490,15 @@ function initializeSSE() {
     };
 }
 
+function handleNightModeToggle(e) {
+    const isChecked = e.target.checked;
+    e.target.setAttribute('aria-checked', isChecked ? 'true' : 'false');
+    if (isChecked) {
+        document.body.classList.add('night-mode');
+        setStorageItem('nightMode', 'enabled');
+    } else {
+        document.body.classList.remove('night-mode');
+        setStorageItem('nightMode', 'disabled');
+    }
+}
 

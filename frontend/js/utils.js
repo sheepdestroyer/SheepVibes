@@ -15,7 +15,6 @@ export function throttle(callback, delay) {
             lastThis = this;
             return;
         }
-        }
 
         callback.apply(this, args);
         isThrottled = true;
@@ -93,3 +92,43 @@ export function sanitizeUrl(url) {
     }
     return '#';
 }
+
+/**
+ * Safely retrieves an item from localStorage.
+ * @param {string} key - The key to retrieve.
+ * @returns {string | null} The item value or null if unavailable/error.
+ */
+export function getStorageItem(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch (e) {
+        console.warn(`localStorage getItem failed for key "${key}":`, e);
+        return null;
+    }
+}
+
+/**
+ * Safely sets an item in localStorage.
+ * @param {string} key - The key to set.
+ * @param {string} value - The value to store.
+ */
+export function setStorageItem(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch (e) {
+        console.warn(`localStorage setItem failed for key "${key}":`, e);
+    }
+}
+
+/**
+ * Safely removes an item from localStorage.
+ * @param {string} key - The key to remove.
+ */
+export function removeStorageItem(key) {
+    try {
+        localStorage.removeItem(key);
+    } catch (e) {
+        console.warn(`localStorage removeItem failed for key "${key}":`, e);
+    }
+}
+

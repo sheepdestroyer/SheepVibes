@@ -184,13 +184,17 @@ def _get_autosave_directory():
         db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if db_uri.startswith("sqlite:///"):
             db_path = db_uri.replace("sqlite:///", "")
-            if db_path == ":memory:":
+            if ":memory:" in db_path or "mode=memory" in db_path:
                 logger.warning(
-                    "Skipping OPML autosave because database is in-memory.")
+                    "Skipping OPML autosave because database is in-memory."
+                )
                 return None
             # Resolve relative paths to absolute ones to find the data directory correctly
             try:
-                abs_db_path = os.path.abspath(db_path)
+                clean_path = db_path.split("?")[0]
+                if clean_path.startswith("file:"):
+                    clean_path = clean_path[5:]
+                abs_db_path = os.path.abspath(clean_path)
                 data_dir = os.path.dirname(abs_db_path)
                 logger.debug(
                     "Resolved autosave directory from SQLite path: %s", data_dir

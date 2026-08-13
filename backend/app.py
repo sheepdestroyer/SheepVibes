@@ -50,12 +50,15 @@ CORS(app, origins=allowed_origins, resources={r"/api/*": {}})
 # Test specific configuration
 # Check app.config first in case it's set by test runner, then env var
 if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    if "SQLALCHEMY_DATABASE_URI" not in app.config:
+        app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+            "TEST_DATABASE_URI", "sqlite:///file:memdb1?mode=memory&cache=shared&uri=true"
+        )
     app.config["TESTING"] = True  # Ensure it's explicitly True in app.config
     app.config["CACHE_TYPE"] = (
         "SimpleCache"  # Use SimpleCache for tests, no Redis needed
     )
-    logger.info("TESTING mode: Using in-memory SQLite database and SimpleCache.")
+    logger.info("TESTING mode: Using SQLite database (%s) and SimpleCache.", app.config["SQLALCHEMY_DATABASE_URI"])
 else:
     # Existing database configuration logic
     default_db_path_in_container = "/app/data/sheepvibes.db"
@@ -100,6 +103,10 @@ else:
         "CACHE_REDIS_URL", "redis://localhost:6379/0"
     )
 
+# Enable URI parsing for SQLite connections globally
+if "SQLALCHEMY_ENGINE_OPTIONS" not in app.config:
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"uri": True}}
+
 # Disable modification tracking
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -134,9 +141,12 @@ def scheduled_feed_update():
         db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if db_uri.startswith("sqlite:///"):
             db_path = db_uri.replace("sqlite:///", "")
-            if db_path != ":memory:":
+            if not (":memory:" in db_path or "mode=memory" in db_path):
                 try:
-                    data_dir = os.path.dirname(os.path.abspath(db_path))
+                    clean_path = db_path.split("?")[0]
+                    if clean_path.startswith("file:"):
+                        clean_path = clean_path[5:]
+                    data_dir = os.path.dirname(os.path.abspath(clean_path))
                 except Exception:
                     pass
     if not data_dir:
@@ -349,6 +359,9 @@ def stream():
 
 
 if __name__ == "__main__":
+    if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
+        with app.app_context():
+            db.create_all()
     # Start the Flask development server for local testing.
     is_debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     server_port = int(os.environ.get("PORT", "5000"))
