@@ -6,10 +6,10 @@
 set -euo pipefail
 
 # --- Configuration ---
-IMAGE_NAME="sheepvibes-app"
+IMAGE_NAME="localhost/sheepvibes-app:latest"
 CONTAINER_NAME="sheepvibes-instance"
 VOLUME_NAME="sheepvibes-data"
-HOST_PORT="5001"
+HOST_PORT="5002"
 CONTAINER_PORT="5000"
 DATA_PATH="/app/data" # Updated data path inside the container
 RESTART_POLICY="unless-stopped"

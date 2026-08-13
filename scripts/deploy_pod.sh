@@ -72,7 +72,7 @@ DOWNLOAD_SUCCESS=true
 for filename in "${QUADLET_FILES[@]}"; do
     file_url="${QUADLET_BASE_URL}/${filename}"
     echo "Downloading ${filename} from ${file_url}..."
-    if curl -sSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${file_url}" -o "${SYSTEMD_USER_DIR}/${filename}"; then
+    if curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${file_url}" -o "${SYSTEMD_USER_DIR}/${filename}"; then
         echo "${filename} downloaded successfully to ${SYSTEMD_USER_DIR}."
     else
         echo "Error downloading ${filename} from ${file_url}."
@@ -85,6 +85,12 @@ if [ "${DOWNLOAD_SUCCESS}" = false ]; then
     echo "Please check the repository path, branch name, filenames in pod/, and your internet connection."
     exit 1
 fi
+echo ""
+
+# --- Reload systemd ---
+echo "Reloading systemd user daemon to parse updated Quadlet files..."
+systemctl --user daemon-reload
+echo "Systemd user daemon reloaded."
 echo ""
 
 # --- User Instructions ---
