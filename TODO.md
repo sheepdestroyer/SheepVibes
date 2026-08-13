@@ -152,7 +152,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
   - [x] Implemented feed parser comments extraction and URL structure validation in `backend/feed_service.py` supporting RSS 2.0 `<comments>` and Atom `rel="replies"`.
   - [x] Updated API serializers in `backend/models.py` and `backend/blueprints/tabs.py`.
   - [x] Implemented UI rendering in `frontend/js/ui.js` and `frontend/style.css` to make discussion thread primary/default and provide a secondary `[article]` link with unread status marking on click/middle-click.
-  - [x] Added unit tests across Pytest backend and Vitest frontend; verified 100% test pass rate across Vitest (25/25), Pytest unit (166/166), and Playwright E2E (3/3).
+  - [x] Added comprehensive unit test suite across Pytest backend and Vitest frontend:
+    - RSS 2.0 real XML parsing for Hacker News and Lobsters feeds (story posts vs. ask/self-posts).
+    - Atom link rel variations (`replies`, `discussion`, `comments`).
+    - Malformed and unsafe URL filtering (non-string, whitespace, non-http/https schemes).
+    - Database update idempotency and upstream omitted-comments preservation.
+    - API serialization and pagination comments_url preservation in `FeedItem.to_dict()` and `_get_top_items_for_feeds`.
+    - Frontend Vitest suite covering discussion links, secondary article links, URL sanitization, and click/middle-click mark-as-read handlers.
+    - Verified 100% test pass rate across Vitest (36/36), Pytest unit (173/173), and Playwright E2E (3/3).
 
 *   [x] **2026-08-13: Documentation Overhaul & Automated Release Workflow**
   - [x] Published GitHub Releases for `v0.26` (Valkey standardization) and `v0.27` (Night Mode, WCAG AA contrast, and Dependabot updates).
