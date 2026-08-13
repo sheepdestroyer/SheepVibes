@@ -1,5 +1,7 @@
 # AI Agents must respect the following rules
 
+- **Dependency & Version Policy**: Never downgrade dependencies, tools, or GitHub Action versions on a whim or based on outdated training assumptions. Always keep the latest release versions and empirically verify actual existence before making version changes.
+
 ## An Agent must always start by reading **all** `.md` files from the repository in order to have a global understanding of the application. They must also read both backend & frontend code files to understand the app's logic. 
 
 ## Agents' workflow :
