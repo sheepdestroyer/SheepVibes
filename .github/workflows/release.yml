@@ -60,4 +60,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.build-image.outputs.TAG }}
         run: |
-          gh release create "$TAG" --generate-notes --title "$TAG" || gh release edit "$TAG" --generate-notes
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping creation."
+          else
+            gh release create "$TAG" --generate-notes --title "$TAG"
+          fi

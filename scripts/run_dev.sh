@@ -25,7 +25,7 @@ source "$VENV_DIR/bin/activate"
 
 # Check if Valkey server is running by using the installed 'redis' Python package (wire-compatible)
 echo "Checking Valkey connection..."
-if ! python -c "import redis; redis.Redis(decode_responses=True).ping()" &> /dev/null; then
+if ! python -c "import os, redis; url = os.environ.get('CACHE_VALKEY_URL') or os.environ.get('CACHE_REDIS_URL') or 'redis://localhost:6379/0'; redis.Redis.from_url(url, decode_responses=True).ping()" &> /dev/null; then
     echo "Error: Cannot connect to Valkey server. Is it running?"
     echo "Please start Valkey (e.g., 'podman run -d -p 6379:6379 docker.io/valkey/valkey:9.1.1') before running the development server."
     deactivate
