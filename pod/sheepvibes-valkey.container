@@ -3,7 +3,7 @@ Description=SheepVibes Valkey Container
 
 [Container]
 ContainerName=sheepvibes-valkey
-Image=docker.io/valkey/valkey:9.1.1-alpine
+Image=docker.io/valkey/valkey:9.1.1
 Pod=sheepvibespod.pod
 Volume=sheepvibes-valkey.volume:/data
 

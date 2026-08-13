@@ -30,7 +30,7 @@ Automated environments, such as those used by Google's Jules, operate in restric
 
 ### Key Configuration Points for Automated Agents:
 
-1.  **Service Containerization**: The tests require a running Valkey service for caching checks. In the GitHub Actions workflow, this is accomplished using the `services` block to start a `docker.io/valkey/valkey:9.1.1-alpine` container. Your environment must provide a Valkey container accessible to the test runner.
+1.  **Service Containerization**: The tests require a running Valkey service for caching checks. In the GitHub Actions workflow, this is accomplished using the `services` block to start a `docker.io/valkey/valkey:9.1.1` container. Your environment must provide a Valkey container accessible to the test runner.
 
 2.  **Dynamic Port Handling**: In CI systems, you cannot assume Valkey will be available on `localhost:6379`. The service container's port `6379` will be mapped to a *dynamic port* on the host runner. The GitHub Actions workflow retrieves this port using `${{ job.services.valkey.ports['6379'] }}`.
 

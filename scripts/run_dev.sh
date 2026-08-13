@@ -27,7 +27,7 @@ source "$VENV_DIR/bin/activate"
 echo "Checking Valkey connection..."
 if ! python -c "import redis; redis.Redis(decode_responses=True).ping()" &> /dev/null; then
     echo "Error: Cannot connect to Valkey server. Is it running?"
-    echo "Please start Valkey (e.g., 'podman run -d -p 6379:6379 docker.io/valkey/valkey:9.1.1-alpine') before running the development server."
+    echo "Please start Valkey (e.g., 'podman run -d -p 6379:6379 docker.io/valkey/valkey:9.1.1') before running the development server."
     deactivate
     exit 1
 fi

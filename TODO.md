@@ -147,7 +147,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 ## Process
 
 *   [x] **2026-08-13: Standardize on Valkey instead of Redis**
-  - [x] Migrated caching container image and service definitions from Redis to Valkey pinned to latest release tag `docker.io/valkey/valkey:9.1.1-alpine`.
+  - [x] Migrated caching container image and service definitions from Redis to Valkey pinned to latest release tag `docker.io/valkey/valkey:9.1.1` (standard Debian-based image to guarantee GLIBC/tooling compatibility and prevent BusyBox `nc -z` / health check restart issues).
   - [x] Updated Quadlet service configurations (`pod/sheepvibes-valkey.container`, `pod/sheepvibes-valkey.volume`), deployment scripts (`scripts/deploy_pod.sh`, `scripts/dev_manager.sh`), CI workflows (`.github/workflows/run-tests.yml`), and environment variables (`CACHE_VALKEY_URL`, `CACHE_VALKEY_PORT`).
   - [x] Verified full unit and E2E test suites pass with Valkey cache container.
 

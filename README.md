@@ -152,7 +152,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 
 2.  **Start Valkey Container**:
     ```bash
-    podman run -d --name sheepvibes-valkey-dev --network sheepvibes-dev-network docker.io/valkey/valkey:9.1.1-alpine
+    podman run -d --name sheepvibes-valkey-dev --network sheepvibes-dev-network docker.io/valkey/valkey:9.1.1
     ```
 
 3.  **Run the Application Container**:

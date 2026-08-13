@@ -19,7 +19,7 @@ jobs:
     services:
       # Start a Valkey service container for the job
       valkey:
-        image: docker.io/valkey/valkey:9.1.1-alpine
+        image: docker.io/valkey/valkey:9.1.1
         # Expose port 6379 on the service container to be mapped to the host
         ports:
           - 6379:6379

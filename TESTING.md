@@ -27,10 +27,10 @@ The backend tests require a running Valkey instance for caching checks.
     Before running the tests, start a Valkey container. The `--rm` flag will ensure it is automatically removed when stopped.
     ```bash
     # Using Podman
-    podman run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1.1-alpine
+    podman run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1.1
 
     # Or using Docker
-    # docker run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1.1-alpine
+    # docker run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1.1
     ```
 
 2.  **Run Pytest**
