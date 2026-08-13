@@ -110,11 +110,11 @@ header h1 {
 }
 
 #tab-management-buttons #add-tab-button {
-    background-color: #007bff;
+    background-color: #005a9c;
 }
 
 #tab-management-buttons #add-tab-button:hover {
-    background-color: #0056b3;
+    background-color: #004070;
 }
 
 #tab-management-buttons #delete-tab-button {
@@ -350,7 +350,9 @@ header h1 {
 }
 
 .feed-widget:hover .edit-feed-button,
-.feed-widget:hover .delete-feed-button {
+.feed-widget:hover .delete-feed-button,
+.edit-feed-button:focus-visible,
+.delete-feed-button:focus-visible {
     opacity: 1;
 }
 
@@ -497,12 +499,12 @@ header h1 {
 }
 
 #save-feed-button {
-    background-color: #007bff;
+    background-color: #005a9c;
     color: white;
 }
 
 #save-feed-button:hover {
-    background-color: #0056b3;
+    background-color: #004070;
 }
 
 #cancel-edit-button {
@@ -668,9 +670,8 @@ header h1 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 12px;
+    padding: 6px 12px 8px;
     border-bottom: 1px solid #dee2e6;
-    padding-bottom: 8px;
     margin-bottom: 8px;
     font-size: 0.9em;
     color: #333;
@@ -755,6 +756,16 @@ body.night-mode #settings-menu input[type="text"] {
     border-color: #444;
 }
 
+body.night-mode #settings-menu button {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.night-mode #settings-menu button:hover {
+    background-color: #383838;
+}
+
 /* Feed Grid / Widgets */
 body.night-mode .feed-widget {
     background-color: #1e1e1e;
@@ -772,11 +783,11 @@ body.night-mode .feed-widget li.unread a {
 }
 
 body.night-mode .feed-widget li.read a {
-    color: #888;
+    color: #a0a0a0;
 }
 
 body.night-mode .feed-widget li span {
-    color: #888;
+    color: #a0a0a0;
 }
 
 /* Progress Container */
@@ -815,11 +826,11 @@ body.night-mode .form-group input {
 
 body.night-mode .form-group input[readonly] {
     background-color: #151515;
-    color: #888;
+    color: #a0a0a0;
 }
 
 body.night-mode .form-group small {
-    color: #888;
+    color: #a0a0a0;
 }
 
 body.night-mode .modal-close-button {

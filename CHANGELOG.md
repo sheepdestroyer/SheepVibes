@@ -1,5 +1,13 @@
 # Timestamped Changelog maintained by agents when working on this repository
 
+## 2026-08-12
+
+- **Refactor & Fix (PR #523): Night Mode code review resolution & E2E Database Initialization**
+  - **Backend & SQLite Safety**: Configured global `SQLALCHEMY_ENGINE_OPTIONS={"connect_args": {"uri": True}}` in `backend/app.py` for both testing and production environments. Updated lock path resolution in `backend/app.py` and `_get_autosave_directory()` in `backend/blueprints/opml.py` to correctly identify and strip `file:` URI prefixes and query parameters for SQLite memory databases. Scoped `db.create_all()` execution to application startup (`__main__`).
+  - **Frontend & DOM Safety**: Added explicit `document.body` guards at top-level module load and null checks for dropdown elements in `frontend/js/app.js`. Added `aria-checked` state synchronization for `role="switch"`.
+  - **UI Contrast & Focus**: Fixed button contrast ratios (`#005a9c`, > 4.5:1) for WCAG 2.1 AA compliance and added `:focus-visible` opacity styling for feed action buttons in `frontend/style.css`.
+  - **E2E & Test Quality**: Updated `open_settings_menu` in `tests/e2e/test_infinite_scroll.py` to use natural user click interactions (`page.click('#settings-button')`). Verified 100% test pass rate across Vitest (23/23) and Pytest (162/162).
+
 ## 2026-08-11
 
 - **Feat: Night Mode / Dark Theme**

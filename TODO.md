@@ -146,6 +146,13 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-12: PR #523 Code Review Resolution & E2E live_server Fix**
+  - [x] Implemented safe `localStorage` helper wrappers with try-catch fallback handling in `frontend/js/utils.js` and `frontend/js/app.js`.
+  - [x] Fixed `live_server` SQLite in-memory isolation issue in `backend/app.py` and `backend/blueprints/opml.py` with global `SQLALCHEMY_ENGINE_OPTIONS={"connect_args": {"uri": True}}` and URI parameter cleaning.
+  - [x] Fixed WCAG 2.1 AA color contrast for night mode read items, buttons (`#005a9c`), and focus states in `frontend/style.css`.
+  - [x] Added `document.body` guards at top-level module load and ARIA `role="switch"` state sync in `frontend/js/app.js`.
+  - [x] Verified 100% pass rate across frontend vitest (23/23) and backend/e2e pytest suite (162/162 passed, 0 skipped).
+
 *   [x] **2026-08-06: Production Feed Refresh Investigation & Fix**
   - [x] Fixed deduplication logic bug in `_process_single_entry` where link matching overwrote items with distinct GUIDs.
   - [x] Increased feed download timeout to 20 seconds (`DEFAULT_FEED_FETCH_TIMEOUT`).

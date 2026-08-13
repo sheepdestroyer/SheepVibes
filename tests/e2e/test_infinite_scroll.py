@@ -17,10 +17,9 @@ from playwright.sync_api import Page, expect
 
 
 def open_settings_menu(page: Page):
-    """Ensure the settings menu dropdown is open."""
-    page.evaluate(
-        "document.getElementById('settings-menu').classList.remove('hidden')"
-    )
+    """Ensure the settings menu dropdown is open via user click."""
+    if not page.locator("#settings-menu").is_visible():
+        page.click("#settings-button")
 
 
 @pytest.mark.e2e
