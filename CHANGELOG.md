@@ -1,5 +1,10 @@
 ## 2026-08-13
 
+- **Docs & Release Automation: GitHub Release Automation & Documentation Consistency**
+  - **Release Workflow Automation**: Updated `.github/workflows/release.yml` with `contents: write` permissions and added an automated step to create/update GitHub Releases with auto-generated release notes upon pushing `v*.*` tags.
+  - **GitHub Releases Backfill**: Published official GitHub Releases for `v0.26` (Valkey standardization) and `v0.27` (Night Mode, WCAG AA compliance, and Dependabot bumps).
+  - **Documentation Alignment**: Synchronized `README.md`, `TESTING.md`, `AGENTS.md`, and `TODO.md` with current project architecture (Flask Blueprints, ES6 JS modules, Valkey 9.1.1, Vitest frontend tests, and Playwright E2E suites).
+
 - **Infrastructure: Standardized caching on Valkey (docker.io/valkey/valkey:9.1.1)**
   - **Container & Service Migration**: Replaced Redis container definitions with Valkey pinned to standard release tag `docker.io/valkey/valkey:9.1.1` (Debian-based base image to prevent BusyBox syntax/probe issues and ensure GLIBC tool compatibility). Updated Quadlet files (`pod/sheepvibes-valkey.container`, `pod/sheepvibes-valkey.volume`), deployment scripts (`scripts/deploy_pod.sh`, `scripts/dev_manager.sh`, `scripts/run_dev.sh`), and GitHub Actions workflow (`.github/workflows/run-tests.yml`) to use `valkey` and `valkey-cli ping`.
   - **Backend & Environment Variables**: Added support for `CACHE_VALKEY_URL` (with fallback to `CACHE_REDIS_URL`) in `backend/app.py` and `CACHE_VALKEY_PORT` in unit/e2e test suites.

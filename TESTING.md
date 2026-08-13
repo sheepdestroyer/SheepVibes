@@ -1,80 +1,90 @@
-## Backend Testing
-The backend of SheepVibes is written in Python and uses the `pytest` framework for testing.
+# Testing Guide for SheepVibes
 
-## Linting
+SheepVibes uses a multi-layered test suite covering backend logic, security constraints, frontend modules, and end-to-end user flows.
 
-We use `flake8` for Python linting.
+## Linting & Static Analysis
 
 ```bash
+# Python linting
 flake8 backend/ --max-line-length=120
+
+# Python static analysis
+pylint backend/feed_service.py backend/app.py backend/blueprints/
 ```
 
-### I. Setup for Local Testing
-1.  Navigate to the backend directory. Install the necessary development dependencies within a Python virtual environment, including `pytest`:
-    ```bash
-    # From the project root
-    python -m venv venv
-    source venv/bin/activate
-    pip install --upgrade pip
-    pip install -r backend/requirements.txt -r backend/requirements-dev.txt
-    ```
+## I. Setup for Local Testing
 
+From the project root:
 
-### II. Running Local Tests
-The backend tests require a running Valkey instance for caching checks.
+```bash
+# Set up Python virtual environment and dependencies
+python -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
-1.  **Start Valkey**
-    Before running the tests, start a Valkey container. The `--rm` flag will ensure it is automatically removed when stopped.
-    ```bash
-    # Using Podman
-    podman run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1.1
+# Install Playwright browser dependencies (for E2E tests)
+python -m playwright install chromium --with-deps
 
-    # Or using Docker
-    # docker run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1.1
-    ```
+# Install Node.js frontend dependencies (for Vitest)
+npm install
+```
 
-2.  **Run Pytest**
-    Ensure you are in the project root (not `backend`). The test suite is configured via `pytest.ini` (in `tests/`) to automatically connect to Valkey on `localhost:6379`.
-    ```bash
-    # From the project root
-    python -m pytest -c tests/pytest.ini tests/ -v
-    ```
+## II. Running Backend Unit Tests
 
-3.  **Stop Valkey**
-    After you've finished testing, you can stop the Valkey container.
-    ```bash
-    podman stop sheepvibes-test-valkey
-    ```
+Backend tests require a running Valkey service container for caching checks.
 
-### III. Testing with Dev Environment (Podman)
-The project includes a robust development environment managed by `scripts/dev_manager.sh`.
+1. **Start Valkey**:
+   ```bash
+   podman run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1.1
+   ```
 
-1.  **Start Dev Environment**
-    This will build the image, start Valkey, and launch the Backend App in **Debug Mode** (Flask development server).
-    ```bash
-    ./scripts/dev_manager.sh up
-    ```
-    - The app runs at `http://localhost:5002` (default).
-    - Code changes are hot-reloaded automatically.
+2. **Run Pytest Unit Suite**:
+   ```bash
+   python -m pytest -c tests/pytest.ini tests/unit -v
+   ```
 
-2.  **Verify Production Parity**
-    To test the application as it runs in production (using Gunicorn), use the `--prod` flag:
-    ```bash
-    ./scripts/dev_manager.sh up --prod
-    ```
+3. **Stop Valkey**:
+   ```bash
+   podman stop sheepvibes-test-valkey
+   ```
 
-## Frontend Testing
-Currently, there are no automated tests specifically for the frontend JavaScript code.
+## III. Running Frontend Unit Tests
 
-### Future Considerations
-For a vanilla JavaScript application like this, End-to-End (E2E) testing would be a valuable addition. Suitable E2E testing tools include:
+Frontend tests use [Vitest](https://vitest.dev/) with `jsdom` to test ES6 modules, security sanitizers, URL encoding, and UI components:
 
-* **Playwright:** [https://playwright.dev/](https://playwright.dev/)
-* **Cypress:** [https://www.cypress.io/](https://www.cypress.io/)
+```bash
+npm test
+# Or in watch mode during development:
+npx vitest
+```
 
-## Automated Testing with GitHub Actions
-To ensure code quality, the project uses a GitHub Actions workflow to run backend tests on every push and pull request. This workflow serves as the definitive guide for setting up an automated testing environment.  
-The workflow is defined in `.github/workflows/run-tests.yml`.
+## IV. Running End-to-End (E2E) Tests
 
-## Recommendations for CI/CD and Automated Tools & Agents
-The key is to follow the instructions given above, and replicate the setup found in our GitHub Actions workflow, paying close attention to the use of service containers and the `CACHE_VALKEY_PORT` environment variable for dynamic port mapping.
+End-to-end tests use [Playwright](https://playwright.dev/) to test complete user workflows (infinite scrolling, night mode toggling & localStorage persistence, OPML import and SSE progress):
+
+```bash
+# Ensure Valkey is running, then run E2E tests:
+python -m pytest -c tests/pytest.ini tests/e2e -v --browser chromium
+```
+
+> **Note:** The E2E test harness automatically spins up and tears down an isolated live Flask server subprocess. You can optionally test against an external server by providing `TEST_BASE_URL=http://localhost:5002`.
+
+## V. Testing with Local Dev Environment (Podman)
+
+The project provides `scripts/dev_manager.sh` to spin up a complete pod (App + Valkey + Volume):
+
+```bash
+# Start Dev Server (Flask Debug Mode with Hot Reloading):
+./scripts/dev_manager.sh up
+
+# Start Production Parity Server (Gunicorn):
+./scripts/dev_manager.sh up --prod
+
+# Teardown:
+./scripts/dev_manager.sh down
+```
+
+## VI. CI/CD Automated Testing
+
+GitHub Actions runs the full test suite on every push and pull request via `.github/workflows/run-tests.yml`. CI dynamically maps Valkey's port `6379` and passes it via `CACHE_VALKEY_PORT`.

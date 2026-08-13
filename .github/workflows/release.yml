@@ -15,7 +15,7 @@ jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # Needed to create and update GitHub Releases
       packages: write # Needed to push to ghcr.io
 
     steps:
@@ -54,3 +54,14 @@ jobs:
           TAG=${{ steps.build-image.outputs.TAG }} # Use the determined tag
           podman push "${IMAGE_ID}:${TAG}"
           podman push "${IMAGE_ID}:latest"
+
+      - name: Create or update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.build-image.outputs.TAG }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping creation."
+          else
+            gh release create "$TAG" --generate-notes --title "$TAG"
+          fi
