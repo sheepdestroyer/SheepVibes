@@ -13,9 +13,13 @@
 4. Only then, start the next step.
   
 ### Finishing a task :
-5. Before preparing to end a task it is necessary to run a last full validation of all tests.
+5. Before preparing to end a task it is necessary to run a last full validation of all tests (Vitest frontend, Pytest unit, and Playwright E2E suites).
 6. Then it is necessary to update all relevant .md files (*especially* `TODO.md` and `CHANGELOG.md`) accordingly.
 7. Only then will the task be completed, and changes be submitted / committed.
+
+### Tag & Release Workflow
+- **Automated GHCR & GitHub Releases**: Pushing a version tag matching `v*.*` (e.g. `v0.27`) triggers `.github/workflows/release.yml`, which automatically builds and publishes the container image to `ghcr.io/sheepdestroyer/sheepvibes:<TAG>` and `:latest`, and generates/updates the corresponding GitHub Release notes with the GitHub API.
+- **Manual releases**: Can also be drafted or triggered via `gh release create <tag> --generate-notes` or the `workflow_dispatch` trigger in `.github/workflows/release.yml`.
 
 ### Tooling for Agents
 - **`scripts/dev_manager.sh`**: Use this script to easily spin up a full development environment (App + Valkey) in a pod for integration testing or verification.
@@ -34,15 +38,17 @@ Automated environments, such as those used by Google's Jules, operate in restric
 
 2.  **Dynamic Port Handling**: In CI systems, you cannot assume Valkey will be available on `localhost:6379`. The service container's port `6379` will be mapped to a *dynamic port* on the host runner. The GitHub Actions workflow retrieves this port using `${{ job.services.valkey.ports['6379'] }}`.
 
-3.  **Environment Variable**: The test suite (`backend/test_app.py`) is explicitly configured to look for the `CACHE_VALKEY_PORT` environment variable. If this variable is set, it will override the default Valkey port and allow the tests to connect to the dynamically mapped port of the Valkey service container.
+3.  **Environment Variable**: The test suite (`tests/unit/test_app.py`) is explicitly configured to look for the `CACHE_VALKEY_PORT` environment variable (with fallback to `CACHE_REDIS_PORT`). If this variable is set, it will override the default Valkey port and allow the tests to connect to the dynamically mapped port of the Valkey service container.
 
 ### Actionable Steps for Automated Agents:
 
-To successfully run the backend tests, please follow this procedure, which mirrors our CI workflow:
+To successfully run the test suite, please follow this procedure, which mirrors our CI workflow:
 
 1.  **Start a Valkey service container** within your environment, and **Identify the host port** that has been dynamically mapped to the container's internal port `6379`.
 2.  **Set the `CACHE_VALKEY_PORT` environment variable** to this dynamically assigned port number.
-3.  Navigate to the `backend` directory, and **Install dependencies**: `cd backend && pip install -r requirements.txt -r requirements-dev.txt`.
-4.  **Run the tests** using the command: `python -m pytest -v`.
+3.  From the project root, **Install dependencies**: `pip install -r backend/requirements.txt -r backend/requirements-dev.txt && npm install`.
+4.  **Run backend unit tests**: `python -m pytest -c tests/pytest.ini tests/unit -v`.
+5.  **Run frontend unit tests**: `npm test`.
+6.  **Run Playwright E2E tests**: `python -m pytest -c tests/pytest.ini tests/e2e -v --browser chromium`.
 
 By following these instructions, which mirror the setup in our own CI workflow, automated tools should be able to execute the full test suite correctly. Always ensure it succeeds before submitting your changes.

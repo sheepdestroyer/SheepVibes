@@ -146,6 +146,12 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-13: Documentation Overhaul & Automated Release Workflow**
+  - [x] Published GitHub Releases for `v0.26` (Valkey standardization) and `v0.27` (Night Mode, WCAG AA contrast, and Dependabot updates).
+  - [x] Updated `.github/workflows/release.yml` with `contents: write` permissions and automatic `gh release create` execution upon pushing `v*.*` tags.
+  - [x] Updated `README.md`, `TESTING.md`, and `AGENTS.md` to ensure documentation consistency across backend unit tests, Vitest frontend suite, Playwright E2E tests, and release procedures.
+  - [x] Validated full test suites across frontend Vitest (23/23), Pytest backend unit tests (160/160), and Playwright E2E tests (3/3).
+
 *   [x] **2026-08-13: Standardize on Valkey instead of Redis**
   - [x] Migrated caching container image and service definitions from Redis to Valkey pinned to latest release tag `docker.io/valkey/valkey:9.1.1` (standard Debian-based image to guarantee GLIBC/tooling compatibility and prevent BusyBox `nc -z` / health check restart issues).
   - [x] Updated Quadlet service configurations (`pod/sheepvibes-valkey.container`, `pod/sheepvibes-valkey.volume`), deployment scripts (`scripts/deploy_pod.sh`, `scripts/dev_manager.sh`), CI workflows (`.github/workflows/run-tests.yml`), and environment variables (`CACHE_VALKEY_URL`, `CACHE_VALKEY_PORT`).

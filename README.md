@@ -6,26 +6,34 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, d
 
 *   **Feed Management**: Add, delete, and edit RSS/Atom feeds.
 *   **Tabbed Organization**: Organize feeds into customizable tabs, similar to Netvibes and iGoogle.
-*   **OPML Support**: Import and export your feeds and tabs as OPML files.
+*   **OPML Support**: Import and export your feeds and tabs as OPML files with live progress indicators.
 *   **Background Updates**: Automatically fetches feed updates in the background.
 *   **Real-Time UI**: The user interface updates in real-time when feeds are refreshed, thanks to Server-Sent Events (SSE).
 *   **Unread Tracking**: Mark items as read and see unread counts for each feed and tab.
+*   **Night Mode**: Built-in dark theme with WCAG 2.1 AA contrast compliance and persistent user preferences.
+*   **Infinite Scrolling**: Smooth, per-widget progressive loading of feed items.
 *   **Persistence**: Your data is saved in a persistent database.
 
 ## Project Structure
 
-*   `.github/workflows/`: Contains GitHub Actions workflows for automated testing.
+*   `.github/workflows/`: GitHub Actions workflows for automated testing (`run-tests.yml`) and container release publishing (`release.yml`).
 *   `backend/`: The Python Flask backend.
-    *   `app.py`: The main Flask application file, containing API endpoints and application logic.
-    *   `feed_service.py`: Handles fetching, parsing, and processing of RSS/Atom feeds.
-    *   `models.py`: Defines the database schema using SQLAlchemy.
-    *   `test_app.py`, `test_feed.py`: Pytest tests for the backend.
-*   `frontend/`: The vanilla JavaScript frontend.
-    *   `index.html`: The main HTML file.
-    *   `script.js`: The main JavaScript file, containing all frontend logic.
-    *   `style.css`: The stylesheet for the application.
-*   `pod/`: Contains pod file for deploying the application with systemd and Podman.
-*   `scripts/`: Contains helper scripts for deployment and development.
+    *   `app.py`: Flask application factory, server configuration, and blueprint registration.
+    *   `blueprints/`: Modular route handlers (`feeds.py`, `opml.py`, `tabs.py`).
+    *   `feed_service.py`: Handles secure fetching, parsing, sanitization, and processing of RSS/Atom feeds.
+    *   `models.py`: Database models using SQLAlchemy.
+    *   `cache_utils.py`: Granular caching utilities and cache invalidation helpers.
+    *   `sse.py`: Server-Sent Events notification bus.
+*   `frontend/`: Modular vanilla JavaScript frontend.
+    *   `index.html`: The main HTML interface.
+    *   `js/`: ES6 JavaScript modules (`app.js`, `api.js`, `ui.js`, `utils.js`).
+    *   `style.css`: Stylesheet with responsive layout and Night Mode theme tokens.
+*   `tests/`: Comprehensive test suites.
+    *   `unit/`: Pytest unit tests for backend models, feed service, security, and blueprints.
+    *   `e2e/`: Playwright end-to-end integration tests.
+    *   `frontend/js/*.test.js`: Vitest unit tests for frontend utility functions, API layer, and UI helpers.
+*   `pod/`: Quadlet pod, container, and volume definitions for systemd/Podman deployment.
+*   `scripts/`: Automation and development helper scripts (`dev_manager.sh`, `deploy_pod.sh`, `run_dev.sh`, `rebuild_container.sh`).
 
 ## Production Deployment (Podman Pod with systemd using Quadlet)
 
@@ -78,12 +86,12 @@ This section describes how to deploy SheepVibes using a Podman Pod managed by sy
 
 ### Static Analysis & Linting
 
-To maintain code quality, we use `pylint`. It is highly recommended to run it before submitting pull requests:
+To maintain code quality, we use `pylint` and `flake8`:
 ```bash
-# From the root directory
-pylint backend/feed_service.py backend/app.py
+# Lint backend
+flake8 backend/ --max-line-length=120
+pylint backend/feed_service.py backend/app.py backend/blueprints/
 ```
-A high score (9.0+) is generally expected for new contributions.
 
 ### Accessing the Application
 
@@ -98,6 +106,7 @@ This section describes how to set up SheepVibes for local development.
 *   Podman
 *   Git
 *   Python 3 and `pip`
+*   Node.js (for frontend unit tests)
 
 ### Building the Container
 
@@ -175,28 +184,30 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 ### Direct Backend/Frontend Development
 
 1.  **Prerequisites**:
-    *   A running Valkey server.
+    *   A running Valkey server (e.g. `docker.io/valkey/valkey:9.1.1` on port 6379).
 
 2.  **Set up Backend Virtual Environment**:
-    *   Navigate to the `backend` directory: `cd sheepvibes/backend`
-    *   Create a virtual environment: `python -m venv venv`
-    *   Activate it: `source venv/bin/activate`
-    *   Install dependencies: `pip install -r requirements.txt && pip install -r requirements-dev.txt`
+    *   Create and activate a virtual environment from project root: `python -m venv venv && source venv/bin/activate`
+    *   Install dependencies: `pip install -r backend/requirements.txt -r backend/requirements-dev.txt`
+    *   Install frontend testing dependencies (optional): `npm install`
 
 3.  **Run the Development Server**:
-    The `scripts/run_dev.sh` script can start the Flask backend server.
+    The `scripts/run_dev.sh` script starts the Flask backend server with Valkey connectivity checks:
     ```bash
     ./scripts/run_dev.sh
     ```
 
 ## Configuration (Environment Variables)
 
-*   `DATABASE_PATH`: The path to the SQLite database file.
-*   `UPDATE_INTERVAL_MINUTES`: The interval in minutes for checking for feed updates.
-*   `CACHE_VALKEY_URL`: The URL for the Valkey server.
-*   `FLASK_APP`: The path to the Flask application.
-*   `PYTHONPATH`: The Python module search path.
-*   `FLASK_RUN_HOST`: The host for the Flask development server.
+*   `DATABASE_PATH`: Path to the SQLite database file (default: `instance/sheepvibes.db` or `/app/data/sheepvibes.db` in container).
+*   `UPDATE_INTERVAL_MINUTES`: Recurring interval in minutes for background feed update scheduler (default: 15).
+*   `CACHE_VALKEY_URL`: Connection URL for the Valkey caching service (default: `redis://localhost:6379/0`; fallback supported via `CACHE_REDIS_URL`).
+*   `CACHE_VALKEY_PORT`: Dynamic host port override used by automated CI test runners.
+*   `FEED_FETCH_TIMEOUT`: Network timeout in seconds for downloading external feed content (default: 20).
+*   `MAX_CONCURRENT_FETCHES`: Maximum concurrent worker threads for fetching feeds in parallel (default: 5, capped at 10).
+*   `FLASK_APP`: Flask application entrypoint (`backend.app`).
+*   `PYTHONPATH`: Python search path (set to `.` or `/app`).
+*   `FLASK_RUN_HOST`: Host bind address for development server (default: `127.0.0.1`).
 
 ## Contributing
 Contributions are welcome. Please open an issue or pull request.
