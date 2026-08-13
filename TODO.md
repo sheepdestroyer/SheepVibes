@@ -147,12 +147,17 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-14: Playwright E2E Test Suite for Feed Comments Links**
+  - [x] Implemented comprehensive Playwright E2E test suite in `tests/e2e/test_comments_links.py`.
+  - [x] Added tests for DOM structure and attribute verification (`target`, `rel`, `title`, `aria-label`), Ask HN suppression (`comments_url == link`), standard feed fallback, primary discussion link click & read state updates, secondary `[article]` link click & read state updates, middle-click `auxclick` interaction, unread badge removal upon zero count, and Night Mode styling & WCAG AA color restoration.
+  - [x] Verified 100% test pass rate across Vitest frontend unit tests (25/25), Pytest backend unit tests (166/166), and Playwright E2E tests (9/9).
+
 *   [x] **2026-08-14: Hacker News & Feed Comments Thread Link Support**
   - [x] Extended `FeedItem` model and added migration `8e59ae7a1c5b` for `comments_url` field.
   - [x] Implemented feed parser comments extraction and URL structure validation in `backend/feed_service.py` supporting RSS 2.0 `<comments>` and Atom `rel="replies"`.
   - [x] Updated API serializers in `backend/models.py` and `backend/blueprints/tabs.py`.
   - [x] Implemented UI rendering in `frontend/js/ui.js` and `frontend/style.css` to make discussion thread primary/default and provide a secondary `[article]` link with unread status marking on click/middle-click.
-  - [x] Added unit tests across Pytest backend and Vitest frontend; verified 100% test pass rate across Vitest (25/25), Pytest unit (166/166), and Playwright E2E (3/3).
+  - [x] Added unit tests across Pytest backend and Vitest frontend; verified 100% test pass rate across Vitest (25/25), Pytest unit (166/166), and Playwright E2E (9/9).
 
 *   [x] **2026-08-13: Documentation Overhaul & Automated Release Workflow**
   - [x] Published GitHub Releases for `v0.26` (Valkey standardization) and `v0.27` (Night Mode, WCAG AA contrast, and Dependabot updates).
