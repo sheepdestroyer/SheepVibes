@@ -656,6 +656,34 @@ def test_update_all_feeds_basic_run(db_setup, mocker, mock_dns):  # pylint: disa
     assert feed2_db.name == "Feed B"
 
 
+def test_update_all_feeds_metadata_change_without_new_items(db_setup, mocker, mock_dns):  # pylint: disable=unused-argument
+    """Test that metadata/title updates without new items populate affected_tab_ids for cache invalidation."""
+    logger.info("Testing update_all_feeds() metadata change without new items")
+
+    mock_feed_data = MockParsedFeed(
+        "Updated Canonical Brand", []  # 0 entries
+    )
+
+    m_fetch = mocker.patch("backend.feed_service.fetch_feed")
+    m_fetch.return_value = mock_feed_data
+
+    tab = Tab(name="Metadata Tab", order=0)
+    db.session.add(tab)
+    db.session.commit()
+    feed = Feed(name="Old Title", url="http://brand.com/rss", tab_id=tab.id)
+    db.session.add(feed)
+    db.session.commit()
+
+    processed, new_items, affected_tabs = feed_service.update_all_feeds()
+
+    assert processed == 1
+    assert new_items == 0
+    assert tab.id in affected_tabs, "Tab should be in affected_tab_ids due to title change"
+
+    feed_db = Feed.query.filter_by(url="http://brand.com/rss").first()
+    assert feed_db.name == "Updated Canonical Brand"
+
+
 def test_integrity_error_fallback_to_individual_commits(db_setup, mocker):  # pylint: disable=unused-argument
     """
     Test that if a batch insert fails due to IntegrityError, the system falls back

@@ -11,12 +11,14 @@ from ..constants import (
     MAX_PAGINATION_LIMIT,
 )
 from ..extensions import db
+from ..feed_name_utils import derive_canonical_feed_name
 from ..feed_service import (
     is_valid_feed_url,
     fetch_and_update_feed,
     fetch_feed,
     process_feed_entries,
     update_all_feeds,
+    validate_link_structure,
 )
 from ..models import Feed, FeedItem, Tab
 from ..sse import announcer
@@ -77,12 +79,20 @@ def _get_feed_metadata(feed_url):
         )
         return feed_url, None, parsed_feed
 
-    feed_name = parsed_feed.feed.get(
-        "title", feed_url
-    )  # Use URL as fallback if title missing
-    site_link = parsed_feed.feed.get("link")  # Get the website link
+    raw_title = parsed_feed.feed.get("title", feed_url)
+    site_link = parsed_feed.feed.get("link")
+    valid_site_link = validate_link_structure(site_link)
+    feed_name = (
+        derive_canonical_feed_name(
+            raw_title,
+            site_url=valid_site_link,
+            feed_url=feed_url,
+        )
+        or raw_title
+        or feed_url
+    )
 
-    return feed_name, site_link, parsed_feed
+    return feed_name, valid_site_link, parsed_feed
 
 
 def _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed):
@@ -213,10 +223,12 @@ def delete_feed(feed_id):
 
 def _determine_feed_metadata(new_url, custom_name, parsed_feed):
     """Determines the appropriate name and site link for a feed."""
-    if custom_name:
-        new_name = custom_name
+    if custom_name and custom_name.strip():
+        new_name = custom_name.strip()
         new_site_link = (
-            parsed_feed.feed.get("link") if parsed_feed and parsed_feed.feed else None
+            validate_link_structure(parsed_feed.feed.get("link"))
+            if parsed_feed and parsed_feed.feed
+            else None
         )
     elif not parsed_feed or not parsed_feed.feed:
         # If fetch fails and no custom name provided, use the URL as the name
@@ -227,10 +239,17 @@ def _determine_feed_metadata(new_url, custom_name, parsed_feed):
             new_url,
         )
     else:
-        new_name = parsed_feed.feed.get(
-            "title", new_url
-        )  # Use URL as fallback if title missing
-        new_site_link = parsed_feed.feed.get("link")  # Get the website link
+        raw_title = parsed_feed.feed.get("title", new_url)
+        new_site_link = validate_link_structure(parsed_feed.feed.get("link"))
+        new_name = (
+            derive_canonical_feed_name(
+                raw_title,
+                site_url=new_site_link,
+                feed_url=new_url,
+            )
+            or raw_title
+            or new_url
+        )
 
     return new_name, new_site_link
 
@@ -361,7 +380,7 @@ def api_update_all_feeds():
             processed_count,
             new_items_count,
         )
-        if new_items_count > 0 and affected_tab_ids:
+        if affected_tab_ids:
             for tab_id in affected_tab_ids:
                 invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
             invalidate_tabs_cache()
@@ -403,8 +422,14 @@ def update_feed(feed_id):
     """Manually triggers an update check for a specific feed."""
     feed = db.get_or_404(Feed, feed_id)
     try:
+        old_name = feed.name
+        old_site_link = feed.site_link
         success, new_items, _ = fetch_and_update_feed(feed.id)
-        if success and new_items > 0:
+        if success and (
+            new_items > 0
+            or feed.name != old_name
+            or feed.site_link != old_site_link
+        ):
             invalidate_tab_feeds_cache(feed.tab_id)
             logger.info(
                 "Cache invalidated for tab %s after manual update of feed %s.",

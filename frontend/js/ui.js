@@ -156,13 +156,19 @@ export function createFeedWidget(feed, callbacks) {
 
     if (feedLinkUrl) {
         const titleLink = document.createElement('a');
+        titleLink.className = 'feed-widget-title';
         titleLink.href = sanitizeUrl(feedLinkUrl);
+        titleLink.title = feed.name;
         titleLink.target = '_blank';
         titleLink.rel = 'noopener noreferrer';
         titleLink.appendChild(titleTextNode);
         titleElement.appendChild(titleLink);
     } else {
-        titleElement.appendChild(titleTextNode);
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'feed-widget-title';
+        titleSpan.title = feed.name;
+        titleSpan.appendChild(titleTextNode);
+        titleElement.appendChild(titleSpan);
     }
 
     const badge = createBadge(feed.unread_count);

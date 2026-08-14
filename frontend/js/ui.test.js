@@ -177,6 +177,55 @@ describe('createFeedWidget URL sanitization', () => {
         const commentsLink = widget.querySelector('.item-comments-link');
         expect(commentsLink.getAttribute('href')).toBe('https://news.ycombinator.com/item?id=123');
     });
+
+    it('renders widget title link with feed-widget-title class and title tooltip', () => {
+        const feed = {
+            id: 2,
+            tab_id: 1,
+            name: 'Wccftech',
+            site_link: 'https://wccftech.com',
+            url: 'https://wccftech.com/feed/',
+            unread_count: 0,
+            items: []
+        };
+
+        const widget = createFeedWidget(feed, {
+            onEdit: () => {},
+            onDelete: () => {},
+            onMarkItemRead: () => {},
+            onLoadMore: () => {}
+        });
+
+        const headerLink = widget.querySelector('h2 a.feed-widget-title');
+        expect(headerLink).not.toBeNull();
+        expect(headerLink.textContent).toBe('Wccftech');
+        expect(headerLink.getAttribute('title')).toBe('Wccftech');
+        expect(headerLink.getAttribute('href')).toBe('https://wccftech.com');
+    });
+
+    it('renders widget title span with feed-widget-title class and title tooltip when site_link is null', () => {
+        const feed = {
+            id: 3,
+            tab_id: 1,
+            name: 'Plain Feed',
+            site_link: null,
+            url: null,
+            unread_count: 0,
+            items: []
+        };
+
+        const widget = createFeedWidget(feed, {
+            onEdit: () => {},
+            onDelete: () => {},
+            onMarkItemRead: () => {},
+            onLoadMore: () => {}
+        });
+
+        const headerSpan = widget.querySelector('h2 span.feed-widget-title');
+        expect(headerSpan).not.toBeNull();
+        expect(headerSpan.textContent).toBe('Plain Feed');
+        expect(headerSpan.getAttribute('title')).toBe('Plain Feed');
+    });
 });
 
 describe('createFeedWidget comments_url and article link handling', () => {

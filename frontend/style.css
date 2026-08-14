@@ -235,13 +235,31 @@ header h1 {
     /* Slightly smaller header */
     font-weight: 600;
     margin: 0;
-    padding: 10px 15px;
+    padding: 8px 12px;
     border-bottom: 1px solid #e9ecef;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
     background-color: #f8f9fa;
     /* Light header background */
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.feed-widget h2 a,
+.feed-widget h2 .feed-widget-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1 1 auto;
+    color: #005a9c;
+    text-decoration: none;
+}
+
+.feed-widget h2 a:hover {
+    text-decoration: underline;
 }
 
 .feed-widget ul {
@@ -344,6 +362,7 @@ header h1 {
     display: flex;
     align-items: center;
     gap: 4px;
+    flex-shrink: 0;
 }
 
 /* Edit and Delete Buttons */
@@ -366,6 +385,7 @@ header h1 {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    margin: -8px 0;
 }
 
 .feed-widget:hover .edit-feed-button,
@@ -795,6 +815,11 @@ body.night-mode .feed-widget h2 {
     background-color: #252525;
     border-bottom-color: #2d2d2d;
     color: #e0e0e0;
+}
+
+body.night-mode .feed-widget h2 a,
+body.night-mode .feed-widget h2 .feed-widget-title {
+    color: #58a6ff;
 }
 
 body.night-mode .feed-widget li.unread a {
