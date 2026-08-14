@@ -166,6 +166,18 @@ def test_admin_create_user(client, admin_user):
     )
     assert res_dup.status_code == 409
 
+    # 7. Duplicate email conflict (409)
+    res_dup_email = client.post(
+        "/api/admin/users",
+        json={
+            "username": "unique_username",
+            "password": "ValidPassword123!",
+            "email": "CHARLIE@EXAMPLE.COM",
+        },
+    )
+    assert res_dup_email.status_code == 409
+    assert "already registered" in res_dup_email.json["error"]
+
 
 def test_admin_update_user(client, admin_user, regular_user):
     """Verifies admin user modification, role toggling, password reset, and self-guards."""
@@ -178,6 +190,7 @@ def test_admin_update_user(client, admin_user, regular_user):
     res = client.put(
         f"/api/admin/users/{regular_user.id}",
         json={
+            "username": "Regular_Bob",
             "role": "admin",
             "is_active": True,
             "password": "NewAdminPass123!",
@@ -186,8 +199,16 @@ def test_admin_update_user(client, admin_user, regular_user):
     )
     assert res.status_code == 200
     updated = res.json["user"]
+    assert updated["username"] == "Regular_Bob"
     assert updated["role"] == "admin"
     assert updated["email"] == "bob_new@example.com"
+
+    # 2. Duplicate email conflict on update (409)
+    res_email_conflict = client.put(
+        f"/api/admin/users/{regular_user.id}",
+        json={"email": "admin@example.com"},
+    )
+    assert res_email_conflict.status_code == 409
 
     # Verify new credentials work
     client.post("/api/auth/logout")
@@ -197,7 +218,7 @@ def test_admin_update_user(client, admin_user, regular_user):
     )
     assert login_res.status_code == 200
 
-    # 2. Self-guard: Cannot deactivate own account
+    # 3. Self-guard: Cannot deactivate own account
     client.post("/api/auth/logout")
     client.post(
         "/api/auth/login",
@@ -210,7 +231,7 @@ def test_admin_update_user(client, admin_user, regular_user):
     assert self_deact.status_code == 400
     assert "Cannot deactivate your own administrator account" in self_deact.json["error"]
 
-    # 3. Self-guard: Cannot demote own admin account
+    # 4. Self-guard: Cannot demote own admin account
     self_demote = client.put(
         f"/api/admin/users/{admin_user.id}",
         json={"role": "user"},
@@ -218,7 +239,7 @@ def test_admin_update_user(client, admin_user, regular_user):
     assert self_demote.status_code == 400
     assert "Cannot demote your own administrator account" in self_demote.json["error"]
 
-    # 4. Not found 404
+    # 5. Not found 404
     not_found = client.put("/api/admin/users/99999", json={"role": "user"})
     assert not_found.status_code == 404
 

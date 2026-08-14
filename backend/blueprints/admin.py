@@ -1,7 +1,6 @@
 """Blueprint for administrative management and system diagnostics."""
 
 import datetime
-import io
 import logging
 import os
 import platform
@@ -12,7 +11,7 @@ import tempfile
 from flask import Blueprint, current_app, jsonify, request, send_file
 from sqlalchemy import func
 
-from ..auth import admin_required, get_current_user, login_required
+from ..auth import admin_required, get_current_user
 from ..cache_utils import invalidate_user_caches
 from ..extensions import cache, db
 from ..models import Feed, FeedItem, Tab, User
@@ -83,6 +82,14 @@ def create_user():
     ).first()
     if existing_user:
         return jsonify({"error": f"Username '{username}' is already taken"}), 409
+
+    # Check for email collision if provided (case-insensitive)
+    if email:
+        existing_email = User.query.filter(
+            func.lower(User.email) == email.lower()
+        ).first()
+        if existing_email:
+            return jsonify({"error": f"Email '{email}' is already registered"}), 409
 
     new_user = User(
         username=username,
@@ -158,12 +165,21 @@ def update_user(user_id):
     # Update email
     if "email" in data:
         email_val = str(data["email"]).strip() if data["email"] else None
+        if email_val and (
+            not target_user.email
+            or email_val.lower() != target_user.email.lower()
+        ):
+            existing_email = User.query.filter(
+                func.lower(User.email) == email_val.lower()
+            ).first()
+            if existing_email and existing_email.id != target_user.id:
+                return jsonify({"error": f"Email '{email_val}' is already registered"}), 409
         target_user.email = email_val
 
     # Update username
     if "username" in data and data["username"]:
         new_username = str(data["username"]).strip()
-        if new_username.lower() != target_user.username.lower():
+        if new_username != target_user.username:
             if not USERNAME_REGEX.match(new_username):
                 return (
                     jsonify(
@@ -176,14 +192,15 @@ def update_user(user_id):
                     ),
                     400,
                 )
-            existing = User.query.filter(
-                func.lower(User.username) == new_username.lower()
-            ).first()
-            if existing:
-                return (
-                    jsonify({"error": f"Username '{new_username}' is already taken"}),
-                    409,
-                )
+            if new_username.lower() != target_user.username.lower():
+                existing = User.query.filter(
+                    func.lower(User.username) == new_username.lower()
+                ).first()
+                if existing:
+                    return (
+                        jsonify({"error": f"Username '{new_username}' is already taken"}),
+                        409,
+                    )
             target_user.username = new_username
 
     db.session.commit()
@@ -289,17 +306,32 @@ def download_backup():
         temp_backup.close()
 
         raw_conn = db.engine.raw_connection()
-        driver_conn = raw_conn.driver_connection if hasattr(raw_conn, "driver_connection") else raw_conn.connection
-        dest_conn = sqlite3.connect(temp_backup_path)
-        driver_conn.backup(dest_conn)
-        dest_conn.close()
+        try:
+            driver_conn = raw_conn.driver_connection if hasattr(raw_conn, "driver_connection") else raw_conn.connection
+            dest_conn = sqlite3.connect(temp_backup_path)
+            try:
+                driver_conn.backup(dest_conn)
+            finally:
+                dest_conn.close()
+        finally:
+            raw_conn.close()
 
-        return send_file(
+        response = send_file(
             temp_backup_path,
             mimetype="application/x-sqlite3",
             as_attachment=True,
             download_name=download_filename,
         )
+
+        @response.call_on_close
+        def cleanup_temp_backup():
+            try:
+                if os.path.exists(temp_backup_path):
+                    os.unlink(temp_backup_path)
+            except OSError:
+                pass
+
+        return response
     except Exception as e:
         logger.error("Failed to generate database backup: %s", e)
         return jsonify({"error": f"Failed to generate backup: {str(e)}"}), 500
