@@ -143,6 +143,170 @@
                 </form>
             </div>
         </div>
+
+        <!-- Admin Main Panel Modal -->
+        <div id="admin-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
+            <div class="modal-content admin-modal-content">
+                <button id="admin-modal-close-button" class="modal-close-button" aria-label="Close" title="Close">&times;</button>
+                <h2 id="admin-modal-title">Administration Panel</h2>
+
+                <div class="admin-nav-tabs" role="tablist">
+                    <button id="admin-tab-users" class="admin-nav-tab is-active" role="tab" aria-selected="true" aria-controls="admin-section-users">User Accounts</button>
+                    <button id="admin-tab-system" class="admin-nav-tab" role="tab" aria-selected="false" aria-controls="admin-section-system">System Diagnostics</button>
+                </div>
+
+                <!-- Users Section -->
+                <div id="admin-section-users" class="admin-section" role="tabpanel" aria-labelledby="admin-tab-users">
+                    <div class="admin-toolbar">
+                        <button id="admin-open-add-user-button" class="action-button-primary">+ Add New User</button>
+                        <button id="admin-refresh-users-button" class="action-button-secondary">Refresh List</button>
+                    </div>
+                    <div class="admin-table-container">
+                        <table id="admin-users-table" class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Tabs</th>
+                                    <th>Feeds</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-table-body">
+                                <tr>
+                                    <td colspan="9" class="loading-cell">Loading users...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- System Section -->
+                <div id="admin-section-system" class="admin-section hidden" role="tabpanel" aria-labelledby="admin-tab-system">
+                    <div class="admin-diagnostics-grid">
+                        <div class="diagnostic-card">
+                            <div class="diagnostic-label">Total Users</div>
+                            <div id="admin-stat-users" class="diagnostic-value">-</div>
+                        </div>
+                        <div class="diagnostic-card">
+                            <div class="diagnostic-label">Total Tabs</div>
+                            <div id="admin-stat-tabs" class="diagnostic-value">-</div>
+                        </div>
+                        <div class="diagnostic-card">
+                            <div class="diagnostic-label">Total Feeds</div>
+                            <div id="admin-stat-feeds" class="diagnostic-value">-</div>
+                        </div>
+                        <div class="diagnostic-card">
+                            <div class="diagnostic-label">Feed Items</div>
+                            <div id="admin-stat-items" class="diagnostic-value">-</div>
+                        </div>
+                        <div class="diagnostic-card">
+                            <div class="diagnostic-label">Unread Items</div>
+                            <div id="admin-stat-unread" class="diagnostic-value">-</div>
+                        </div>
+                        <div class="diagnostic-card">
+                            <div class="diagnostic-label">Database Size</div>
+                            <div id="admin-stat-db-size" class="diagnostic-value">-</div>
+                        </div>
+                        <div class="diagnostic-card">
+                            <div class="diagnostic-label">Cache Engine</div>
+                            <div id="admin-stat-cache" class="diagnostic-value">-</div>
+                        </div>
+                        <div class="diagnostic-card">
+                            <div class="diagnostic-label">Python Version</div>
+                            <div id="admin-stat-python" class="diagnostic-value">-</div>
+                        </div>
+                    </div>
+
+                    <div class="admin-backup-section">
+                        <h3>Database Backup</h3>
+                        <p>Generate and download a complete point-in-time snapshot backup of the SQLite database.</p>
+                        <a id="admin-download-backup-button" class="backup-button" href="/api/admin/backup" download>⬇️ Download Database Backup (.db)</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Add User Modal -->
+        <div id="admin-add-user-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="admin-add-user-modal-title">
+            <div class="modal-content auth-modal-content">
+                <button id="admin-add-user-close-button" class="modal-close-button" aria-label="Close" title="Close">&times;</button>
+                <h2 id="admin-add-user-modal-title">Add New User</h2>
+                <div id="admin-add-user-error" class="error-banner hidden" role="alert"></div>
+                <form id="admin-add-user-form">
+                    <div class="form-group">
+                        <label for="admin-add-username">Username:</label>
+                        <input type="text" id="admin-add-username" required autocomplete="off" placeholder="3-30 letters, numbers, -, _">
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-add-email">Email (optional):</label>
+                        <input type="email" id="admin-add-email" autocomplete="off" placeholder="user@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-add-password">Password:</label>
+                        <input type="password" id="admin-add-password" required autocomplete="new-password" placeholder="At least 8 characters">
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-add-role">Role:</label>
+                        <select id="admin-add-role">
+                            <option value="user" selected>User</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="submit" id="admin-add-user-submit-button">Create User</button>
+                        <button type="button" id="admin-add-user-cancel-button">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Admin Edit User Modal -->
+        <div id="admin-edit-user-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="admin-edit-user-modal-title">
+            <div class="modal-content auth-modal-content">
+                <button id="admin-edit-user-close-button" class="modal-close-button" aria-label="Close" title="Close">&times;</button>
+                <h2 id="admin-edit-user-modal-title">Edit User Account</h2>
+                <div id="admin-edit-user-error" class="error-banner hidden" role="alert"></div>
+                <form id="admin-edit-user-form">
+                    <input type="hidden" id="admin-edit-user-id">
+                    <div class="form-group">
+                        <label for="admin-edit-username">Username:</label>
+                        <input type="text" id="admin-edit-username" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-edit-email">Email:</label>
+                        <input type="email" id="admin-edit-email" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-edit-role">Role:</label>
+                        <select id="admin-edit-role">
+                            <option value="user">User</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-edit-status">Account Status:</label>
+                        <select id="admin-edit-status">
+                            <option value="true">Active</option>
+                            <option value="false">Deactivated</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-edit-password">Reset Password (leave blank to keep unchanged):</label>
+                        <input type="password" id="admin-edit-password" autocomplete="new-password" placeholder="New password (8+ chars)">
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="submit" id="admin-edit-user-submit-button">Save Changes</button>
+                        <button type="button" id="admin-delete-user-button" class="delete-button">Delete User</button>
+                        <button type="button" id="admin-edit-user-cancel-button">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
     <div id="toast-container"></div>
 

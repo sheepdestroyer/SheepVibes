@@ -121,6 +121,22 @@ export const api = {
         body: formData
     }),
 
+    // Admin
+    getAdminUsers: () => fetchData('/api/admin/users'),
+    createAdminUser: (userData) => fetchData('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+    }),
+    updateAdminUser: (userId, userData) => fetchData(`/api/admin/users/${encodeURIComponent(userId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+    }),
+    deleteAdminUser: (userId) => fetchData(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
+    getAdminSystemStats: () => fetchData('/api/admin/system/stats'),
+    getAdminBackupUrl: () => `${API_BASE_URL}/api/admin/backup`,
+
     // Handler setter
     setUnauthorizedHandler
 };

@@ -105,3 +105,9 @@ def invalidate_tab_feeds_cache(tab_id, user_id=None, invalidate_tabs=True):
     )
     if invalidate_tabs:
         invalidate_tabs_cache(uid)
+
+
+def invalidate_user_caches(user_id):
+    """Invalidates all cached views for a specific user."""
+    invalidate_tabs_cache(user_id=user_id)
+

@@ -10,6 +10,7 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from .blueprints.admin import admin_bp
 from .blueprints.auth import auth_bp
 from .blueprints.feeds import feeds_bp, items_bp
 from .blueprints.opml import autosave_opml, opml_bp
@@ -136,6 +137,7 @@ migrate = Migrate(
 cache.init_app(app)
 
 # Register Blueprints
+app.register_blueprint(admin_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(opml_bp)
 app.register_blueprint(tabs_bp)
