@@ -147,6 +147,10 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-14: Strict Pull Request Policy & Prohibition of Direct Pushes to `main`**
+  - [x] Enacted strict rule in `AGENTS.md` requiring all changes without exception to go through dedicated branches and Pull Requests.
+  - [x] Prohibited direct pushes to `main` under any circumstances.
+
 *   [x] **2026-08-14: Canonical Short Feed Names & Single-Line Widget Title Bars**
   - [x] Enforced strict single-line CSS truncation (`white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;`) and compact header layout in `frontend/style.css` and `frontend/js/ui.js`.
   - [x] Added `feed-widget-title` class and hover tooltip `title` attribute to feed widget headers.
