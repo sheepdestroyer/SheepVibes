@@ -66,7 +66,7 @@ def change_password():
     new_password = str(data.get("new_password"))
 
     if not user.check_password(current_password):
-        return jsonify({"error": "Incorrect current password"}), 401
+        return jsonify({"error": "Incorrect current password"}), 400
 
     if len(new_password) < 8:
         return jsonify({"error": "New password must be at least 8 characters long"}), 400

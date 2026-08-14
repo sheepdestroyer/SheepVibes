@@ -15,10 +15,10 @@ def setup_auth_routes(page: Page, authenticated: bool = False, role: str = "user
             route.fulfill(
                 status=200,
                 content_type="application/json",
-                body='{"id": 1, "username": "alice", "email": "alice@example.com", "role": "' + current_auth_state["role"] + '", "is_active": true}',
+                body='{"authenticated": true, "user": {"id": 1, "username": "alice", "email": "alice@example.com", "role": "' + current_auth_state["role"] + '", "is_active": true}}',
             )
         else:
-            route.fulfill(status=401, content_type="application/json", body='{"error": "Authentication required"}')
+            route.fulfill(status=200, content_type="application/json", body='{"authenticated": false, "user": null}')
 
     def handle_login(route):
         req = route.request

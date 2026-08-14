@@ -143,6 +143,7 @@ def test_api_change_password(client):
     db.session.commit()
 
     # Unauthenticated change password attempt
+    client.post("/api/auth/logout")
     unauth_resp = client.put(
         "/api/auth/password",
         json={"current_password": "OldPass123", "new_password": "NewSecretPass456"},
@@ -157,7 +158,7 @@ def test_api_change_password(client):
         "/api/auth/password",
         json={"current_password": "WrongOldPass", "new_password": "NewSecretPass456"},
     )
-    assert wrong_curr.status_code == 401
+    assert wrong_curr.status_code == 400
 
     # Password too short
     too_short = client.put(

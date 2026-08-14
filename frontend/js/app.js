@@ -117,6 +117,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             !settingsMenu.contains(event.target) &&
             !settingsButton.contains(event.target)) {
             settingsMenu.classList.add('hidden');
+            settingsButton.setAttribute('aria-expanded', 'false');
         }
 
         const userMenu = document.getElementById('user-menu');
@@ -126,6 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             !userMenu.contains(event.target) &&
             !userButton.contains(event.target)) {
             userMenu.classList.add('hidden');
+            userButton.setAttribute('aria-expanded', 'false');
         }
     });
 
@@ -157,6 +159,9 @@ async function checkAuthAndInitialize() {
 
 function handleUnauthorized() {
     currentUser = null;
+    activeTabId = null;
+    allTabs = [];
+    loadedTabs.clear();
     clearUserState();
     if (eventSourceInstance) {
         eventSourceInstance.close();
@@ -238,7 +243,8 @@ async function handleChangePasswordSubmit(e) {
 
     try {
         await api.changePassword(currentPassword, newPassword);
-        showChangePasswordModal(null, 'Password updated successfully!');
+        document.getElementById('change-password-form')?.reset();
+        showChangePasswordModal(null, 'Password updated successfully!', true);
         showToast('Password updated successfully.', 'success');
         setTimeout(() => {
             closeChangePasswordModal();
@@ -253,7 +259,13 @@ async function handleChangePasswordSubmit(e) {
 }
 
 function toggleUserMenu() {
-    document.getElementById('user-menu')?.classList.toggle('hidden');
+    const menu = document.getElementById('user-menu');
+    const button = document.getElementById('user-button');
+    if (!menu) return;
+    const isHidden = menu.classList.toggle('hidden');
+    if (button) {
+        button.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+    }
 }
 
 // --- Core Logic ---
@@ -351,7 +363,13 @@ async function loadFeedsForTab(tabId) {
 // --- Handlers ---
 
 function toggleSettingsMenu() {
-    document.getElementById('settings-menu').classList.toggle('hidden');
+    const menu = document.getElementById('settings-menu');
+    const button = document.getElementById('settings-button');
+    if (!menu) return;
+    const isHidden = menu.classList.toggle('hidden');
+    if (button) {
+        button.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+    }
 }
 
 async function handleAddTab() {

@@ -1014,6 +1014,24 @@ body.night-mode #user-menu {
     border-color: #383838;
 }
 
+body.night-mode #user-menu button {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.night-mode #user-menu button:hover {
+    background-color: #383838;
+}
+
+body.night-mode #user-menu #logout-button {
+    background-color: #a71d2a;
+    color: #fff;
+}
+
+body.night-mode #user-menu #logout-button:hover {
+    background-color: #bd2130;
+}
+
 body.night-mode #user-info-section {
     border-bottom-color: #383838;
     color: #e0e0e0;

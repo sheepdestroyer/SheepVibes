@@ -27,7 +27,7 @@ export async function fetchData(url, options = {}, responseType = 'json') {
     try {
         const response = await fetch(`${API_BASE_URL}${url}`, options);
         if (!response.ok) {
-            if (response.status === 401 && onUnauthorizedCallback && !url.startsWith('/api/auth/login')) {
+            if (response.status === 401 && typeof onUnauthorizedCallback === 'function' && !url.startsWith('/api/auth/login') && !url.startsWith('/api/auth/password')) {
                 onUnauthorizedCallback();
             }
 
