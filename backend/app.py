@@ -353,7 +353,9 @@ def serve_static_files(filename):
     # Basic security check: prevent accessing files outside the frontend folder
     if ".." in filename or filename.startswith("/"):
         return jsonify({"error": "Invalid path"}), 400
-    return send_from_directory(FRONTEND_FOLDER, filename)
+    response = send_from_directory(FRONTEND_FOLDER, filename)
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
 
 
 @app.route("/api/stream")

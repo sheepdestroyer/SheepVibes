@@ -93,6 +93,17 @@ systemctl --user daemon-reload
 echo "Systemd user daemon reloaded."
 echo ""
 
+echo "Pulling latest container images..."
+podman pull ghcr.io/${REPO}:latest || true
+if systemctl --user is-active --quiet "sheepvibespod-pod.service"; then
+    echo "Restarting sheepvibespod-pod.service..."
+    systemctl --user stop sheepvibespod-pod.service
+    podman rm -f sheepvibes-app sheepvibes-valkey systemd-sheepvibespod-infra || true
+    systemctl --user start sheepvibespod-pod.service
+    echo "Service restarted."
+fi
+echo ""
+
 # --- User Instructions ---
 POD_SERVICE_NAME="sheepvibespod-pod.service" # Generated from sheepvibespod.pod
 DB_VOLUME_NAME="systemd-sheepvibes-db"
