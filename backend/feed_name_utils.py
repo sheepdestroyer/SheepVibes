@@ -141,7 +141,10 @@ def derive_canonical_feed_name(
     domain = _extract_domain(site_url) or _extract_domain(feed_url)
     brand_from_domain = KNOWN_DOMAIN_BRANDS.get(domain) if domain else None
 
-    cleaned_title = html.unescape(raw_title.strip()) if raw_title else ""
+    if not raw_title or not isinstance(raw_title, str):
+        cleaned_title = ""
+    else:
+        cleaned_title = html.unescape(raw_title.strip())
     # Normalize excessive internal whitespace
     cleaned_title = re.sub(r"\s+", " ", cleaned_title).strip()
 
@@ -235,6 +238,9 @@ def derive_canonical_feed_name(
         name_without_tld = cleaned_title[:-4]
         if name_without_tld.lower() in ("distrowatch", "slashdot", "phoronix"):
             return name_without_tld.capitalize()
+
+    # Strip any dangling delimiters at ends
+    cleaned_title = cleaned_title.strip(" -|:—–»•~").strip()
 
     return cleaned_title if cleaned_title else (
         brand_from_domain or _format_domain_as_name(domain or "") or ""

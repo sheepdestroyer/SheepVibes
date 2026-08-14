@@ -109,12 +109,25 @@ from backend.feed_name_utils import derive_canonical_feed_name, _extract_domain,
             "https://example.com/rss",
             "My Favorite Tech Blog",
         ),
-        # HTML unescaping
+        # Trailing delimiters stripped
         (
-            "Hardware News &amp; Reviews",
+            "Custom Tech News - ",
             "https://example.com",
             "https://example.com/rss",
-            "Hardware News & Reviews",
+            "Custom Tech News",
+        ),
+        (
+            "Another Blog | ",
+            "https://example.com",
+            "https://example.com/rss",
+            "Another Blog",
+        ),
+        # Non-string input safety
+        (
+            12345,
+            None,
+            "https://example.com/rss",
+            "Example",
         ),
     ],
 )

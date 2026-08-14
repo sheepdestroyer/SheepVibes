@@ -380,7 +380,7 @@ def api_update_all_feeds():
             processed_count,
             new_items_count,
         )
-        if new_items_count > 0 and affected_tab_ids:
+        if affected_tab_ids:
             for tab_id in affected_tab_ids:
                 invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
             invalidate_tabs_cache()
@@ -422,8 +422,14 @@ def update_feed(feed_id):
     """Manually triggers an update check for a specific feed."""
     feed = db.get_or_404(Feed, feed_id)
     try:
+        old_name = feed.name
+        old_site_link = feed.site_link
         success, new_items, _ = fetch_and_update_feed(feed.id)
-        if success and new_items > 0:
+        if success and (
+            new_items > 0
+            or feed.name != old_name
+            or feed.site_link != old_site_link
+        ):
             invalidate_tab_feeds_cache(feed.tab_id)
             logger.info(
                 "Cache invalidated for tab %s after manual update of feed %s.",

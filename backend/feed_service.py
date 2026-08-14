@@ -1078,6 +1078,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
             _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
         )
+        _update_feed_metadata(feed_db_obj, parsed_feed)
         feed_db_obj.last_updated_time = datetime.datetime.now(timezone.utc)
         # CAREFUL: Extract attributes BEFORE rollback to avoid detached instance errors
         feed_name = feed_db_obj.name
@@ -1758,13 +1759,19 @@ def update_all_feeds():
 
             try:
                 parsed_feed = future.result()
+                old_name = feed_obj.name
+                old_site_link = feed_obj.site_link
                 success, new_items, tab_id = _process_fetch_result(
                     feed_obj, parsed_feed
                 )
                 if success:
                     successful_count += 1
                     total_new_items += new_items
-                    if new_items > 0:
+                    if (
+                        new_items > 0
+                        or feed_obj.name != old_name
+                        or feed_obj.site_link != old_site_link
+                    ):
                         affected_tab_ids.add(tab_id)
             except Exception:  # pylint: disable=broad-exception-caught
                 logger.exception(
