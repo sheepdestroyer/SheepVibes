@@ -43,6 +43,7 @@ def upgrade():
             'fk_tabs_user_id_users', 'users', ['user_id'], ['id'], ondelete='CASCADE'
         )
         batch_op.create_index('ix_tabs_user_id', ['user_id'], unique=False)
+        batch_op.create_unique_constraint('uq_tabs_user_id_name', ['user_id', 'name'])
 
     # 3. Seed default admin user and associate existing tabs if any
     bind = op.get_bind()
@@ -89,6 +90,7 @@ def upgrade():
 
 def downgrade():
     with op.batch_alter_table('tabs', schema=None) as batch_op:
+        batch_op.drop_constraint('uq_tabs_user_id_name', type_='unique')
         batch_op.drop_index('ix_tabs_user_id')
         batch_op.drop_constraint('fk_tabs_user_id_users', type_='foreignkey')
         batch_op.drop_column('user_id')

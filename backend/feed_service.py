@@ -713,32 +713,6 @@ def import_opml(opml_file_stream, requested_tab_id_str, user_id=None):
         affected_tab_ids=state.affected_tab_ids_set,
     )
 
-    if not opml_body.findall("outline") and not state.newly_added_feeds_list:
-        logger.info(
-            "OPML import: No <outline> elements found in the OPML body.")
-        return _finish_opml_import(
-            message="No feed entries or folders found in the OPML file.",
-            imported_count=0,
-            skipped_count=0,
-            tab_id=top_level_target_tab_id,
-            tab_name=top_level_target_tab_name,
-        )
-
-    imported_final_count = state.imported_count
-    skipped_final_count = state.skipped_count
-
-    return _finish_opml_import(
-        message=(
-            f"{imported_final_count} feeds imported. {skipped_final_count} skipped. "
-            f"Tab: {top_level_target_tab_name}."
-        ),
-        imported_count=imported_final_count,
-        skipped_count=skipped_final_count,
-        tab_id=top_level_target_tab_id,
-        tab_name=top_level_target_tab_name,
-        affected_tab_ids=state.affected_tab_ids_set,
-    )
-
 
 MAX_FEED_RESPONSE_BYTES = 10 * 1024 * 1024  # 10MB cap for feed responses
 

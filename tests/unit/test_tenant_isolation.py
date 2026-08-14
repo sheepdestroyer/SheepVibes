@@ -141,6 +141,53 @@ def test_opml_export_and_import_isolation(client, user_a, user_b):
     assert "User A Tab" not in export_b.text
 
 
+def test_opml_nested_import_isolation(client, user_a, user_b, mocker):
+    """Verifies that nested OPML imports create tabs specifically assigned to the importing user."""
+    mocker.patch("backend.feed_service.fetch_and_update_feed")
+
+    opml_content = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <opml version="2.0">
+      <head><title>Subscriptions</title></head>
+      <body>
+        <outline text="Design" title="Design">
+          <outline text="Smashing Magazine" title="Smashing Magazine" type="rss" xmlUrl="https://www.smashingmagazine.com/feed/" />
+        </outline>
+      </body>
+    </opml>"""
+
+    # User A imports OPML with folder "Design"
+    login(client, "user_a", "PassUserA123")
+    resp_a = client.post(
+        "/api/opml/import",
+        data={"file": (io.BytesIO(opml_content), "feeds.opml")},
+        content_type="multipart/form-data",
+    )
+    assert resp_a.status_code == 200
+
+    # User A has tab "Design"
+    tab_design_a = Tab.query.filter_by(name="Design", user_id=user_a.id).first()
+    assert tab_design_a is not None
+
+    # User B logs in and should not see "Design" tab
+    client.post("/api/auth/logout")
+    login(client, "user_b", "PassUserB123")
+    tabs_b = client.get("/api/tabs").json
+    assert not any(t["name"] == "Design" for t in tabs_b)
+
+    # User B imports same OPML
+    resp_b = client.post(
+        "/api/opml/import",
+        data={"file": (io.BytesIO(opml_content), "feeds.opml")},
+        content_type="multipart/form-data",
+    )
+    assert resp_b.status_code == 200
+
+    # User B now has their own separate "Design" tab
+    tab_design_b = Tab.query.filter_by(name="Design", user_id=user_b.id).first()
+    assert tab_design_b is not None
+    assert tab_design_b.id != tab_design_a.id
+
+
 def test_cache_keys_partitioning_by_user(client, user_a, user_b):
     """Verifies that cache keys and invalidations are strictly partitioned per user ID."""
     key_a = make_tabs_cache_key(user_id=user_a.id)

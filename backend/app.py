@@ -196,14 +196,19 @@ def scheduled_feed_update():
                         feeds_updated,
                         new_items,
                     )
-                    # Invalidate the cache after updates
                     if affected_tab_ids:
-                        for tab_id in affected_tab_ids:
-                            invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
-                        invalidate_tabs_cache()
+                        affected_tabs = Tab.query.filter(Tab.id.in_(affected_tab_ids)).all()
+                        user_ids_to_invalidate = set()
+                        for tab in affected_tabs:
+                            invalidate_tab_feeds_cache(tab.id, user_id=tab.user_id, invalidate_tabs=False)
+                            if tab.user_id:
+                                user_ids_to_invalidate.add(tab.user_id)
+                        for uid in user_ids_to_invalidate:
+                            invalidate_tabs_cache(user_id=uid)
                         logger.info(
-                            "Granular cache invalidation completed for affected tabs: %s",
+                            "Granular cache invalidation completed for affected tabs: %s (users: %s)",
                             affected_tab_ids,
+                            user_ids_to_invalidate,
                         )
 
                     # Announce the update to any listening clients

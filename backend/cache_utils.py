@@ -14,9 +14,9 @@ def _resolve_user_id(user_id=None):
     """Resolves the user id from explicit argument, Flask g, or session."""
     if user_id is not None:
         return user_id
-    if hasattr(g, "_current_user") and g._current_user:
-        return g._current_user.id
     if has_request_context():
+        if hasattr(g, "_current_user") and g._current_user:
+            return g._current_user.id
         return session.get("user_id") or "anon"
     return "anon"
 
@@ -51,12 +51,14 @@ def make_tabs_cache_key(user_id=None, *args, **kwargs):
     return f"view/user/{uid}/tabs/v{version}"
 
 
-def make_tab_feeds_cache_key(tab_id, user_id=None):
+def make_tab_feeds_cache_key(tab_id, user_id=None, *args, **kwargs):
     """Creates a cache key for a specific tab's feeds, partitioned by user.
 
     Args:
         tab_id (int): The ID of the tab.
         user_id (int | None): User identifier if known.
+        *args: Additional arguments (unused).
+        **kwargs: Additional keyword arguments (unused).
 
     Returns:
         str: The generated cache key.
