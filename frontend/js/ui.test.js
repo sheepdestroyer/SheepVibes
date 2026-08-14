@@ -108,11 +108,40 @@ describe('createFeedWidget URL sanitization', () => {
         const titleLink = widget.querySelector('h2 a');
         expect(titleLink.getAttribute('href')).toBe('#');
 
-        const itemLink = widget.querySelector('ul li a');
+        const itemLink = widget.querySelector('ul li a.item-title-link');
         expect(itemLink.getAttribute('href')).toBe('#');
 
-        const commentsLink = widget.querySelector('.item-comments-link');
-        expect(commentsLink.getAttribute('href')).toBe('#');
+        // Unsafe comments URL (sanitized to '#') should not render a comments link
+        expect(widget.querySelector('.item-comments-link')).toBeNull();
+    });
+
+    it('suppresses comments link when comments_url after normalization matches article link', () => {
+        const feed = {
+            id: 1,
+            tab_id: 1,
+            name: 'Whitespace Match Feed',
+            url: 'https://example.com/rss',
+            unread_count: 0,
+            items: [
+                {
+                    id: 103,
+                    title: 'Whitespace Wrapped Match Item',
+                    link: 'https://example.com/article-1',
+                    comments_url: '   https://example.com/article-1 \t ',
+                    is_read: false,
+                    published_time: '2026-01-01T00:00:00Z'
+                }
+            ]
+        };
+
+        const widget = createFeedWidget(feed, {
+            onEdit: () => {},
+            onDelete: () => {},
+            onMarkItemRead: () => {},
+            onLoadMore: () => {}
+        });
+
+        expect(widget.querySelector('.item-comments-link')).toBeNull();
     });
 
     it('preserves safe URL schemes for both discussion and article links', () => {

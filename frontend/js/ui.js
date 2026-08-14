@@ -65,18 +65,15 @@ function createFeedItemElement(item, clickHandler) {
     listItem.dataset.itemId = item.id;
     listItem.classList.add(item.is_read ? 'read' : 'unread');
 
-    const hasComments = Boolean(
-        item.comments_url &&
-        typeof item.comments_url === 'string' &&
-        item.comments_url.trim() !== '' &&
-        item.comments_url !== item.link
-    );
+    const articleUrl = sanitizeUrl(item.link || '');
+    const commentsUrl = sanitizeUrl(item.comments_url || '');
+    const hasComments = commentsUrl !== '#' && commentsUrl !== articleUrl;
 
     // Primary link: Main link is the article itself (with fallback to comments_url or '#')
-    const primaryUrl = item.link || item.comments_url || '#';
+    const primaryUrl = articleUrl !== '#' ? articleUrl : (commentsUrl !== '#' ? commentsUrl : '#');
     const link = document.createElement('a');
     link.className = 'item-title-link';
-    link.href = sanitizeUrl(primaryUrl);
+    link.href = primaryUrl;
     link.textContent = item.title;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
@@ -92,12 +89,12 @@ function createFeedItemElement(item, clickHandler) {
     timestamp.className = 'item-meta';
     timestamp.textContent = formatDate(item.published_time || item.fetched_time);
 
-    if (hasComments && item.comments_url) {
+    if (hasComments) {
         const separator = document.createTextNode(' · ');
         timestamp.appendChild(separator);
 
         const commentsLink = document.createElement('a');
-        commentsLink.href = sanitizeUrl(item.comments_url);
+        commentsLink.href = commentsUrl;
         commentsLink.textContent = 'comments';
         commentsLink.className = 'item-comments-link';
         commentsLink.target = '_blank';
