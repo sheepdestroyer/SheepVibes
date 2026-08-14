@@ -607,6 +607,7 @@ header h1 {
 
 #save-feed-button,
 #login-submit-button,
+#setup-wizard-submit-button,
 #change-password-submit-button {
     background-color: #005a9c;
     color: white;
@@ -614,6 +615,7 @@ header h1 {
 
 #save-feed-button:hover,
 #login-submit-button:hover,
+#setup-wizard-submit-button:hover,
 #change-password-submit-button:hover {
     background-color: #004070;
 }

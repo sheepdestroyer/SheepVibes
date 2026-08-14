@@ -68,7 +68,7 @@ SheepVibes supports several environment variables to tune authentication and ses
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | `dev-secret-key-change-in-production` | Secret key used to cryptographically sign session cookies. Must be set to a strong random value in production. |
+| `SECRET_KEY` | `sheepvibes-default-secret-key-change-in-prod` | Secret key used to cryptographically sign session cookies. Must be set to a strong random value in production. |
 | `SESSION_COOKIE_SECURE` | `False` | When set to `True`, ensures session cookies are transmitted only over HTTPS connections. |
 | `SESSION_COOKIE_HTTPONLY` | `True` | Prevents client-side scripts from reading session cookies. |
 | `SESSION_COOKIE_SAMESITE` | `Lax` | Restricts cookie sending to same-site and top-level navigation. |
@@ -84,7 +84,7 @@ After=network-online.target
 [Container]
 Image=ghcr.io/sheepdestroyer/sheepvibes:latest
 PublishPort=5000:5000
-Volume=/var/lib/sheepvibes/data:/app/instance:Z
+Volume=/var/lib/sheepvibes/data:/app/data:Z
 Environment=SECRET_KEY=generate_with_openssl_rand_hex_32
 Environment=SESSION_COOKIE_SECURE=true
 Environment=SESSION_LIFETIME_DAYS=30
