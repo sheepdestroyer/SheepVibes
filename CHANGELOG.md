@@ -1,5 +1,12 @@
 ## 2026-08-14
 
+- **Feat: Canonical Short Feed Names & Single-Line Widget Title Bars**
+  - **Single-Line Truncation & Compact Title Bar (`frontend/style.css`, `frontend/js/ui.js`)**: Enforced strict single-line CSS truncation (`white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;`) on widget title links and spans, added `.feed-widget-title` class and hover tooltip `title` attribute, and adjusted button vertical margins so widget title bars maintain a compact ~36px height while keeping 44px touch targets.
+  - **Canonical Short Name Extraction (`backend/feed_name_utils.py`)**: Added `derive_canonical_feed_name` to clean verbose RSS channel `<title>` tags, stripping boilerplate suffixes (`- Articles`, `- News`, `| Homepage`, `:: RSS Feed`), boilerplate prefixes (`Latest from...`), domain artifacts (`www.theregister.com - Articles` → `The Register`), and pure marketing taglines (`GPU News, CPU News, Reviews & PC Hardware Guides` → `Wccftech`).
+  - **Backend Metadata & OPML Integration (`backend/feed_service.py`, `backend/blueprints/feeds.py`)**: Integrated canonical name derivation on initial feed addition, OPML outline import, and background refresh cycles (`_update_feed_metadata`).
+  - **Unit & E2E Test Suite (`tests/unit/test_feed_name_utils.py`, `frontend/js/ui.test.js`, `tests/e2e/test_widget_titles.py`)**: Added comprehensive unit tests covering domain normalization, boilerplate removal, HTML unescaping, DOM tooltip rendering, and Playwright E2E integration tests for single-line widget layout and tooltip attributes.
+  - **Verification**: 100% test pass rate across Vitest (39/39), Pytest unit tests (191/191), and Playwright E2E suite (10/10).
+
 - **Feat(frontend): Swap Article and Comments Links (Article as Primary, Comments as Secondary)**
   - **Primary & Secondary Link Swap (`frontend/js/ui.js`)**: Updated `createFeedItemElement` so the main item title link opens the original article (`item.link`) directly, and when a discussion thread URL is available (`comments_url` differs from `link`), an inline secondary link labeled `comments` opens the discussion thread.
   - **CSS Styling & Accessibility (`frontend/style.css`)**: Styled `.item-comments-link` with WCAG AA compliant contrast colors in light mode (`#005a9c`) and night mode (`#58a6ff`), hover underline states, and ARIA labels (`aria-label="Open discussion thread: {title}"`).

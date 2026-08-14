@@ -12,7 +12,6 @@ import ipaddress
 import itertools
 import json
 import logging  # Standard logging
-import operator
 import os
 import socket
 import ssl
@@ -47,6 +46,7 @@ from .constants import (
     MAX_ITEMS_PER_FEED,
     SKIPPED_FOLDER_TYPES,
 )
+from .feed_name_utils import derive_canonical_feed_name
 
 # Import database models from the new models.py
 from .models import Feed, FeedItem, Tab, db
@@ -270,10 +270,15 @@ def _process_single_outline_node(
     xml_url = outline_element.get("xmlUrl")
     title = (outline_element.get("title") or "").strip()
     text = (outline_element.get("text") or "").strip()
+    html_url = outline_element.get("htmlUrl")
     element_name = title or text
 
     if xml_url:
-        feed_name = element_name if element_name else xml_url
+        feed_name = derive_canonical_feed_name(
+            element_name,
+            site_url=html_url,
+            feed_url=xml_url,
+        ) or element_name or xml_url
         _process_opml_feed_node(xml_url, feed_name, current_tab_id, state)
     else:
         _process_folder_node(
@@ -1217,24 +1222,34 @@ def fetch_feed(feed_url):
 
 
 def _update_feed_metadata(feed_db_obj, parsed_feed):
-    """Updates feed title and site_link if changed.
+    """Updates feed site_link and canonicalizes feed title if changed.
 
     Args:
         feed_db_obj (Feed): The database feed object.
         parsed_feed (feedparser.FeedParserDict): The parsed feed result.
     """
     raw_title = parsed_feed.feed.get("title")
-    new_title = raw_title.strip() if raw_title else None
+    raw_site_link = parsed_feed.feed.get("link")
+    new_site_link = validate_link_structure(raw_site_link)
+
+    new_title = (
+        derive_canonical_feed_name(
+            raw_title,
+            site_url=new_site_link or feed_db_obj.site_link,
+            feed_url=feed_db_obj.url,
+        )
+        if raw_title
+        else None
+    )
+
     if new_title and new_title != feed_db_obj.name:
         logger.info(
-            "Updating feed title for '%s' to '%s'",
+            "Updating canonical feed title for '%s' to '%s'",
             _sanitize_for_log(feed_db_obj.name),
             _sanitize_for_log(new_title),
         )
         feed_db_obj.name = new_title
 
-    raw_site_link = parsed_feed.feed.get("link")
-    new_site_link = validate_link_structure(raw_site_link)
     if not new_site_link and raw_site_link:
         logger.warning(
             "Feed '%s': Ignored potentially unsafe site_link: %s",

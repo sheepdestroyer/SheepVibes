@@ -147,6 +147,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-14: Canonical Short Feed Names & Single-Line Widget Title Bars**
+  - [x] Enforced strict single-line CSS truncation (`white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;`) and compact header layout in `frontend/style.css` and `frontend/js/ui.js`.
+  - [x] Added `feed-widget-title` class and hover tooltip `title` attribute to feed widget headers.
+  - [x] Implemented canonical short feed name normalizer and cleaner in `backend/feed_name_utils.py` stripping boilerplate prefixes, suffixes, and taglines (e.g. converting `"GPU News, CPU News, Reviews & PC Hardware Guides"` to `"Wccftech"`, `"www.theregister.com - Articles"` to `"The Register"`, and `"Ars Technica - All content"` to `"Ars Technica"`).
+  - [x] Integrated canonical name extraction into feed creation, OPML import, and background metadata updates in `backend/feed_service.py` and `backend/blueprints/feeds.py`.
+  - [x] Added comprehensive unit tests in `tests/unit/test_feed_name_utils.py` and `frontend/js/ui.test.js`, and Playwright E2E integration test in `tests/e2e/test_widget_titles.py`.
+  - [x] Validated 100% test pass rate across Vitest (39/39), Pytest unit (191/191), and Playwright E2E (10/10).
+
 *   [x] **2026-08-14: Swap Article and Comments Links (Article Primary, Comments Secondary)**
   - [x] Swapped feed item main link to point directly to original article (`item.link`).
   - [x] Renamed secondary link to `comments` pointing to discussion thread (`item.comments_url`).
