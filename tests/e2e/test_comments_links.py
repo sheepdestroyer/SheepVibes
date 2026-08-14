@@ -2,21 +2,22 @@
 
 Verifies:
 1. DOM structure and attributes:
-   - Primary title link opens discussion thread with target="_blank", rel="noopener noreferrer", and title.
-   - Secondary [article] link points to the original article with target="_blank", rel="noopener noreferrer", title, and aria-label.
-   - Items without comments thread render only a single title link without [article].
+   - Primary title link opens original article with target="_blank" and rel="noopener noreferrer".
+   - Secondary comments link points to the discussion thread with target="_blank", rel="noopener noreferrer",
+     title, and aria-label.
+   - Items without comments thread render only a single title link without comments link.
    - Items with comments_url == link (e.g. Ask HN) render only a single title link.
    - Items with empty/whitespace-only comments_url render only a single title link.
    - Potentially unsafe URLs (e.g., javascript: / data:) are sanitized safely.
 2. User interaction & read state:
-   - Clicking primary discussion link marks item as read (li.read) and decrements unread badge.
-   - Clicking secondary [article] link marks item as read (li.read) and decrements unread badge.
+   - Clicking primary article link marks item as read (li.read) and decrements unread badge.
+   - Clicking secondary comments link marks item as read (li.read) and decrements unread badge.
    - Middle click (auxclick button 1) on both links marks item as read.
    - Clicking an already-read item does not decrement badges further or send redundant requests.
    - When all unread items are marked read, the badge is removed cleanly from the DOM.
 3. Accessibility & Night Mode:
    - Verifies aria-label and title attributes for screen readers.
-   - Verifies computed styles (contrast color) for .item-article-link in both light and night modes.
+   - Verifies computed styles (contrast color) for .item-comments-link in both light and night modes.
 """
 
 import json
@@ -174,35 +175,35 @@ def setup_mock_comments_feed(
 
 @pytest.mark.e2e
 def test_comments_and_article_links_dom_structure(page: Page, live_server: str):
-    """Verify DOM structure, link attributes, and presence/absence of secondary article links."""
+    """Verify DOM structure, link attributes, and presence/absence of secondary comments links."""
     setup_mock_comments_feed(page, live_server)
 
-    # 1. Check Item 101 (Hacker News item with separate article link)
+    # 1. Check Item 101 (Hacker News item with separate article and comments links)
     item_101 = page.locator('li[data-item-id="101"]')
     expect(item_101).to_be_visible()
 
-    # Primary title link -> Discussion thread
+    # Primary title link -> Original article
     primary_link_101 = item_101.locator("> a")
     expect(primary_link_101).to_have_attribute(
-        "href", "https://news.ycombinator.com/item?id=1001"
+        "href", "https://github.com/sheepdestroyer/sheepvibes"
     )
     expect(primary_link_101).to_have_text("Show HN: SheepVibes RSS Aggregator")
     expect(primary_link_101).to_have_attribute("target", "_blank")
     expect(primary_link_101).to_have_attribute("rel", "noopener noreferrer")
-    expect(primary_link_101).to_have_attribute("title", "Open discussion thread")
+    expect(primary_link_101).not_to_have_attribute("title", "Open discussion thread")
 
-    # Secondary link -> Original article
-    article_link_101 = item_101.locator("a.item-article-link")
-    expect(article_link_101).to_be_visible()
-    expect(article_link_101).to_have_attribute(
-        "href", "https://github.com/sheepdestroyer/sheepvibes"
+    # Secondary link -> Comments / Discussion thread
+    comments_link_101 = item_101.locator("a.item-comments-link")
+    expect(comments_link_101).to_be_visible()
+    expect(comments_link_101).to_have_attribute(
+        "href", "https://news.ycombinator.com/item?id=1001"
     )
-    expect(article_link_101).to_have_text("[article]")
-    expect(article_link_101).to_have_attribute("target", "_blank")
-    expect(article_link_101).to_have_attribute("rel", "noopener noreferrer")
-    expect(article_link_101).to_have_attribute("title", "Open original article")
-    expect(article_link_101).to_have_attribute(
-        "aria-label", "Open original article: Show HN: SheepVibes RSS Aggregator"
+    expect(comments_link_101).to_have_text("comments")
+    expect(comments_link_101).to_have_attribute("target", "_blank")
+    expect(comments_link_101).to_have_attribute("rel", "noopener noreferrer")
+    expect(comments_link_101).to_have_attribute("title", "Open discussion thread")
+    expect(comments_link_101).to_have_attribute(
+        "aria-label", "Open discussion thread: Show HN: SheepVibes RSS Aggregator"
     )
 
     # 2. Check Item 102 (Ask HN where comments_url == link)
@@ -216,30 +217,29 @@ def test_comments_and_article_links_dom_structure(page: Page, live_server: str):
     expect(primary_link_102).to_have_text("Ask HN: Favorite self-hosted apps in 2026?")
     expect(primary_link_102).to_have_attribute("target", "_blank")
     expect(primary_link_102).to_have_attribute("rel", "noopener noreferrer")
-    # Should NOT have title="Open discussion thread" because comments_url == link
     expect(primary_link_102).not_to_have_attribute("title", "Open discussion thread")
 
-    # Should NOT have secondary [article] link
-    expect(item_102.locator("a.item-article-link")).to_have_count(0)
+    # Should NOT have secondary comments link
+    expect(item_102.locator("a.item-comments-link")).to_have_count(0)
 
-    # 3. Check Item 103 (Lobsters item with discussion and article)
+    # 3. Check Item 103 (Lobsters item with article and comments)
     item_103 = page.locator('li[data-item-id="103"]')
     expect(item_103).to_be_visible()
 
     primary_link_103 = item_103.locator("> a")
     expect(primary_link_103).to_have_attribute(
-        "href", "https://lobste.rs/s/xyz987/modern_web_performance"
-    )
-    expect(primary_link_103).to_have_attribute("title", "Open discussion thread")
-
-    article_link_103 = item_103.locator("a.item-article-link")
-    expect(article_link_103).to_be_visible()
-    expect(article_link_103).to_have_attribute(
         "href", "https://example.com/web-performance"
     )
-    expect(article_link_103).to_have_text("[article]")
-    expect(article_link_103).to_have_attribute(
-        "aria-label", "Open original article: Lobsters: Modern Web Performance"
+    expect(primary_link_103).not_to_have_attribute("title", "Open discussion thread")
+
+    comments_link_103 = item_103.locator("a.item-comments-link")
+    expect(comments_link_103).to_be_visible()
+    expect(comments_link_103).to_have_attribute(
+        "href", "https://lobste.rs/s/xyz987/modern_web_performance"
+    )
+    expect(comments_link_103).to_have_text("comments")
+    expect(comments_link_103).to_have_attribute(
+        "aria-label", "Open discussion thread: Lobsters: Modern Web Performance"
     )
 
     # 4. Check Item 104 (Whitespace-only comments_url)
@@ -251,7 +251,7 @@ def test_comments_and_article_links_dom_structure(page: Page, live_server: str):
     expect(item_104.locator("> a")).not_to_have_attribute(
         "title", "Open discussion thread"
     )
-    expect(item_104.locator("a.item-article-link")).to_have_count(0)
+    expect(item_104.locator("a.item-comments-link")).to_have_count(0)
 
     # 5. Check Standard feed items (Item 201: None, Item 202: empty string)
     item_201 = page.locator('li[data-item-id="201"]')
@@ -262,7 +262,7 @@ def test_comments_and_article_links_dom_structure(page: Page, live_server: str):
     expect(item_201.locator("> a")).not_to_have_attribute(
         "title", "Open discussion thread"
     )
-    expect(item_201.locator("a.item-article-link")).to_have_count(0)
+    expect(item_201.locator("a.item-comments-link")).to_have_count(0)
 
     item_202 = page.locator('li[data-item-id="202"]')
     expect(item_202).to_be_visible()
@@ -272,14 +272,14 @@ def test_comments_and_article_links_dom_structure(page: Page, live_server: str):
     expect(item_202.locator("> a")).not_to_have_attribute(
         "title", "Open discussion thread"
     )
-    expect(item_202.locator("a.item-article-link")).to_have_count(0)
+    expect(item_202.locator("a.item-comments-link")).to_have_count(0)
 
 
 @pytest.mark.e2e
-def test_click_primary_discussion_link_marks_read_and_decrements_badges(
+def test_click_primary_article_link_marks_read_and_decrements_badges(
     page: Page, live_server: str
 ):
-    """Verify clicking the primary title/discussion link marks the item read and decrements badges."""
+    """Verify clicking the primary title/article link marks the item read and decrements badges."""
     read_item_requests = setup_mock_comments_feed(
         page, live_server, initial_tab_unread=4, initial_feed_unread=4
     )
@@ -295,7 +295,7 @@ def test_click_primary_discussion_link_marks_read_and_decrements_badges(
     expect(feed_badge).to_have_text("4")
     expect(tab_badge).to_have_text("4")
 
-    # Dispatch click event on primary link (triggering mark-as-read without opening external page)
+    # Dispatch click event on primary article link (triggering mark-as-read without opening external page)
     item_101.locator("> a").dispatch_event("click")
 
     # Verify item is marked read
@@ -316,10 +316,10 @@ def test_click_primary_discussion_link_marks_read_and_decrements_badges(
 
 
 @pytest.mark.e2e
-def test_click_secondary_article_link_marks_read_and_decrements_badges(
+def test_click_secondary_comments_link_marks_read_and_decrements_badges(
     page: Page, live_server: str
 ):
-    """Verify clicking the secondary [article] link marks the item read and decrements badges."""
+    """Verify clicking the secondary comments link marks the item read and decrements badges."""
     read_item_requests = setup_mock_comments_feed(
         page, live_server, initial_tab_unread=4, initial_feed_unread=4
     )
@@ -335,9 +335,9 @@ def test_click_secondary_article_link_marks_read_and_decrements_badges(
     expect(feed_badge).to_have_text("4")
     expect(tab_badge).to_have_text("4")
 
-    # Click the secondary article link
-    article_link_103 = item_103.locator("a.item-article-link")
-    article_link_103.dispatch_event("click")
+    # Click the secondary comments link
+    comments_link_103 = item_103.locator("a.item-comments-link")
+    comments_link_103.dispatch_event("click")
 
     # Verify item is marked read
     expect(item_103).to_have_class(re.compile(r"\bread\b"))
@@ -361,10 +361,10 @@ def test_middle_click_auxclick_marks_read(page: Page, live_server: str):
     expect(item_101).to_have_class(re.compile(r"\bread\b"))
     assert 101 in read_item_requests
 
-    # 2. Middle-click on secondary [article] link of item 103
+    # 2. Middle-click on secondary comments link of item 103
     item_103 = page.locator('li[data-item-id="103"]')
     expect(item_103).to_have_class(re.compile(r"\bunread\b"))
-    item_103.locator("a.item-article-link").dispatch_event("auxclick", {"button": 1})
+    item_103.locator("a.item-comments-link").dispatch_event("auxclick", {"button": 1})
     expect(item_103).to_have_class(re.compile(r"\bread\b"))
     assert 103 in read_item_requests
 
@@ -386,8 +386,8 @@ def test_badge_removal_when_all_unread_items_marked_read(
     expect(feed_1_widget.locator(".unread-count-badge")).to_have_text("1")
     expect(tab_button.locator(".unread-count-badge")).to_have_text("1")
 
-    # Mark the only unread item as read via [article] link
-    item_101.locator("a.item-article-link").dispatch_event("click")
+    # Mark the only unread item as read via comments link
+    item_101.locator("a.item-comments-link").dispatch_event("click")
     expect(item_101).to_have_class(re.compile(r"\bread\b"))
 
     # Badges should be removed entirely
@@ -404,17 +404,20 @@ def test_comments_links_accessibility_and_night_mode_styling(
 
     item_101 = page.locator('li[data-item-id="101"]')
     primary_link = item_101.locator("> a")
-    article_link = item_101.locator("a.item-article-link")
+    comments_link = item_101.locator("a.item-comments-link")
 
     # 1. Accessibility checks
-    expect(primary_link).to_have_attribute("title", "Open discussion thread")
-    expect(article_link).to_have_attribute("title", "Open original article")
-    expect(article_link).to_have_attribute(
-        "aria-label", "Open original article: Show HN: SheepVibes RSS Aggregator"
+    expect(primary_link).not_to_have_attribute("title", "Open discussion thread")
+    expect(primary_link).not_to_have_attribute(
+        "aria-label", "Open discussion thread: Show HN: SheepVibes RSS Aggregator"
+    )
+    expect(comments_link).to_have_attribute("title", "Open discussion thread")
+    expect(comments_link).to_have_attribute(
+        "aria-label", "Open discussion thread: Show HN: SheepVibes RSS Aggregator"
     )
 
     # 2. Check Light Mode computed colors
-    light_color = article_link.evaluate("el => window.getComputedStyle(el).color")
+    light_color = comments_link.evaluate("el => window.getComputedStyle(el).color")
     # #005a9c corresponds to rgb(0, 90, 156)
     assert light_color == "rgb(0, 90, 156)", f"Expected rgb(0, 90, 156), got {light_color}"
 
@@ -425,8 +428,8 @@ def test_comments_links_accessibility_and_night_mode_styling(
     expect(page.locator("body")).to_have_class(re.compile(r"\bnight-mode\b"))
 
     # 4. Check Night Mode computed color and visibility
-    expect(article_link).to_be_visible()
-    night_color = article_link.evaluate("el => window.getComputedStyle(el).color")
+    expect(comments_link).to_be_visible()
+    night_color = comments_link.evaluate("el => window.getComputedStyle(el).color")
     # #58a6ff corresponds to rgb(88, 166, 255)
     assert night_color == "rgb(88, 166, 255)", f"Expected rgb(88, 166, 255), got {night_color}"
 
@@ -435,5 +438,5 @@ def test_comments_links_accessibility_and_night_mode_styling(
     night_mode_switch.uncheck()
     expect(page.locator("body")).not_to_have_class(re.compile(r"\bnight-mode\b"))
 
-    restored_color = article_link.evaluate("el => window.getComputedStyle(el).color")
+    restored_color = comments_link.evaluate("el => window.getComputedStyle(el).color")
     assert restored_color == "rgb(0, 90, 156)", f"Expected rgb(0, 90, 156), got {restored_color}"

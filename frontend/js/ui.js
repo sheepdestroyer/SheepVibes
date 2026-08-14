@@ -65,23 +65,18 @@ function createFeedItemElement(item, clickHandler) {
     listItem.dataset.itemId = item.id;
     listItem.classList.add(item.is_read ? 'read' : 'unread');
 
-    const hasComments = Boolean(
-        item.comments_url &&
-        typeof item.comments_url === 'string' &&
-        item.comments_url.trim() !== '' &&
-        item.comments_url !== item.link
-    );
+    const articleUrl = sanitizeUrl(item.link || '');
+    const commentsUrl = sanitizeUrl(item.comments_url || '');
+    const hasComments = commentsUrl !== '#' && commentsUrl !== articleUrl;
 
-    // Primary link: Discussion thread if available (default/primary), otherwise article link
-    const primaryUrl = hasComments ? item.comments_url : item.link;
+    // Primary link: Main link is the article itself (with fallback to comments_url or '#')
+    const primaryUrl = articleUrl !== '#' ? articleUrl : (commentsUrl !== '#' ? commentsUrl : '#');
     const link = document.createElement('a');
-    link.href = sanitizeUrl(primaryUrl);
+    link.className = 'item-title-link';
+    link.href = primaryUrl;
     link.textContent = item.title;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    if (hasComments) {
-        link.title = 'Open discussion thread';
-    }
     link.addEventListener('click', () => clickHandler(listItem));
     link.addEventListener('auxclick', (event) => {
         if (event.button === 1) {
@@ -94,25 +89,25 @@ function createFeedItemElement(item, clickHandler) {
     timestamp.className = 'item-meta';
     timestamp.textContent = formatDate(item.published_time || item.fetched_time);
 
-    if (hasComments && item.link) {
+    if (hasComments) {
         const separator = document.createTextNode(' · ');
         timestamp.appendChild(separator);
 
-        const articleLink = document.createElement('a');
-        articleLink.href = sanitizeUrl(item.link);
-        articleLink.textContent = '[article]';
-        articleLink.className = 'item-article-link';
-        articleLink.target = '_blank';
-        articleLink.rel = 'noopener noreferrer';
-        articleLink.title = 'Open original article';
-        articleLink.setAttribute('aria-label', `Open original article: ${item.title}`);
-        articleLink.addEventListener('click', () => clickHandler(listItem));
-        articleLink.addEventListener('auxclick', (event) => {
+        const commentsLink = document.createElement('a');
+        commentsLink.href = commentsUrl;
+        commentsLink.textContent = 'comments';
+        commentsLink.className = 'item-comments-link';
+        commentsLink.target = '_blank';
+        commentsLink.rel = 'noopener noreferrer';
+        commentsLink.title = 'Open discussion thread';
+        commentsLink.setAttribute('aria-label', `Open discussion thread: ${item.title}`);
+        commentsLink.addEventListener('click', () => clickHandler(listItem));
+        commentsLink.addEventListener('auxclick', (event) => {
             if (event.button === 1) {
                 clickHandler(listItem);
             }
         });
-        timestamp.appendChild(articleLink);
+        timestamp.appendChild(commentsLink);
     }
 
     listItem.appendChild(timestamp);

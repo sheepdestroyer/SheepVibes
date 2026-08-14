@@ -1,5 +1,11 @@
 ## 2026-08-14
 
+- **Feat(frontend): Swap Article and Comments Links (Article as Primary, Comments as Secondary)**
+  - **Primary & Secondary Link Swap (`frontend/js/ui.js`)**: Updated `createFeedItemElement` so the main item title link opens the original article (`item.link`) directly, and when a discussion thread URL is available (`comments_url` differs from `link`), an inline secondary link labeled `comments` opens the discussion thread.
+  - **CSS Styling & Accessibility (`frontend/style.css`)**: Styled `.item-comments-link` with WCAG AA compliant contrast colors in light mode (`#005a9c`) and night mode (`#58a6ff`), hover underline states, and ARIA labels (`aria-label="Open discussion thread: {title}"`).
+  - **Test Suite Updates (`frontend/js/ui.test.js`, `tests/e2e/test_comments_links.py`)**: Updated Vitest unit suite and Playwright E2E integration suite to validate primary article links, secondary `comments` links, click and middle-click (`auxclick`) mark-as-read handlers, badge decrements, and light/night mode themes.
+  - **Verification**: 100% test pass rate across Vitest (36/36), Pytest unit tests (173/173), and Playwright E2E suite (8 passed, 1 skipped).
+
 - **Test(e2e): Comprehensive Playwright E2E Test Suite for Feed Comments Links**
   - **Comprehensive E2E Coverage (`tests/e2e/test_comments_links.py`)**: Added full browser end-to-end integration tests using Playwright Chromium and `live_server` subprocess.
   - **DOM & Attribute Validation**: Verified rendered discussion thread primary links, secondary `[article]` links, attribute presence/absence (`target="_blank"`, `rel="noopener noreferrer"`, `title`, `aria-label`), suppression of `[article]` for Ask HN (`comments_url == link`), and fallback for feeds without comments.
