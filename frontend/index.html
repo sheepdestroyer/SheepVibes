@@ -21,23 +21,40 @@
             <button id="rename-tab-button" title="Rename Active Tab" aria-label="Rename Active Tab">Rename</button>
             <button id="delete-tab-button" title="Delete Active Tab" aria-label="Delete Active Tab">-</button>
         </div>
-        <div id="settings-menu-container">
-            <button id="settings-button" aria-label="Settings">⚙️</button>
-            <div id="settings-menu" class="hidden">
-                <div id="add-feed-section">
-                    <input type="text" id="feed-url-input" placeholder="Enter feed URL">
-                    <small id="add-feed-error" class="error-text hidden"></small>
-                    <button id="add-feed-button">Add Feed</button>
+        <div id="header-right-controls">
+            <div id="settings-menu-container">
+                <button id="settings-button" title="Settings" aria-label="Settings">⚙️</button>
+                <div id="settings-menu" class="hidden">
+                    <div id="add-feed-section">
+                        <input type="text" id="feed-url-input" placeholder="Enter feed URL">
+                        <small id="add-feed-error" class="error-text hidden"></small>
+                        <button id="add-feed-button">Add Feed</button>
+                    </div>
+                    <div id="night-mode-section">
+                        <label for="night-mode-switch">
+                            <input type="checkbox" id="night-mode-switch" role="switch"> Night Mode
+                        </label>
+                    </div>
+                    <button id="refresh-all-feeds-button">Refresh All Feeds</button>
+                    <button id="export-opml-button">Export OPML</button>
+                    <input type="file" id="opml-file-input" accept=".opml, .xml" class="hidden">
+                    <button id="import-opml-button">Import OPML</button>
                 </div>
-                <div id="night-mode-section">
-                    <label for="night-mode-switch">
-                        <input type="checkbox" id="night-mode-switch" role="switch"> Night Mode
-                    </label>
+            </div>
+            <div id="user-menu-container" class="hidden">
+                <button id="user-button" title="User Account" aria-label="User Account">
+                    <span class="user-icon">👤</span>
+                    <span id="user-display-name">User</span>
+                </button>
+                <div id="user-menu" class="hidden">
+                    <div id="user-info-section">
+                        <span id="user-menu-username">Username</span>
+                        <span id="user-role-badge" class="badge">User</span>
+                    </div>
+                    <button id="change-password-button">Change Password</button>
+                    <button id="admin-panel-button" class="hidden">Admin Panel</button>
+                    <button id="logout-button">Log Out</button>
                 </div>
-                <button id="refresh-all-feeds-button">Refresh All Feeds</button>
-                <button id="export-opml-button">Export OPML</button>
-                <input type="file" id="opml-file-input" accept=".opml, .xml" class="hidden">
-                <button id="import-opml-button">Import OPML</button>
             </div>
         </div>
     </header>
@@ -51,6 +68,56 @@
     </main>
 
     <div id="modal-root">
+        <!-- Login Modal -->
+        <div id="login-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="login-modal-title">
+            <div class="modal-content auth-modal-content">
+                <h2 id="login-modal-title">Log In to SheepVibes</h2>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" required autocomplete="username" autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required autocomplete="current-password">
+                    </div>
+                    <div id="login-error" class="error-banner hidden" role="alert"></div>
+                    <div class="modal-buttons auth-buttons">
+                        <button type="submit" id="login-submit-button">Log In</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Change Password Modal -->
+        <div id="change-password-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="change-password-modal-title">
+            <div class="modal-content">
+                <button id="change-password-modal-close-button" class="modal-close-button" aria-label="Close"
+                    title="Close">&times;</button>
+                <h2 id="change-password-modal-title">Change Password</h2>
+                <form id="change-password-form">
+                    <div class="form-group">
+                        <label for="change-password-current">Current Password</label>
+                        <input type="password" id="change-password-current" required autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="change-password-new">New Password (min 8 characters)</label>
+                        <input type="password" id="change-password-new" required minlength="8" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="change-password-confirm">Confirm New Password</label>
+                        <input type="password" id="change-password-confirm" required minlength="8" autocomplete="new-password">
+                    </div>
+                    <div id="change-password-error" class="error-banner hidden" role="alert"></div>
+                    <div id="change-password-success" class="success-banner hidden" role="status"></div>
+                    <div class="modal-buttons">
+                        <button type="submit" id="change-password-submit-button">Update Password</button>
+                        <button type="button" id="change-password-cancel-button">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Edit Feed Modal -->
         <div id="edit-feed-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-feed-modal-title">
             <div class="modal-content">

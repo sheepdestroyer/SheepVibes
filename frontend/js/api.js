@@ -5,18 +5,34 @@ export const API_BASE_URL =
     window.API_BASE_URL ||
     (window.location.pathname.startsWith('/sheepvibes') ? '/sheepvibes' : '');
 
+let onUnauthorizedCallback = null;
+
+/**
+ * Registers a global callback to invoke when a 401 Unauthorized response is received.
+ * @param {Function} callback
+ */
+export function setUnauthorizedHandler(callback) {
+    onUnauthorizedCallback = callback;
+}
+
 /**
  * Fetches data from the specified API endpoint.
  * Handles JSON parsing, error reporting, and different response types.
  * @param {string} url - The API endpoint URL.
  * @param {object} options - Optional fetch options (method, headers, body).
- * @returns {Promise<object|null>} A promise resolving to the JSON data, {success: true} for successful non-JSON responses, or null on failure.
+ * @param {string} responseType - Expected response type ('json' or 'text').
+ * @returns {Promise<object|string|null>} A promise resolving to the data or status.
  */
 export async function fetchData(url, options = {}, responseType = 'json') {
     try {
         const response = await fetch(`${API_BASE_URL}${url}`, options);
         if (!response.ok) {
+            if (response.status === 401 && onUnauthorizedCallback && !url.startsWith('/api/auth/login')) {
+                onUnauthorizedCallback();
+            }
+
             const error = new Error(`HTTP error! status: ${response.status}`);
+            error.status = response.status;
             try {
                 const contentType = response.headers.get('content-type');
                 if (contentType && contentType.includes('application/json')) {
@@ -51,6 +67,20 @@ export async function fetchData(url, options = {}, responseType = 'json') {
 // --- API Methods ---
 
 export const api = {
+    // Auth
+    login: (username, password) => fetchData('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    }),
+    logout: () => fetchData('/api/auth/logout', { method: 'POST' }),
+    getCurrentUser: () => fetchData('/api/auth/me'),
+    changePassword: (currentPassword, newPassword) => fetchData('/api/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+    }),
+
     // Tabs
     getTabs: () => fetchData('/api/tabs'),
     createTab: (name) => fetchData('/api/tabs', {
@@ -89,5 +119,8 @@ export const api = {
     importOpml: (formData) => fetchData('/api/opml/import', {
         method: 'POST',
         body: formData
-    })
+    }),
+
+    // Handler setter
+    setUnauthorizedHandler
 };

@@ -2,9 +2,9 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { api } from './api.js';
+import { api, setUnauthorizedHandler, fetchData } from './api.js';
 
-describe('api parameter encoding', () => {
+describe('api parameter encoding and endpoints', () => {
     beforeEach(() => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
             ok: true,
@@ -45,5 +45,50 @@ describe('api parameter encoding', () => {
 
         await api.deleteFeed('feed/2');
         expect(fetch).toHaveBeenCalledWith('/api/feeds/feed%2F2', expect.any(Object));
+    });
+
+    it('sends login request with credentials', async () => {
+        await api.login('admin', 'secret123');
+        expect(fetch).toHaveBeenCalledWith('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'admin', password: 'secret123' })
+        });
+    });
+
+    it('sends logout request', async () => {
+        await api.logout();
+        expect(fetch).toHaveBeenCalledWith('/api/auth/logout', { method: 'POST' });
+    });
+
+    it('sends getCurrentUser request', async () => {
+        await api.getCurrentUser();
+        expect(fetch).toHaveBeenCalledWith('/api/auth/me', expect.any(Object));
+    });
+
+    it('sends changePassword request', async () => {
+        await api.changePassword('oldPass', 'newPass123');
+        expect(fetch).toHaveBeenCalledWith('/api/auth/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: 'oldPass', new_password: 'newPass123' })
+        });
+    });
+
+    it('triggers unauthorized handler when a protected endpoint returns 401', async () => {
+        const mockUnauthorized = vi.fn();
+        setUnauthorizedHandler(mockUnauthorized);
+
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+            ok: false,
+            status: 401,
+            headers: {
+                get: () => 'application/json'
+            },
+            json: async () => ({ error: 'Unauthorized' })
+        }));
+
+        await expect(api.getTabs()).rejects.toThrow();
+        expect(mockUnauthorized).toHaveBeenCalledTimes(1);
     });
 });

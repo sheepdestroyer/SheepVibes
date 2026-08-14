@@ -174,6 +174,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
   - [x] Updated Vitest unit tests in `frontend/js/ui.test.js` and Playwright E2E tests in `tests/e2e/test_comments_links.py`.
   - [x] Validated 100% pass rate across Vitest (36/36), Pytest unit (173/173), and Playwright E2E suites.
 
+*   [x] **2026-08-14: Multi-User Accounts Support and Admin Panel (Issue #324 - PR 3: Frontend Authentication UI & User State)**
+  - [x] Auth API methods and 401 unauthorized interceptor in `frontend/js/api.js`.
+  - [x] Header user navigation, dropdown menu, and role badge in `frontend/index.html`, `frontend/js/ui.js`, `frontend/style.css`.
+  - [x] Login modal and Change Password modal with client-side validation and responsive/night-mode styling.
+  - [x] Session lifecycle initialization and logout state management in `frontend/js/app.js`.
+  - [x] Unit test suites in `frontend/js/api.test.js`, `frontend/js/ui.test.js`, and Playwright E2E tests in `tests/e2e/test_auth_ui.py`.
+  - [x] Validated 100% test pass rate across Vitest (47/47), Pytest unit (207/207), and Playwright E2E suite (12 passed, 1 skipped).
+
 *   [x] **2026-08-14: Multi-User Accounts Support and Admin Panel (Issue #324 - PR 2: Tenant Scoping, Cache Partitioning & API Isolation)**
   - [x] Database composite unique constraint (`user_id`, `name`) on `Tab`.
   - [x] Protected all tab, feed, item, and OPML routes with `@login_required` and scoped queries to `current_user.id`.

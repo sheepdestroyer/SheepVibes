@@ -53,7 +53,7 @@ def get_current_session_user():
     return jsonify({"authenticated": False, "user": None}), 200
 
 
-@auth_bp.route("/password", methods=["PUT"])
+@auth_bp.route("/password", methods=["PUT", "POST"])
 @login_required
 def change_password():
     """Changes the password of the currently authenticated user."""

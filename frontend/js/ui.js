@@ -297,6 +297,7 @@ export function renderTabs(tabs, activeTabId, callbacks) {
 
 export function showEditFeedModal(feedId, currentUrl, currentName) {
     const modal = document.getElementById('edit-feed-modal');
+    if (!modal) return;
     document.getElementById('edit-feed-id').value = feedId;
     document.getElementById('edit-feed-url').value = currentUrl;
     document.getElementById('edit-feed-name').value = currentName;
@@ -305,7 +306,116 @@ export function showEditFeedModal(feedId, currentUrl, currentName) {
 }
 
 export function closeEditFeedModal() {
-    document.getElementById('edit-feed-modal').classList.remove('is-active');
+    const modal = document.getElementById('edit-feed-modal');
+    if (modal) modal.classList.remove('is-active');
+}
+
+export function showLoginModal(errorMessage = null) {
+    const modal = document.getElementById('login-modal');
+    if (!modal) return;
+    const errorBanner = document.getElementById('login-error');
+    if (errorBanner) {
+        if (errorMessage) {
+            errorBanner.textContent = errorMessage;
+            errorBanner.classList.remove('hidden');
+        } else {
+            errorBanner.textContent = '';
+            errorBanner.classList.add('hidden');
+        }
+    }
+    const passwordInput = document.getElementById('login-password');
+    if (passwordInput) passwordInput.value = '';
+    modal.classList.add('is-active');
+    const usernameInput = document.getElementById('login-username');
+    if (usernameInput) usernameInput.focus();
+}
+
+export function closeLoginModal() {
+    const modal = document.getElementById('login-modal');
+    if (!modal) return;
+    modal.classList.remove('is-active');
+    const errorBanner = document.getElementById('login-error');
+    if (errorBanner) errorBanner.classList.add('hidden');
+}
+
+export function showChangePasswordModal(errorMessage = null, successMessage = null, clearInputs = false) {
+    const modal = document.getElementById('change-password-modal');
+    if (!modal) return;
+    const errorBanner = document.getElementById('change-password-error');
+    const successBanner = document.getElementById('change-password-success');
+
+    if (errorBanner) {
+        if (errorMessage) {
+            errorBanner.textContent = errorMessage;
+            errorBanner.classList.remove('hidden');
+        } else {
+            errorBanner.textContent = '';
+            errorBanner.classList.add('hidden');
+        }
+    }
+
+    if (successBanner) {
+        if (successMessage) {
+            successBanner.textContent = successMessage;
+            successBanner.classList.remove('hidden');
+        } else {
+            successBanner.textContent = '';
+            successBanner.classList.add('hidden');
+        }
+    }
+
+    if (clearInputs || (!errorMessage && !successMessage)) {
+        const cur = document.getElementById('change-password-current');
+        const next = document.getElementById('change-password-new');
+        const conf = document.getElementById('change-password-confirm');
+        if (cur) cur.value = '';
+        if (next) next.value = '';
+        if (conf) conf.value = '';
+    }
+    modal.classList.add('is-active');
+}
+
+export function closeChangePasswordModal() {
+    const modal = document.getElementById('change-password-modal');
+    if (!modal) return;
+    modal.classList.remove('is-active');
+}
+
+// --- User State ---
+
+export function renderUserState(user) {
+    const userContainer = document.getElementById('user-menu-container');
+    const displayName = document.getElementById('user-display-name');
+    const menuUsername = document.getElementById('user-menu-username');
+    const roleBadge = document.getElementById('user-role-badge');
+    const adminButton = document.getElementById('admin-panel-button');
+
+    if (user && user.username) {
+        if (displayName) displayName.textContent = user.username;
+        if (menuUsername) menuUsername.textContent = user.username;
+        if (roleBadge) {
+            roleBadge.textContent = user.role || 'user';
+            roleBadge.className = `badge role-${user.role || 'user'}`;
+        }
+        if (adminButton) {
+            if (user.role === 'admin') {
+                adminButton.classList.remove('hidden');
+            } else {
+                adminButton.classList.add('hidden');
+            }
+        }
+        if (userContainer) userContainer.classList.remove('hidden');
+    }
+}
+
+export function clearUserState() {
+    const userContainer = document.getElementById('user-menu-container');
+    const userMenu = document.getElementById('user-menu');
+    const adminButton = document.getElementById('admin-panel-button');
+
+    if (userContainer) userContainer.classList.add('hidden');
+    if (userMenu) userMenu.classList.add('hidden');
+    if (adminButton) adminButton.classList.add('hidden');
 }
 
 // --- Progress Bar ---
@@ -335,5 +445,6 @@ export function hideProgress() {
 }
 
 export function updateProgressBarPosition() {
-    // No longer needed, handled by CSS .sticky-nav
+    // Handled by CSS .sticky-nav
 }
+
