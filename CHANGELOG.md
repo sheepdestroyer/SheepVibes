@@ -1,5 +1,13 @@
 ## 2026-08-14
 
+- **Feat(auth): Tenant Scoping, Cache Partitioning & API Isolation (Issue #324 - PR 2)**
+  - **Database Composite Uniqueness (`backend/models.py`)**: Replaced global `Tab.name` unique constraint with composite `UniqueConstraint("user_id", "name", name="uq_tabs_user_id_name")`, allowing distinct users to organize tabs with identical names (e.g., "Tech", "News") while enforcing per-account uniqueness.
+  - **Route Protection & User Scoping (`backend/blueprints/tabs.py`, `backend/blueprints/feeds.py`, `backend/blueprints/opml.py`)**: Applied `@login_required` to all tab, feed, item, and OPML routes. Scoped all queries (`Tab`, `Feed`, `FeedItem`) to `user_id == current_user.id` to prevent cross-tenant enumeration and unauthorized access.
+  - **Multi-Tenant Cache Partitioning (`backend/cache_utils.py`)**: Partitioned cache keys by user ID (`view/user/{user_id}/tabs/v{version}` and `view/user/{user_id}/tab/{tab_id}/...`) and updated cache invalidators to increment user-specific version keys, preventing cross-user cache collisions or data leakage.
+  - **Multi-Tenant OPML Support (`backend/feed_service.py`, `backend/blueprints/opml.py`)**: Updated OPML import and export pipelines to respect user boundaries, creating tabs and feeds under the authenticated user's ID.
+  - **Unit Test Suite (`tests/unit/test_tenant_isolation.py`, `tests/conftest.py`)**: Added dedicated multi-tenant isolation unit tests verifying tab and feed isolation, 404 enforcement on foreign resource access, per-user OPML import/export isolation, and partitioned cache keys.
+  - **Verification**: 100% test pass rate across Vitest (39/39) and Pytest unit tests (206/206).
+
 - **Feat(auth): User Model, Authentication Engine & Database Migration (Issue #324 - PR 1)**
   - **User Data Model (`backend/models.py`)**: Added `User` model with secure password hashing (`werkzeug.security`), role checking (`is_admin`), timestamps, and linked `Tab.user_id` foreign key (`CASCADE` deletion).
   - **Authentication Engine & Decorators (`backend/auth.py`)**: Built session-based authentication helpers (`get_current_user`, `login_user`, `logout_user`) and route protection decorators (`@login_required`, `@admin_required`).

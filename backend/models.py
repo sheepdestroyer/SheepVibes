@@ -100,14 +100,19 @@ class Tab(db.Model):
         db.Integer,
         db.ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
+        default=1,
         index=True,
     )
-    name = db.Column(db.String(100), nullable=False, unique=True)  # Name of the tab
+    name = db.Column(db.String(100), nullable=False)  # Name of the tab
     order = db.Column(db.Integer, default=0)  # Display order of the tab
     # Relationship to Feeds: One-to-Many (one Tab has many Feeds)
     # cascade='all, delete-orphan' means deleting a Tab also deletes its associated Feeds
     feeds = db.relationship(
         "Feed", backref="tab", lazy=True, cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "name", name="uq_tabs_user_id_name"),
     )
 
     def to_dict(self, unread_count=None):

@@ -1,4 +1,4 @@
-import { throttle, getStorageItem, setStorageItem } from './utils.js';
+import { throttle, getStorageItem, setStorageItem, removeStorageItem } from './utils.js';
 import { api, API_BASE_URL } from './api.js';
 import {
     showToast,

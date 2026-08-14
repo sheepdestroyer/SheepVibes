@@ -10,6 +10,7 @@ from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
+from ..auth import get_current_user, login_required
 from ..feed_service import import_opml as import_opml_service
 from ..models import Tab
 
@@ -45,24 +46,18 @@ def _generate_opml_string(tabs=None):
     body_element = ET.SubElement(opml_element, "body")
 
     if tabs is None:
-        # Eager load feeds to avoid N+1 queries
-        tabs = Tab.query.options(selectinload(
-            Tab.feeds)).order_by(Tab.order).all()
+        tabs = Tab.query.options(selectinload(Tab.feeds)).order_by(Tab.order).all()
 
     for tab in tabs:
-        # Skip tabs with no feeds
         if not tab.feeds:
             continue
 
-        # Create a folder outline for the tab
         folder_outline = ET.SubElement(body_element, "outline")
         folder_name = _sanitize_xml_text(tab.name)
         folder_outline.set("text", folder_name)
         folder_outline.set("title", folder_name)
-        # Sort feeds by name for deterministic output because relation order is not guaranteed
         sorted_feeds = sorted(tab.feeds, key=lambda f: f.name)
 
-        # Add feeds for this tab
         for feed in sorted_feeds:
             feed_outline = ET.SubElement(folder_outline, "outline")
             feed_name = _sanitize_xml_text(feed.name)
@@ -74,7 +69,6 @@ def _generate_opml_string(tabs=None):
             if feed.site_link:
                 feed_outline.set("htmlUrl", _sanitize_xml_text(feed.site_link))
 
-    # Convert the XML tree to a string
     opml_string = ET.tostring(opml_element, encoding="utf-8", method="xml").decode(
         "utf-8"
     )
@@ -95,7 +89,6 @@ def _validate_opml_file_request():
     if not opml_file:
         return None, (jsonify({"error": "File object is empty"}), 400)
 
-    # Basic security: check file extension
     allowed_extensions = {".opml", ".xml", ".txt"}
     _, ext = os.path.splitext(opml_file.filename)
     if ext.lower() not in allowed_extensions:
@@ -108,7 +101,6 @@ def _validate_opml_file_request():
             400,
         )
 
-    # Basic security: check file size (5MB limit)
     opml_file.seek(0, os.SEEK_END)
     size = opml_file.tell()
     opml_file.seek(0)
@@ -119,17 +111,19 @@ def _validate_opml_file_request():
 
 
 @opml_bp.route("/import", methods=["POST"])
+@login_required
 def import_opml():
     """Imports feeds from an OPML file, supporting nested structures as new tabs."""
+    user = get_current_user()
     opml_file, error_resp = _validate_opml_file_request()
     if error_resp:
         return error_resp
 
     requested_tab_id_str = request.form.get("tab_id")
 
-    # Call the service function
     result, error_info = import_opml_service(
-        opml_file.stream, requested_tab_id_str)
+        opml_file.stream, requested_tab_id_str, user_id=user.id
+    )
 
     if error_info:
         error_json, status_code = error_info
@@ -139,19 +133,22 @@ def import_opml():
 
 
 @opml_bp.route("/export", methods=["GET"])
+@login_required
 def export_opml():
-    """Exports all feeds as an OPML file.
-
-    Returns:
-        A Flask Response object containing the OPML file, or a JSON error response.
-    """
+    """Exports all feeds for the authenticated user as an OPML file."""
+    user = get_current_user()
     try:
-        opml_string, tab_count, feed_count = _generate_opml_string()
+        user_tabs = (
+            Tab.query.filter_by(user_id=user.id)
+            .options(selectinload(Tab.feeds))
+            .order_by(Tab.order)
+            .all()
+        )
+        opml_string, tab_count, feed_count = _generate_opml_string(tabs=user_tabs)
     except SQLAlchemyError:
         logger.exception("Database error during OPML generation for export")
         return jsonify({"error": "Database error during OPML generation"}), 500
-    except Exception:  # pylint: disable=broad-exception-caught
-        # Catch unexpected errors during OPML generation
+    except Exception:
         logger.exception("Error during OPML generation for export")
         return jsonify({"error": "Failed to generate OPML export"}), 500
 
@@ -161,26 +158,19 @@ def export_opml():
     )
 
     logger.info(
-        "Successfully generated OPML export for %d feeds across %d tabs.",
+        "Successfully generated OPML export for %d feeds across %d tabs for user %s.",
         feed_count,
         tab_count,
+        user.id,
     )
     return response
 
 
 def _get_autosave_directory():
-    """Determines the autosave directory with flexible configuration.
-
-    Priority:
-    1. DATA_DIR config/environment variable (explicit configuration)
-    2. Directory of the SQLite database file (alongside user data)
-    3. PROJECT_ROOT/data (default fallback)
-    """
-    # 1. Check for explicit DATA_DIR configuration
+    """Determines the autosave directory with flexible configuration."""
     data_dir = current_app.config.get("DATA_DIR") or os.environ.get("DATA_DIR")
 
     if not data_dir:
-        # 2. Try to use the directory of the SQLite database
         db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if db_uri.startswith("sqlite:///"):
             db_path = db_uri.replace("sqlite:///", "")
@@ -189,23 +179,18 @@ def _get_autosave_directory():
                     "Skipping OPML autosave because database is in-memory."
                 )
                 return None
-            # Resolve relative paths to absolute ones to find the data directory correctly
             try:
                 clean_path = db_path.split("?")[0]
                 if clean_path.startswith("file:"):
                     clean_path = clean_path[5:]
                 abs_db_path = os.path.abspath(clean_path)
                 data_dir = os.path.dirname(abs_db_path)
-                logger.debug(
-                    "Resolved autosave directory from SQLite path: %s", data_dir
-                )
             except Exception:
                 logger.warning(
                     "Could not resolve absolute path for SQLite DB: %s", db_path
                 )
 
     if not data_dir:
-        # 3. Fall back to PROJECT_ROOT/data
         project_root = current_app.config.get("PROJECT_ROOT", "")
         if project_root:
             data_dir = os.path.join(project_root, "data")
@@ -235,9 +220,7 @@ def _write_atomically_with_lock(autosave_path, opml_string):
     lock = FileLock(lock_path, timeout=5)
 
     try:
-        # Use a file lock to prevent race conditions in multi-process environments
         with lock:
-            # Use atomic write: write to a temporary file then rename
             with open(temp_path, "w", encoding="utf-8") as f:
                 f.write(opml_string)
             os.replace(temp_path, autosave_path)
@@ -249,13 +232,13 @@ def _write_atomically_with_lock(autosave_path, opml_string):
         )
     except OSError:
         logger.exception("Failed to write autosave file to %s", autosave_path)
-        # Cleanup temp file if it exists
         if os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
             except OSError as e:
                 logger.warning(
-                    "Failed to remove temporary file %s: %s", temp_path, e)
+                    "Failed to remove temporary file %s: %s", temp_path, e
+                )
     return False
 
 

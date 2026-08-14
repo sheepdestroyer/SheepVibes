@@ -15,7 +15,7 @@ from backend.feed_service import (  # For new tests
     parse_published_time,
     process_feed_entries,
 )
-from backend.models import Feed, FeedItem, Tab, db  # Import models directly
+from backend.models import Feed, FeedItem, Tab, User, db  # Import models directly
 
 
 @pytest.fixture
@@ -72,9 +72,17 @@ def client():
     with app.app_context():  # Ensure app context for create_all and drop_all
         db.create_all()  # Ensure tables are created for each test
         cache.clear()  # Clear cache before each test run for isolation
+        user = User(id=1, username="test_default_user", role="admin")
+        user.set_password("DefaultPass123!")
+        db.session.add(user)
+        db.session.commit()
 
     with app.test_client() as client:
-        yield client  # Provide the test client to the tests
+        client.post(
+            "/api/auth/login",
+            json={"username": "test_default_user", "password": "DefaultPass123!"},
+        )
+        yield client
 
     # Teardown: drop all tables after each test to ensure isolation
     with app.app_context():
@@ -862,55 +870,53 @@ def test_stream_endpoint_content_type(client):
 # --- Tests for Caching ---
 def test_cache_invalidation_flow(client, setup_tabs_and_feeds):
     """Tests the granular cache invalidation by checking its effects."""
-    with app.app_context():
-        tab1_id = setup_tabs_and_feeds["tab1_id"]
-        item1_id = setup_tabs_and_feeds["item1_id"]
+    tab1_id = setup_tabs_and_feeds["tab1_id"]
+    item1_id = setup_tabs_and_feeds["item1_id"]
 
-        # --- Test /api/tabs/{id}/feeds caching and invalidation ---
-        with patch("backend.extensions.db.session.execute") as mock_execute:
-            # 1. Prime the cache (this call will execute the query).
-            client.get(f"/api/tabs/{tab1_id}/feeds")
+    # --- Test /api/tabs/{id}/feeds caching and invalidation ---
+    with patch("backend.extensions.db.session.execute") as mock_execute:
+        # 1. Prime the cache (this call will execute the query).
+        client.get(f"/api/tabs/{tab1_id}/feeds")
 
-            # 2. Assert query was called once initially.
-            initial_call_count = mock_execute.call_count
-            assert initial_call_count > 0
+        # 2. Assert query was called once initially.
+        initial_call_count = mock_execute.call_count
+        assert initial_call_count > 0
 
-            # 3. Call again and assert the query was NOT re-executed (cache hit).
-            client.get(f"/api/tabs/{tab1_id}/feeds")
-            assert mock_execute.call_count == initial_call_count
+        # 3. Call again and assert the query was NOT re-executed (cache hit).
+        client.get(f"/api/tabs/{tab1_id}/feeds")
+        assert mock_execute.call_count == initial_call_count
 
-        # 4. Invalidate the cache by marking an item as read.
-        client.post(f"/api/items/{item1_id}/read")
+    # 4. Invalidate the cache by marking an item as read.
+    client.post(f"/api/items/{item1_id}/read")
 
-        # 5. Assert the query IS re-executed on the next call (cache miss).
-        with patch(
-            "backend.extensions.db.session.execute"
-        ) as mock_execute_after_invalidation:
-            client.get(f"/api/tabs/{tab1_id}/feeds")
-            mock_execute_after_invalidation.assert_called()
+    # 5. Assert the query IS re-executed on the next call (cache miss).
+    with patch(
+        "backend.extensions.db.session.execute"
+    ) as mock_execute_after_invalidation:
+        client.get(f"/api/tabs/{tab1_id}/feeds")
+        mock_execute_after_invalidation.assert_called()
 
-        # --- Test /api/tabs caching and invalidation ---
-        with patch("backend.models.Tab.query") as mock_tab_query:
-            # Mock the query result
-            mock_tab_query.order_by.return_value.all.return_value = []
+    # --- Test /api/tabs caching and invalidation ---
+    with patch("backend.models.Tab.query") as mock_tab_query:
+        mock_tab_query.filter_by.return_value.order_by.return_value.all.return_value = []
 
-            # 1. Prime cache for /api/tabs
-            client.get("/api/tabs")
-            # 2. Assert it was called
-            mock_tab_query.order_by.return_value.all.assert_called_once()
+        # 1. Prime cache for /api/tabs
+        client.get("/api/tabs")
+        # 2. Assert it was called
+        mock_tab_query.filter_by.return_value.order_by.return_value.all.assert_called_once()
 
-            # 3. Assert a second call is a cache hit
-            client.get("/api/tabs")
-            mock_tab_query.order_by.return_value.all.assert_called_once()
+        # 3. Assert a second call is a cache hit
+        client.get("/api/tabs")
+        mock_tab_query.filter_by.return_value.order_by.return_value.all.assert_called_once()
 
-        # 4. Invalidate by creating a new tab
-        client.post("/api/tabs", json={"name": "A New Tab"})
+    # 4. Invalidate by creating a new tab
+    client.post("/api/tabs", json={"name": "A New Tab"})
 
-        # 5. Assert the next call is a cache miss
-        with patch("backend.models.Tab.query") as mock_tab_query_after_invalidation:
-            mock_tab_query_after_invalidation.order_by.return_value.all.return_value = []
-            client.get("/api/tabs")
-            mock_tab_query_after_invalidation.order_by.return_value.all.assert_called_once()
+    # 5. Assert the next call is a cache miss
+    with patch("backend.models.Tab.query") as mock_tab_query_after_invalidation:
+        mock_tab_query_after_invalidation.filter_by.return_value.order_by.return_value.all.return_value = []
+        client.get("/api/tabs")
+        mock_tab_query_after_invalidation.filter_by.return_value.order_by.return_value.all.assert_called_once()
 
 
 # --- Tests for Model Methods ---

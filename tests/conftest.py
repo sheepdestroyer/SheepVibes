@@ -8,6 +8,7 @@ os.environ["TESTING"] = "true"
 
 from backend.app import app, db
 from backend.extensions import cache
+from backend.models import User
 
 
 @pytest.fixture(scope="session", name="tests_root")
@@ -41,6 +42,31 @@ def mock_dns(mocker):
 
 @pytest.fixture
 def client():
+    app.config["TESTING"] = True
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    with app.test_client() as client, app.app_context():
+        db.create_all()
+        cache.clear()
+
+        # Create default test user and log into session
+        default_user = User(username="test_default_user", role="admin")
+        default_user.set_password("DefaultPass123!")
+        db.session.add(default_user)
+        db.session.commit()
+
+        client.post("/api/auth/login", json={"username": "test_default_user", "password": "DefaultPass123!"})
+
+        yield client
+        db.session.rollback()
+        db.session.remove()
+        db.drop_all()
+        cache.clear()
+
+
+@pytest.fixture
+def unauth_client():
     app.config["TESTING"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False

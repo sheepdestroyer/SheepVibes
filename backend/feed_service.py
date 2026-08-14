@@ -186,16 +186,23 @@ def _process_opml_feed_node(
         state.skipped_count += 1
 
 
-def _get_or_create_nested_tab(folder_name):
-    """Finds an existing tab by name or creates a new one."""
-    existing_tab = Tab.query.filter_by(name=folder_name).first()
+def _get_or_create_nested_tab(folder_name, user_id=None):
+    """Finds an existing tab by name or creates a new one for the user."""
+    clean_name = folder_name.strip()
+    query = Tab.query.filter_by(name=clean_name)
+    if user_id is not None:
+        query = query.filter_by(user_id=user_id)
+    existing_tab = query.first()
 
     if existing_tab:
         return existing_tab.id, existing_tab.name
 
-    max_order = db.session.query(db.func.max(Tab.order)).scalar()
+    max_order_query = db.session.query(db.func.max(Tab.order))
+    if user_id is not None:
+        max_order_query = max_order_query.filter(Tab.user_id == user_id)
+    max_order = max_order_query.scalar()
     new_order = (max_order or -1) + 1
-    new_folder_tab = Tab(name=folder_name, order=new_order)
+    new_folder_tab = Tab(name=clean_name, order=new_order, user_id=user_id)
     db.session.add(new_folder_tab)
 
     # Use a savepoint to prevent rolling back the entire session (and losing feeds)
@@ -203,17 +210,18 @@ def _get_or_create_nested_tab(folder_name):
     try:
         db.session.flush()  # Flush to get the ID
         nested.commit()  # Commit savepoint
-        invalidate_tabs_cache()
+        invalidate_tabs_cache(user_id=user_id)
     except sqlalchemy.exc.IntegrityError:
         nested.rollback()  # Rollback only to savepoint
-        # Remove the failed object from session identity map to prevent re-flush issues
         db.session.expunge(new_folder_tab)
 
-        # Another process created this tab; fetch it
-        existing_tab = Tab.query.filter_by(name=folder_name).first()
+        refetch_query = Tab.query.filter_by(name=clean_name)
+        if user_id is not None:
+            refetch_query = refetch_query.filter_by(user_id=user_id)
+        existing_tab = refetch_query.first()
         if existing_tab:
             return existing_tab.id, existing_tab.name
-        raise  # Re-raise if still not found
+        raise
     return new_folder_tab.id, new_folder_tab.name
 
 
@@ -223,6 +231,7 @@ def _process_folder_node(
     current_tab_id,
     current_tab_name,
     state: OpmlImportState,
+    user_id=None,
 ):
     """Processes a folder node (non-feed outline) from the OPML."""
     folder_type_attr = outline_element.get("type")
@@ -240,7 +249,8 @@ def _process_folder_node(
     if element_name and child_outlines:
         try:
             nested_tab_id, nested_tab_name = _get_or_create_nested_tab(
-                element_name)
+                element_name, user_id=user_id
+            )
             state.stack.append(
                 (list(reversed(child_outlines)), nested_tab_id, nested_tab_name)
             )
@@ -265,6 +275,7 @@ def _process_single_outline_node(
     current_tab_id,
     current_tab_name,
     state: OpmlImportState,
+    user_id=None,
 ):
     """Processes a single OPML outline node, creating feeds or pushing folders to stack."""
     xml_url = outline_element.get("xmlUrl")
@@ -287,6 +298,7 @@ def _process_single_outline_node(
             current_tab_id,
             current_tab_name,
             state,
+            user_id=user_id,
         )
 
 
@@ -296,9 +308,9 @@ def _process_opml_outlines_iterative(
     top_level_tab_name,
     all_existing_feed_urls_set,
     total_outlines,
+    user_id=None,
 ):
     """Iteratively processes OPML outline elements with weighted progress updates."""
-    # Phase 1: Processing (0-50%)
     stack = [
         (
             list(reversed(initial_outline_elements)),
@@ -331,21 +343,26 @@ def _process_opml_outlines_iterative(
                 current_tab_id,
                 current_tab_name,
                 state,
+                user_id=user_id,
             )
     return state
 
 
-def _get_requested_tab(requested_tab_id_str):
+def _get_requested_tab(requested_tab_id_str, user_id=None):
     if not requested_tab_id_str:
         return None, None
     try:
         tab_id_val = int(requested_tab_id_str)
-        tab_obj = db.session.get(Tab, tab_id_val)
+        query = Tab.query.filter_by(id=tab_id_val)
+        if user_id is not None:
+            query = query.filter_by(user_id=user_id)
+        tab_obj = query.first()
         if tab_obj:
             return tab_obj.id, tab_obj.name
         logger.warning(
-            "OPML import: Requested tab_id %s not found. Will use default logic.",
+            "OPML import: Requested tab_id %s not found for user %s. Will use default logic.",
             tab_id_val,
+            user_id,
         )
     except ValueError:
         logger.warning(
@@ -355,29 +372,35 @@ def _get_requested_tab(requested_tab_id_str):
     return None, None
 
 
-def _get_or_create_default_import_tab():
-    default_tab_obj = Tab.query.order_by(Tab.order).first()
+def _get_or_create_default_import_tab(user_id=None):
+    query = Tab.query.filter_by(user_id=user_id) if user_id is not None else Tab.query
+    default_tab_obj = query.order_by(Tab.order).first()
     if default_tab_obj:
         return default_tab_obj.id, default_tab_obj.name, False, None
 
     logger.info(
-        "OPML import: No tabs exist. Creating a default tab for top-level feeds."
+        "OPML import: No tabs exist for user %s. Creating a default tab for top-level feeds.",
+        user_id,
     )
     default_tab_name = DEFAULT_OPML_IMPORT_TAB_NAME
-    temp_tab_check = Tab.query.filter_by(name=default_tab_name).first()
-    if temp_tab_check:
-        return temp_tab_check.id, temp_tab_check.name, False, None
+    temp_tab_check = Tab.query.filter_by(name=default_tab_name)
+    if user_id is not None:
+        temp_tab_check = temp_tab_check.filter_by(user_id=user_id)
+    temp_tab = temp_tab_check.first()
+    if temp_tab:
+        return temp_tab.id, temp_tab.name, False, None
 
-    new_tab = Tab(name=default_tab_name, order=0)
+    new_tab = Tab(name=default_tab_name, order=0, user_id=user_id)
     db.session.add(new_tab)
     try:
         db.session.commit()
         logger.info(
-            "OPML import: Created default tab '%s' (ID: %s).",
+            "OPML import: Created default tab '%s' (ID: %s) for user %s.",
             new_tab.name,
             new_tab.id,
+            user_id,
         )
-        invalidate_tabs_cache()
+        invalidate_tabs_cache(user_id=user_id)
         return new_tab.id, new_tab.name, True, None
     except sqlalchemy.exc.IntegrityError:
         db.session.rollback()
@@ -385,7 +408,10 @@ def _get_or_create_default_import_tab():
             "OPML import: Race condition on default tab creation. Re-fetching tab '%s'.",
             default_tab_name,
         )
-        refetched_tab = Tab.query.filter_by(name=default_tab_name).first()
+        refetch_query = Tab.query.filter_by(name=default_tab_name)
+        if user_id is not None:
+            refetch_query = refetch_query.filter_by(user_id=user_id)
+        refetched_tab = refetch_query.first()
         if refetched_tab:
             return refetched_tab.id, refetched_tab.name, False, None
 
@@ -413,22 +439,14 @@ def _get_or_create_default_import_tab():
         )
 
 
-def _determine_target_tab(requested_tab_id_str):
-    """
-    Determines the target tab for OPML import.
-    Returns:
-        tuple: (tab_id, tab_name, was_created, error_response)
-        - tab_id (int): The ID of the target tab.
-        - tab_name (str): The name of the target tab.
-        - was_created (bool): True if a new default tab was created, False otherwise.
-        - error_response (tuple): (json_response, status_code) if an error occurred, else None.
-    """
-    target_tab_id, target_tab_name = _get_requested_tab(requested_tab_id_str)
+def _determine_target_tab(requested_tab_id_str, user_id=None):
+    """Determines the target tab for OPML import."""
+    target_tab_id, target_tab_name = _get_requested_tab(requested_tab_id_str, user_id=user_id)
     was_created = False
 
     if not target_tab_id:
         target_tab_id, target_tab_name, was_created, error_response = (
-            _get_or_create_default_import_tab()
+            _get_or_create_default_import_tab(user_id=user_id)
         )
         if error_response:
             return None, None, False, error_response
@@ -447,7 +465,7 @@ def _determine_target_tab(requested_tab_id_str):
     return target_tab_id, target_tab_name, was_created, None
 
 
-def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
+def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids, user_id=None):
     """Cleans up the default tab if it was created for this import but remains empty."""
     if was_created and tab_id not in affected_tab_ids:
         try:
@@ -455,7 +473,7 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
             if tab_to_del and not tab_to_del.feeds:
                 db.session.delete(tab_to_del)
                 db.session.commit()
-                invalidate_tabs_cache()
+                invalidate_tabs_cache(user_id=user_id)
                 logger.info(
                     "OPML import: Removed empty default tab '%s' (ID: %s) created during import.",
                     tab_name,
@@ -473,7 +491,6 @@ def _cleanup_empty_default_tab(was_created, tab_id, tab_name, affected_tab_ids):
 def _parse_opml_root(opml_stream):
     """Parses the OPML stream and returns the root element."""
     try:
-        # Use parse() directly on stream for better encoding handling
         tree = SafeET.parse(opml_stream)
         root = tree.getroot()
         return root, None
@@ -484,7 +501,7 @@ def _parse_opml_root(opml_stream):
             {"error": "Malformed OPML file. Please check the file format."},
             400,
         )
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except Exception as e:
         logger.error(
             "OPML import failed: Could not parse file stream. Error: %s",
             e,
@@ -524,7 +541,7 @@ def _fetch_single_new_feed(feed_obj: Feed) -> None:
     if feed_obj.id:
         try:
             fetch_and_update_feed(feed_obj.id)
-        except Exception:  # pylint: disable=broad-exception-caught
+        except Exception:
             logger.exception(
                 "OPML import: Error fetching for new feed %s (ID: %s)",
                 feed_obj.name,
@@ -564,16 +581,17 @@ def _batch_commit_and_fetch_new_feeds(newly_added_feeds_list):
         )
 
 
-def _invalidate_import_caches(affected_tab_ids_set):
+def _invalidate_import_caches(affected_tab_ids_set, user_id=None):
     """Invalidates caches for all tabs affected by the import."""
     if not affected_tab_ids_set:
         return
     for tab_id in affected_tab_ids_set:
-        invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
-    invalidate_tabs_cache()
+        invalidate_tab_feeds_cache(tab_id, user_id=user_id, invalidate_tabs=False)
+    invalidate_tabs_cache(user_id=user_id)
     logger.info(
-        "OPML import: Invalidated caches for tabs: %s.",
+        "OPML import: Invalidated caches for tabs %s for user %s.",
         affected_tab_ids_set,
+        user_id,
     )
 
 
@@ -602,7 +620,7 @@ def _finish_opml_import(
     return result, None
 
 
-def import_opml(opml_file_stream, requested_tab_id_str):
+def import_opml(opml_file_stream, requested_tab_id_str, user_id=None):
     """Imports feeds from an OPML file, sending progress via SSE."""
     root, error_resp = _parse_opml_root(opml_file_stream)
     if error_resp:
@@ -614,7 +632,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         top_level_target_tab_name,
         was_default_tab_created,
         error_resp,
-    ) = _determine_target_tab(requested_tab_id_str)
+    ) = _determine_target_tab(requested_tab_id_str, user_id=user_id)
     if error_resp:
         return None, error_resp
 
@@ -629,7 +647,12 @@ def import_opml(opml_file_stream, requested_tab_id_str):
             tab_name=top_level_target_tab_name,
         )
 
-    all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
+    if user_id is not None:
+        all_existing_feed_urls_set = {
+            feed.url for feed in Feed.query.join(Tab).filter(Tab.user_id == user_id).all()
+        }
+    else:
+        all_existing_feed_urls_set = {feed.url for feed in Feed.query.all()}
 
     # Announce start
     announcer.announce(
@@ -642,6 +665,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         top_level_target_tab_name,
         all_existing_feed_urls_set,
         total_outlines,
+        user_id=user_id,
     )
 
     # Batch commit and fetch
@@ -652,7 +676,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         return None, error_resp
 
     # Cache invalidation
-    _invalidate_import_caches(state.affected_tab_ids_set)
+    _invalidate_import_caches(state.affected_tab_ids_set, user_id=user_id)
 
     # Cleanup if needed
     _cleanup_empty_default_tab(
@@ -660,6 +684,7 @@ def import_opml(opml_file_stream, requested_tab_id_str):
         top_level_target_tab_id,
         top_level_target_tab_name,
         state.affected_tab_ids_set,
+        user_id=user_id,
     )
 
     if not opml_body.findall("outline") and not state.newly_added_feeds_list:

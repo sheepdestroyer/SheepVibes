@@ -1,9 +1,12 @@
+"""Blueprint for managing tabs in SheepVibes."""
+
 import logging
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from ..auth import get_current_user, login_required
 from ..cache_utils import (
     invalidate_tab_feeds_cache,
     invalidate_tabs_cache,
@@ -17,22 +20,22 @@ from ..models import Feed, FeedItem, Tab
 logger = logging.getLogger(__name__)
 
 
-def _validate_tab_name(data, exclude_tab_id=None, is_rename=False):
-    """Validates tab name input and checks for duplicates.
+def _validate_tab_name(data, user_id, exclude_tab_id=None, is_rename=False):
+    """Validates tab name input and checks for duplicates for the specific user.
 
     Returns:
         tuple: (tab_name, error_response) where error_response is None if valid
     """
     error_prefix = "new " if is_rename else ""
-    if not data or "name" not in data or not data["name"].strip():
+    if not data or "name" not in data or not str(data["name"]).strip():
         return None, (
             jsonify({"error": f"Missing or empty {error_prefix}tab name"}),
             400,
         )
 
-    tab_name = data["name"].strip()
+    tab_name = str(data["name"]).strip()
 
-    query = Tab.query.filter(Tab.name == tab_name)
+    query = Tab.query.filter(Tab.user_id == user_id, Tab.name == tab_name)
     if exclude_tab_id is not None:
         query = query.filter(Tab.id != exclude_tab_id)
 
@@ -49,6 +52,8 @@ def _validate_tab_name(data, exclude_tab_id=None, is_rename=False):
 
 def _get_unread_counts(feed_ids):
     """Calculates unread counts for given feed IDs."""
+    if not feed_ids:
+        return {}
     unread_counts_query = (
         db.session.query(FeedItem.feed_id, func.count(FeedItem.id))
         .filter(FeedItem.feed_id.in_(feed_ids), FeedItem.is_read.is_(False))
@@ -59,6 +64,8 @@ def _get_unread_counts(feed_ids):
 
 def _get_top_items_for_feeds(feed_ids, limit):
     """Fetches the top items for given feed IDs up to the limit."""
+    if not feed_ids:
+        return {}
     ranked_items_subq = (
         select(
             FeedItem,
@@ -107,14 +114,16 @@ tabs_bp = Blueprint("tabs", __name__, url_prefix="/api/tabs")
 
 
 @tabs_bp.route("", methods=["GET"])
+@login_required
 @cache.cached(make_cache_key=make_tabs_cache_key)
 def get_tabs():
-    """Returns a list of all tabs, ordered by their 'order' field.
+    """Returns a list of all tabs for the authenticated user, ordered by 'order'.
 
     Returns:
         A JSON response containing a list of tab objects.
     """
-    tabs = Tab.query.order_by(Tab.order).all()
+    user = get_current_user()
+    tabs = Tab.query.filter_by(user_id=user.id).order_by(Tab.order).all()
 
     tab_ids = [tab.id for tab in tabs]
     if not tab_ids:
@@ -135,31 +144,46 @@ def get_tabs():
 
 
 @tabs_bp.route("", methods=["POST"])
+@login_required
 def create_tab():
-    """Creates a new tab.
+    """Creates a new tab for the authenticated user.
 
     Returns:
         A tuple containing a JSON response and the HTTP status code.
     """
+    user = get_current_user()
     data = request.get_json()
-    tab_name, error_response = _validate_tab_name(data)
+    tab_name, error_response = _validate_tab_name(data, user_id=user.id)
     if error_response:
         return error_response
 
-    # Determine the order for the new tab (append to the end)
-    max_order = db.session.query(db.func.max(Tab.order)).scalar()
+    # Determine the order for the new tab (append to the end for this user)
+    max_order = (
+        db.session.query(db.func.max(Tab.order))
+        .filter(Tab.user_id == user.id)
+        .scalar()
+    )
     new_order = (max_order or -1) + 1
 
     try:
-        new_tab = Tab(name=tab_name, order=new_order)
+        new_tab = Tab(user_id=user.id, name=tab_name, order=new_order)
         db.session.add(new_tab)
         db.session.commit()
-        invalidate_tabs_cache()
-        logger.info("Created new tab '%s' with id %s.", new_tab.name, new_tab.id)
+        invalidate_tabs_cache(user.id)
+        logger.info(
+            "Created new tab '%s' with id %s for user %s.",
+            new_tab.name,
+            new_tab.id,
+            user.id,
+        )
         return jsonify(new_tab.to_dict(unread_count=0)), 201  # Created
     except IntegrityError:
         db.session.rollback()
-        logger.warning("Attempted to create a tab with a duplicate name '%s'", tab_name)
+        logger.warning(
+            "Attempted to create a tab with duplicate name '%s' for user %s",
+            tab_name,
+            user.id,
+        )
         return jsonify({"error": f'Tab with name "{tab_name}" already exists'}), 409
     except Exception as e:
         db.session.rollback()
@@ -171,8 +195,9 @@ def create_tab():
 
 
 @tabs_bp.route("/<int:tab_id>", methods=["PUT"])
+@login_required
 def rename_tab(tab_id):
-    """Renames an existing tab.
+    """Renames an existing tab owned by the authenticated user.
 
     Args:
         tab_id (int): The ID of the tab to rename.
@@ -180,12 +205,14 @@ def rename_tab(tab_id):
     Returns:
         A tuple containing a JSON response and the HTTP status code.
     """
-    # Find the tab or return 404
-    tab = db.get_or_404(Tab, tab_id)
+    user = get_current_user()
+    tab = Tab.query.filter_by(id=tab_id, user_id=user.id).first()
+    if not tab:
+        return jsonify({"error": "Tab not found"}), 404
 
     data = request.get_json()
     new_name, error_response = _validate_tab_name(
-        data, exclude_tab_id=tab_id, is_rename=True
+        data, user_id=user.id, exclude_tab_id=tab_id, is_rename=True
     )
     if error_response:
         return error_response
@@ -194,11 +221,14 @@ def rename_tab(tab_id):
         original_name = tab.name
         tab.name = new_name
         db.session.commit()
-        invalidate_tabs_cache()
+        invalidate_tabs_cache(user.id)
         logger.info(
-            "Renamed tab %s from '%s' to '%s'.", tab_id, original_name, new_name
+            "Renamed tab %s from '%s' to '%s' for user %s.",
+            tab_id,
+            original_name,
+            new_name,
+            user.id,
         )
-        # Get unread count explicitly to avoid N+1 queries
         unread_count = (
             db.session.query(db.func.count(FeedItem.id))
             .join(Feed)
@@ -210,13 +240,19 @@ def rename_tab(tab_id):
     except IntegrityError:
         db.session.rollback()
         logger.warning(
-            "Failed to rename tab %s to '%s' due to duplicate name.", tab_id, new_name
+            "Failed to rename tab %s to '%s' due to duplicate name.",
+            tab_id,
+            new_name,
         )
         return jsonify({"error": f'Tab name "{new_name}" is already in use'}), 409
     except Exception as e:
         db.session.rollback()
         logger.error(
-            "Error renaming tab %s to '%s': %s", tab_id, new_name, str(e), exc_info=True
+            "Error renaming tab %s to '%s': %s",
+            tab_id,
+            new_name,
+            str(e),
+            exc_info=True,
         )
         return (
             jsonify({"error": "An internal error occurred while renaming the tab."}),
@@ -225,20 +261,26 @@ def rename_tab(tab_id):
 
 
 @tabs_bp.route("/<int:tab_id>", methods=["DELETE"])
+@login_required
 def delete_tab(tab_id):
-    """Deletes a tab and its associated feeds/items."""
-    # Find the tab or return 404
-    tab = db.get_or_404(Tab, tab_id)
+    """Deletes a tab and its associated feeds/items for the authenticated user."""
+    user = get_current_user()
+    tab = Tab.query.filter_by(id=tab_id, user_id=user.id).first()
+    if not tab:
+        return jsonify({"error": "Tab not found"}), 404
 
     try:
         tab_name = tab.name
-        # Associated feeds/items are deleted due to cascade settings in the model
-        invalidate_tab_feeds_cache(tab_id, invalidate_tabs=False)
+        invalidate_tab_feeds_cache(tab_id, user_id=user.id, invalidate_tabs=False)
         db.session.delete(tab)
         db.session.commit()
-        invalidate_tabs_cache()
-        logger.info("Deleted tab '%s' with id %s.", tab_name, tab_id)
-        # OK
+        invalidate_tabs_cache(user.id)
+        logger.info(
+            "Deleted tab '%s' with id %s for user %s.",
+            tab_name,
+            tab_id,
+            user.id,
+        )
         return jsonify({"message": f"Tab {tab_id} deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
@@ -250,38 +292,28 @@ def delete_tab(tab_id):
 
 
 @tabs_bp.route("/<int:tab_id>/feeds", methods=["GET"])
+@login_required
 @cache.cached(make_cache_key=make_tab_feeds_cache_key)
 def get_feeds_for_tab(tab_id):
-    """
-    Returns a list of feeds for a tab, including recent items for each feed.
-    This is highly optimized to prevent the N+1 query problem.
-    """
-    # Ensure tab exists, or return 404.
-    db.get_or_404(Tab, tab_id)
+    """Returns feeds for a tab owned by the user, including recent items."""
+    user = get_current_user()
+    tab = Tab.query.filter_by(id=tab_id, user_id=user.id).first()
+    if not tab:
+        return jsonify({"error": "Tab not found"}), 404
 
-    # Get limit for items from query string, default to DEFAULT_FEED_ITEMS_LIMIT.
     limit = request.args.get("limit", DEFAULT_FEED_ITEMS_LIMIT, type=int)
-    # Clamp limit to a sensible range to avoid surprising behavior with negative values.
-    # Negative values are clamped to 0 (return no items).
     limit = max(0, min(limit, MAX_PAGINATION_LIMIT))
 
-    # Query 1: Get all feeds for the given tab.
     feeds = Feed.query.filter_by(tab_id=tab_id).all()
     if not feeds:
         return jsonify([])
 
     feed_ids = [feed.id for feed in feeds]
-
-    # Query 2: Get unread counts for all feeds in this tab to avoid N+1 queries.
     unread_counts = _get_unread_counts(feed_ids)
-
-    # Query 3: Get the top N items for ALL those feeds in a single, efficient query.
     items_by_feed = _get_top_items_for_feeds(feed_ids, limit)
 
-    # Build the final response, combining feeds with their items.
     response_data = []
     for feed in feeds:
-        # Pass the pre-calculated unread count to avoid N+1 queries
         feed_dict = feed.to_dict(unread_count=unread_counts.get(feed.id, 0))
         feed_dict["items"] = items_by_feed.get(feed.id, [])
         response_data.append(feed_dict)
