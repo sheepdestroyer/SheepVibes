@@ -46,7 +46,7 @@ def test_delete_tab_invalidates_tab_feeds_cache(client):
         response = client.delete(f"/api/tabs/{tab_id}")
 
     assert response.status_code == 200
-    mock_invalidate_tab_feeds.assert_called_once_with(tab_id, invalidate_tabs=False)
+    mock_invalidate_tab_feeds.assert_called_once_with(tab_id, user_id=1, invalidate_tabs=False)
     mock_invalidate_tabs.assert_called_once()
 
 

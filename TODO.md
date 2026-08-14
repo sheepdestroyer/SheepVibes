@@ -174,7 +174,21 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
   - [x] Updated Vitest unit tests in `frontend/js/ui.test.js` and Playwright E2E tests in `tests/e2e/test_comments_links.py`.
   - [x] Validated 100% pass rate across Vitest (36/36), Pytest unit (173/173), and Playwright E2E suites.
 
-*   [x] **2026-08-14: Comprehensive Unit & E2E Test Suite for Comments Links**
+*   [x] **2026-08-14: Multi-User Accounts Support and Admin Panel (Issue #324 - PR 2: Tenant Scoping, Cache Partitioning & API Isolation)**
+  - [x] Database composite unique constraint (`user_id`, `name`) on `Tab`.
+  - [x] Protected all tab, feed, item, and OPML routes with `@login_required` and scoped queries to `current_user.id`.
+  - [x] User-partitioned cache keys in `backend/cache_utils.py` with user-specific version counters.
+  - [x] User-scoped OPML import and export pipelines in `backend/feed_service.py` and `backend/blueprints/opml.py`.
+  - [x] Dedicated unit test suite in `tests/unit/test_tenant_isolation.py` and updated client test fixtures.
+  - [x] Validated 100% test pass rate across Vitest (39/39) and Pytest unit tests (206/206).
+
+*   [x] **2026-08-14: Multi-User Accounts Support and Admin Panel (Issue #324 - PR 1: Core User Model & Auth Engine)**
+  - [x] Implemented `User` model in `backend/models.py` with password hashing and `Tab.user_id` foreign key.
+  - [x] Created authentication engine in `backend/auth.py` and API blueprint in `backend/blueprints/auth.py`.
+  - [x] Added Alembic database migration seeding legacy tabs into initial administrator.
+  - [x] Added comprehensive auth unit test suite in `tests/unit/test_auth.py`.
+
+*   [x] **2026-08-14: Comprehensive Verification of Hacker News Comments Links**
   - [x] Implemented comprehensive Playwright E2E test suite in `tests/e2e/test_comments_links.py` (9/9 E2E tests).
   - [x] Added comprehensive unit test suite across Pytest backend and Vitest frontend:
     - RSS 2.0 real XML parsing for Hacker News and Lobsters feeds (story posts vs. ask/self-posts).

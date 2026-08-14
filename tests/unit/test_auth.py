@@ -203,6 +203,7 @@ def test_login_and_admin_required_decorators(client):
 
     # 1. Unauthenticated requests
     with client.application.test_request_context():
+        logout_user()
         resp, code = protected_view()
         assert code == 401
         admin_resp, admin_code = admin_view()
