@@ -111,8 +111,8 @@ describe('createFeedWidget URL sanitization', () => {
         const itemLink = widget.querySelector('ul li a');
         expect(itemLink.getAttribute('href')).toBe('#');
 
-        const articleLink = widget.querySelector('.item-article-link');
-        expect(articleLink.getAttribute('href')).toBe('#');
+        const commentsLink = widget.querySelector('.item-comments-link');
+        expect(commentsLink.getAttribute('href')).toBe('#');
     });
 
     it('preserves safe URL schemes for both discussion and article links', () => {
@@ -142,16 +142,16 @@ describe('createFeedWidget URL sanitization', () => {
             onLoadMore: () => {}
         });
 
-        const titleLink = widget.querySelector('ul li a:not(.item-article-link)');
-        expect(titleLink.getAttribute('href')).toBe('https://news.ycombinator.com/item?id=123');
+        const titleLink = widget.querySelector('ul li a:not(.item-comments-link)');
+        expect(titleLink.getAttribute('href')).toBe('https://example.com/article');
 
-        const articleLink = widget.querySelector('.item-article-link');
-        expect(articleLink.getAttribute('href')).toBe('https://example.com/article');
+        const commentsLink = widget.querySelector('.item-comments-link');
+        expect(commentsLink.getAttribute('href')).toBe('https://news.ycombinator.com/item?id=123');
     });
 });
 
 describe('createFeedWidget comments_url and article link handling', () => {
-    it('sets comments thread as primary title link and renders secondary article link when comments_url differs from link', () => {
+    it('sets article as primary title link and renders secondary comments link when comments_url differs from link', () => {
         let markedReadCalls = [];
         const feed = {
             id: 1,
@@ -185,28 +185,28 @@ describe('createFeedWidget comments_url and article link handling', () => {
         expect(listItem.classList.contains('read')).toBe(false);
         expect(listItem.dataset.itemId).toBe('201');
 
-        // Primary title link
-        const titleLink = widget.querySelector('ul li a:not(.item-article-link)');
+        // Primary title link -> Original article
+        const titleLink = widget.querySelector('ul li a:not(.item-comments-link)');
         expect(titleLink).not.toBeNull();
-        expect(titleLink.getAttribute('href')).toBe('https://news.ycombinator.com/item?id=49289112');
+        expect(titleLink.getAttribute('href')).toBe('https://github.com/sheepdestroyer/SheepVibes');
         expect(titleLink.textContent).toBe('Show HN: SheepVibes');
-        expect(titleLink.getAttribute('title')).toBe('Open discussion thread');
+        expect(titleLink.hasAttribute('title')).toBe(false);
         expect(titleLink.getAttribute('target')).toBe('_blank');
         expect(titleLink.getAttribute('rel')).toBe('noopener noreferrer');
 
-        // Secondary article link
+        // Secondary comments link -> Discussion thread
         const metaSpan = widget.querySelector('ul li .item-meta');
         expect(metaSpan).not.toBeNull();
         expect(metaSpan.textContent).toContain(' · ');
 
-        const articleLink = widget.querySelector('ul li .item-article-link');
-        expect(articleLink).not.toBeNull();
-        expect(articleLink.getAttribute('href')).toBe('https://github.com/sheepdestroyer/SheepVibes');
-        expect(articleLink.textContent).toBe('[article]');
-        expect(articleLink.getAttribute('title')).toBe('Open original article');
-        expect(articleLink.getAttribute('aria-label')).toBe('Open original article: Show HN: SheepVibes');
-        expect(articleLink.getAttribute('target')).toBe('_blank');
-        expect(articleLink.getAttribute('rel')).toBe('noopener noreferrer');
+        const commentsLink = widget.querySelector('ul li .item-comments-link');
+        expect(commentsLink).not.toBeNull();
+        expect(commentsLink.getAttribute('href')).toBe('https://news.ycombinator.com/item?id=49289112');
+        expect(commentsLink.textContent).toBe('comments');
+        expect(commentsLink.getAttribute('title')).toBe('Open discussion thread');
+        expect(commentsLink.getAttribute('aria-label')).toBe('Open discussion thread: Show HN: SheepVibes');
+        expect(commentsLink.getAttribute('target')).toBe('_blank');
+        expect(commentsLink.getAttribute('rel')).toBe('noopener noreferrer');
 
         // Test clicking primary title link triggers mark read with proper arguments
         titleLink.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -226,21 +226,21 @@ describe('createFeedWidget comments_url and article link handling', () => {
         titleLink.dispatchEvent(new MouseEvent('auxclick', { button: 2, bubbles: true }));
         expect(markedReadCalls).toHaveLength(2);
 
-        // Test clicking secondary article link triggers mark read
-        articleLink.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        // Test clicking secondary comments link triggers mark read
+        commentsLink.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         expect(markedReadCalls).toHaveLength(3);
         expect(markedReadCalls[2].id).toBe(201);
 
-        // Test middle-click (button 1) on secondary article link
-        articleLink.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
+        // Test middle-click (button 1) on secondary comments link
+        commentsLink.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
         expect(markedReadCalls).toHaveLength(4);
 
-        // Test right-click (button 2) on secondary article link does NOT trigger mark read
-        articleLink.dispatchEvent(new MouseEvent('auxclick', { button: 2, bubbles: true }));
+        // Test right-click (button 2) on secondary comments link does NOT trigger mark read
+        commentsLink.dispatchEvent(new MouseEvent('auxclick', { button: 2, bubbles: true }));
         expect(markedReadCalls).toHaveLength(4);
     });
 
-    it('uses article link as primary and does not render secondary article link when comments_url is missing or equal to link', () => {
+    it('uses article link as primary and does not render secondary comments link when comments_url is missing or equal to link', () => {
         const feed = {
             id: 2,
             tab_id: 1,
@@ -299,24 +299,24 @@ describe('createFeedWidget comments_url and article link handling', () => {
         const item1TitleLink = listItems[0].querySelector('a');
         expect(item1TitleLink.getAttribute('href')).toBe('https://example.com/standard-post');
         expect(item1TitleLink.hasAttribute('title')).toBe(false);
-        expect(listItems[0].querySelector('.item-article-link')).toBeNull();
+        expect(listItems[0].querySelector('.item-comments-link')).toBeNull();
 
         // Second item (comments_url == link)
         expect(listItems[1].classList.contains('unread')).toBe(true);
         const item2TitleLink = listItems[1].querySelector('a');
         expect(item2TitleLink.getAttribute('href')).toBe('https://news.ycombinator.com/item?id=49289200');
         expect(item2TitleLink.hasAttribute('title')).toBe(false);
-        expect(listItems[1].querySelector('.item-article-link')).toBeNull();
+        expect(listItems[1].querySelector('.item-comments-link')).toBeNull();
 
         // Third item (whitespace comments_url)
         const item3TitleLink = listItems[2].querySelector('a');
         expect(item3TitleLink.getAttribute('href')).toBe('https://example.com/whitespace-comments');
-        expect(listItems[2].querySelector('.item-article-link')).toBeNull();
+        expect(listItems[2].querySelector('.item-comments-link')).toBeNull();
 
         // Fourth item (non-string comments_url)
         const item4TitleLink = listItems[3].querySelector('a');
         expect(item4TitleLink.getAttribute('href')).toBe('https://example.com/non-string-comments');
-        expect(listItems[3].querySelector('.item-article-link')).toBeNull();
+        expect(listItems[3].querySelector('.item-comments-link')).toBeNull();
     });
 
     it('renders empty fallback text when feed has no items', () => {
@@ -381,21 +381,22 @@ describe('appendItemsToFeedWidget', () => {
         const listItems = widgetList.querySelectorAll('li');
         expect(listItems.length).toBe(2);
 
-        // First item has discussion link and secondary article link
+        // First item has primary article link and secondary comments link
         const item1 = listItems[0];
         expect(item1.dataset.itemId).toBe('401');
         expect(item1.classList.contains('unread')).toBe(true);
 
-        const item1Discussion = item1.querySelector('a:not(.item-article-link)');
-        expect(item1Discussion.getAttribute('href')).toBe('https://news.ycombinator.com/item?id=401');
-        expect(item1Discussion.getAttribute('title')).toBe('Open discussion thread');
-
-        const item1Article = item1.querySelector('.item-article-link');
-        expect(item1Article).not.toBeNull();
+        const item1Article = item1.querySelector('a:not(.item-comments-link)');
         expect(item1Article.getAttribute('href')).toBe('https://example.com/appended-story');
 
-        // Test clicking appended article link marks item read
-        item1Article.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const item1Comments = item1.querySelector('.item-comments-link');
+        expect(item1Comments).not.toBeNull();
+        expect(item1Comments.getAttribute('href')).toBe('https://news.ycombinator.com/item?id=401');
+        expect(item1Comments.textContent).toBe('comments');
+        expect(item1Comments.getAttribute('title')).toBe('Open discussion thread');
+
+        // Test clicking appended comments link marks item read
+        item1Comments.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         expect(markedReadCalls).toHaveLength(1);
         expect(markedReadCalls[0]).toEqual({
             id: 401,
@@ -408,7 +409,7 @@ describe('appendItemsToFeedWidget', () => {
         const item2 = listItems[1];
         expect(item2.dataset.itemId).toBe('402');
         expect(item2.classList.contains('read')).toBe(true);
-        expect(item2.querySelector('.item-article-link')).toBeNull();
+        expect(item2.querySelector('.item-comments-link')).toBeNull();
     });
 });
 

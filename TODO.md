@@ -147,6 +147,13 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-14: Swap Article and Comments Links (Article Primary, Comments Secondary)**
+  - [x] Swapped feed item main link to point directly to original article (`item.link`).
+  - [x] Renamed secondary link to `comments` pointing to discussion thread (`item.comments_url`).
+  - [x] Updated CSS classes and styles (`.item-comments-link`) in light and night modes.
+  - [x] Updated Vitest unit tests in `frontend/js/ui.test.js` and Playwright E2E tests in `tests/e2e/test_comments_links.py`.
+  - [x] Validated 100% pass rate across Vitest (36/36), Pytest unit (173/173), and Playwright E2E suites.
+
 *   [x] **2026-08-14: Comprehensive Unit & E2E Test Suite for Comments Links**
   - [x] Implemented comprehensive Playwright E2E test suite in `tests/e2e/test_comments_links.py` (9/9 E2E tests).
   - [x] Added comprehensive unit test suite across Pytest backend and Vitest frontend:
