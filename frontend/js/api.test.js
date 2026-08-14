@@ -47,6 +47,20 @@ describe('api parameter encoding and endpoints', () => {
         expect(fetch).toHaveBeenCalledWith('/api/feeds/feed%2F2', expect.any(Object));
     });
 
+    it('sends getAuthStatus request', async () => {
+        await api.getAuthStatus();
+        expect(fetch).toHaveBeenCalledWith('/api/auth/status', {});
+    });
+
+    it('sends setupMasterAdmin request', async () => {
+        await api.setupMasterAdmin({ username: 'root_admin', password: 'Password123!' });
+        expect(fetch).toHaveBeenCalledWith('/api/auth/setup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'root_admin', password: 'Password123!' })
+        });
+    });
+
     it('sends login request with credentials', async () => {
         await api.login('admin', 'secret123');
         expect(fetch).toHaveBeenCalledWith('/api/auth/login', {

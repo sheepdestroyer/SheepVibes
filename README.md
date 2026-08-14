@@ -4,15 +4,18 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, d
 
 ## Features
 
-*   **Feed Management**: Add, delete, and edit RSS/Atom feeds.
-*   **Tabbed Organization**: Organize feeds into customizable tabs, similar to Netvibes and iGoogle.
+*   **Multi-User & Role-Based Access Control**: Complete multi-tenant isolation, secure session cookies, user management, and user roles (`user` vs `admin`). See [Multi-User Guide](docs/multi-user.md).
+*   **First-Run Onboarding Wizard**: Interactive onboarding screen on initial deployment to initialize the master administrator account.
+*   **Administration Panel**: Web-based admin dashboard for user account management, password resets, system diagnostics, and non-blocking point-in-time database snapshot backups.
+*   **Feed Management**: Add, delete, and edit RSS/Atom feeds with canonical short name derivation.
+*   **Tabbed Organization**: Organize feeds into customizable tabs, similar to Netvibes and iGoogle, with independent per-user namespaces.
 *   **OPML Support**: Import and export your feeds and tabs as OPML files with live progress indicators.
 *   **Background Updates**: Automatically fetches feed updates in the background.
 *   **Real-Time UI**: The user interface updates in real-time when feeds are refreshed, thanks to Server-Sent Events (SSE).
 *   **Unread Tracking**: Mark items as read and see unread counts for each feed and tab.
 *   **Night Mode**: Built-in dark theme with WCAG 2.1 AA contrast compliance and persistent user preferences.
 *   **Infinite Scrolling**: Smooth, per-widget progressive loading of feed items.
-*   **Persistence**: Your data is saved in a persistent database.
+*   **Persistence**: Your data is saved in a persistent database with user-partitioned versioned caching.
 
 ## Project Structure
 

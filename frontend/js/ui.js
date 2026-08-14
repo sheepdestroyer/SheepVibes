@@ -330,6 +330,32 @@ export function showLoginModal(errorMessage = null) {
     if (usernameInput) usernameInput.focus();
 }
 
+export function showSetupWizardModal(errorMessage = null) {
+    const modal = document.getElementById('setup-wizard-modal');
+    if (!modal) return;
+    const errorBanner = document.getElementById('setup-wizard-error');
+    if (errorBanner) {
+        if (errorMessage) {
+            errorBanner.textContent = errorMessage;
+            errorBanner.classList.remove('hidden');
+        } else {
+            errorBanner.textContent = '';
+            errorBanner.classList.add('hidden');
+        }
+    }
+    modal.classList.add('is-active');
+    const usernameInput = document.getElementById('setup-username');
+    if (usernameInput) usernameInput.focus();
+}
+
+export function closeSetupWizardModal() {
+    const modal = document.getElementById('setup-wizard-modal');
+    if (!modal) return;
+    modal.classList.remove('is-active');
+    const errorBanner = document.getElementById('setup-wizard-error');
+    if (errorBanner) errorBanner.classList.add('hidden');
+}
+
 export function closeLoginModal() {
     const modal = document.getElementById('login-modal');
     if (!modal) return;

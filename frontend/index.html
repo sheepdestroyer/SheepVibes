@@ -68,6 +68,39 @@
     </main>
 
     <div id="modal-root">
+        <!-- First-Run Onboarding Setup Wizard Modal -->
+        <div id="setup-wizard-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="setup-wizard-title">
+            <div class="modal-content auth-modal-content">
+                <div class="setup-header">
+                    <div class="setup-icon">🐑</div>
+                    <h2 id="setup-wizard-title">Welcome to SheepVibes</h2>
+                    <p class="setup-subtitle">Create your master administrator account to get started.</p>
+                </div>
+                <div id="setup-wizard-error" class="error-banner hidden" role="alert"></div>
+                <form id="setup-wizard-form">
+                    <div class="form-group">
+                        <label for="setup-username">Administrator Username</label>
+                        <input type="text" id="setup-username" required autocomplete="username" placeholder="3-30 letters, numbers, -, _" autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label for="setup-email">Email (optional)</label>
+                        <input type="email" id="setup-email" autocomplete="email" placeholder="admin@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="setup-password">Password</label>
+                        <input type="password" id="setup-password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters">
+                    </div>
+                    <div class="form-group">
+                        <label for="setup-password-confirm">Confirm Password</label>
+                        <input type="password" id="setup-password-confirm" required minlength="8" autocomplete="new-password" placeholder="Confirm password">
+                    </div>
+                    <div class="modal-buttons auth-buttons">
+                        <button type="submit" id="setup-wizard-submit-button">Complete Setup &amp; Launch</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Login Modal -->
         <div id="login-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="login-modal-title">
             <div class="modal-content auth-modal-content">

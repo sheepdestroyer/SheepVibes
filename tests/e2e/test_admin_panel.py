@@ -115,6 +115,24 @@ def setup_admin_e2e_routes(page: Page, is_admin: bool = True):
             }
         )
 
+    def handle_auth_status(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            json={
+                "setup_required": False,
+                "authenticated": True,
+                "user": {
+                    "id": 1,
+                    "username": "testuser",
+                    "email": "test@example.com",
+                    "role": current_role,
+                    "is_active": True,
+                },
+            },
+        )
+
+    page.route("**/api/auth/status", handle_auth_status)
     page.route("**/api/auth/me", handle_auth_me)
     page.route("**/api/admin/users", lambda r: handle_admin_users_get(r) if r.request.method == "GET" else handle_admin_users_post(r))
     page.route("**/api/admin/users/*", lambda r: handle_admin_user_put(r) if r.request.method == "PUT" else handle_admin_user_delete(r))

@@ -607,6 +607,7 @@ header h1 {
 
 #save-feed-button,
 #login-submit-button,
+#setup-wizard-submit-button,
 #change-password-submit-button {
     background-color: #005a9c;
     color: white;
@@ -614,6 +615,7 @@ header h1 {
 
 #save-feed-button:hover,
 #login-submit-button:hover,
+#setup-wizard-submit-button:hover,
 #change-password-submit-button:hover {
     background-color: #004070;
 }
@@ -641,6 +643,29 @@ header h1 {
     width: 100%;
     padding: 10px;
     font-size: 1em;
+}
+
+.setup-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.setup-icon {
+    font-size: 2.8rem;
+    line-height: 1;
+    margin-bottom: 8px;
+    display: inline-block;
+}
+
+.setup-subtitle {
+    color: #666;
+    font-size: 0.95rem;
+    margin-top: 4px;
+    margin-bottom: 0;
+}
+
+body.night-mode .setup-subtitle {
+    color: #8b949e;
 }
 
 .error-banner {
