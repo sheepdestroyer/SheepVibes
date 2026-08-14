@@ -2,6 +2,7 @@ import datetime
 from datetime import timezone  # Import timezone
 
 from sqlalchemy.orm import validates
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Initialize SQLAlchemy ORM extension
 # This will be initialized with the app in app.py using db.init_app(app)
@@ -10,11 +11,83 @@ from .extensions import db
 # --- Database Models ---
 
 
+class User(db.Model):
+    """Represents a user account in SheepVibes.
+
+    Attributes:
+        id (int): The primary key.
+        username (str): The unique username.
+        email (str): Optional unique email address.
+        password_hash (str): The hashed password.
+        role (str): Role of user ('admin' or 'user').
+        is_active (bool): Whether the account is active.
+        created_at (datetime): Timestamp of account creation.
+        last_login_at (datetime): Timestamp of last login.
+        tabs (relationship): Relationship to Tab objects owned by this user.
+    """
+
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(120), unique=True, nullable=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="user")
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.datetime.now(timezone.utc),
+    )
+    last_login_at = db.Column(db.DateTime, nullable=True)
+
+    tabs = db.relationship(
+        "Tab", backref="user", lazy=True, cascade="all, delete-orphan"
+    )
+
+    def set_password(self, password: str) -> None:
+        """Hashes and sets the user password."""
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        """Verifies the password against the stored hash."""
+        if not self.password_hash or not password:
+            return False
+        return check_password_hash(self.password_hash, password)
+
+    @property
+    def is_admin(self) -> bool:
+        """Returns True if the user has admin role."""
+        return self.role == "admin"
+
+    def to_dict(self) -> dict:
+        """Serializes the User object to a dictionary."""
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "role": self.role or "user",
+            "is_active": self.is_active if self.is_active is not None else True,
+            "is_admin": self.is_admin,
+            "created_at": (
+                FeedItem.to_iso_z_string(self.created_at)
+                if self.created_at
+                else None
+            ),
+            "last_login_at": (
+                FeedItem.to_iso_z_string(self.last_login_at)
+                if self.last_login_at
+                else None
+            ),
+        }
+
+
 class Tab(db.Model):
     """Represents a tab for organizing feeds.
 
     Attributes:
         id (int): The primary key.
+        user_id (int): The foreign key for the user this tab belongs to.
         name (str): The name of the tab.
         order (int): The display order of the tab.
         feeds (relationship): A relationship to the feeds in this tab.
@@ -23,6 +96,12 @@ class Tab(db.Model):
     __tablename__ = "tabs"
 
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     name = db.Column(db.String(100), nullable=False, unique=True)  # Name of the tab
     order = db.Column(db.Integer, default=0)  # Display order of the tab
     # Relationship to Feeds: One-to-Many (one Tab has many Feeds)
@@ -45,6 +124,7 @@ class Tab(db.Model):
 
         return {
             "id": self.id,
+            "user_id": self.user_id,
             "name": self.name,
             "order": self.order,
             "unread_count": unread_count,

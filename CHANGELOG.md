@@ -1,5 +1,13 @@
 ## 2026-08-14
 
+- **Feat(auth): User Model, Authentication Engine & Database Migration (Issue #324 - PR 1)**
+  - **User Data Model (`backend/models.py`)**: Added `User` model with secure password hashing (`werkzeug.security`), role checking (`is_admin`), timestamps, and linked `Tab.user_id` foreign key (`CASCADE` deletion).
+  - **Authentication Engine & Decorators (`backend/auth.py`)**: Built session-based authentication helpers (`get_current_user`, `login_user`, `logout_user`) and route protection decorators (`@login_required`, `@admin_required`).
+  - **Auth Blueprint & Endpoints (`backend/blueprints/auth.py`, `backend/app.py`)**: Exposed `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`, and `/api/auth/password` with HTTPOnly/SameSite session cookies and configurable lifetime.
+  - **Database Migration (`backend/migrations/versions/b2c3d4e5f6a7_add_user_model_and_tab_user_id.py`)**: Created Alembic migration adding `users` table, `tabs.user_id` column, and automated seeding of legacy tabs into a default initial administrator account.
+  - **Unit Test Suite (`tests/unit/test_auth.py`)**: Added 8 comprehensive test cases covering user serialization, password hashing, authentication failure modes, session lifecycle, password updates, and route decorator enforcement.
+  - **Verification**: 100% test pass rate across Vitest (39/39), Pytest unit tests (202/202), and Playwright E2E suite (10/10).
+
 - **Docs & Governance: Enact Strict Pull Request Policy & Prohibition of Direct Pushes to `main`**
   - **Rule Definition (`AGENTS.md`)**: Enacted strict policy that direct pushes to `main` are prohibited under all circumstances. Every change (features, bug fixes, operational scripts, database migrations, configuration, and documentation) must be made on a dedicated branch and merged via Pull Request.
 
