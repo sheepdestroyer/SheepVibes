@@ -1053,3 +1053,322 @@ body.night-mode .success-banner {
     color: #7ee787;
     border-color: #1e3a2b;
 }
+
+/* ==========================================================================
+   Admin Panel Styles
+   ========================================================================== */
+
+.admin-modal-content {
+    max-width: 860px;
+    width: 95%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.admin-nav-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 20px;
+}
+
+.admin-nav-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 10px 18px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #555;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-nav-tab:hover {
+    color: #005a9c;
+    background-color: rgba(0, 90, 156, 0.05);
+}
+
+.admin-nav-tab.is-active {
+    color: #005a9c;
+    border-bottom-color: #005a9c;
+}
+
+.admin-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 12px;
+}
+
+.action-button-primary {
+    background-color: #005a9c;
+    color: #ffffff;
+    border: none;
+    padding: 8px 16px;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.action-button-primary:hover {
+    background-color: #004080;
+}
+
+.action-button-secondary {
+    background-color: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+    padding: 8px 14px;
+    font-weight: 500;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.action-button-secondary:hover {
+    background-color: #e0e0e0;
+}
+
+.admin-table-container {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    text-align: left;
+}
+
+.admin-table th {
+    background-color: #f8f9fa;
+    padding: 10px 12px;
+    font-weight: 600;
+    border-bottom: 1px solid #ddd;
+    color: #333;
+}
+
+.admin-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    color: #444;
+}
+
+.admin-table tr:last-child td {
+    border-bottom: none;
+}
+
+.admin-table tr:hover {
+    background-color: #f9fbfd;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-active {
+    background-color: #e6f4ea;
+    color: #137333;
+}
+
+.status-inactive {
+    background-color: #fce8e6;
+    color: #c5221f;
+}
+
+.table-action-button {
+    background-color: #f1f3f4;
+    color: #1a73e8;
+    border: 1px solid #dadce0;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.table-action-button:hover {
+    background-color: #e8f0fe;
+    border-color: #1a73e8;
+}
+
+.admin-diagnostics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.diagnostic-card {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+
+.diagnostic-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.diagnostic-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #005a9c;
+}
+
+.admin-backup-section {
+    background-color: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 10px;
+}
+
+.admin-backup-section h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+}
+
+.admin-backup-section p {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.backup-button {
+    display: inline-block;
+    background-color: #28a745;
+    color: #fff;
+    padding: 10px 18px;
+    font-weight: 600;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+.backup-button:hover {
+    background-color: #218838;
+}
+
+/* Night Mode Admin Styles */
+body.night-mode .admin-nav-tabs {
+    border-bottom-color: #383838;
+}
+
+body.night-mode .admin-nav-tab {
+    color: #a0a0a0;
+}
+
+body.night-mode .admin-nav-tab:hover {
+    color: #58a6ff;
+    background-color: rgba(88, 166, 255, 0.1);
+}
+
+body.night-mode .admin-nav-tab.is-active {
+    color: #58a6ff;
+    border-bottom-color: #58a6ff;
+}
+
+body.night-mode .action-button-primary {
+    background-color: #1f6feb;
+    color: #fff;
+}
+
+body.night-mode .action-button-primary:hover {
+    background-color: #388bfd;
+}
+
+body.night-mode .action-button-secondary {
+    background-color: #252525;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.night-mode .action-button-secondary:hover {
+    background-color: #333;
+}
+
+body.night-mode .admin-table-container {
+    border-color: #383838;
+}
+
+body.night-mode .admin-table th {
+    background-color: #202020;
+    color: #e0e0e0;
+    border-bottom-color: #383838;
+}
+
+body.night-mode .admin-table td {
+    border-bottom-color: #2d2d2d;
+    color: #c9d1d9;
+}
+
+body.night-mode .admin-table tr:hover {
+    background-color: #262626;
+}
+
+body.night-mode .status-active {
+    background-color: #13231b;
+    color: #7ee787;
+}
+
+body.night-mode .status-inactive {
+    background-color: #2c1517;
+    color: #ff7b72;
+}
+
+body.night-mode .table-action-button {
+    background-color: #252525;
+    color: #58a6ff;
+    border-color: #444;
+}
+
+body.night-mode .table-action-button:hover {
+    background-color: #333;
+    border-color: #58a6ff;
+}
+
+body.night-mode .diagnostic-card,
+body.night-mode .admin-backup-section {
+    background-color: #202020;
+    border-color: #383838;
+}
+
+body.night-mode .diagnostic-label,
+body.night-mode .admin-backup-section p {
+    color: #8b949e;
+}
+
+body.night-mode .diagnostic-value {
+    color: #58a6ff;
+}
+
+body.night-mode .backup-button {
+    background-color: #238636;
+    color: #fff;
+}
+
+body.night-mode .backup-button:hover {
+    background-color: #2ea043;
+}
+

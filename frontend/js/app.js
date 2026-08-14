@@ -1,5 +1,6 @@
 import { throttle, getStorageItem, setStorageItem, removeStorageItem } from './utils.js';
 import { api, API_BASE_URL, setUnauthorizedHandler } from './api.js';
+import { initAdminPanel } from './admin.js';
 import {
     showToast,
     createFeedWidget,
@@ -104,6 +105,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('edit-feed-modal-close-button')?.addEventListener('click', closeEditFeedModal);
     document.getElementById('cancel-edit-button')?.addEventListener('click', closeEditFeedModal);
     document.getElementById('edit-feed-form')?.addEventListener('submit', handleEditFeedSubmit);
+
+    // Initialize Admin Panel
+    initAdminPanel();
 
     // Register 401 unauthorized interceptor
     setUnauthorizedHandler(handleUnauthorized);

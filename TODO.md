@@ -174,6 +174,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
   - [x] Updated Vitest unit tests in `frontend/js/ui.test.js` and Playwright E2E tests in `tests/e2e/test_comments_links.py`.
   - [x] Validated 100% pass rate across Vitest (36/36), Pytest unit (173/173), and Playwright E2E suites.
 
+*   [x] **2026-08-14: Multi-User Accounts Support and Admin Panel (Issue #324 - PR 4: Admin Panel - User Management & Diagnostics)**
+  - [x] Admin Blueprint in `backend/blueprints/admin.py` with user CRUD, account safeguards, stats diagnostics, and DB backup.
+  - [x] Frontend Admin controller module `frontend/js/admin.js`, modals in `frontend/index.html`, and CSS in `frontend/style.css`.
+  - [x] Admin API client integration in `frontend/js/api.js` and lifecycle wiring in `frontend/js/app.js`.
+  - [x] Unit test suites in `tests/unit/test_admin.py`, `frontend/js/admin.test.js`, `frontend/js/api.test.js`.
+  - [x] Playwright E2E browser test suite in `tests/e2e/test_admin_panel.py`.
+  - [x] Validated 100% test pass rate across Vitest (55/55), Pytest unit (214/214), and Playwright E2E suite (15 passed, 1 skipped).
+
 *   [x] **2026-08-14: Multi-User Accounts Support and Admin Panel (Issue #324 - PR 3: Frontend Authentication UI & User State)**
   - [x] Auth API methods and 401 unauthorized interceptor in `frontend/js/api.js`.
   - [x] Header user navigation, dropdown menu, and role badge in `frontend/index.html`, `frontend/js/ui.js`, `frontend/style.css`.

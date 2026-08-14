@@ -91,4 +91,68 @@ describe('api parameter encoding and endpoints', () => {
         await expect(api.getTabs()).rejects.toThrow();
         expect(mockUnauthorized).toHaveBeenCalledTimes(1);
     });
+
+    it('handles admin endpoints with correct HTTP methods and paths', async () => {
+        // getAdminUsers
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: async () => ({ users: [{ id: 1, username: 'admin' }] })
+        });
+        const usersRes = await api.getAdminUsers();
+        expect(usersRes.users).toHaveLength(1);
+        expect(fetch).toHaveBeenCalledWith('/api/admin/users', {});
+
+        // createAdminUser
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            status: 201,
+            headers: { get: () => null },
+            json: async () => ({ user: { id: 2, username: 'newuser' } })
+        });
+        await api.createAdminUser({ username: 'newuser', password: 'Password123' });
+        expect(fetch).toHaveBeenCalledWith('/api/admin/users', expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ username: 'newuser', password: 'Password123' })
+        }));
+
+        // updateAdminUser
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: async () => ({ user: { id: 2, role: 'admin' } })
+        });
+        await api.updateAdminUser(2, { role: 'admin' });
+        expect(fetch).toHaveBeenCalledWith('/api/admin/users/2', expect.objectContaining({
+            method: 'PUT',
+            body: JSON.stringify({ role: 'admin' })
+        }));
+
+        // deleteAdminUser
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: async () => ({ message: 'User deleted' })
+        });
+        await api.deleteAdminUser(2);
+        expect(fetch).toHaveBeenCalledWith('/api/admin/users/2', expect.objectContaining({
+            method: 'DELETE'
+        }));
+
+        // getAdminSystemStats
+        fetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: async () => ({ stats: { users_count: 5 } })
+        });
+        const statsRes = await api.getAdminSystemStats();
+        expect(statsRes.stats.users_count).toBe(5);
+
+        // getAdminBackupUrl
+        expect(api.getAdminBackupUrl()).toBe('/api/admin/backup');
+    });
 });

@@ -1,5 +1,13 @@
 ## 2026-08-14
 
+- **Feat(admin): Admin Panel, User Management & System Diagnostics (Issue #324 - PR 4)**
+  - **Admin Blueprint & Endpoints (`backend/blueprints/admin.py`, `backend/app.py`)**: Implemented `@admin_required` protected endpoints including `/api/admin/users` (list, create), `/api/admin/users/<id>` (update status/role/email/password, delete with cascade), `/api/admin/system/stats` (users/tabs/feeds/items counts, DB size, cache engine health), and `/api/admin/backup` (point-in-time snapshot download).
+  - **Account Safeguards (`backend/blueprints/admin.py`)**: Added security guards preventing administrators from self-deactivating, self-demoting, or self-deleting their own active accounts.
+  - **Frontend Admin Controller & Modals (`frontend/js/admin.js`, `frontend/index.html`, `frontend/style.css`)**: Built Administration Panel modal with tabbed views for User Management (table with badges, Add User dialog, Edit User dialog, status toggles) and System Diagnostics (metric cards, point-in-time database snapshot download).
+  - **Frontend API & Lifecycle Integration (`frontend/js/api.js`, `frontend/js/app.js`)**: Added admin client API methods and integrated Admin Panel trigger into the user account dropdown for administrator accounts.
+  - **Unit & Playwright E2E Test Suites (`tests/unit/test_admin.py`, `frontend/js/admin.test.js`, `frontend/js/api.test.js`, `tests/e2e/test_admin_panel.py`)**: Added comprehensive Pytest backend tests (privilege verification, validation, cascading, self-guards, diagnostics, DB backups), Vitest frontend unit tests, and Playwright browser tests.
+  - **Verification**: 100% test pass rate across Vitest (55/55), Pytest unit tests (214/214), and Playwright E2E suite (15 passed, 1 skipped).
+
 - **Feat(auth): Frontend Authentication UI, User State & Modals (Issue #324 - PR 3)**
   - **Auth API & Interceptor (`frontend/js/api.js`)**: Added `api.login()`, `api.logout()`, `api.getCurrentUser()`, `api.changePassword()`, and an automatic HTTP 401 unauthorized interceptor (`setUnauthorizedHandler`) that resets frontend user state and opens the login modal when an unauthorized request occurs.
   - **User Navigation & Dropdown Menu (`frontend/index.html`, `frontend/js/ui.js`, `frontend/style.css`)**: Implemented header user control displaying the active username, user role badge (User / Admin), "Change Password" modal trigger, "Admin Panel" navigation button (for administrators), and "Log Out" action.
