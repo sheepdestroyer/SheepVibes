@@ -286,8 +286,7 @@ header h1 {
     margin-bottom: 3px;
 }
 
-.feed-widget li a.item-comments-link,
-.feed-widget li a.item-article-link {
+.feed-widget li a.item-comments-link {
     display: inline;
     font-size: 0.95em;
     font-weight: 500;
@@ -297,15 +296,12 @@ header h1 {
 }
 
 .feed-widget li.unread a.item-comments-link,
-.feed-widget li.read a.item-comments-link,
-.feed-widget li.unread a.item-article-link,
-.feed-widget li.read a.item-article-link {
+.feed-widget li.read a.item-comments-link {
     font-weight: 500;
     color: #005a9c;
 }
 
-.feed-widget li a.item-comments-link:hover,
-.feed-widget li a.item-article-link:hover {
+.feed-widget li a.item-comments-link:hover {
     text-decoration: underline;
 }
 
@@ -810,9 +806,7 @@ body.night-mode .feed-widget li.read a {
 }
 
 body.night-mode .feed-widget li.unread a.item-comments-link,
-body.night-mode .feed-widget li.read a.item-comments-link,
-body.night-mode .feed-widget li.unread a.item-article-link,
-body.night-mode .feed-widget li.read a.item-article-link {
+body.night-mode .feed-widget li.read a.item-comments-link {
     color: #58a6ff;
 }
 

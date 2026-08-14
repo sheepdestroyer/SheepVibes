@@ -72,9 +72,11 @@ function createFeedItemElement(item, clickHandler) {
         item.comments_url !== item.link
     );
 
-    // Primary link: Main link is the article itself
+    // Primary link: Main link is the article itself (with fallback to comments_url or '#')
+    const primaryUrl = item.link || item.comments_url || '#';
     const link = document.createElement('a');
-    link.href = sanitizeUrl(item.link);
+    link.className = 'item-title-link';
+    link.href = sanitizeUrl(primaryUrl);
     link.textContent = item.title;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';

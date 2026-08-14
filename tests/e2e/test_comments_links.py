@@ -408,6 +408,9 @@ def test_comments_links_accessibility_and_night_mode_styling(
 
     # 1. Accessibility checks
     expect(primary_link).not_to_have_attribute("title", "Open discussion thread")
+    expect(primary_link).not_to_have_attribute(
+        "aria-label", "Open discussion thread: Show HN: SheepVibes RSS Aggregator"
+    )
     expect(comments_link).to_have_attribute("title", "Open discussion thread")
     expect(comments_link).to_have_attribute(
         "aria-label", "Open discussion thread: Show HN: SheepVibes RSS Aggregator"

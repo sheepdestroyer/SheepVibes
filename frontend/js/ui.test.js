@@ -142,7 +142,7 @@ describe('createFeedWidget URL sanitization', () => {
             onLoadMore: () => {}
         });
 
-        const titleLink = widget.querySelector('ul li a:not(.item-comments-link)');
+        const titleLink = widget.querySelector('ul li .item-title-link');
         expect(titleLink.getAttribute('href')).toBe('https://example.com/article');
 
         const commentsLink = widget.querySelector('.item-comments-link');
@@ -186,7 +186,7 @@ describe('createFeedWidget comments_url and article link handling', () => {
         expect(listItem.dataset.itemId).toBe('201');
 
         // Primary title link -> Original article
-        const titleLink = widget.querySelector('ul li a:not(.item-comments-link)');
+        const titleLink = widget.querySelector('ul li .item-title-link');
         expect(titleLink).not.toBeNull();
         expect(titleLink.getAttribute('href')).toBe('https://github.com/sheepdestroyer/SheepVibes');
         expect(titleLink.textContent).toBe('Show HN: SheepVibes');
@@ -386,7 +386,7 @@ describe('appendItemsToFeedWidget', () => {
         expect(item1.dataset.itemId).toBe('401');
         expect(item1.classList.contains('unread')).toBe(true);
 
-        const item1Article = item1.querySelector('a:not(.item-comments-link)');
+        const item1Article = item1.querySelector('.item-title-link');
         expect(item1Article.getAttribute('href')).toBe('https://example.com/appended-story');
 
         const item1Comments = item1.querySelector('.item-comments-link');
