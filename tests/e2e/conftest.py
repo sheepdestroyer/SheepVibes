@@ -76,6 +76,12 @@ def live_server():
         return
 
     project_root = Path(__file__).resolve().parents[2]  # tests/e2e -> project root
+    e2e_db_path = project_root / "data" / "e2e_test.db"
+    if e2e_db_path.exists():
+        try:
+            e2e_db_path.unlink()
+        except OSError:
+            pass
 
     # Use the same Python interpreter that is running pytest
     python = sys.executable
@@ -87,6 +93,7 @@ def live_server():
         "PYTHONUNBUFFERED": "1",
         # Use a non-default port to avoid conflicts with dev servers
         "PORT": str(E2E_SERVER_PORT),
+        "TEST_DATABASE_URI": f"sqlite:///{e2e_db_path}",
     })
 
     # Start Flask via `python -m backend.app` from the project root
@@ -124,6 +131,12 @@ def live_server():
                 proc.kill()
         except ProcessLookupError:
             pass
+    finally:
+        if e2e_db_path.exists():
+            try:
+                e2e_db_path.unlink()
+            except OSError:
+                pass
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -135,3 +148,14 @@ def configure_page_viewport(page: Page):
     """
     page.set_viewport_size({"width": 1920, "height": 1080})
     yield page
+
+
+@pytest.fixture(scope="function", autouse=True)
+def default_auth_state(page: Page, live_server: str):
+    """By default in E2E tests, establish an authenticated admin session on the live server."""
+    page.context.request.post(
+        f"{live_server}/api/auth/login",
+        data={"username": "admin", "password": "DefaultPass123!"},
+        headers={"Content-Type": "application/json"},
+    )
+    yield

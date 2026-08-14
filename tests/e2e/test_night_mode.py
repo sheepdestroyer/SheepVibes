@@ -18,8 +18,6 @@ def open_settings_menu(page: Page):
 @pytest.mark.e2e
 def test_night_mode_toggle_and_persistence(page: Page, live_server: str):
     """Verify night mode toggling and persistence via localStorage."""
-    page.on("console", lambda msg: print(f"CONSOLE: {msg.text} ({msg.type})"))
-    page.on("pageerror", lambda err: print(f"PAGE ERROR: {err}"))
     base_url = live_server
     night_mode_pattern = re.compile(r"\bnight-mode\b")
 

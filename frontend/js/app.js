@@ -1,11 +1,17 @@
 import { throttle, getStorageItem, setStorageItem, removeStorageItem } from './utils.js';
-import { api, API_BASE_URL } from './api.js';
+import { api, API_BASE_URL, setUnauthorizedHandler } from './api.js';
 import {
     showToast,
     createFeedWidget,
     renderTabs,
     showEditFeedModal,
     closeEditFeedModal,
+    showLoginModal,
+    closeLoginModal,
+    showChangePasswordModal,
+    closeChangePasswordModal,
+    renderUserState,
+    clearUserState,
     appendItemsToFeedWidget,
     showProgress,
     updateProgress,
@@ -29,12 +35,14 @@ if (getStorageItem('nightMode') === 'enabled') {
 }
 
 // State
+let currentUser = null;
 const storedTabId = getStorageItem('activeTabId');
 const parsedTabId = storedTabId !== null ? parseInt(storedTabId, 10) : NaN;
 let activeTabId = !isNaN(parsedTabId) ? parsedTabId : null;
 let allTabs = [];
 const loadedTabs = new Set();
 const ITEMS_PER_PAGE = 10;
+let eventSourceInstance = null;
 
 // --- Progress Fallback Helpers ---
 
@@ -69,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.classList.add('night-mode');
     }
 
-    // Setup event listeners
+    // Setup tab and feed event listeners
     document.getElementById('add-tab-button')?.addEventListener('click', handleAddTab);
     document.getElementById('rename-tab-button')?.addEventListener('click', handleRenameTab);
     document.getElementById('delete-tab-button')?.addEventListener('click', handleDeleteTab);
@@ -80,20 +88,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('import-opml-button')?.addEventListener('click', () => document.getElementById('opml-file-input')?.click());
     document.getElementById('opml-file-input')?.addEventListener('change', handleImportOpmlFileSelect);
 
-    // Modal listeners
+    // User and Auth event listeners
+    document.getElementById('user-button')?.addEventListener('click', toggleUserMenu);
+    document.getElementById('logout-button')?.addEventListener('click', handleLogout);
+    document.getElementById('change-password-button')?.addEventListener('click', () => {
+        document.getElementById('user-menu')?.classList.add('hidden');
+        showChangePasswordModal();
+    });
+    document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
+    document.getElementById('change-password-form')?.addEventListener('submit', handleChangePasswordSubmit);
+    document.getElementById('change-password-modal-close-button')?.addEventListener('click', closeChangePasswordModal);
+    document.getElementById('change-password-cancel-button')?.addEventListener('click', closeChangePasswordModal);
+
+    // Edit Feed Modal listeners
     document.getElementById('edit-feed-modal-close-button')?.addEventListener('click', closeEditFeedModal);
     document.getElementById('cancel-edit-button')?.addEventListener('click', closeEditFeedModal);
     document.getElementById('edit-feed-form')?.addEventListener('submit', handleEditFeedSubmit);
 
-    // Initial load
-    await initializeTabs();
-    initializeSSE();
-    updateProgressBarPosition();
+    // Register 401 unauthorized interceptor
+    setUnauthorizedHandler(handleUnauthorized);
 
-    // Resize listener for progress bar positioning
-    window.addEventListener('resize', updateProgressBarPosition);
-
-    // Close settings on click outside
+    // Close menus on click outside
     document.addEventListener('click', (event) => {
         const settingsMenu = document.getElementById('settings-menu');
         const settingsButton = document.getElementById('settings-button');
@@ -102,9 +117,156 @@ document.addEventListener('DOMContentLoaded', async () => {
             !settingsMenu.contains(event.target) &&
             !settingsButton.contains(event.target)) {
             settingsMenu.classList.add('hidden');
+            settingsButton.setAttribute('aria-expanded', 'false');
+        }
+
+        const userMenu = document.getElementById('user-menu');
+        const userButton = document.getElementById('user-button');
+        if (userMenu && userButton &&
+            !userMenu.classList.contains('hidden') &&
+            !userMenu.contains(event.target) &&
+            !userButton.contains(event.target)) {
+            userMenu.classList.add('hidden');
+            userButton.setAttribute('aria-expanded', 'false');
         }
     });
+
+    // Verify session & initial load
+    await checkAuthAndInitialize();
+    updateProgressBarPosition();
+    window.addEventListener('resize', updateProgressBarPosition);
 });
+
+// --- Auth & Session Logic ---
+
+async function checkAuthAndInitialize() {
+    try {
+        const response = await api.getCurrentUser();
+        const user = response && (response.user || (response.id ? response : null));
+        if (user && user.id) {
+            currentUser = user;
+            renderUserState(currentUser);
+            closeLoginModal();
+            await initializeTabs();
+            initializeSSE();
+        } else {
+            handleUnauthorized();
+        }
+    } catch (e) {
+        handleUnauthorized();
+    }
+}
+
+function handleUnauthorized() {
+    currentUser = null;
+    activeTabId = null;
+    allTabs = [];
+    loadedTabs.clear();
+    clearUserState();
+    if (eventSourceInstance) {
+        eventSourceInstance.close();
+        eventSourceInstance = null;
+    }
+    document.getElementById('feed-grid').innerHTML = '';
+    renderTabs([], null, {});
+    showLoginModal();
+}
+
+async function handleLoginSubmit(e) {
+    e.preventDefault();
+    const usernameInput = document.getElementById('login-username');
+    const passwordInput = document.getElementById('login-password');
+    const submitButton = document.getElementById('login-submit-button');
+
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!username || !password) {
+        showLoginModal('Please enter both username and password.');
+        return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.textContent = 'Logging in...';
+
+    try {
+        const result = await api.login(username, password);
+        currentUser = result.user;
+        renderUserState(currentUser);
+        closeLoginModal();
+        showToast(`Welcome back, ${currentUser.username}!`, 'success');
+        await initializeTabs();
+        initializeSSE();
+    } catch (err) {
+        const errorMsg = err.backendMessage || 'Invalid username or password.';
+        showLoginModal(errorMsg);
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Log In';
+    }
+}
+
+async function handleLogout() {
+    try {
+        await api.logout();
+    } catch (e) {
+        console.error('Logout error:', e);
+    } finally {
+        handleUnauthorized();
+        showToast('Logged out successfully.', 'info');
+    }
+}
+
+async function handleChangePasswordSubmit(e) {
+    e.preventDefault();
+    const currentPasswordInput = document.getElementById('change-password-current');
+    const newPasswordInput = document.getElementById('change-password-new');
+    const confirmPasswordInput = document.getElementById('change-password-confirm');
+    const submitButton = document.getElementById('change-password-submit-button');
+
+    const currentPassword = currentPasswordInput.value;
+    const newPassword = newPasswordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
+
+    if (newPassword !== confirmPassword) {
+        showChangePasswordModal('New passwords do not match.');
+        return;
+    }
+
+    if (newPassword.length < 8) {
+        showChangePasswordModal('New password must be at least 8 characters long.');
+        return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.textContent = 'Updating...';
+
+    try {
+        await api.changePassword(currentPassword, newPassword);
+        document.getElementById('change-password-form')?.reset();
+        showChangePasswordModal(null, 'Password updated successfully!', true);
+        showToast('Password updated successfully.', 'success');
+        setTimeout(() => {
+            closeChangePasswordModal();
+        }, 1200);
+    } catch (err) {
+        const errorMsg = err.backendMessage || 'Failed to update password.';
+        showChangePasswordModal(errorMsg);
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Update Password';
+    }
+}
+
+function toggleUserMenu() {
+    const menu = document.getElementById('user-menu');
+    const button = document.getElementById('user-button');
+    if (!menu) return;
+    const isHidden = menu.classList.toggle('hidden');
+    if (button) {
+        button.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+    }
+}
 
 // --- Core Logic ---
 
@@ -112,7 +274,6 @@ async function initializeTabs() {
     try {
         allTabs = await api.getTabs();
 
-        // Validation: if activeTabId is no longer in valid tabs, reset it
         if (!allTabs.some(t => t.id === activeTabId)) {
             activeTabId = allTabs.length > 0 ? allTabs[0].id : null;
         }
@@ -128,7 +289,9 @@ async function initializeTabs() {
         }
     } catch (error) {
         console.error('Error initializing tabs:', error);
-        showToast('Failed to load tabs.', 'error');
+        if (currentUser) {
+            showToast('Failed to load tabs.', 'error');
+        }
     }
 }
 
@@ -137,13 +300,9 @@ async function switchTab(tabId) {
     activeTabId = tabId;
     setStorageItem('activeTabId', tabId);
 
-    // Update UI active state and re-render tabs logic
     renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
-
-    // Show/Hide widgets
     toggleWidgetsVisibility();
 
-    // Load content if not loaded
     if (!loadedTabs.has(tabId)) {
         await loadFeedsForTab(tabId);
     }
@@ -153,7 +312,6 @@ function toggleWidgetsVisibility() {
     const feedGrid = document.getElementById('feed-grid');
     const widgets = feedGrid.querySelectorAll('.feed-widget');
 
-    // Hide all first
     widgets.forEach(widget => {
         if (widget.dataset.tabId == activeTabId) {
             widget.classList.remove('hidden');
@@ -161,23 +319,15 @@ function toggleWidgetsVisibility() {
             widget.classList.add('hidden');
         }
     });
-
-    // Handle "empty" message visibility (simplified)
-    // Ideally we would check if we HAVE feeds for this tab.
-    // We loaded them in loadFeedsForTab.
-    // If loadedTabs has it, but no widgets match -> empty.
 }
 
 async function loadFeedsForTab(tabId) {
     const feedGrid = document.getElementById('feed-grid');
-
-    // If already loaded, just return (toggleWidgetsVisibility handles display)
     if (loadedTabs.has(tabId)) return;
 
     try {
         const feeds = await api.getFeedsForTab(tabId);
 
-        // Remove ANY existing "no feeds" messages to be clean
         const placeholders = feedGrid.querySelectorAll(
             `.empty-tab-message[data-tab-id="${tabId}"]`
         );
@@ -194,9 +344,8 @@ async function loadFeedsForTab(tabId) {
                 feedGrid.appendChild(widget);
             });
         } else {
-            // Create an empty-state message container for this tab
             const msg = document.createElement('div');
-            msg.className = 'feed-widget empty-tab-message'; // Reuse class but add distinct marker
+            msg.className = 'feed-widget empty-tab-message';
             msg.dataset.tabId = tabId;
             msg.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
             feedGrid.appendChild(msg);
@@ -205,14 +354,22 @@ async function loadFeedsForTab(tabId) {
         toggleWidgetsVisibility();
     } catch (error) {
         console.error('Error loading feeds:', error);
-        showToast('Failed to load feeds.', 'error');
+        if (currentUser) {
+            showToast('Failed to load feeds.', 'error');
+        }
     }
 }
 
 // --- Handlers ---
 
 function toggleSettingsMenu() {
-    document.getElementById('settings-menu').classList.toggle('hidden');
+    const menu = document.getElementById('settings-menu');
+    const button = document.getElementById('settings-button');
+    if (!menu) return;
+    const isHidden = menu.classList.toggle('hidden');
+    if (button) {
+        button.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+    }
 }
 
 async function handleAddTab() {
@@ -249,13 +406,12 @@ async function handleDeleteTab() {
         const deletedTabId = activeTabId;
         await api.deleteTab(deletedTabId);
 
-        // Surgically update the UI and state instead of a full reload
         document.querySelectorAll(`.feed-widget[data-tab-id="${deletedTabId}"]`).forEach(w => w.remove());
         loadedTabs.delete(deletedTabId);
         activeTabId = null;
         removeStorageItem('activeTabId');
 
-        await initializeTabs(); // Still need this to re-render the tab list properly
+        await initializeTabs();
         showToast('Tab deleted.', 'success');
     } catch (e) {
         showToast(e.message, 'error');
@@ -333,11 +489,10 @@ async function handleRefreshAllFeeds() {
     _startProgressFallback();
     try {
         await api.updateAllFeeds();
-        // The SSE events will drive the rest of the UI updates.
     } catch (e) {
         showToast('Failed to refresh: ' + e.message, 'error');
         _clearProgressFallback();
-        hideProgress(); // Hide progress bar on failure
+        hideProgress();
     }
 }
 
@@ -371,7 +526,6 @@ async function handleImportOpmlFileSelect(e) {
     _startProgressFallback();
     try {
         const data = await api.importOpml(formData);
-        // Always re-initialize tabs, as new (empty) tabs might have been created.
         await initializeTabs();
 
         if (data.imported_count > 0) {
@@ -385,8 +539,6 @@ async function handleImportOpmlFileSelect(e) {
                 }
             }
         }
-        // The 'progress_complete' SSE event is the single source of truth for hiding the
-        // progress bar and showing the final status.
     } catch (err) {
         showToast(err.message, 'error');
         _clearProgressFallback();
@@ -435,7 +587,6 @@ async function handleLoadMoreItems(listElement) {
 
 async function reloadTab(tabId) {
     if (activeTabId === tabId) {
-        // Remove existing for this tab
         document.querySelectorAll(`.feed-widget[data-tab-id="${tabId}"]`).forEach(w => w.remove());
         loadedTabs.delete(tabId);
         await loadFeedsForTab(tabId);
@@ -445,15 +596,16 @@ async function reloadTab(tabId) {
 }
 
 function initializeSSE() {
-    const eventSource = new EventSource(`${API_BASE_URL}/api/stream`);
+    if (eventSourceInstance) {
+        eventSourceInstance.close();
+    }
+    eventSourceInstance = new EventSource(`${API_BASE_URL}/api/stream`);
 
-    eventSource.onmessage = async (event) => {
+    eventSourceInstance.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
 
-            // Handle progress updates
             if (data.type === 'progress') {
-                // Any progress event clears/resets the fallback to keep it alive during long operations
                 _startProgressFallback();
                 updateProgress(data.status, data.value, data.max);
                 return;
@@ -465,7 +617,6 @@ function initializeSSE() {
                 return;
             }
 
-            // Handle new items notification
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
                 allTabs = await api.getTabs();
@@ -485,7 +636,7 @@ function initializeSSE() {
         }
     };
 
-    eventSource.onerror = (err) => {
+    eventSourceInstance.onerror = (err) => {
         console.error('SSE connection failed:', err);
     };
 }
@@ -501,4 +652,3 @@ function handleNightModeToggle(e) {
         setStorageItem('nightMode', 'disabled');
     }
 }
-

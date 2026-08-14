@@ -21,6 +21,7 @@ from .constants import (
 )
 from .extensions import cache, db, scheduler
 from .feed_service import update_all_feeds
+from .models import Feed, FeedItem, Tab, User
 from .sse import announcer
 
 # Set up logging configuration
@@ -388,7 +389,17 @@ def stream():
 if __name__ == "__main__":
     if app.config.get("TESTING") or os.environ.get("TESTING") == "true":
         with app.app_context():
+            from .models import Tab, User
             db.create_all()
+            if not User.query.filter_by(username="admin").first():
+                admin_user = User(username="admin", role="admin", is_active=True)
+                admin_user.set_password("DefaultPass123!")
+                db.session.add(admin_user)
+                db.session.commit()
+                if not Tab.query.filter_by(user_id=admin_user.id).first():
+                    default_tab = Tab(name="General", user_id=admin_user.id, order=0)
+                    db.session.add(default_tab)
+                    db.session.commit()
     # Start the Flask development server for local testing.
     is_debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     server_port = int(os.environ.get("PORT", "5000"))

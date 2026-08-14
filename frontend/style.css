@@ -125,11 +125,17 @@ header h1 {
     background-color: #c82333;
 }
 
+/* Header Right Controls */
+#header-right-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
 /* Settings Menu */
 #settings-menu-container {
     position: relative;
-    margin-left: auto;
-    /* Push to the right */
 }
 
 #settings-button {
@@ -137,10 +143,16 @@ header h1 {
     border: none;
     font-size: 1.5em;
     cursor: pointer;
-    padding: 0 10px;
+    padding: 0 8px;
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-#settings-menu {
+#settings-menu,
+#user-menu {
     position: absolute;
     top: 100%;
     right: 0;
@@ -156,7 +168,8 @@ header h1 {
     min-width: 250px;
 }
 
-#settings-menu.hidden {
+#settings-menu.hidden,
+#user-menu.hidden {
     display: none;
 }
 
@@ -178,10 +191,11 @@ header h1 {
     font-size: 0.9em;
 }
 
-#settings-menu button {
+#settings-menu button,
+#user-menu button {
     width: 100%;
     text-align: left;
-    padding: 6px 12px;
+    padding: 8px 12px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -196,13 +210,67 @@ header h1 {
     background-color: #28a745;
 }
 
-
-#settings-menu button:hover {
+#settings-menu button:hover,
+#user-menu button:hover {
     background-color: #5a6268;
 }
 
 #settings-menu #add-feed-section button:hover {
     background-color: #218838;
+}
+
+#user-menu #logout-button {
+    background-color: #dc3545;
+}
+
+#user-menu #logout-button:hover {
+    background-color: #c82333;
+}
+
+/* User Menu & Button */
+#user-menu-container {
+    position: relative;
+}
+
+#user-button {
+    background: #e9ecef;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    color: #333;
+    transition: background-color 0.2s;
+}
+
+#user-button:hover {
+    background-color: #dde2e6;
+}
+
+#user-info-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
+    font-size: 0.95em;
+    color: #333;
+}
+
+#user-role-badge {
+    font-size: 0.75em;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background-color: #005a9c;
+    color: white;
+    text-transform: uppercase;
+    font-weight: 700;
 }
 
 /* Feed Grid */
@@ -537,22 +605,62 @@ header h1 {
     font-size: 0.9em;
 }
 
-#save-feed-button {
+#save-feed-button,
+#login-submit-button,
+#change-password-submit-button {
     background-color: #005a9c;
     color: white;
 }
 
-#save-feed-button:hover {
+#save-feed-button:hover,
+#login-submit-button:hover,
+#change-password-submit-button:hover {
     background-color: #004070;
 }
 
-#cancel-edit-button {
+#cancel-edit-button,
+#change-password-cancel-button {
     background-color: #6c757d;
     color: white;
 }
 
-#cancel-edit-button:hover {
+#cancel-edit-button:hover,
+#change-password-cancel-button:hover {
     background-color: #5a6268;
+}
+
+.auth-modal-content {
+    max-width: 380px;
+}
+
+.auth-buttons {
+    margin-top: 20px;
+}
+
+.auth-buttons button {
+    width: 100%;
+    padding: 10px;
+    font-size: 1em;
+}
+
+.error-banner {
+    background-color: #f8d7da;
+    color: #842029;
+    border: 1px solid #f5c2c7;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+}
+
+.success-banner {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    border: 1px solid #badbcc;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 15px;
+    font-size: 0.9em;
 }
 
 .modal-close-button {
@@ -888,4 +996,60 @@ body.night-mode .modal-close-button {
 
 body.night-mode .modal-close-button:hover {
     color: #fff;
+}
+
+/* Night Mode User Menu & Auth */
+body.night-mode #user-button {
+    background-color: #252525;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.night-mode #user-button:hover {
+    background-color: #333;
+}
+
+body.night-mode #user-menu {
+    background-color: #252525;
+    border-color: #383838;
+}
+
+body.night-mode #user-menu button {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.night-mode #user-menu button:hover {
+    background-color: #383838;
+}
+
+body.night-mode #user-menu #logout-button {
+    background-color: #a71d2a;
+    color: #fff;
+}
+
+body.night-mode #user-menu #logout-button:hover {
+    background-color: #bd2130;
+}
+
+body.night-mode #user-info-section {
+    border-bottom-color: #383838;
+    color: #e0e0e0;
+}
+
+body.night-mode #user-role-badge {
+    background-color: #58a6ff;
+    color: #121212;
+}
+
+body.night-mode .error-banner {
+    background-color: #2c1517;
+    color: #ff7b72;
+    border-color: #5a1e22;
+}
+
+body.night-mode .success-banner {
+    background-color: #13231b;
+    color: #7ee787;
+    border-color: #1e3a2b;
 }

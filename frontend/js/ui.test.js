@@ -13,7 +13,13 @@ import {
     updateProgress,
     hideProgress,
     showEditFeedModal,
-    closeEditFeedModal
+    closeEditFeedModal,
+    showLoginModal,
+    closeLoginModal,
+    showChangePasswordModal,
+    closeChangePasswordModal,
+    renderUserState,
+    clearUserState
 } from './ui.js';
 
 describe('createBadge', () => {
@@ -586,5 +592,82 @@ describe('Modals and Progress helpers', () => {
 
         hideProgress();
         expect(document.getElementById('progress-container').classList.contains('hidden')).toBe(true);
+    });
+
+    it('handles login modal display and dismissal', () => {
+        document.body.innerHTML = `
+            <div id="login-modal">
+                <input id="login-username" />
+                <input id="login-password" />
+                <div id="login-error" class="hidden"></div>
+            </div>
+        `;
+
+        showLoginModal('Invalid username or password');
+        expect(document.getElementById('login-modal').classList.contains('is-active')).toBe(true);
+        expect(document.getElementById('login-error').textContent).toBe('Invalid username or password');
+        expect(document.getElementById('login-error').classList.contains('hidden')).toBe(false);
+
+        closeLoginModal();
+        expect(document.getElementById('login-modal').classList.contains('is-active')).toBe(false);
+        expect(document.getElementById('login-error').classList.contains('hidden')).toBe(true);
+    });
+
+    it('handles change password modal display and dismissal', () => {
+        document.body.innerHTML = `
+            <div id="change-password-modal">
+                <input id="change-password-current" />
+                <input id="change-password-new" />
+                <input id="change-password-confirm" />
+                <div id="change-password-error" class="hidden"></div>
+                <div id="change-password-success" class="hidden"></div>
+            </div>
+        `;
+
+        showChangePasswordModal('Passwords do not match');
+        expect(document.getElementById('change-password-modal').classList.contains('is-active')).toBe(true);
+        expect(document.getElementById('change-password-error').textContent).toBe('Passwords do not match');
+        expect(document.getElementById('change-password-error').classList.contains('hidden')).toBe(false);
+
+        showChangePasswordModal(null, 'Password updated successfully!');
+        expect(document.getElementById('change-password-success').textContent).toBe('Password updated successfully!');
+        expect(document.getElementById('change-password-success').classList.contains('hidden')).toBe(false);
+        expect(document.getElementById('change-password-error').classList.contains('hidden')).toBe(true);
+
+        closeChangePasswordModal();
+        expect(document.getElementById('change-password-modal').classList.contains('is-active')).toBe(false);
+    });
+
+    it('renders and clears user state in navigation', () => {
+        document.body.innerHTML = `
+            <div id="user-menu-container" class="hidden">
+                <span id="user-display-name"></span>
+                <div id="user-menu" class="hidden">
+                    <span id="user-menu-username"></span>
+                    <span id="user-role-badge"></span>
+                    <button id="admin-panel-button" class="hidden"></button>
+                </div>
+            </div>
+        `;
+
+        // Regular user
+        renderUserState({ id: 1, username: 'testuser', role: 'user' });
+        expect(document.getElementById('user-display-name').textContent).toBe('testuser');
+        expect(document.getElementById('user-menu-username').textContent).toBe('testuser');
+        expect(document.getElementById('user-role-badge').textContent).toBe('user');
+        expect(document.getElementById('user-menu-container').classList.contains('hidden')).toBe(false);
+        expect(document.getElementById('admin-panel-button').classList.contains('hidden')).toBe(true);
+
+        // Admin user
+        renderUserState({ id: 2, username: 'superadmin', role: 'admin' });
+        expect(document.getElementById('user-display-name').textContent).toBe('superadmin');
+        expect(document.getElementById('user-role-badge').textContent).toBe('admin');
+        expect(document.getElementById('admin-panel-button').classList.contains('hidden')).toBe(false);
+
+        // Clear user state
+        clearUserState();
+        expect(document.getElementById('user-menu-container').classList.contains('hidden')).toBe(true);
+        expect(document.getElementById('user-menu').classList.contains('hidden')).toBe(true);
+        expect(document.getElementById('admin-panel-button').classList.contains('hidden')).toBe(true);
     });
 });

@@ -1,5 +1,13 @@
 ## 2026-08-14
 
+- **Feat(auth): Frontend Authentication UI, User State & Modals (Issue #324 - PR 3)**
+  - **Auth API & Interceptor (`frontend/js/api.js`)**: Added `api.login()`, `api.logout()`, `api.getCurrentUser()`, `api.changePassword()`, and an automatic HTTP 401 unauthorized interceptor (`setUnauthorizedHandler`) that resets frontend user state and opens the login modal when an unauthorized request occurs.
+  - **User Navigation & Dropdown Menu (`frontend/index.html`, `frontend/js/ui.js`, `frontend/style.css`)**: Implemented header user control displaying the active username, user role badge (User / Admin), "Change Password" modal trigger, "Admin Panel" navigation button (for administrators), and "Log Out" action.
+  - **Authentication Modals & Client-Side Validation (`frontend/index.html`, `frontend/js/ui.js`, `frontend/style.css`)**: Built accessible login modal and change password modal with real-time error banner rendering, minimum password length checks (8+ characters), and confirmation matching.
+  - **Session Lifecycle Management (`frontend/js/app.js`)**: Integrated automated session validation on page load (`checkAuthAndInitialize`), rendering protected feeds/tabs only upon successful authentication and clearing session state upon logout or session expiration.
+  - **Unit & Playwright E2E Test Suite (`frontend/js/api.test.js`, `frontend/js/ui.test.js`, `tests/e2e/test_auth_ui.py`, `tests/e2e/conftest.py`)**: Added unit test coverage for auth endpoints and modal lifecycle, plus Playwright E2E browser tests validating unauthenticated prompts, login error handling, successful authentication, password change dialogs, and logout workflows.
+  - **Verification**: 100% test pass rate across Vitest (47/47), Pytest unit tests (207/207), and Playwright E2E suite (12 passed, 1 skipped).
+
 - **Feat(auth): Tenant Scoping, Cache Partitioning & API Isolation (Issue #324 - PR 2)**
   - **Database Composite Uniqueness (`backend/models.py`)**: Replaced global `Tab.name` unique constraint with composite `UniqueConstraint("user_id", "name", name="uq_tabs_user_id_name")`, allowing distinct users to organize tabs with identical names (e.g., "Tech", "News") while enforcing per-account uniqueness.
   - **Route Protection & User Scoping (`backend/blueprints/tabs.py`, `backend/blueprints/feeds.py`, `backend/blueprints/opml.py`)**: Applied `@login_required` to all tab, feed, item, and OPML routes. Scoped all queries (`Tab`, `Feed`, `FeedItem`) to `user_id == current_user.id` to prevent cross-tenant enumeration and unauthorized access.

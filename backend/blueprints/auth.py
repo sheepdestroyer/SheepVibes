@@ -53,7 +53,7 @@ def get_current_session_user():
     return jsonify({"authenticated": False, "user": None}), 200
 
 
-@auth_bp.route("/password", methods=["PUT"])
+@auth_bp.route("/password", methods=["PUT", "POST"])
 @login_required
 def change_password():
     """Changes the password of the currently authenticated user."""
@@ -66,7 +66,7 @@ def change_password():
     new_password = str(data.get("new_password"))
 
     if not user.check_password(current_password):
-        return jsonify({"error": "Incorrect current password"}), 401
+        return jsonify({"error": "Incorrect current password"}), 400
 
     if len(new_password) < 8:
         return jsonify({"error": "New password must be at least 8 characters long"}), 400
