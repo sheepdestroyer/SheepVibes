@@ -1,5 +1,8 @@
 ## 2026-08-14
 
+- **Docs & Governance: Enact Strict Pull Request Policy & Prohibition of Direct Pushes to `main`**
+  - **Rule Definition (`AGENTS.md`)**: Enacted strict policy that direct pushes to `main` are prohibited under all circumstances. Every change (features, bug fixes, operational scripts, database migrations, configuration, and documentation) must be made on a dedicated branch and merged via Pull Request.
+
 - **Feat: Canonical Short Feed Names & Single-Line Widget Title Bars**
   - **Single-Line Truncation & Compact Title Bar (`frontend/style.css`, `frontend/js/ui.js`)**: Enforced strict single-line CSS truncation (`white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;`) on widget title links and spans, added `.feed-widget-title` class and hover tooltip `title` attribute, and adjusted button vertical margins so widget title bars maintain a compact ~36px height while keeping 44px touch targets.
   - **Canonical Short Name Extraction (`backend/feed_name_utils.py`)**: Added `derive_canonical_feed_name` to clean verbose RSS channel `<title>` tags, stripping boilerplate suffixes (`- Articles`, `- News`, `| Homepage`, `:: RSS Feed`), boilerplate prefixes (`Latest from...`), domain artifacts (`www.theregister.com - Articles` → `The Register`), and pure marketing taglines (`GPU News, CPU News, Reviews & PC Hardware Guides` → `Wccftech`).

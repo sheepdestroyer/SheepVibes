@@ -1,6 +1,7 @@
 # AI Agents must respect the following rules
 
 - **Dependency & Version Policy**: Never downgrade dependencies, tools, or GitHub Action versions on a whim or based on outdated training assumptions. Always keep the latest release versions and empirically verify actual existence before making version changes.
+- **Strict Pull Request Policy (No Direct Pushes to `main`)**: Direct pushes to `main` are strictly forbidden under all circumstances. Every change (features, bug fixes, operational scripts, database migrations, configurations, and documentation) MUST be committed to a dedicated branch (`feat/...` or `fix/...`), submitted as a Pull Request via `gh pr create`, pass the full CI/testing and code review loop, and be merged via the PR workflow.
 
 ## An Agent must always start by reading **all** `.md` files from the repository in order to have a global understanding of the application. They must also read both backend & frontend code files to understand the app's logic. 
 
@@ -16,6 +17,7 @@
 5. Before preparing to end a task it is necessary to run a last full validation of all tests (Vitest frontend, Pytest unit, and Playwright E2E suites).
 6. Then it is necessary to update all relevant .md files (*especially* `TODO.md` and `CHANGELOG.md`) accordingly.
 7. Only then will the task be completed, and changes be submitted / committed.
+8. Changes must be pushed to the feature/fix branch and merged exclusively via a Pull Request. Never push directly to `main`.
 
 ### Tag & Release Workflow
 - **Automated GHCR & GitHub Releases**: Pushing a version tag matching `v*.*` (e.g. `v0.27`) triggers `.github/workflows/release.yml`, which automatically builds and publishes the container image to `ghcr.io/sheepdestroyer/sheepvibes:<TAG>` and `:latest`, and generates/updates the corresponding GitHub Release notes with the GitHub API.
