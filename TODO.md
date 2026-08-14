@@ -147,6 +147,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## Process
 
+*   [x] **2026-08-14: Multi-User Account Support & Admin Panel - PR 1: User Model, Auth Engine & Migration**
+  - [x] Implemented `User` model in `backend/models.py` with password hashing (`werkzeug.security`), role checking (`is_admin`), and `Tab.user_id` foreign key.
+  - [x] Implemented authentication engine and decorators (`backend/auth.py` with `@login_required`, `@admin_required`, `get_current_user`, `login_user`, `logout_user`).
+  - [x] Created authentication blueprint (`backend/blueprints/auth.py`) supporting `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`, and `/api/auth/password`.
+  - [x] Added Alembic database migration (`backend/migrations/versions/b2c3d4e5f6a7_add_user_model_and_tab_user_id.py`) with automatic default admin seeding and existing tab association.
+  - [x] Added unit tests (`tests/unit/test_auth.py`) covering user model, password verification, auth endpoints, and route protection decorators.
+  - [x] Validated full test suite: 39/39 Vitest, 202/202 Pytest unit, and 10/10 Playwright E2E tests passing.
+
 *   [x] **2026-08-14: Strict Pull Request Policy & Prohibition of Direct Pushes to `main`**
   - [x] Enacted strict rule in `AGENTS.md` requiring all changes without exception to go through dedicated branches and Pull Requests.
   - [x] Prohibited direct pushes to `main` under any circumstances.

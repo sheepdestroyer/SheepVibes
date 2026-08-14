@@ -1,4 +1,5 @@
 import atexit
+import datetime
 import json
 import logging
 import os
@@ -9,6 +10,7 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from .blueprints.auth import auth_bp
 from .blueprints.feeds import feeds_bp, items_bp
 from .blueprints.opml import autosave_opml, opml_bp
 from .blueprints.tabs import tabs_bp
@@ -112,6 +114,19 @@ if "SQLALCHEMY_ENGINE_OPTIONS" not in app.config:
 # Disable modification tracking
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+# Session and Security Configuration
+app.secret_key = os.environ.get(
+    "SECRET_KEY", "sheepvibes-default-secret-key-change-in-prod"
+)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = (
+    os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+)
+app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(
+    days=int(os.environ.get("SESSION_LIFETIME_DAYS", 30))
+)
+
 # Initialize extensions
 db.init_app(app)
 migrate = Migrate(
@@ -120,6 +135,7 @@ migrate = Migrate(
 cache.init_app(app)
 
 # Register Blueprints
+app.register_blueprint(auth_bp)
 app.register_blueprint(opml_bp)
 app.register_blueprint(tabs_bp)
 app.register_blueprint(feeds_bp)
