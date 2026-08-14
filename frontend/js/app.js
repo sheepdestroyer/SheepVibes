@@ -9,6 +9,8 @@ import {
     closeEditFeedModal,
     showLoginModal,
     closeLoginModal,
+    showSetupWizardModal,
+    closeSetupWizardModal,
     showChangePasswordModal,
     closeChangePasswordModal,
     renderUserState,
@@ -96,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('user-menu')?.classList.add('hidden');
         showChangePasswordModal();
     });
+    document.getElementById('setup-wizard-form')?.addEventListener('submit', handleSetupWizardSubmit);
     document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
     document.getElementById('change-password-form')?.addEventListener('submit', handleChangePasswordSubmit);
     document.getElementById('change-password-modal-close-button')?.addEventListener('click', closeChangePasswordModal);
@@ -145,12 +148,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function checkAuthAndInitialize() {
     try {
-        const response = await api.getCurrentUser();
-        const user = response && (response.user || (response.id ? response : null));
-        if (user && user.id) {
-            currentUser = user;
+        const authStatus = await api.getAuthStatus();
+        if (authStatus && authStatus.setup_required) {
+            closeLoginModal();
+            showSetupWizardModal();
+            return;
+        }
+
+        if (authStatus && authStatus.authenticated && authStatus.user) {
+            currentUser = authStatus.user;
             renderUserState(currentUser);
             closeLoginModal();
+            closeSetupWizardModal();
             await initializeTabs();
             initializeSSE();
         } else {
@@ -158,6 +167,49 @@ async function checkAuthAndInitialize() {
         }
     } catch (e) {
         handleUnauthorized();
+    }
+}
+
+async function handleSetupWizardSubmit(e) {
+    e.preventDefault();
+    const usernameInput = document.getElementById('setup-username');
+    const emailInput = document.getElementById('setup-email');
+    const passwordInput = document.getElementById('setup-password');
+    const confirmInput = document.getElementById('setup-password-confirm');
+    const submitButton = document.getElementById('setup-wizard-submit-button');
+
+    const username = usernameInput.value.trim();
+    const email = emailInput.value.trim() || null;
+    const password = passwordInput.value;
+    const confirmPassword = confirmInput.value;
+
+    if (password !== confirmPassword) {
+        showSetupWizardModal('Passwords do not match.');
+        return;
+    }
+
+    if (password.length < 8) {
+        showSetupWizardModal('Password must be at least 8 characters long.');
+        return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.textContent = 'Setting up...';
+
+    try {
+        const result = await api.setupMasterAdmin({ username, email, password });
+        currentUser = result.user;
+        renderUserState(currentUser);
+        closeSetupWizardModal();
+        showToast(`Welcome to SheepVibes, Administrator ${currentUser.username}!`, 'success');
+        await initializeTabs();
+        initializeSSE();
+    } catch (err) {
+        const errorMsg = err.backendMessage || 'Failed to complete setup.';
+        showSetupWizardModal(errorMsg);
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Complete Setup & Launch';
     }
 }
 
@@ -173,6 +225,7 @@ function handleUnauthorized() {
     }
     document.getElementById('feed-grid').innerHTML = '';
     renderTabs([], null, {});
+    closeSetupWizardModal();
     showLoginModal();
 }
 

@@ -27,7 +27,7 @@ export async function fetchData(url, options = {}, responseType = 'json') {
     try {
         const response = await fetch(`${API_BASE_URL}${url}`, options);
         if (!response.ok) {
-            if (response.status === 401 && typeof onUnauthorizedCallback === 'function' && !url.startsWith('/api/auth/login') && !url.startsWith('/api/auth/password')) {
+            if (response.status === 401 && typeof onUnauthorizedCallback === 'function' && !url.startsWith('/api/auth/login') && !url.startsWith('/api/auth/password') && !url.startsWith('/api/auth/setup') && !url.startsWith('/api/auth/status')) {
                 onUnauthorizedCallback();
             }
 
@@ -43,10 +43,13 @@ export async function fetchData(url, options = {}, responseType = 'json') {
                     }
                 } else {
                     const errorText = await response.text();
-                    error.message += `, message: ${errorText}`;
+                    if (errorText) {
+                        error.backendMessage = errorText;
+                        error.message += `, message: ${errorText}`;
+                    }
                 }
-            } catch (e) {
-                error.message += `, message: ${response.statusText}`;
+            } catch (_) {
+                // If parsing fails, preserve base HTTP error
             }
             throw error;
         }
@@ -68,6 +71,12 @@ export async function fetchData(url, options = {}, responseType = 'json') {
 
 export const api = {
     // Auth
+    getAuthStatus: () => fetchData('/api/auth/status'),
+    setupMasterAdmin: (userData) => fetchData('/api/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+    }),
     login: (username, password) => fetchData('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

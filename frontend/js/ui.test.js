@@ -16,6 +16,8 @@ import {
     closeEditFeedModal,
     showLoginModal,
     closeLoginModal,
+    showSetupWizardModal,
+    closeSetupWizardModal,
     showChangePasswordModal,
     closeChangePasswordModal,
     renderUserState,
@@ -669,5 +671,23 @@ describe('Modals and Progress helpers', () => {
         expect(document.getElementById('user-menu-container').classList.contains('hidden')).toBe(true);
         expect(document.getElementById('user-menu').classList.contains('hidden')).toBe(true);
         expect(document.getElementById('admin-panel-button').classList.contains('hidden')).toBe(true);
+    });
+
+    it('opens and closes setup wizard modal with error banner support', () => {
+        document.body.innerHTML = `
+            <div id="setup-wizard-modal" class="modal">
+                <input id="setup-username" />
+                <div id="setup-wizard-error" class="hidden"></div>
+            </div>
+        `;
+
+        showSetupWizardModal('Passwords do not match');
+        expect(document.getElementById('setup-wizard-modal').classList.contains('is-active')).toBe(true);
+        expect(document.getElementById('setup-wizard-error').textContent).toBe('Passwords do not match');
+        expect(document.getElementById('setup-wizard-error').classList.contains('hidden')).toBe(false);
+
+        closeSetupWizardModal();
+        expect(document.getElementById('setup-wizard-modal').classList.contains('is-active')).toBe(false);
+        expect(document.getElementById('setup-wizard-error').classList.contains('hidden')).toBe(true);
     });
 });

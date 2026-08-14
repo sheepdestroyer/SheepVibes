@@ -1,5 +1,12 @@
 ## 2026-08-14
 
+- **Feat(auth): First-Run Onboarding Wizard, Documentation & Release (Issue #324 - PR 5)**
+  - **First-Run Setup Backend API (`backend/blueprints/auth.py`)**: Added `GET /api/auth/status` (reporting `setup_required`, `authenticated`, and active session user) and `POST /api/auth/setup` (onboarding endpoint to bootstrap the master administrator account and initial tab, permanently rejecting subsequent invocations with 403 Forbidden).
+  - **Interactive Onboarding UI (`frontend/index.html`, `frontend/js/ui.js`, `frontend/js/app.js`, `frontend/style.css`)**: Implemented first-run setup wizard modal with branding, input validation, confirmation matching, automatic administrator authentication, and seamless transition to dashboard.
+  - **Comprehensive Multi-User Documentation (`docs/multi-user.md`, `README.md`)**: Authored detailed architectural documentation covering multi-tenancy, partitioned caching, RBAC, first-run wizard, Admin Panel features, SQLite snapshot backups, and production Quadlet/Podman deployment configurations.
+  - **Unit & Playwright E2E Test Suites (`tests/unit/test_setup_wizard.py`, `frontend/js/ui.test.js`, `frontend/js/api.test.js`, `tests/e2e/test_setup_wizard.py`)**: Added test coverage for setup status checks, master admin bootstrap, validation errors, duplicate setup prevention, and full browser onboarding flow.
+  - **Verification**: 100% test pass rate across Vitest (58/58), Pytest unit tests (216/216), and Playwright E2E suite (16 passed, 1 skipped).
+
 - **Feat(admin): Admin Panel, User Management & System Diagnostics (Issue #324 - PR 4)**
   - **Admin Blueprint & Endpoints (`backend/blueprints/admin.py`, `backend/app.py`)**: Implemented `@admin_required` protected endpoints including `/api/admin/users` (list, create), `/api/admin/users/<id>` (update status/role/email/password, delete with cascade), `/api/admin/system/stats` (users/tabs/feeds/items counts, DB size, cache engine health), and `/api/admin/backup` (point-in-time snapshot download).
   - **Account Safeguards (`backend/blueprints/admin.py`)**: Added security guards preventing administrators from self-deactivating, self-demoting, or self-deleting their own active accounts.

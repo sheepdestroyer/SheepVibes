@@ -65,6 +65,21 @@ def setup_auth_routes(page: Page, authenticated: bool = False, role: str = "user
         else:
             route.fulfill(status=401, content_type="application/json", body='{"error": "Unauthorized"}')
 
+    def handle_auth_status(route):
+        if current_auth_state["authenticated"]:
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body='{"setup_required": false, "authenticated": true, "user": {"id": 1, "username": "alice", "email": "alice@example.com", "role": "' + current_auth_state["role"] + '", "is_active": true}}',
+            )
+        else:
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body='{"setup_required": false, "authenticated": false, "user": null}',
+            )
+
+    page.route("**/api/auth/status", handle_auth_status)
     page.route("**/api/auth/me", handle_auth_me)
     page.route("**/api/auth/login", handle_login)
     page.route("**/api/auth/logout", handle_logout)

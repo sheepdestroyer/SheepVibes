@@ -174,6 +174,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
   - [x] Updated Vitest unit tests in `frontend/js/ui.test.js` and Playwright E2E tests in `tests/e2e/test_comments_links.py`.
   - [x] Validated 100% pass rate across Vitest (36/36), Pytest unit (173/173), and Playwright E2E suites.
 
+*   [x] **2026-08-14: Multi-User Accounts Support and Admin Panel (Issue #324 - PR 5: First-Run Onboarding Wizard, Docs & Release)**
+  - [x] First-run setup API (`/api/auth/status` and `/api/auth/setup`) in `backend/blueprints/auth.py`.
+  - [x] First-run onboarding wizard modal `setup-wizard-modal` in `frontend/index.html`, `frontend/js/ui.js`, `frontend/js/app.js`, `frontend/style.css`.
+  - [x] Architectural documentation in `docs/multi-user.md` and feature summary in `README.md`.
+  - [x] Unit test suites in `tests/unit/test_setup_wizard.py`, `frontend/js/ui.test.js`, `frontend/js/api.test.js`.
+  - [x] Playwright E2E browser test suite in `tests/e2e/test_setup_wizard.py`.
+  - [x] Validated 100% test pass rate across Vitest (58/58), Pytest unit (216/216), and Playwright E2E suite (16 passed, 1 skipped).
+
 *   [x] **2026-08-14: Multi-User Accounts Support and Admin Panel (Issue #324 - PR 4: Admin Panel - User Management & Diagnostics)**
   - [x] Admin Blueprint in `backend/blueprints/admin.py` with user CRUD, account safeguards, stats diagnostics, and DB backup.
   - [x] Frontend Admin controller module `frontend/js/admin.js`, modals in `frontend/index.html`, and CSS in `frontend/style.css`.

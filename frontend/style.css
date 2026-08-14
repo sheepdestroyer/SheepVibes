@@ -643,6 +643,29 @@ header h1 {
     font-size: 1em;
 }
 
+.setup-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.setup-icon {
+    font-size: 2.8rem;
+    line-height: 1;
+    margin-bottom: 8px;
+    display: inline-block;
+}
+
+.setup-subtitle {
+    color: #666;
+    font-size: 0.95rem;
+    margin-top: 4px;
+    margin-bottom: 0;
+}
+
+body.night-mode .setup-subtitle {
+    color: #8b949e;
+}
+
 .error-banner {
     background-color: #f8d7da;
     color: #842029;
