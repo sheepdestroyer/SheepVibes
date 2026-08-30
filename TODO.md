@@ -2,6 +2,14 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-08-30 Review Work
+
+*   [x] **PR #542: Route application log severities by stream without removing host handlers.**
+    *   [x] Preserve unrelated Gunicorn, test-capture, and host logging handlers.
+    *   [x] Restore root logging state in stream-routing tests and cover handler preservation.
+    *   [x] Document stream routing as a container-runtime/systemd convention.
+    *   [x] Validate full backend unit tests (219/219), Playwright E2E tests (16 passed, 1 skipped), and frontend Vitest tests (58/58).
+
 ## Phase 0: Project Setup & Core Backend
 
 *   [x] Initialize project structure (directories for backend, frontend, docs, etc.).

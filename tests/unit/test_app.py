@@ -1,6 +1,7 @@
 import datetime  # For new tests, specifically for timezone object
 import io
 import json
+import logging
 import os
 import xml.etree.ElementTree as ET
 from datetime import timezone  # For new tests
@@ -10,7 +11,13 @@ import pytest
 
 # Import the Flask app instance and db object
 # Need to configure the app for testing
-from backend.app import app, cache  # Import the app and cache instance
+from backend.app import (
+    MaxLevelFilter,
+    SheepVibesStreamHandler,
+    app,
+    cache,
+    configure_logging,
+)  # Import the app, cache, and logging config
 from backend.feed_service import (  # For new tests
     parse_published_time,
     process_feed_entries,
@@ -2503,3 +2510,80 @@ def test_feed_items_pagination_comments_url_preservation(client, setup_tabs_and_
     assert page2[0]["comments_url"] == "https://news.ycombinator.com/item?id=1002"
     assert page2[1]["title"] == "Paginated Item 3"
     assert page2[1]["comments_url"] is None
+
+
+def test_max_level_filter():
+    """Test that MaxLevelFilter permits records at or below max_level and blocks higher."""
+    filt = MaxLevelFilter(logging.INFO)
+    debug_record = logging.LogRecord("test", logging.DEBUG, "path", 1, "msg", (), None)
+    info_record = logging.LogRecord("test", logging.INFO, "path", 1, "msg", (), None)
+    warning_record = logging.LogRecord("test", logging.WARNING, "path", 1, "msg", (), None)
+    error_record = logging.LogRecord("test", logging.ERROR, "path", 1, "msg", (), None)
+
+    assert filt.filter(debug_record) is True
+    assert filt.filter(info_record) is True
+    assert filt.filter(warning_record) is False
+    assert filt.filter(error_record) is False
+
+
+def test_configure_logging_stdout_and_stderr_routing(capsys):
+    """Test that configure_logging routes each severity to its intended stream."""
+    root_logger = logging.getLogger()
+    original_handlers = root_logger.handlers[:]
+    original_level = root_logger.level
+    try:
+        configure_logging(level=logging.DEBUG)
+        test_logger = logging.getLogger("test_logger_routing")
+
+        test_logger.debug("debug message")
+        test_logger.info("info message")
+        test_logger.warning("warning message")
+        test_logger.error("error message")
+        test_logger.critical("critical message")
+
+        captured = capsys.readouterr()
+        assert "debug message" in captured.out
+        assert "info message" in captured.out
+        assert "debug message" not in captured.err
+        assert "info message" not in captured.err
+
+        assert "warning message" in captured.err
+        assert "error message" in captured.err
+        assert "critical message" in captured.err
+        assert "warning message" not in captured.out
+        assert "error message" not in captured.out
+        assert "critical message" not in captured.out
+    finally:
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+            if isinstance(handler, SheepVibesStreamHandler):
+                handler.close()
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+        root_logger.setLevel(original_level)
+
+
+def test_configure_logging_preserves_existing_handlers():
+    """Test that application logging leaves host-installed handlers intact."""
+    root_logger = logging.getLogger()
+    original_handlers = root_logger.handlers[:]
+    original_level = root_logger.level
+    sentinel = logging.StreamHandler()
+    root_logger.addHandler(sentinel)
+    try:
+        configure_logging()
+        configure_logging()
+        assert sentinel in root_logger.handlers
+        assert sum(
+            isinstance(handler, SheepVibesStreamHandler)
+            for handler in root_logger.handlers
+        ) == 2
+    finally:
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+            if isinstance(handler, SheepVibesStreamHandler):
+                handler.close()
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+        root_logger.setLevel(original_level)
+        sentinel.close()
