@@ -1,3 +1,11 @@
+## 2026-08-30
+
+- **Fix(logging): Preserve host logging handlers while routing application severities by stream (PR #542)**
+  - Scoped the application logging setup to its own handler class instead of clearing unrelated root handlers, preserving Gunicorn, test-capture, and host integrations.
+  - Restored the root logging configuration in the stream-routing test and added regression coverage for existing handler preservation.
+  - Documented stream routing as a container-runtime/systemd convention rather than asserting a universal journald priority mapping.
+  - **Verification:** Focused backend logging tests pass (3/3); full frontend Vitest suite passes (58/58).
+
 ## 2026-08-14
 
 - **Feat(auth): First-Run Onboarding Wizard, Documentation & Release (Issue #324 - PR 5)**

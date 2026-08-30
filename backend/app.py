@@ -23,7 +23,7 @@ from .constants import (
 )
 from .extensions import cache, db, scheduler
 from .feed_service import update_all_feeds
-from .models import Feed, FeedItem, Tab, User
+from .models import Tab, User
 from .sse import announcer
 
 
@@ -38,19 +38,25 @@ class MaxLevelFilter(logging.Filter):
         return record.levelno <= self.max_level
 
 
+class SheepVibesStreamHandler(logging.StreamHandler):
+    """Stream handler owned by the SheepVibes application logging setup."""
+
+    is_sheepvibes_handler = True
+
+
 def configure_logging(level: int = logging.INFO) -> None:
     """
     Configures application logging with separate handlers for stdout and stderr.
 
-    Routes DEBUG and INFO records to sys.stdout (so container runtimes and systemd
-    assign them Info priority / PRIORITY=6), and WARNING, ERROR, and CRITICAL
-    records to sys.stderr (assigned Error priority / PRIORITY=3).
+    Routes DEBUG and INFO records to sys.stdout and WARNING-or-higher records to
+    sys.stderr, following the stream-to-priority convention used by the container
+    runtime and systemd integration.
     """
-    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler = SheepVibesStreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.DEBUG)
     stdout_handler.addFilter(MaxLevelFilter(logging.INFO))
 
-    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler = SheepVibesStreamHandler(sys.stderr)
     stderr_handler.setLevel(logging.WARNING)
 
     formatter = logging.Formatter(
@@ -61,7 +67,9 @@ def configure_logging(level: int = logging.INFO) -> None:
 
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
-    root_logger.handlers.clear()
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, SheepVibesStreamHandler):
+            root_logger.removeHandler(handler)
     root_logger.addHandler(stdout_handler)
     root_logger.addHandler(stderr_handler)
 

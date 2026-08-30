@@ -13,6 +13,7 @@ import pytest
 # Need to configure the app for testing
 from backend.app import (
     MaxLevelFilter,
+    SheepVibesStreamHandler,
     app,
     cache,
     configure_logging,
@@ -2526,26 +2527,62 @@ def test_max_level_filter():
 
 
 def test_configure_logging_stdout_and_stderr_routing(capsys):
-    """Test that configure_logging properly routes INFO/DEBUG to stdout and WARNING/ERROR/CRITICAL to stderr."""
-    configure_logging(level=logging.DEBUG)
-    test_logger = logging.getLogger("test_logger_routing")
+    """Test that configure_logging routes each severity to its intended stream."""
+    root_logger = logging.getLogger()
+    original_handlers = root_logger.handlers[:]
+    original_level = root_logger.level
+    try:
+        configure_logging(level=logging.DEBUG)
+        test_logger = logging.getLogger("test_logger_routing")
 
-    test_logger.debug("debug message")
-    test_logger.info("info message")
-    test_logger.warning("warning message")
-    test_logger.error("error message")
-    test_logger.critical("critical message")
+        test_logger.debug("debug message")
+        test_logger.info("info message")
+        test_logger.warning("warning message")
+        test_logger.error("error message")
+        test_logger.critical("critical message")
 
-    captured = capsys.readouterr()
-    assert "debug message" in captured.out
-    assert "info message" in captured.out
-    assert "debug message" not in captured.err
-    assert "info message" not in captured.err
+        captured = capsys.readouterr()
+        assert "debug message" in captured.out
+        assert "info message" in captured.out
+        assert "debug message" not in captured.err
+        assert "info message" not in captured.err
 
-    assert "warning message" in captured.err
-    assert "error message" in captured.err
-    assert "critical message" in captured.err
-    assert "warning message" not in captured.out
-    assert "error message" not in captured.out
-    assert "critical message" not in captured.out
+        assert "warning message" in captured.err
+        assert "error message" in captured.err
+        assert "critical message" in captured.err
+        assert "warning message" not in captured.out
+        assert "error message" not in captured.out
+        assert "critical message" not in captured.out
+    finally:
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+            if isinstance(handler, SheepVibesStreamHandler):
+                handler.close()
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+        root_logger.setLevel(original_level)
 
+
+def test_configure_logging_preserves_existing_handlers():
+    """Test that application logging leaves host-installed handlers intact."""
+    root_logger = logging.getLogger()
+    original_handlers = root_logger.handlers[:]
+    original_level = root_logger.level
+    sentinel = logging.StreamHandler()
+    root_logger.addHandler(sentinel)
+    try:
+        configure_logging()
+        assert sentinel in root_logger.handlers
+        assert sum(
+            isinstance(handler, SheepVibesStreamHandler)
+            for handler in root_logger.handlers
+        ) == 2
+    finally:
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+            if isinstance(handler, SheepVibesStreamHandler):
+                handler.close()
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+        root_logger.setLevel(original_level)
+        sentinel.close()
