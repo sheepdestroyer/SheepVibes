@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import os
+import sys
 
 from filelock import FileLock, Timeout
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -25,12 +26,48 @@ from .feed_service import update_all_feeds
 from .models import Feed, FeedItem, Tab, User
 from .sse import announcer
 
+
+class MaxLevelFilter(logging.Filter):
+    """Filter that only allows log records up to a maximum level."""
+
+    def __init__(self, max_level: int):
+        super().__init__()
+        self.max_level = max_level
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno <= self.max_level
+
+
+def configure_logging(level: int = logging.INFO) -> None:
+    """
+    Configures application logging with separate handlers for stdout and stderr.
+
+    Routes DEBUG and INFO records to sys.stdout (so container runtimes and systemd
+    assign them Info priority / PRIORITY=6), and WARNING, ERROR, and CRITICAL
+    records to sys.stderr (assigned Error priority / PRIORITY=3).
+    """
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.addFilter(MaxLevelFilter(logging.INFO))
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.WARNING)
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    stdout_handler.setFormatter(formatter)
+    stderr_handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+    root_logger.handlers.clear()
+    root_logger.addHandler(stdout_handler)
+    root_logger.addHandler(stderr_handler)
+
+
 # Set up logging configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],  # Log to standard output
-)
+configure_logging()
 logger = logging.getLogger("sheepvibes")
 
 # Initialize Flask application
