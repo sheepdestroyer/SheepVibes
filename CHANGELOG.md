@@ -4,7 +4,7 @@
   - Scoped the application logging setup to its own handler class instead of clearing unrelated root handlers, preserving Gunicorn, test-capture, and host integrations.
   - Restored the root logging configuration in the stream-routing test and added regression coverage for existing handler preservation.
   - Documented stream routing as a container-runtime/systemd convention rather than asserting a universal journald priority mapping.
-  - **Verification:** Focused backend logging tests pass (3/3); full frontend Vitest suite passes (58/58).
+  - **Verification:** Full backend unit suite passes (219/219), Playwright E2E passes (16 passed, 1 skipped), and full frontend Vitest suite passes (58/58).
 
 ## 2026-08-14
 

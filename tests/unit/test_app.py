@@ -2572,6 +2572,7 @@ def test_configure_logging_preserves_existing_handlers():
     root_logger.addHandler(sentinel)
     try:
         configure_logging()
+        configure_logging()
         assert sentinel in root_logger.handlers
         assert sum(
             isinstance(handler, SheepVibesStreamHandler)
