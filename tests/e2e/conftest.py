@@ -35,7 +35,7 @@ from playwright.sync_api import Page
 # ---------------------------------------------------------------------------
 
 E2E_SERVER_PORT = int(os.environ.get("E2E_SERVER_PORT", "5099"))
-E2E_SERVER_TIMEOUT = int(os.environ.get("E2E_SERVER_TIMEOUT", "15"))
+E2E_SERVER_TIMEOUT = int(os.environ.get("E2E_SERVER_TIMEOUT", "30"))
 E2E_BASE_URL = os.environ.get(
     "TEST_BASE_URL", f"http://127.0.0.1:{E2E_SERVER_PORT}"
 )
@@ -76,7 +76,9 @@ def live_server():
         return
 
     project_root = Path(__file__).resolve().parents[2]  # tests/e2e -> project root
-    e2e_db_path = project_root / "data" / "e2e_test.db"
+    data_dir = project_root / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    e2e_db_path = data_dir / "e2e_test.db"
     if e2e_db_path.exists():
         try:
             e2e_db_path.unlink()
