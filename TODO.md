@@ -2,6 +2,15 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-08-31 Review Work
+
+*   [x] **PR #543: Graceful feed fetch error logging and warning-level handling.**
+    *   [x] Catch expected network/socket exceptions (`URLError`, `TimeoutError`, `socket.timeout`, `ConnectionRefusedError`, `OSError`, `http.client.HTTPException`) and log as concise `WARNING`s without full tracebacks.
+    *   [x] Downgrade `_process_fetch_result` null feed dispatch log from `ERROR` to `WARNING`.
+    *   [x] Preserve `logger.exception` at `ERROR` level for unexpected internal application errors.
+    *   [x] Add unit test coverage for network warnings, unexpected error tracebacks, and fetch result logging in `tests/unit/test_feed.py`.
+    *   [x] Validate full test suite: 227/227 Pytest unit tests, 58/58 Vitest frontend tests, and 16 passed (1 skipped) Playwright E2E tests.
+
 ## 2026-08-30 Review Work
 
 *   [x] **PR #542: Route application log severities by stream without removing host handlers.**

@@ -1,3 +1,12 @@
+## 2026-08-31
+ 
+- **Fix(logging): Graceful feed fetch error handling and warning-level logging (PR #543)**
+  - Replaced multi-line traceback dumps for expected network and upstream connection errors (`urllib.error.URLError`, `TimeoutError`, `socket.timeout`, `ConnectionRefusedError`, `OSError`, `http.client.HTTPException`) in `fetch_feed` with concise single-line `WARNING` logs.
+  - Downgraded `_process_fetch_result` null feed dispatch log from `ERROR` to `WARNING`.
+  - Maintained `logger.exception` at `ERROR` level for unexpected internal application faults.
+  - Added unit test suite in `tests/unit/test_feed.py` verifying warning generation for network/socket errors, error traceback logging for unexpected failures, and proper log severity in result processing.
+  - **Verification:** Full backend unit suite passes (227/227), Playwright E2E passes (16 passed, 1 skipped), and full frontend Vitest suite passes (58/58).
+
 ## 2026-08-30
 
 - **Fix(logging): Preserve host logging handlers while routing application severities by stream (PR #542)**

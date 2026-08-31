@@ -15,6 +15,7 @@ import logging  # Standard logging
 import os
 import socket
 import ssl
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import timezone  # Specifically import timezone
@@ -871,7 +872,6 @@ def validate_and_resolve_url(url):
             if _is_safe_ip(ip_obj) or (os.environ.get("TESTING") == "true" and ip_str == "192.0.2.1"):
                 return ip_str, parsed.hostname
 
-
             logger.warning(
                 "Blocked SSRF attempt: %s://%s -> %s",
                 parsed.scheme,
@@ -1089,7 +1089,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     """
     tab_id = feed_db_obj.tab_id
     if not parsed_feed:
-        logger.error(
+        logger.warning(
             "Fetching content for feed '%s' (ID: %s) failed (None returned).",
             _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
@@ -1239,6 +1239,19 @@ def fetch_feed(feed_url):
 
         return _parse_and_validate_feed(content, feed_url)
 
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        socket.timeout,
+        OSError,
+        http.client.HTTPException,
+    ) as exc:
+        logger.warning(
+            "Failed to fetch feed %s: %s",
+            _sanitize_for_log(feed_url),
+            _sanitize_for_log(str(exc)),
+        )
+        return None
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error fetching feed %s", _sanitize_for_log(feed_url))
         return None

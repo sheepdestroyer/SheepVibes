@@ -5,9 +5,11 @@ This script can be used to test feed fetching and processing without running the
 """
 
 import datetime  # <--- Added import for datetime
+import http.client
 import logging
 import os
 import socket  # Added for SSRF test
+import urllib.error
 from unittest.mock import MagicMock
 
 import pytest
@@ -1420,3 +1422,103 @@ def test_database_update_idempotency_and_omitted_comments(db_setup):  # pylint: 
 
     item_updated = FeedItem.query.filter_by(feed_id=feed_obj.id, guid="hn-guid-1").first()
     assert item_updated.comments_url == "https://news.ycombinator.com/item?id=222"
+
+
+def test_fetch_feed_network_error_logs_warning(mocker, caplog):
+    """Test that expected network errors in fetch_feed log as warnings without tracebacks."""
+    mocker.patch(
+        "backend.feed_service.validate_and_resolve_url",
+        return_value=("93.184.216.34", "example.com"),
+    )
+    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    mock_opener = mock_build_opener.return_value
+    mock_opener.open.side_effect = urllib.error.URLError("Connection refused")
+
+    with caplog.at_level(logging.DEBUG, logger="backend.feed_service"):
+        result = feed_service.fetch_feed("https://example.com/feed.xml")
+
+    assert result is None
+    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    assert len(warning_records) >= 1
+    assert any("Failed to fetch feed https://example.com/feed.xml" in r.message for r in warning_records)
+    assert any("Connection refused" in r.message for r in warning_records)
+    assert len(error_records) == 0
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        TimeoutError("Connection timed out"),
+        socket.timeout("The read operation timed out"),
+        ConnectionRefusedError("[Errno 111] Connection refused"),
+        OSError("Network is unreachable"),
+        http.client.RemoteDisconnected("Remote end closed connection without response"),
+    ],
+)
+def test_fetch_feed_expected_exceptions_log_warning(mocker, caplog, exc):
+    """Test various expected network/socket exceptions log as warning instead of error."""
+    mocker.patch(
+        "backend.feed_service.validate_and_resolve_url",
+        return_value=("93.184.216.34", "example.com"),
+    )
+    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    mock_opener = mock_build_opener.return_value
+    mock_opener.open.side_effect = exc
+
+    with caplog.at_level(logging.DEBUG, logger="backend.feed_service"):
+        result = feed_service.fetch_feed("https://example.com/feed.xml")
+
+    assert result is None
+    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    assert len(warning_records) >= 1
+    assert any("Failed to fetch feed https://example.com/feed.xml" in r.message for r in warning_records)
+    assert len(error_records) == 0
+
+
+def test_fetch_feed_unexpected_exception_logs_error(mocker, caplog):
+    """Test that unexpected non-network exceptions in fetch_feed log as error with traceback."""
+    mocker.patch(
+        "backend.feed_service.validate_and_resolve_url",
+        return_value=("93.184.216.34", "example.com"),
+    )
+    mock_build_opener = mocker.patch("backend.feed_service.urllib.request.build_opener")
+    mock_build_opener.side_effect = RuntimeError("Unexpected internal crash")
+
+    with caplog.at_level(logging.DEBUG, logger="backend.feed_service"):
+        result = feed_service.fetch_feed("https://example.com/feed.xml")
+
+    assert result is None
+    error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(error_records) >= 1
+    assert any("Error fetching feed https://example.com/feed.xml" in r.message for r in error_records)
+    assert any(r.exc_info is not None for r in error_records)
+
+
+def test_process_fetch_result_none_parsed_feed_logs_warning(db_setup, caplog):  # pylint: disable=unused-argument
+    """Test that _process_fetch_result logs warning instead of error when parsed_feed is None."""
+    tab = Tab(name="Warn Tab", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Unreachable Feed", url="https://example.com/feed.xml", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    with caplog.at_level(logging.DEBUG, logger="backend.feed_service"):
+        success, new_items, tab_id = feed_service._process_fetch_result(feed_obj, None)
+
+    assert success is False
+    assert new_items == 0
+    assert tab_id == tab.id
+
+    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    assert len(warning_records) >= 1
+    assert any("Fetching content for feed 'Unreachable Feed'" in r.message for r in warning_records)
+    assert any("failed (None returned)" in r.message for r in warning_records)
+    assert len(error_records) == 0
+
