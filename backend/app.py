@@ -48,16 +48,16 @@ def configure_logging(level: int = logging.INFO) -> None:
     """
     Configures application logging with separate handlers for stdout and stderr.
 
-    Routes DEBUG and INFO records to sys.stdout and WARNING-or-higher records to
-    sys.stderr, following the stream-to-priority convention used by the container
-    runtime and systemd integration.
+    Routes operational logs (DEBUG, INFO, WARNING) to sys.stdout (syslog PRIORITY=6
+    in journald/conmon) so filtering by priority:err does not capture them.
+    Only actual errors (ERROR, CRITICAL) are routed to sys.stderr (syslog PRIORITY=3).
     """
     stdout_handler = SheepVibesStreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.DEBUG)
-    stdout_handler.addFilter(MaxLevelFilter(logging.INFO))
+    stdout_handler.addFilter(MaxLevelFilter(logging.WARNING))
 
     stderr_handler = SheepVibesStreamHandler(sys.stderr)
-    stderr_handler.setLevel(logging.WARNING)
+    stderr_handler.setLevel(logging.ERROR)
 
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

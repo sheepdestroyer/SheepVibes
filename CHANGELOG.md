@@ -1,6 +1,12 @@
 ## 2026-08-31
  
-- **Fix(logging): Graceful feed fetch error handling and warning-level logging (PR #543)**
+- **Fix(logging): Route WARNING logs to stdout to prevent journald priority:err false positives (PR #545)**
+  - Reconfigured `configure_logging()` to route `DEBUG`, `INFO`, and `WARNING` records to `sys.stdout` (`MaxLevelFilter(logging.WARNING)`), and restricted `sys.stderr` strictly to `ERROR` and `CRITICAL` records.
+  - Resolves container runtime / systemd journald behavior where all `stderr` output was assigned syslog `PRIORITY=3` (`err`), ensuring log filters like `priority:err` and `journalctl -p err` capture only real errors and tracebacks rather than expected operational warnings.
+  - Updated unit test assertions in `tests/unit/test_app.py` to verify stream routing for all logging levels.
+  - **Verification:** Full backend unit suite passes (227/227), Playwright E2E passes (16 passed, 1 skipped), and full frontend Vitest suite passes (58/58).
+
+- **Fix(logging): Graceful feed fetch error handling and warning-level logging (PR #544)**
   - Replaced multi-line traceback dumps for expected network and upstream connection errors (`urllib.error.URLError`, `TimeoutError`, `socket.timeout`, `ConnectionRefusedError`, `OSError`, `http.client.HTTPException`) in `fetch_feed` with concise single-line `WARNING` logs.
   - Downgraded `_process_fetch_result` null feed dispatch log from `ERROR` to `WARNING`.
   - Maintained `logger.exception` at `ERROR` level for unexpected internal application faults.
