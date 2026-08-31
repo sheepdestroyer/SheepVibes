@@ -2514,7 +2514,7 @@ def test_feed_items_pagination_comments_url_preservation(client, setup_tabs_and_
 
 def test_max_level_filter():
     """Test that MaxLevelFilter permits records at or below max_level and blocks higher."""
-    filt = MaxLevelFilter(logging.INFO)
+    filt = MaxLevelFilter(logging.WARNING)
     debug_record = logging.LogRecord("test", logging.DEBUG, "path", 1, "msg", (), None)
     info_record = logging.LogRecord("test", logging.INFO, "path", 1, "msg", (), None)
     warning_record = logging.LogRecord("test", logging.WARNING, "path", 1, "msg", (), None)
@@ -2522,12 +2522,12 @@ def test_max_level_filter():
 
     assert filt.filter(debug_record) is True
     assert filt.filter(info_record) is True
-    assert filt.filter(warning_record) is False
+    assert filt.filter(warning_record) is True
     assert filt.filter(error_record) is False
 
 
 def test_configure_logging_stdout_and_stderr_routing(capsys):
-    """Test that configure_logging routes each severity to its intended stream."""
+    """Test that configure_logging routes operational logs to stdout and errors to stderr."""
     root_logger = logging.getLogger()
     original_handlers = root_logger.handlers[:]
     original_level = root_logger.level
@@ -2544,15 +2544,15 @@ def test_configure_logging_stdout_and_stderr_routing(capsys):
         captured = capsys.readouterr()
         assert "debug message" in captured.out
         assert "info message" in captured.out
-        assert "debug message" not in captured.err
-        assert "info message" not in captured.err
-
-        assert "warning message" in captured.err
-        assert "error message" in captured.err
-        assert "critical message" in captured.err
-        assert "warning message" not in captured.out
+        assert "warning message" in captured.out
         assert "error message" not in captured.out
         assert "critical message" not in captured.out
+
+        assert "debug message" not in captured.err
+        assert "info message" not in captured.err
+        assert "warning message" not in captured.err
+        assert "error message" in captured.err
+        assert "critical message" in captured.err
     finally:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)

@@ -4,7 +4,12 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## 2026-08-31 Review Work
 
-*   [x] **PR #543: Graceful feed fetch error logging and warning-level handling.**
+*   [x] **PR #545: Route WARNING logs to stdout and reserve stderr for ERROR/CRITICAL.**
+    *   [x] Align logging stream routing with LLM-Routing convention: send `DEBUG`, `INFO`, and `WARNING` to `sys.stdout` (`MaxLevelFilter(logging.WARNING)`).
+    *   [x] Restrict `sys.stderr` to `logging.ERROR` and `logging.CRITICAL` so systemd journald and conmon do not map expected `WARNING`s to syslog `PRIORITY=3` (`err`).
+    *   [x] Update unit tests in `tests/unit/test_app.py` for stream-to-level verification.
+    *   [x] Validate full test suite: 227/227 Pytest unit tests, 58/58 Vitest frontend tests, and 16 passed (1 skipped) Playwright E2E tests.
+*   [x] **PR #544: Graceful feed fetch error logging and warning-level handling.**
     *   [x] Catch expected network/socket exceptions (`URLError`, `TimeoutError`, `socket.timeout`, `ConnectionRefusedError`, `OSError`, `http.client.HTTPException`) and log as concise `WARNING`s without full tracebacks.
     *   [x] Downgrade `_process_fetch_result` null feed dispatch log from `ERROR` to `WARNING`.
     *   [x] Preserve `logger.exception` at `ERROR` level for unexpected internal application errors.
