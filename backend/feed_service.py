@@ -15,6 +15,7 @@ import logging  # Standard logging
 import os
 import socket
 import ssl
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import timezone  # Specifically import timezone
@@ -871,7 +872,6 @@ def validate_and_resolve_url(url):
             if _is_safe_ip(ip_obj) or (os.environ.get("TESTING") == "true" and ip_str == "192.0.2.1"):
                 return ip_str, parsed.hostname
 
-
             logger.warning(
                 "Blocked SSRF attempt: %s://%s -> %s",
                 parsed.scheme,
@@ -1089,7 +1089,7 @@ def _process_fetch_result(feed_db_obj, parsed_feed):
     """
     tab_id = feed_db_obj.tab_id
     if not parsed_feed:
-        logger.error(
+        logger.warning(
             "Fetching content for feed '%s' (ID: %s) failed (None returned).",
             _sanitize_for_log(feed_db_obj.name),
             feed_db_obj.id,
@@ -1148,57 +1148,72 @@ DEFAULT_FEED_FETCH_TIMEOUT = int(os.environ.get("FEED_FETCH_TIMEOUT", 20))
 
 def _download_feed_content(opener, feed_url):
     """Executes the network request safely, enforcing size limits and basic zip bomb checks."""
-    req = urllib.request.Request(
-        feed_url,
-        headers={
-            "User-Agent": "SheepVibes/1.0",
-            "Accept-Encoding": "identity",  # Prevent Zip Bombs
-        },
-    )
-    url_opener = opener.open(req, timeout=DEFAULT_FEED_FETCH_TIMEOUT)
+    try:
+        req = urllib.request.Request(
+            feed_url,
+            headers={
+                "User-Agent": "SheepVibes/1.0",
+                "Accept-Encoding": "identity",  # Prevent Zip Bombs
+            },
+        )
+        url_opener = opener.open(req, timeout=DEFAULT_FEED_FETCH_TIMEOUT)
 
-    with url_opener as response:
-        # Check Content-Length header first
-        content_length = response.getheader("Content-Length")
-        if content_length:
-            try:
-                if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+        with url_opener as response:
+            # Check Content-Length header first
+            content_length = response.getheader("Content-Length")
+            if content_length:
+                try:
+                    if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                        logger.warning(
+                            "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                            _sanitize_for_log(content_length),
+                            MAX_FEED_RESPONSE_BYTES,
+                            _sanitize_for_log(feed_url),
+                        )
+                        return None
+                except (ValueError, TypeError):
+                    # Malformed header; ignore and rely on read limit
                     logger.warning(
-                        "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                        "Ignored invalid Content-Length (%s) for feed %s",
                         _sanitize_for_log(content_length),
-                        MAX_FEED_RESPONSE_BYTES,
                         _sanitize_for_log(feed_url),
                     )
-                    return None
-            except (ValueError, TypeError):
-                # Malformed header; ignore and rely on read limit
+
+            # Read limited amount + 1 byte to detect overflow
+            content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
+            if len(content) > MAX_FEED_RESPONSE_BYTES:
                 logger.warning(
-                    "Ignored invalid Content-Length (%s) for feed %s",
-                    _sanitize_for_log(content_length),
+                    "Feed rejected: Response size exceeds limit (%s) for %s",
+                    MAX_FEED_RESPONSE_BYTES,
                     _sanitize_for_log(feed_url),
                 )
+                return None
 
-        # Read limited amount + 1 byte to detect overflow
-        content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
-        if len(content) > MAX_FEED_RESPONSE_BYTES:
+        # ZIP BOMB PROTECTION
+        # Even with 'Accept-Encoding: identity', some servers might send GZIP.
+        # We manually check for the GZIP magic header (\x1f\x8b) and reject.
+        if content.startswith(b"\x1f\x8b"):
             logger.warning(
-                "Feed rejected: Response size exceeds limit (%s) for %s",
-                MAX_FEED_RESPONSE_BYTES,
+                "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
                 _sanitize_for_log(feed_url),
             )
             return None
 
-    # ZIP BOMB PROTECTION
-    # Even with 'Accept-Encoding: identity', some servers might send GZIP.
-    # We manually check for the GZIP magic header (\x1f\x8b) and reject.
-    if content.startswith(b"\x1f\x8b"):
+        return content
+
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        socket.timeout,
+        OSError,
+        http.client.HTTPException,
+    ) as exc:
         logger.warning(
-            "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+            "Failed to fetch feed %s: %s",
             _sanitize_for_log(feed_url),
+            _sanitize_for_log(str(exc)),
         )
         return None
-
-    return content
 
 
 def _parse_and_validate_feed(content, feed_url):
