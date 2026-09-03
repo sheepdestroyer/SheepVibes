@@ -98,7 +98,7 @@ pylint backend/feed_service.py backend/app.py backend/blueprints/
 
 ### Accessing the Application
 
-Once started, the application will be accessible at `http://127.0.0.1:5001` by default. To access the application from other machines, you may need to modify the `PublishPort` setting in `~/.config/containers/systemd/sheepvibespod.pod` (e.g., to `0.0.0.0:5001:5000`) and then run `systemctl --user daemon-reload && systemctl --user restart sheepvibespod-pod.service`.
+Once started in the production Quadlet, the application is available at `http://127.0.0.1:5002` (container port `5000`). To expose it through a controlled ingress, keep the host binding on `127.0.0.1:5002` and route through HAProxy; do not publish the production container directly on a LAN address. After changing `PublishPort`, run `systemctl --user daemon-reload && systemctl --user restart sheepvibespod-pod.service`.
 
 ## Local Development
 
