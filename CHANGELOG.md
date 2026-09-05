@@ -1,3 +1,12 @@
+## 2026-09-05
+
+- **Feat(test): Default pytest runs to parallelized execution with -n auto**
+  - Configured `addopts = -n auto -v --strict-markers` in `tests/pytest.ini` and added `pytest-xdist>=3.8.0` to `backend/requirements-dev.txt`.
+  - Updated `tests/e2e/conftest.py` with dynamic worker-isolated server ports (`5099 + worker_offset`) and database paths (`e2e_test_{worker_id}.db`) under `pytest-xdist`, enabling complete concurrent execution of the Playwright E2E suite without resource or process conflicts.
+  - Added unit test coverage in `tests/unit/test_e2e_conftest.py` covering worker offset parsing, dynamic server port assignment, database path allocation, and configuration assertions for `pytest.ini` and `requirements-dev.txt`.
+  - Updated `TESTING.md` with guidelines on parallel test execution and `-n` flag overrides.
+  - **Verification:** Full backend unit suite passes in parallel (233/233 in ~6.5s vs ~22.6s), Playwright E2E suite passes in parallel (16 passed, 1 skipped in ~36s vs ~55s), and frontend Vitest suite passes (58/58).
+
 ## 2026-08-31
  
 - **Fix(logging): Route WARNING logs to stdout to prevent journald priority:err false positives (PR #545)**

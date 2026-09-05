@@ -2,6 +2,16 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-05 Parallelized Testing
+
+*   [x] **Parallelize pytest runs by default with `-n auto`:**
+    *   [x] Add `pytest-xdist>=3.8.0` to `backend/requirements-dev.txt`.
+    *   [x] Configure `addopts = -n auto -v --strict-markers` in `tests/pytest.ini`.
+    *   [x] Update `tests/e2e/conftest.py` with worker-isolated ports and SQLite database files to support fully concurrent Playwright E2E execution without collision.
+    *   [x] Add unit test coverage in `tests/unit/test_e2e_conftest.py` for worker offset calculation, dynamic port assignment, database path isolation, and configuration validation.
+    *   [x] Update documentation in `TESTING.md`.
+    *   [x] Validate full test suites across unit tests (233/233), Playwright E2E (16 passed, 1 skipped), and Vitest (58/58).
+
 ## 2026-08-31 Review Work
 
 *   [x] **PR #545: Route WARNING logs to stdout and reserve stderr for ERROR/CRITICAL.**
