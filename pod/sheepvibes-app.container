@@ -11,9 +11,9 @@ AutoUpdate=registry
 Pod=sheepvibespod.pod
 Volume=sheepvibes-db.volume:/app/data
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
-HealthCmd=python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/')"
+HealthCmd=python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=3)"
 HealthInterval=15s
-HealthTimeout=5s
+HealthTimeout=10s
 HealthRetries=3
 Environment=CACHE_VALKEY_URL=redis://localhost:6379/0
 Environment=CACHE_REDIS_URL=redis://localhost:6379/0
