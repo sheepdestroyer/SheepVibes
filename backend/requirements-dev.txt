@@ -3,4 +3,5 @@ pytest-mock
 pytest-env
 pytest-playwright
 pytest-base-url
+pytest-xdist>=3.8.0
 playwright

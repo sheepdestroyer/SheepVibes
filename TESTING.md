@@ -43,6 +43,7 @@ Backend tests require a running Valkey service container for caching checks.
    ```bash
    python -m pytest -c tests/pytest.ini tests/unit -v
    ```
+   > **Note:** Tests are automatically parallelized across all available CPU cores using `pytest-xdist` with `-n auto` by default (configured in `tests/pytest.ini`). You can override this at any time by supplying `-n 0` or `-n <count>`.
 
 3. **Stop Valkey**:
    ```bash
@@ -68,7 +69,7 @@ End-to-end tests use [Playwright](https://playwright.dev/) to test complete user
 python -m pytest -c tests/pytest.ini tests/e2e -v --browser chromium
 ```
 
-> **Note:** The E2E test harness automatically spins up and tears down an isolated live Flask server subprocess. You can optionally test against an external server by providing `TEST_BASE_URL=http://localhost:5002`.
+> **Note:** The E2E test harness automatically spins up and tears down isolated live Flask server subprocesses per worker with dynamic port allocation and isolated SQLite databases when running in parallel under `pytest-xdist`. You can optionally test against an external server by providing `TEST_BASE_URL=http://localhost:5002`.
 
 ## V. Testing with Local Dev Environment (Podman)
 

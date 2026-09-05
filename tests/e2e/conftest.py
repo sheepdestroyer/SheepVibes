@@ -46,6 +46,31 @@ E2E_BASE_URL = os.environ.get(
 # ---------------------------------------------------------------------------
 
 
+def _get_worker_offset() -> int:
+    """Return a numeric port offset based on the pytest-xdist worker ID if present."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    if worker.startswith("gw"):
+        try:
+            return int(worker[2:])
+        except ValueError:
+            return 0
+    return 0
+
+
+def _get_server_port() -> int:
+    """Return the server port for this worker process."""
+    base_port = int(os.environ.get("E2E_SERVER_PORT", E2E_SERVER_PORT))
+    return base_port + _get_worker_offset()
+
+
+def _get_db_path(data_dir: Path) -> Path:
+    """Return an isolated database path for this worker process."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    if worker:
+        return data_dir / f"e2e_test_{worker}.db"
+    return data_dir / "e2e_test.db"
+
+
 def _wait_for_server(host: str, port: int, timeout: int) -> bool:
     """Poll until the server is accepting TCP connections or timeout expires."""
     deadline = time.monotonic() + timeout
@@ -78,7 +103,9 @@ def live_server():
     project_root = Path(__file__).resolve().parents[2]  # tests/e2e -> project root
     data_dir = project_root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
-    e2e_db_path = data_dir / "e2e_test.db"
+    server_port = _get_server_port()
+    server_base_url = f"http://127.0.0.1:{server_port}"
+    e2e_db_path = _get_db_path(data_dir)
     if e2e_db_path.exists():
         try:
             e2e_db_path.unlink()
@@ -94,7 +121,7 @@ def live_server():
         "FLASK_DEBUG": "0",
         "PYTHONUNBUFFERED": "1",
         # Use a non-default port to avoid conflicts with dev servers
-        "PORT": str(E2E_SERVER_PORT),
+        "PORT": str(server_port),
         "TEST_DATABASE_URI": f"sqlite:///{e2e_db_path}",
     })
 
@@ -109,14 +136,14 @@ def live_server():
     )
 
     # Wait for server to accept connections
-    if not _wait_for_server("127.0.0.1", E2E_SERVER_PORT, E2E_SERVER_TIMEOUT):
+    if not _wait_for_server("127.0.0.1", server_port, E2E_SERVER_TIMEOUT):
         proc.terminate()
         pytest.fail(
-            f"Flask server failed to start on port {E2E_SERVER_PORT} "
+            f"Flask server failed to start on port {server_port} "
             f"within {E2E_SERVER_TIMEOUT}s."
         )
 
-    yield E2E_BASE_URL
+    yield server_base_url
 
     # Teardown: kill the entire process group
     try:
