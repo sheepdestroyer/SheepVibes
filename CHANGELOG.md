@@ -1,5 +1,13 @@
 ## 2026-09-06
  
+- **Fix(test): Capture E2E Flask server startup diagnostics and fast abort on failure (Issue #543)**
+  - **Subprocess Log Capture (`tests/e2e/conftest.py`)**: Replaced `subprocess.DEVNULL` with worker-isolated log files (`data/e2e_server_{worker}.log`) combining stdout and stderr (`stderr=subprocess.STDOUT`), preventing silent startup errors, port collisions, or import exceptions from being masked.
+  - **Fast Abort & Diagnostics (`tests/e2e/conftest.py`)**: Updated `_wait_for_server()` to poll `proc.poll()` on every check. If the Flask server terminates prematurely, polling aborts immediately without waiting for the 30-second timeout, failing with the exit code and captured server logs and tracebacks in the `pytest.fail(...)` message.
+  - **Port Configuration Flexibility (`tests/e2e/conftest.py`)**: Preserved worker-offset isolation and added explicit fallback to `PORT` environment variable when `E2E_SERVER_PORT` is not set.
+  - **Route Isolation in Setup Wizard Test (`tests/e2e/test_setup_wizard.py`)**: Mocked `**/api/tabs/*/feeds` to prevent unauthenticated background feed requests from triggering 401 unauthorized dialog popups during parallel E2E runs.
+  - **Unit Testing (`tests/unit/test_e2e_conftest.py`)**: Added unit tests covering fast abort on early process exit, premature exit failure diagnostics, timeout failure diagnostics, log reading fallback helpers, worker log path allocation, and `PORT` environment variable overrides.
+  - **Verification**: Full test suite validated: 265/265 Pytest unit tests, 58/58 Vitest frontend tests, and 16 passed (1 skipped) Playwright E2E tests.
+
 - **Feat(logging): Integrate unified log-priority-splitter into pod containers**
   - **Quadlet Logging Stream Alignment (`pod/sheepvibes-app.container`, `pod/sheepvibes-rssbridge.container`)**:
     - Bind-mounted centralized log priority splitter (`/mnt/DATA/boy/prod/infra/bin/log-priority-splitter.sh:ro,z`) into `/usr/local/bin/log-priority-splitter.sh` and configured as container `Entrypoint`.
