@@ -10,8 +10,14 @@ QUADLET_FILES=(
     "sheepvibespod.pod"
     "sheepvibes-app.container"
     "sheepvibes-valkey.container"
+    "sheepvibes-rssbridge.container"
     "sheepvibes-db.volume"
     "sheepvibes-valkey.volume"
+)
+BRIDGE_FILES=(
+    "LuceboxBridge.php"
+    "AntigravityChangelogBridge.php"
+    "JulesChangelogBridge.php"
 )
 # Base URL for the directory containing the pod file in the repository
 QUADLET_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/"
@@ -80,6 +86,19 @@ for filename in "${QUADLET_FILES[@]}"; do
     fi
 done
 
+echo "Fetching custom bridge files from GitHub (${REPO}, branch: ${BRANCH}, path: pod/bridges/)..."
+mkdir -p "${SYSTEMD_USER_DIR}/bridges"
+for bridge in "${BRIDGE_FILES[@]}"; do
+    bridge_url="${QUADLET_BASE_URL}bridges/${bridge}"
+    echo "Downloading ${bridge} from ${bridge_url}..."
+    if curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${bridge_url}" -o "${SYSTEMD_USER_DIR}/bridges/${bridge}"; then
+        echo "${bridge} downloaded successfully to ${SYSTEMD_USER_DIR}/bridges."
+    else
+        echo "Error downloading ${bridge} from ${bridge_url}."
+        DOWNLOAD_SUCCESS=false
+    fi
+done
+
 if [ "${DOWNLOAD_SUCCESS}" = false ]; then
     echo "One or more files failed to download."
     echo "Please check the repository path, branch name, filenames in pod/, and your internet connection."
@@ -95,10 +114,11 @@ echo ""
 
 echo "Pulling latest container images..."
 podman pull ghcr.io/${REPO}:latest || true
+podman pull docker.io/rssbridge/rss-bridge:latest || true
 if systemctl --user is-active --quiet "sheepvibespod-pod.service"; then
     echo "Restarting sheepvibespod-pod.service..."
     systemctl --user stop sheepvibespod-pod.service
-    podman rm -f sheepvibes-app sheepvibes-valkey systemd-sheepvibespod-infra || true
+    podman rm -f sheepvibes-app sheepvibes-valkey sheepvibes-rssbridge systemd-sheepvibespod-infra || true
     systemctl --user start sheepvibespod-pod.service
     echo "Service restarted."
 fi

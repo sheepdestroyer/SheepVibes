@@ -13,13 +13,14 @@ import itertools
 import json
 import logging  # Standard logging
 import os
+import re
 import socket
 import ssl
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import timezone  # Specifically import timezone
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 from xml.etree.ElementTree import Element  # skipcq: BAN-B405
 from xml.sax import SAXParseException
 from xml.sax.handler import ContentHandler
@@ -852,12 +853,148 @@ def _get_dt_from_field(entry, field):
 # --- Core Feed Processing Functions ---
 
 
+def get_rss_bridge_url():
+    """Returns the configured RSS-Bridge service URL or None."""
+    bridge_url = os.environ.get("RSS_BRIDGE_URL", "").strip()
+    if not bridge_url:
+        return None
+    return bridge_url.rstrip("/")
+
+
+def is_rss_bridge_url(url):
+    """Checks if a URL targets the trusted internal RSS-Bridge service."""
+    if not url or not isinstance(url, str):
+        return False
+    bridge_url = get_rss_bridge_url()
+    if not bridge_url:
+        return False
+    try:
+        parsed_bridge = urlparse(bridge_url)
+        parsed_target = urlparse(url)
+        if parsed_bridge.scheme != parsed_target.scheme:
+            return False
+
+        target_host = (parsed_target.hostname or "").lower()
+        bridge_host = (parsed_bridge.hostname or "").lower()
+        if not target_host or not bridge_host:
+            return False
+
+        if target_host in ("localhost", "127.0.0.1") and bridge_host in ("localhost", "127.0.0.1"):
+            hosts_match = True
+        else:
+            hosts_match = (target_host == bridge_host)
+
+        target_port = parsed_target.port or (443 if parsed_target.scheme == "https" else 80)
+        bridge_port = parsed_bridge.port or (443 if parsed_bridge.scheme == "https" else 80)
+        return hosts_match and (target_port == bridge_port)
+    except Exception:
+        return False
+
+
+def discover_feed_url_from_html(html_content, base_url):
+    """Searches HTML content for RSS/Atom <link rel="alternate"> tags."""
+    if not html_content or not isinstance(html_content, (str, bytes)):
+        return None
+    if isinstance(html_content, bytes):
+        try:
+            html_text = html_content.decode("utf-8", errors="ignore")
+        except Exception:
+            return None
+    else:
+        html_text = html_content
+
+    link_pattern = re.compile(
+        r'<link\s+[^>]*rel=[\"\']alternate[\"\'][^>]*>',
+        re.IGNORECASE,
+    )
+    for match in link_pattern.finditer(html_text):
+        tag = match.group(0)
+        type_match = re.search(
+            r'type=[\"\'](application/(?:rss|atom)\+xml)[\"\']',
+            tag,
+            re.IGNORECASE,
+        )
+        href_match = re.search(r'href=[\"\']([^\"\']+)[\"\']', tag, re.IGNORECASE)
+        if type_match and href_match:
+            discovered_url = urljoin(base_url, href_match.group(1))
+            return validate_link_structure(discovered_url)
+
+    link_pattern2 = re.compile(
+        r'<link\s+[^>]*type=[\"\']application/(?:rss|atom)\+xml[\"\'][^>]*>',
+        re.IGNORECASE,
+    )
+    for match in link_pattern2.finditer(html_text):
+        tag = match.group(0)
+        rel_match = re.search(r'rel=[\"\']alternate[\"\']', tag, re.IGNORECASE)
+        href_match = re.search(r'href=[\"\']([^\"\']+)[\"\']', tag, re.IGNORECASE)
+        if rel_match and href_match:
+            discovered_url = urljoin(base_url, href_match.group(1))
+            return validate_link_structure(discovered_url)
+
+    return None
+
+
+def fetch_rss_bridge_feed(page_url):
+    """Attempts to fetch an Atom feed from RSS-Bridge for an RSS-less web page.
+
+    Args:
+        page_url (str): The web page URL to generate a feed for.
+
+    Returns:
+        feedparser.FeedParserDict | None: The parsed feed object, or None if bridging failed.
+    """
+    bridge_base = get_rss_bridge_url()
+    if not bridge_base:
+        return None
+
+    bridge_query_url = (
+        f"{bridge_base}/?action=detect&url={quote(page_url, safe='')}&format=Atom"
+    )
+    logger.info(
+        "Attempting RSS-Bridge resolution for '%s' via %s",
+        _sanitize_for_log(page_url),
+        _sanitize_for_log(bridge_query_url),
+    )
+    try:
+        safe_ip, _ = validate_and_resolve_url(bridge_query_url)
+        if not safe_ip:
+            return None
+
+        opener = _build_safe_opener(safe_ip)
+        content = _download_feed_content(opener, bridge_query_url)
+        if not content:
+            return None
+
+        parsed_feed = _parse_and_validate_feed(content, bridge_query_url)
+        if parsed_feed and parsed_feed.entries:
+            logger.info(
+                "RSS-Bridge successfully generated %s entries for '%s'",
+                len(parsed_feed.entries),
+                _sanitize_for_log(page_url),
+            )
+            if not parsed_feed.feed.get("link") or is_rss_bridge_url(parsed_feed.feed.get("link")):
+                parsed_feed.feed["link"] = page_url
+            return parsed_feed
+
+        return None
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.warning(
+            "RSS-Bridge resolution failed for %s",
+            _sanitize_for_log(page_url),
+            exc_info=True,
+        )
+        return None
+
+
 def validate_and_resolve_url(url):
     """Validates URL and resolves IP to prevent SSRF (returns safe IP or None)."""
     try:
         parsed = urlparse(url)
         if not (parsed.scheme in ("http", "https") and parsed.hostname):
             return None, None
+
+        if is_rss_bridge_url(url):
+            return ("127.0.0.1", parsed.hostname or "localhost")
 
         try:
             addr_info = socket.getaddrinfo(parsed.hostname, None)
@@ -1238,7 +1375,10 @@ def _parse_and_validate_feed(content, feed_url):
 
 
 def fetch_feed(feed_url):
-    """Fetches and parses a feed, preventing SSRF via IP pinning."""
+    """Fetches and parses a feed, preventing SSRF via IP pinning.
+    Transparently supports feed autodiscovery from HTML and delegation
+    to RSS-Bridge for RSS-less pages.
+    """
     safe_ip, _ = validate_and_resolve_url(feed_url)
     if not safe_ip:
         return None
@@ -1249,10 +1389,37 @@ def fetch_feed(feed_url):
         opener = _build_safe_opener(safe_ip)
 
         content = _download_feed_content(opener, feed_url)
-        if not content:
-            return None
+        parsed_feed = None
+        if content:
+            parsed_feed = _parse_and_validate_feed(content, feed_url)
 
-        return _parse_and_validate_feed(content, feed_url)
+        # If feed has valid entries, return immediately
+        if parsed_feed and parsed_feed.entries:
+            return parsed_feed
+
+        # If the URL is already an RSS-Bridge endpoint, return parsed_feed
+        if is_rss_bridge_url(feed_url):
+            return parsed_feed
+
+        # If content was returned (e.g. HTML), check for <link rel="alternate"> feed autodiscovery
+        if content:
+            discovered_url = discover_feed_url_from_html(content, feed_url)
+            if discovered_url and discovered_url != feed_url:
+                logger.info(
+                    "Autodiscovered alternate feed '%s' from HTML at '%s'",
+                    _sanitize_for_log(discovered_url),
+                    _sanitize_for_log(feed_url),
+                )
+                discovered_feed = fetch_feed(discovered_url)
+                if discovered_feed and discovered_feed.entries:
+                    return discovered_feed
+
+        # If no entries found natively or via autodiscovery, query RSS-Bridge
+        bridged_feed = fetch_rss_bridge_feed(feed_url)
+        if bridged_feed and bridged_feed.entries:
+            return bridged_feed
+
+        return parsed_feed
 
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Error fetching feed %s", _sanitize_for_log(feed_url))

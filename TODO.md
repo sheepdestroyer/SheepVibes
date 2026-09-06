@@ -2,6 +2,22 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-06 RSS-Bridge Deployment & RSS-Less Page Feed Bridging (Issue #550)
+
+*   [x] **Deploy RSS-Bridge in pod and support RSS-less pages:**
+    *   [x] Define Podman Quadlet container `pod/sheepvibes-rssbridge.container` running `docker.io/rssbridge/rss-bridge:latest` on the shared pod network.
+    *   [x] Mount custom PHP bridges from `pod/bridges/` into `/config` in the RSS-Bridge container.
+    *   [x] Implement custom PHP bridge `pod/bridges/LuceboxBridge.php` for Lucebox blog (`https://www.lucebox.com/blog`) with JSON-LD schema parsing and HTML fallback.
+    *   [x] Implement custom PHP bridge `pod/bridges/AntigravityChangelogBridge.php` for Google Antigravity changelog (`https://antigravity.google/changelog`).
+    *   [x] Implement custom PHP bridge `pod/bridges/JulesChangelogBridge.php` for Google Jules documentation changelog (`https://jules.google/docs/changelog/`).
+    *   [x] Support GitHub Releases feeds (`https://github.com/NousResearch/hermes-agent/releases`) via RSS-Bridge's built-in `GithubReleaseBridge`.
+    *   [x] Update `pod/sheepvibes-app.container` with `Wants`/`After=sheepvibes-rssbridge.container` and `Environment=RSS_BRIDGE_URL=http://localhost:80`.
+    *   [x] Update `scripts/dev_manager.sh` to spin up `sheepvibes-dev-rssbridge` alongside App and Valkey, and clean up on teardown.
+    *   [x] Update `scripts/deploy_pod.sh` to install Quadlet configuration and deploy custom bridge files.
+    *   [x] Integrate RSS-Bridge into `backend/feed_service.py` with `RSS_BRIDGE_URL` configuration, safe SSRF loopback routing for trusted RSS-Bridge host, HTML `<link rel="alternate">` autodiscovery, and automatic delegation fallback for RSS-less URLs.
+    *   [x] Add unit test suite in `tests/unit/test_rss_bridge.py` verifying URL validation, SSRF protection, feed delegation, and custom bridge parsing.
+    *   [x] Validate full test suite (Pytest backend unit, Playwright E2E, Vitest frontend).
+
 ## 2026-09-05 Parallelized Testing
 
 *   [x] **Parallelize pytest runs by default with `-n auto`:**

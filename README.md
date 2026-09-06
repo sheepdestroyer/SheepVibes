@@ -8,6 +8,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, d
 *   **First-Run Onboarding Wizard**: Interactive onboarding screen on initial deployment to initialize the master administrator account.
 *   **Administration Panel**: Web-based admin dashboard for user account management, password resets, system diagnostics, and non-blocking point-in-time database snapshot backups.
 *   **Feed Management**: Add, delete, and edit RSS/Atom feeds with canonical short name derivation.
+*   **RSS-Bridge Integration**: Automatically generate Atom/RSS feeds for RSS-less web pages (e.g. Lucebox Blog, Google Antigravity Changelog, Google Jules Docs Changelog, GitHub Releases) via containerized `rssbridge/rss-bridge` within the pod.
 *   **Tabbed Organization**: Organize feeds into customizable tabs, similar to Netvibes and iGoogle, with independent per-user namespaces.
 *   **OPML Support**: Import and export your feeds and tabs as OPML files with live progress indicators.
 *   **Background Updates**: Automatically fetches feed updates in the background.
@@ -35,7 +36,8 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, d
     *   `unit/`: Pytest unit tests for backend models, feed service, security, and blueprints.
     *   `e2e/`: Playwright end-to-end integration tests.
     *   `frontend/js/*.test.js`: Vitest unit tests for frontend utility functions, API layer, and UI helpers.
-*   `pod/`: Quadlet pod, container, and volume definitions for systemd/Podman deployment.
+*   `pod/`: Quadlet pod, container, and volume definitions for systemd/Podman deployment (`sheepvibespod.pod`, `sheepvibes-app.container`, `sheepvibes-valkey.container`, `sheepvibes-rssbridge.container`).
+    *   `bridges/`: Custom PHP bridge definitions for RSS-Bridge (`LuceboxBridge.php`, `AntigravityChangelogBridge.php`, `JulesChangelogBridge.php`).
 *   `scripts/`: Automation and development helper scripts (`dev_manager.sh`, `deploy_pod.sh`, `run_dev.sh`, `rebuild_container.sh`).
 
 ## Production Deployment (Podman Pod with systemd using Quadlet)
@@ -206,6 +208,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 *   `UPDATE_INTERVAL_MINUTES`: Recurring interval in minutes for background feed update scheduler (default: 15).
 *   `CACHE_VALKEY_URL`: Connection URL for the Valkey caching service (default: `redis://localhost:6379/0`; fallback supported via `CACHE_REDIS_URL`).
 *   `CACHE_VALKEY_PORT`: Dynamic host port override used by automated CI test runners.
+*   `RSS_BRIDGE_URL`: Base URL for the internal RSS-Bridge service (default: `http://localhost:80` inside the container pod).
 *   `FEED_FETCH_TIMEOUT`: Network timeout in seconds for downloading external feed content (default: 20).
 *   `MAX_CONCURRENT_FETCHES`: Maximum concurrent worker threads for fetching feeds in parallel (default: 5, capped at 10).
 *   `FLASK_APP`: Flask application entrypoint (`backend.app`).
