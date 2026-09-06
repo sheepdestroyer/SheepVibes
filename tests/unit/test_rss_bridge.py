@@ -358,6 +358,19 @@ def test_deployment_configuration_and_bridge_files():
         assert "ContainerName=sheepvibes-rssbridge" in content
         assert "docker.io/rssbridge/rss-bridge:latest" in content
         assert "Pod=sheepvibespod.pod" in content
+        assert "Entrypoint=/usr/local/bin/log-priority-splitter.sh" in content
+        assert "Exec=/app/docker-entrypoint.sh" in content
+        assert "log-priority-splitter.sh:/usr/local/bin/log-priority-splitter.sh:ro,z" in content
+
+    # App Quadlet container
+    app_quadlet = os.path.join(project_root, "pod", "sheepvibes-app.container")
+    assert os.path.isfile(app_quadlet)
+    with open(app_quadlet, "r", encoding="utf-8") as f:
+        app_content = f.read()
+        assert "ContainerName=sheepvibes-app" in app_content
+        assert "Entrypoint=/usr/local/bin/log-priority-splitter.sh" in app_content
+        assert "Exec=/app/scripts/entrypoint.sh" in app_content
+        assert "log-priority-splitter.sh:/usr/local/bin/log-priority-splitter.sh:ro,z" in app_content
 
     # Generic bridge file
     bridges_dir = os.path.join(project_root, "pod", "bridges")

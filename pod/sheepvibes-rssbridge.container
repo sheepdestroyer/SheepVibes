@@ -6,6 +6,9 @@ ContainerName=sheepvibes-rssbridge
 Image=docker.io/rssbridge/rss-bridge:latest
 Pod=sheepvibespod.pod
 Volume=%h/.config/containers/systemd/bridges:/config:Z
+Volume=/mnt/DATA/boy/prod/infra/bin/log-priority-splitter.sh:/usr/local/bin/log-priority-splitter.sh:ro,z
+Entrypoint=/usr/local/bin/log-priority-splitter.sh
+Exec=/app/docker-entrypoint.sh
 
 [Service]
 Restart=on-failure

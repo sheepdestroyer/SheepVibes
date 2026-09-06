@@ -2,6 +2,15 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-06 Container Log Priority Splitter Integration
+
+*   [x] **Align container stderr logging with syslog priority via unified splitter:**
+    *   [x] Mount `/mnt/DATA/boy/prod/infra/bin/log-priority-splitter.sh` with `:ro,z` into `pod/sheepvibes-app.container` and set as `Entrypoint`, wrapping `/app/scripts/entrypoint.sh`.
+    *   [x] Mount `/mnt/DATA/boy/prod/infra/bin/log-priority-splitter.sh` with `:ro,z` into `pod/sheepvibes-rssbridge.container` and set as `Entrypoint`, wrapping `/app/docker-entrypoint.sh`.
+    *   [x] Prevent non-error runtime outputs (Gunicorn worker boots, Alembic migrations, PHP-FPM notices, access logs) from being mapped to syslog `PRIORITY=3` (`err`) by `conmon`.
+    *   [x] Update unit tests in `tests/unit/test_rss_bridge.py` to verify quadlet configuration and splitter volume mounts.
+    *   [x] Validate test suites across Pytest unit (258/258), Vitest (58/58), and Playwright E2E.
+
 ## 2026-09-06 RSS-Bridge Deployment & RSS-Less Page Feed Bridging (Issue #550)
 
 *   [x] **Fix RSS-Bridge feed title generation and relative entry links:**

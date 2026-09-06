@@ -1,5 +1,13 @@
 ## 2026-09-06
  
+- **Feat(logging): Integrate unified log-priority-splitter into pod containers**
+  - **Quadlet Logging Stream Alignment (`pod/sheepvibes-app.container`, `pod/sheepvibes-rssbridge.container`)**:
+    - Bind-mounted centralized log priority splitter (`/mnt/DATA/boy/prod/infra/bin/log-priority-splitter.sh:ro,z`) into `/usr/local/bin/log-priority-splitter.sh` and configured as container `Entrypoint`.
+    - Wrapped container entrypoints (`/app/scripts/entrypoint.sh` for `sheepvibes-app` and `/app/docker-entrypoint.sh` for `sheepvibes-rssbridge`).
+    - Dynamically tags stderr log streams with syslog priority prefixes (`<6>` for INFO/DEBUG, `<4>` for WARNING, `<3>` for ERROR/FATAL) so conmon and systemd-journald do not misclassify routine Gunicorn, Alembic, and PHP-FPM stderr outputs as syslog `PRIORITY=3` (`err`).
+  - **Unit Tests (`tests/unit/test_rss_bridge.py`)**: Added verification for `Entrypoint`, `Exec`, and splitter volume mount configuration across both Quadlet container definitions.
+  - **Verification**: Full test suites validated (258/258 Pytest unit tests, 58/58 Vitest tests, Playwright E2E passed).
+
 - **Fix(bridge): Canonicalize feed titles and resolve relative entry links**
   - **Dynamic Feed Metadata in Generic Bridge (`pod/bridges/GenericChangelogBridge.php`)**:
     - Implemented `extractFeedMetadata()`, dynamic `getName()`, `getURI()`, and `getIcon()` to extract `og:site_name`, `<title>`, or clean capitalized domains instead of static placeholder strings.
