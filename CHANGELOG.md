@@ -12,8 +12,9 @@
   - **Tooling & Deployment (`scripts/dev_manager.sh`, `scripts/deploy_pod.sh`)**:
     - Updated `scripts/dev_manager.sh` to manage `sheepvibes-dev-rssbridge` alongside App and Valkey during local development.
     - Updated `scripts/deploy_pod.sh` to install Quadlet configuration and deploy custom PHP bridges including `GenericChangelogBridge.php` into `~/.config/containers/systemd/bridges/`.
-  - **Unit Test Suite (`tests/unit/test_rss_bridge.py`)**: Added 14 unit tests verifying URL resolution, SSRF protection, HTML autodiscovery, RSS-Bridge autodetect delegation, GenericChangelogBridge fallback, custom bridge Atom feed parsing, and Quadlet/script configuration.
-  - **Verification**: Full backend unit tests pass (247/247), frontend Vitest tests pass (58/58), and Playwright E2E browser tests pass (16 passed, 1 skipped).
+  - **Unit Test Suite (`tests/unit/test_rss_bridge.py`)**: Added 16 unit tests verifying URL resolution, SSRF protection, HTML autodiscovery cycle bounds, RSS-Bridge autodetect delegation, GenericChangelogBridge fallback, custom bridge Atom feed parsing, and Quadlet/script configuration.
+  - **Code Review Hardening**: Resolved all automated code review findings across Codacy, DeepSource, Sourcery, and CodeRabbit (restricted internal bridge IP routing, bound recursive autodiscovery, supported top-level JSON-LD arrays, fixed PCRE regex delimiter escaping, initialized `PROJECT_ROOT` across all paths in `dev_manager.sh`, added bridge verification in `deploy_pod.sh`, and documented manual Podman workflow in `README.md`).
+  - **Verification**: Full backend unit tests pass (249/249), frontend Vitest tests pass (58/58), and Playwright E2E browser tests pass (16 passed, 1 skipped). All automated checks green.
 
 ## 2026-09-05
 
