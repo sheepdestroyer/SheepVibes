@@ -1586,9 +1586,14 @@ def _preprocess_entries(parsed_feed, feed_name):
 def _resolve_entry_link_with_fallback(raw_link, base_link) -> str | None:
     """Validates entry link, falling back to urljoin with base_link for relative links."""
     entry_link = validate_link_structure(raw_link)
-    if not entry_link and raw_link and isinstance(raw_link, str) and raw_link.strip():
-        if base_link:
-            entry_link = validate_link_structure(urljoin(base_link, raw_link.strip()))
+    if (
+        not entry_link
+        and raw_link
+        and isinstance(raw_link, str)
+        and raw_link.strip()
+        and base_link
+    ):
+        entry_link = validate_link_structure(urljoin(base_link, raw_link.strip()))
     return entry_link
 
 
