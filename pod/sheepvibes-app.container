@@ -10,7 +10,10 @@ Image=ghcr.io/sheepdestroyer/sheepvibes:latest
 Pull=always
 AutoUpdate=registry
 Pod=sheepvibespod.pod
+Entrypoint=/usr/local/bin/log-priority-splitter.sh
+Exec=/app/scripts/entrypoint.sh
 Volume=sheepvibes-db.volume:/app/data
+Volume=/mnt/DATA/boy/prod/infra/bin/log-priority-splitter.sh:/usr/local/bin/log-priority-splitter.sh:ro,z
 Environment=DATABASE_PATH=/app/data/sheepvibes.db
 HealthCmd=python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=3)"
 HealthInterval=15s
