@@ -361,48 +361,59 @@ def _apply_feed_updates(feed, new_url, custom_name, user_id):
     )
 
 
-def _validate_feed_update_payload(data, current_feed, user_id):
-    """Validates the payload for updating a feed URL and name.
+def _validate_update_name(data):
+    """Validates the optional custom feed name in the update payload."""
+    if "name" not in data:
+        return None, None
+    name_val = data["name"]
+    if name_val is None:
+        return None, None
+    if not isinstance(name_val, str):
+        return None, (jsonify({"error": "Invalid feed name: must be a string"}), 400)
+    if len(name_val.strip()) > 200:
+        return None, (
+            jsonify({"error": "Invalid feed name: exceeds maximum length of 200 characters"}),
+            400,
+        )
+    return name_val, None
 
-    Returns:
-        tuple: (new_url, custom_name, error_response)
-    """
-    if (
-        not data
-        or not isinstance(data, dict)
-        or ("url" not in data and "name" not in data)
-    ):
-        return None, None, (jsonify({"error": "Missing or invalid feed URL"}), 400)
 
-    if "url" in data and (not isinstance(data["url"], str) or not data["url"].strip()):
-        return None, None, (jsonify({"error": "Missing or invalid feed URL"}), 400)
-
-    new_url = data["url"].strip() if "url" in data else current_feed.url
-
+def _validate_update_url(data, current_feed, user_id):
+    """Validates the optional or new feed URL in the update payload."""
+    if "url" not in data:
+        return current_feed.url, None
+    url_val = data["url"]
+    if not isinstance(url_val, str) or not url_val.strip():
+        return None, (jsonify({"error": "Missing or invalid feed URL"}), 400)
+    new_url = url_val.strip()
     if not is_valid_feed_url(new_url):
-        return None, None, (jsonify({"error": "Invalid feed URL scheme"}), 400)
-
+        return None, (jsonify({"error": "Invalid feed URL scheme"}), 400)
     existing_feed = (
         Feed.query.join(Tab)
         .filter(Tab.user_id == user_id, Feed.id != current_feed.id, Feed.url == new_url)
         .first()
     )
     if existing_feed:
-        return None, None, (
+        return None, (
             jsonify({"error": f"Feed with URL {new_url} already exists"}),
             409,
         )
+    return new_url, None
 
-    if "name" in data and data["name"] is not None:
-        if not isinstance(data["name"], str):
-            return None, None, (jsonify({"error": "Invalid feed name: must be a string"}), 400)
-        if len(data["name"].strip()) > 200:
-            return None, None, (
-                jsonify({"error": "Invalid feed name: exceeds maximum length of 200 characters"}),
-                400,
-            )
 
-    custom_name = data.get("name") if "name" in data else None
+def _validate_feed_update_payload(data, current_feed, user_id):
+    """Validates payload structure, URL, and name for updating a feed."""
+    if not isinstance(data, dict) or ("url" not in data and "name" not in data):
+        return None, None, (jsonify({"error": "Missing or invalid feed URL"}), 400)
+
+    new_url, url_error = _validate_update_url(data, current_feed, user_id)
+    if url_error:
+        return None, None, url_error
+
+    custom_name, name_error = _validate_update_name(data)
+    if name_error:
+        return None, None, name_error
+
     return new_url, custom_name, None
 
 
