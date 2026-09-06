@@ -19,6 +19,43 @@ class GenericChangelogBridge extends BridgeAbstract
         ],
     ]];
 
+    private ?string $feedName = null;
+    private ?string $feedIcon = null;
+
+    public function getName()
+    {
+        if (!empty($this->feedName)) {
+            return $this->feedName;
+        }
+        $url = $this->getInput('url');
+        if (!empty($url)) {
+            $parsed = parse_url($url);
+            $host = $parsed['host'] ?? '';
+            if (!empty($host)) {
+                $cleanHost = preg_replace('/^www\./i', '', $host);
+                return ucfirst($cleanHost);
+            }
+        }
+        return parent::getName();
+    }
+
+    public function getURI()
+    {
+        $url = $this->getInput('url');
+        if (!empty($url)) {
+            return $url;
+        }
+        return parent::getURI();
+    }
+
+    public function getIcon()
+    {
+        if (!empty($this->feedIcon)) {
+            return $this->feedIcon;
+        }
+        return parent::getIcon();
+    }
+
     public function collectData()
     {
         $url = $this->getInput('url');
@@ -46,6 +83,9 @@ class GenericChangelogBridge extends BridgeAbstract
             throwServerException('Could not load content from ' . $url);
         }
 
+        // Extract page title and icon for feed metadata
+        $this->extractFeedMetadata($html, $url);
+
         // 1. Try structured JSON-LD schema (common in blogs and semantic documentation)
         $this->extractFromJsonLd($html, $url);
         if (!empty($this->items)) {
@@ -60,6 +100,33 @@ class GenericChangelogBridge extends BridgeAbstract
 
         // 3. Fallback to heading-delimited extraction
         $this->extractFromHeadings($html, $url);
+    }
+
+    private function extractFeedMetadata($html, string $baseUrl): void
+    {
+        $ogSiteEl = $html->find('meta[property="og:site_name"], meta[name="og:site_name"]', 0);
+        $ogTitleEl = $html->find('meta[property="og:title"], meta[name="og:title"]', 0);
+        $titleEl = $html->find('title', 0);
+
+        $siteName = $ogSiteEl ? trim((string)$ogSiteEl->content) : '';
+        $pageTitle = '';
+        if ($titleEl && !empty(trim($titleEl->plaintext))) {
+            $pageTitle = trim(html_entity_decode($titleEl->plaintext, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        } elseif ($ogTitleEl && !empty(trim((string)$ogTitleEl->content))) {
+            $pageTitle = trim(html_entity_decode((string)$ogTitleEl->content, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        }
+
+        if (!empty($siteName)) {
+            $this->feedName = $siteName;
+        } elseif (!empty($pageTitle)) {
+            $this->feedName = $pageTitle;
+        }
+
+        // Try favicon
+        $iconEl = $html->find('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]', 0);
+        if ($iconEl && $iconEl->href) {
+            $this->feedIcon = urljoin($baseUrl, trim($iconEl->href));
+        }
     }
 
     private function extractFromJsonLd($html, string $baseUrl): void
@@ -141,19 +208,20 @@ class GenericChangelogBridge extends BridgeAbstract
         $dateStr = $data['datePublished'] ?? $data['dateCreated'] ?? $data['dateModified'] ?? null;
         $timestamp = $dateStr ? strtotime((string)$dateStr) : time();
         $content = (string)($data['description'] ?? $data['articleBody'] ?? $title);
+        $absUri = urljoin($baseUrl, $uri);
 
         $item = [
             'title' => $title,
-            'uri' => defaultLinkTo($uri, $baseUrl),
+            'uri' => $absUri,
             'timestamp' => $timestamp ?: time(),
             'content' => defaultLinkTo($content, $baseUrl),
-            'uid' => defaultLinkTo($uri, $baseUrl),
+            'uid' => $absUri,
         ];
 
         if (isset($data['image'])) {
             $img = is_array($data['image']) ? ($data['image']['url'] ?? '') : (string)$data['image'];
             if ($img) {
-                $imgUrl = defaultLinkTo($img, $baseUrl);
+                $imgUrl = urljoin($baseUrl, $img);
                 $item['enclosures'] = [$imgUrl];
                 $item['content'] = '<p><img src="' . $imgUrl . '" /></p>' . $item['content'];
             }
@@ -212,13 +280,16 @@ class GenericChangelogBridge extends BridgeAbstract
 
     private function parseContainerElement($el, string $baseUrl): ?array
     {
-        // Find title heading or post-title class
-        $headingEl = $el->find('h1, h2, h3, h4, h5, [class*="title"], [class*="heading"], [class*="version"], .post-title', 0);
+        // Find title heading or post-title class (prioritize explicit heading tags over version badges)
+        $headingEl = $el->find('h1, h2, h3, h4, h5, [class*="post-title"], [class*="entry-title"], [class*="card-title"], .post-title, .entry-title', 0);
+        if (!$headingEl) {
+            $headingEl = $el->find('[class*="title"], [class*="heading"]', 0);
+        }
         if (!$headingEl) {
             return null;
         }
 
-        $title = trim($headingEl->plaintext);
+        $title = trim(preg_replace('/\s+/', ' ', $headingEl->plaintext));
         if (empty($title) || strlen($title) > 300) {
             return null;
         }
@@ -226,35 +297,44 @@ class GenericChangelogBridge extends BridgeAbstract
         // Check if there is an explicit version badge or link
         $versionEl = $el->find('a[class*="version"], span[class*="version"], div[class*="version"]', 0);
         $versionText = $versionEl ? trim($versionEl->plaintext) : '';
-        if ($versionText && stripos($title, $versionText) === false && preg_match('/v?\d+(\.\d+)+/i', $versionText)) {
-            $title = "[$versionText] $title";
+        if ($versionText) {
+            if (preg_match('/v?\d+(\.\d+)+/i', $versionText, $vm)) {
+                $cleanVersion = $vm[0];
+                if (stripos($title, $cleanVersion) === false) {
+                    $title = "[$cleanVersion] $title";
+                }
+            } elseif (stripos($title, $versionText) === false && strlen($versionText) <= 20) {
+                $cleanVersion = trim(preg_replace('/\s+/', ' ', $versionText));
+                $title = "[$cleanVersion] $title";
+            }
         }
 
         // Extract date / timestamp
         $timestamp = $this->extractDate($el, $title);
 
-        // Extract URI / Permalink
+        // Extract URI / Permalink and ensure absolute URL
         $uri = $this->extractUri($el, $headingEl, $baseUrl, $title);
+        $absUri = urljoin($baseUrl, $uri);
 
         // Extract Content
-        $excerptEl = $el->find('.post-excerpt, [class*="excerpt"], [class*="summary"], [class*="description"]', 0);
-        $content = $excerptEl ? trim($excerptEl->plaintext) : trim($el->innertext);
+        $excerptEl = $el->find('.post-excerpt, [class*="excerpt"], [class*="summary"], [class*="description"], [class*="changes"], [class*="content"]', 0);
+        $content = $excerptEl ? trim($excerptEl->innertext) : trim($el->innertext);
         if (empty($content)) {
             $content = htmlspecialchars($title);
         }
 
         $item = [
             'title' => $title,
-            'uri' => defaultLinkTo($uri, $baseUrl),
+            'uri' => $absUri,
             'timestamp' => $timestamp ?: time(),
             'content' => defaultLinkTo($content, $baseUrl),
-            'uid' => defaultLinkTo($uri, $baseUrl),
+            'uid' => $absUri,
         ];
 
         // Check for card images
         $img = $el->find('img.post-card-img, img[class*="card"], img', 0);
         if ($img && $img->src) {
-            $imgSrc = defaultLinkTo($img->src, $baseUrl);
+            $imgSrc = urljoin($baseUrl, $img->src);
             $item['enclosures'] = [$imgSrc];
             if (strpos($item['content'], $imgSrc) === false) {
                 $item['content'] = '<p><img src="' . $imgSrc . '" /></p>' . $item['content'];
@@ -302,12 +382,13 @@ class GenericChangelogBridge extends BridgeAbstract
                     $content = htmlspecialchars($title);
                 }
 
+                $absUri = urljoin($baseUrl, $uri);
                 $this->items[] = [
                     'title' => $title,
-                    'uri' => defaultLinkTo($uri, $baseUrl),
+                    'uri' => $absUri,
                     'timestamp' => $timestamp ?: time(),
                     'content' => defaultLinkTo($content, $baseUrl),
-                    'uid' => defaultLinkTo($uri, $baseUrl),
+                    'uid' => $absUri,
                 ];
             }
 
@@ -373,39 +454,45 @@ class GenericChangelogBridge extends BridgeAbstract
     {
         // Check if element itself is an anchor link (e.g. a.post-card)
         if ($el->tag === 'a' && $el->href) {
-            return $el->href;
+            return html_entity_decode(trim($el->href));
+        }
+
+        // Check for version link or release permalink
+        $versionAnchor = $el->find('a[class*="version"], a[class*="release"], a.permalink', 0);
+        if ($versionAnchor && $versionAnchor->href) {
+            return html_entity_decode(trim($versionAnchor->href));
         }
 
         // Check for anchor inside heading
         if ($headingEl) {
             $anchor = $headingEl->find('a', 0);
             if ($anchor && $anchor->href) {
-                return $anchor->href;
+                return html_entity_decode(trim($anchor->href));
             }
             if (!empty($headingEl->id)) {
-                return $baseUrl . '#' . $headingEl->id;
+                return '#' . $headingEl->id;
             }
         }
 
         // Check for anchor or ID in container
         if (!empty($el->id)) {
-            return $baseUrl . '#' . $el->id;
+            return '#' . $el->id;
         }
 
         $hashAnchor = $el->find('a[href*="#"]', 0);
         if ($hashAnchor && $hashAnchor->href) {
-            return $hashAnchor->href;
+            return html_entity_decode(trim($hashAnchor->href));
         }
 
         $firstAnchor = $el->find('a', 0);
         if ($firstAnchor && $firstAnchor->href) {
-            return $firstAnchor->href;
+            return html_entity_decode(trim($firstAnchor->href));
         }
 
         // Fallback: anchor with slugified title
         $slug = preg_replace('/[^a-z0-9]+/i', '-', strtolower($title));
         $slug = trim($slug, '-');
-        return $baseUrl . ($slug ? '#' . $slug : '');
+        return $slug ? '#' . $slug : '';
     }
 
     public function detectParameters($url)

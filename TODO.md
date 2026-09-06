@@ -4,6 +4,14 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 ## 2026-09-06 RSS-Bridge Deployment & RSS-Less Page Feed Bridging (Issue #550)
 
+*   [x] **Fix RSS-Bridge feed title generation and relative entry links:**
+    *   [x] Enhance `pod/bridges/GenericChangelogBridge.php` to extract page metadata (`og:site_name`, `<title>`, `og:title`, favicon) and implement dynamic `getName()`, `getURI()`, and `getIcon()` to avoid fallback to generic bridge name.
+    *   [x] Update `pod/bridges/GenericChangelogBridge.php` to resolve relative entry URIs and enclosure URLs using `urljoin($baseUrl, $uri)` instead of plain `defaultLinkTo()`.
+    *   [x] Improve entry title extraction in `GenericChangelogBridge.php` to prioritize semantic headings (`h1`..`h5`, `.post-title`) and parse clean version string prefixes.
+    *   [x] Update `backend/feed_name_utils.py` to identify generic bridge placeholder names, strip inverted changelog boilerplate delimiters, and expand `KNOWN_DOMAIN_BRANDS` (`antigravity.google`, `jules.google`, `lucebox.com`).
+    *   [x] Update `backend/feed_service.py` to canonicalize generic bridge titles and resolve relative entry links against base page URL.
+    *   [x] Add unit tests in `tests/unit/test_feed_name_utils.py` and `tests/unit/test_rss_bridge.py`.
+    *   [x] Validate full test suites across unit tests (258/258), Playwright E2E (16 passed, 1 skipped), and Vitest (58/58).
 *   [x] **Deploy RSS-Bridge in pod and support RSS-less pages:**
     *   [x] Define Podman Quadlet container `pod/sheepvibes-rssbridge.container` running `docker.io/rssbridge/rss-bridge:latest` on the shared pod network.
     *   [x] Mount custom PHP bridges from `pod/bridges/` into `/config` in the RSS-Bridge container.

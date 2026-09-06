@@ -946,6 +946,34 @@ def _fetch_from_bridge_url(bridge_endpoint_url, page_url):
     if parsed_feed and parsed_feed.entries:
         if not parsed_feed.feed.get("link") or is_rss_bridge_url(parsed_feed.feed.get("link")):
             parsed_feed.feed["link"] = page_url
+
+        # Canonicalize generic bridge feed title if needed
+        feed_title = parsed_feed.feed.get("title")
+        canonical_title = derive_canonical_feed_name(
+            feed_title or "",
+            site_url=page_url,
+            feed_url=page_url,
+        )
+        if canonical_title:
+            parsed_feed.feed["title"] = canonical_title
+
+        # Ensure all entries have valid absolute links
+        for entry in parsed_feed.entries:
+            raw_entry_link = entry.get("link")
+            entry_link = validate_link_structure(raw_entry_link)
+            if not entry_link:
+                if raw_entry_link and isinstance(raw_entry_link, str):
+                    joined = validate_link_structure(urljoin(page_url, raw_entry_link))
+                    if joined:
+                        entry["link"] = joined
+                        continue
+                if entry.get("id"):
+                    id_link = validate_link_structure(entry.get("id"))
+                    if id_link:
+                        entry["link"] = id_link
+                        continue
+                entry["link"] = page_url
+
         return parsed_feed
     return None
 
@@ -1555,6 +1583,12 @@ def _process_single_entry(
     """Processes a single entry, checking for duplicates and updating existing."""
     raw_link = entry.get("link")
     entry_link = validate_link_structure(raw_link)
+
+    # If raw_link is a relative URL (e.g. "/releases/1"), resolve against base site/feed link
+    if not entry_link and raw_link and isinstance(raw_link, str) and raw_link.strip():
+        base_link = feed_db_obj.site_link or feed_db_obj.url
+        if base_link:
+            entry_link = validate_link_structure(urljoin(base_link, raw_link.strip()))
 
     if not entry_link:
         logger.warning(

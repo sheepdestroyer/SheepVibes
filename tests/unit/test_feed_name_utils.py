@@ -129,6 +129,56 @@ from backend.feed_name_utils import derive_canonical_feed_name, _extract_domain,
             "https://example.com/rss",
             "Example",
         ),
+        # Generic RSS-Bridge and GenericChangelogBridge boilerplate rejection
+        (
+            "Generic Changelog & Release Bridge",
+            "https://antigravity.google/changelog",
+            "https://antigravity.google/changelog",
+            "Google Antigravity",
+        ),
+        (
+            "Generic Changelog & Release Bridge",
+            "https://jules.google/docs/changelog",
+            None,
+            "Jules",
+        ),
+        (
+            "Generic Changelog Bridge",
+            "https://lucebox.com/posts",
+            None,
+            "Lucebox",
+        ),
+        (
+            "RSS-Bridge",
+            "https://example.com/changelog",
+            None,
+            "Example",
+        ),
+        # Inverted section and brand delimiter handling (e.g. Changelog | Jules)
+        (
+            "Changelog | Jules",
+            "https://jules.google/docs/changelog",
+            None,
+            "Jules",
+        ),
+        (
+            "Google Antigravity - Changelog",
+            "https://antigravity.google/changelog",
+            None,
+            "Google Antigravity",
+        ),
+        (
+            "Changelog - Google Antigravity",
+            "https://antigravity.google/changelog",
+            None,
+            "Google Antigravity",
+        ),
+        (
+            "Hermes Agent - Releases",
+            "https://github.com/NousResearch/hermes-agent/releases",
+            None,
+            "Hermes Agent",
+        ),
     ],
 )
 def test_derive_canonical_feed_name(raw_title, site_url, feed_url, expected):

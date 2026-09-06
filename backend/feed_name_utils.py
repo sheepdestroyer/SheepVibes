@@ -42,7 +42,16 @@ KNOWN_DOMAIN_BRANDS: dict[str, str] = {
     "kguttag.com": "KGOnTech",
     "stallman.org": "Richard Stallman",
     "slate.fr": "Slate.fr",
+    "antigravity.google": "Google Antigravity",
+    "jules.google": "Jules",
+    "lucebox.com": "Lucebox",
 }
+
+# Regex to detect generic RSS-Bridge and GenericChangelog bridge artifact titles
+_GENERIC_BRIDGE_TITLE_PATTERN = re.compile(
+    r"^(?:generic\s+changelog.*|rss-bridge|bridge)\s*$",
+    re.IGNORECASE,
+)
 
 # Regex to strip common boilerplate suffixes from feed titles
 _BOILERPLATE_SUFFIX_PATTERN = re.compile(
@@ -68,14 +77,18 @@ _BOILERPLATE_SUFFIX_PATTERN = re.compile(
     r"posts|"
     r"une|"
     r"actualit[ée]s.*|"
-    r"graphics card & processor news"
+    r"graphics card & processor news|"
+    r"changelog|"
+    r"releases?|"
+    r"updates?"
     r")\s*$",
     re.IGNORECASE,
 )
 
 # Regex to strip common boilerplate prefixes from feed titles
 _BOILERPLATE_PREFIX_PATTERN = re.compile(
-    r"^(?:latest from|rss feed for|news from|rss:\s*|feed:\s*)\s*",
+    r"^(?:latest from|rss feed for|news from|rss:\s*|feed:\s*|"
+    r"(?:changelog|releases?|updates?|blog)\s*[-|:—–»•~]\s*)\s*",
     re.IGNORECASE,
 )
 
@@ -148,7 +161,7 @@ def derive_canonical_feed_name(
     # Normalize excessive internal whitespace
     cleaned_title = re.sub(r"\s+", " ", cleaned_title).strip()
 
-    if not cleaned_title:
+    if not cleaned_title or bool(_GENERIC_BRIDGE_TITLE_PATTERN.match(cleaned_title)):
         if brand_from_domain:
             return brand_from_domain
         if domain:
@@ -200,30 +213,43 @@ def derive_canonical_feed_name(
 
     # If title still has delimiters like " - ", " | ", " — ", " – ", check if one side is the brand
     for sep in (" – ", " — ", " - ", " | ", " :: ", " » ", " • "):
-        if sep in cleaned_title:
-            parts = [p.strip() for p in cleaned_title.split(sep) if p.strip()]
-            if len(parts) >= 2:
-                # Check if right part matches known brand or domain
-                # e.g., "Artificial intelligence – MIT Technology Review"
-                if (
-                    brand_from_domain
-                    and parts[-1].lower() == brand_from_domain.lower()
-                ):
+        if sep not in cleaned_title:
+            continue
+        parts = [p.strip() for p in cleaned_title.split(sep) if p.strip()]
+        if len(parts) < 2:
+            continue
+        # Check if right part matches known brand or domain
+        # e.g., "Artificial intelligence – MIT Technology Review"
+        if brand_from_domain and parts[-1].lower() == brand_from_domain.lower():
+            return brand_from_domain
+        # If left part matches known brand (e.g. "Ars Technica - Articles")
+        if brand_from_domain and parts[0].lower() == brand_from_domain.lower():
+            return brand_from_domain
+        # If left part is a clean short name, strip trailing TLDs if present
+        left_part = re.sub(
+            r"\.(?:fr|com|org|net|co\.uk|io|de|eu)$",
+            "",
+            parts[0],
+            flags=re.IGNORECASE,
+        ).strip()
+        if brand_from_domain and left_part.lower() == brand_from_domain.lower():
+            return brand_from_domain
+        if len(parts[0]) <= 30 and not _BOILERPLATE_SUFFIX_PATTERN.search(parts[0]):
+            if parts[0].lower() in (
+                "changelog",
+                "releases",
+                "release",
+                "updates",
+                "blog",
+                "news",
+                "articles",
+                "documentation",
+                "docs",
+            ):
+                if brand_from_domain:
                     return brand_from_domain
-                # If left part matches known brand (e.g. "Ars Technica - Articles")
-                if brand_from_domain and parts[0].lower() == brand_from_domain.lower():
-                    return brand_from_domain
-                # If left part is a clean short name, strip trailing TLDs if present
-                left_part = re.sub(
-                    r"\.(?:fr|com|org|net|co\.uk|io|de|eu)$",
-                    "",
-                    parts[0],
-                    flags=re.IGNORECASE,
-                ).strip()
-                if brand_from_domain and left_part.lower() == brand_from_domain.lower():
-                    return brand_from_domain
-                if len(parts[0]) <= 30 and not _BOILERPLATE_SUFFIX_PATTERN.search(parts[0]):
-                    return parts[0]
+                return parts[-1]
+            return parts[0]
 
     # Strip domain suffix like ".com", ".fr" if it was "DistroWatch.com" or "Le Monde.fr"
     cleaned_no_tld = re.sub(

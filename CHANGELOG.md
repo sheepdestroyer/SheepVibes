@@ -1,4 +1,19 @@
 ## 2026-09-06
+ 
+- **Fix(bridge): Canonicalize feed titles and resolve relative entry links**
+  - **Dynamic Feed Metadata in Generic Bridge (`pod/bridges/GenericChangelogBridge.php`)**:
+    - Implemented `extractFeedMetadata()`, dynamic `getName()`, `getURI()`, and `getIcon()` to extract `og:site_name`, `<title>`, or clean capitalized domains instead of static placeholder strings.
+    - Replaced `defaultLinkTo()` on raw string URIs with `urljoin($baseUrl, $uri)` and HTML entity decoding so relative entry links (e.g. `/releases?tab=hub&version=2.12.2` on `https://antigravity.google/changelog`) are converted to valid absolute URLs and not discarded by RSS-Bridge's `FeedItem::setURI()` URL validation regex.
+    - Improved title parsing by prioritizing explicit headings (`h1`..`h5`, `.post-title`) over version container divs and prepending clean extracted version tags (`v?\d+(\.\d+)+`).
+  - **Feed Name Canonicalization (`backend/feed_name_utils.py`)**:
+    - Added generic bridge placeholder pattern recognition (`_GENERIC_BRIDGE_TITLE_PATTERN`) to discard `"Generic Changelog & Release Bridge"` and fall back to domain branding.
+    - Updated boilerplate prefix/suffix regexes to handle inverted changelog delimiters (e.g. `Changelog | Jules` -> `Jules`).
+    - Added domain brand entries for `antigravity.google`, `jules.google`, and `lucebox.com`.
+  - **Feed Service Relative Link Resolution (`backend/feed_service.py`)**:
+    - Ensured `_fetch_from_bridge_url` canonicalizes generic bridge titles and resolves relative or missing entry links against `page_url`.
+    - Ensured `_process_single_entry` resolves non-empty relative links via `urljoin(base_link, raw_link)`.
+  - **Unit Testing**: Added 8 unit tests in `tests/unit/test_feed_name_utils.py` and integration tests in `tests/unit/test_rss_bridge.py`.
+  - **Verification**: Full backend unit tests pass (258/258), frontend Vitest tests pass (58/58), Playwright E2E tests pass (16 passed, 1 skipped), and live Podman Quadlet pod validation confirmed for `antigravity.google/changelog` (108 items, title "Google Antigravity"), `jules.google/docs/changelog` (44 items, title "Jules"), and `lucebox.com` (12 items, title "Lucebox").
 
 - **Feat(bridge): Deploy RSS-Bridge in pod and support RSS-less page feed bridging (Issue #550)**
   - **Quadlet & Pod Orchestration (`pod/sheepvibes-rssbridge.container`, `pod/sheepvibes-app.container`)**: Added `sheepvibes-rssbridge.container` based on `docker.io/rssbridge/rss-bridge:latest` running on the shared pod network. Mounted custom bridges directory into `/config:Z` so custom bridges are automatically copied to `/app/bridges/` by RSS-Bridge's entrypoint. Wired `sheepvibes-app` with `Wants`/`After=sheepvibes-rssbridge.container` and injected `Environment=RSS_BRIDGE_URL=http://localhost:80`.
