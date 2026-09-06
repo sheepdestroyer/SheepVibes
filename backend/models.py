@@ -167,6 +167,7 @@ class Feed(db.Model):
     last_updated_time = db.Column(
         db.DateTime, default=lambda: datetime.datetime.now(timezone.utc)
     )  # Last time feed was successfully fetched
+    order = db.Column(db.Integer, default=0, nullable=False, server_default="0")
     # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
     # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
     # lazy='dynamic' allows for further querying on the relationship.
@@ -196,6 +197,7 @@ class Feed(db.Model):
                 self.last_updated_time.isoformat() if self.last_updated_time else None
             ),
             "unread_count": unread_count,
+            "order": self.order if self.order is not None else 0,
         }
 
 

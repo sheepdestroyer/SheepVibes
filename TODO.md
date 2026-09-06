@@ -10,7 +10,30 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Include captured server stdout and stderr traceback in `pytest.fail(...)` message if server startup fails or times out.
     *   [x] Ensure robust port flexibility: support `PORT` / `E2E_SERVER_PORT` environment variable overrides alongside `pytest-xdist` worker offset isolation.
     *   [x] Add comprehensive unit test suite in `tests/unit/test_e2e_conftest.py` covering fast abort on early process exit, startup failure diagnostics, port override precedence, and worker log paths.
-    *   [x] Validate full test suite (265/265 Pytest unit tests, 58/58 Vitest frontend tests, 16 passed, 1 skipped Playwright E2E tests).
+    *   [x] Validate full test suite (Pytest unit tests, Vitest frontend tests, Playwright E2E tests).
+
+## 2026-09-06 Draggable Widgets (Issue #551)
+
+*   [x] **Widget reordering within tabs and moving feeds across tabs via drag and drop:**
+    *   [x] Database schema: Add `order` column (Integer, default 0, indexed/ordered) to `Feed` model and Alembic migration `c3d4e5f6a7b8_add_feed_order.py`.
+    *   [x] Backend APIs:
+        *   [x] Ensure `get_feeds_for_tab()` orders feeds by `Feed.order.asc(), Feed.id.asc()`.
+        *   [x] Add `PUT /api/tabs/<int:tab_id>/feeds/reorder` to batch update feed ordering within a tab with strict ownership validation and cache invalidation.
+        *   [x] Add `PUT /api/feeds/<int:feed_id>/move` to move a feed to another tab (with optional position) with tenant isolation, index normalization, and cache invalidation for both source and destination tabs.
+        *   [x] Assign sequential `order` index to newly created feeds in `_create_and_process_feed()`.
+    *   [x] Frontend:
+        *   [x] Implement `moveNode()` DOM utility adhering to Modern Web Guidance using `moveBefore()` with `insertBefore()` fallback.
+        *   [x] Add API client methods `reorderTabFeeds()` and `moveFeedToTab()`.
+        *   [x] Add accessible drag handle (`.feed-drag-handle`, `⋮⋮`, `role="button"`, `aria-grabbed`, `tabindex="0"`) to feed widget headers.
+        *   [x] Enable `draggable="true"` on `.feed-widget` with `dragstart`, `dragover`, `dragleave`, `drop`, and `dragend` handlers; safeguard buttons/links/inputs/item lists against unintended dragging.
+        *   [x] Implement visual drop indicators (`.drop-before`, `.drop-after`, `.is-dragging`) and tab drop highlight (`.tab-drag-over`) with full night mode styling.
+        *   [x] Support dragging widget onto tab header buttons to move feed to that tab, update caches, and switch active tab.
+        *   [x] Add error handling and optimistic UI rollback on backend failure.
+    *   [x] Testing & Validation:
+        *   [x] Add backend unit tests in `tests/unit/test_tabs.py` and `tests/unit/test_feed.py` (feed ordering, reorder API, move API, tenant isolation, validation errors).
+        *   [x] Add frontend unit tests in `frontend/js/utils.test.js`, `frontend/js/api.test.js`, and `frontend/js/ui.test.js`.
+        *   [x] Add Playwright E2E test suite in `tests/e2e/test_widget_drag.py` (in-tab drag reordering, cross-tab drag move, accessibility attributes, rollback on failure).
+        *   [x] Validate full CI test suites (Pytest unit 267/267, Vitest 68/68, Playwright E2E 22 passed / 1 skipped).
 
 ## 2026-09-06 Container Log Priority Splitter Integration
 
@@ -213,7 +236,7 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 
 *   [x] Import/Export OPML feed lists. (Refactored for robustness, SSE progress, and XSS prevention)
 *   [x] Hacker News & discussion thread link support with secondary article links.
-*   [ ] Widget resizing/reordering (drag and drop).
+*   [x] Widget reordering (drag and drop within and across tabs - Issue #551).
 *   [ ] Different widget view types (e.g., list vs. expanded).
 *   [ ] User authentication.
 *   [ ] Keyword filtering/highlighting within feeds.

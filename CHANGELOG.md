@@ -6,7 +6,30 @@
   - **Port Configuration Flexibility (`tests/e2e/conftest.py`)**: Preserved worker-offset isolation and added explicit fallback to `PORT` environment variable when `E2E_SERVER_PORT` is not set.
   - **Route Isolation in Setup Wizard Test (`tests/e2e/test_setup_wizard.py`)**: Mocked `**/api/tabs/*/feeds` to prevent unauthenticated background feed requests from triggering 401 unauthorized dialog popups during parallel E2E runs.
   - **Unit Testing (`tests/unit/test_e2e_conftest.py`)**: Added unit tests covering fast abort on early process exit, premature exit failure diagnostics, timeout failure diagnostics, log reading fallback helpers, worker log path allocation, and `PORT` environment variable overrides.
-  - **Verification**: Full test suite validated: 265/265 Pytest unit tests, 58/58 Vitest frontend tests, and 16 passed (1 skipped) Playwright E2E tests.
+  - **Verification**: Full test suite validated: Pytest unit tests, Vitest frontend tests, and Playwright E2E tests.
+
+- **Feat(ui): Draggable feed widgets within tabs and moving feeds across tabs (Issue #551)**
+  - **Database Schema & Migrations (`backend/models.py`, `backend/migrations/versions/c3d4e5f6a7b8_add_feed_order.py`)**:
+    - Added `order = db.Column(db.Integer, default=0, nullable=False, server_default="0")` to `Feed` model and included `"order"` in `Feed.to_dict()`.
+    - Created Alembic database migration to add the `order` column to `feeds`.
+  - **Backend Blueprints & APIs (`backend/blueprints/tabs.py`, `backend/blueprints/feeds.py`)**:
+    - Updated `get_feeds_for_tab()` to retrieve feeds sorted by `Feed.order.asc(), Feed.id.asc()`.
+    - Added `PUT /api/tabs/<int:tab_id>/feeds/reorder` endpoint accepting `{"feed_ids": [...]}` to batch update widget sequence in a single transaction with ownership validation, deduplication checks, and tab cache invalidation.
+    - Added `PUT /api/feeds/<int:feed_id>/move` endpoint accepting `{"tab_id": ..., "position": ...}` to move a feed to a different tab or position with tenant isolation, index normalization, and cache invalidation across both source and target tabs.
+    - Updated `_create_and_process_feed()` to sequentially assign `(max_order or -1) + 1` to newly added feeds.
+  - **Modern Frontend Drag & Drop UI (`frontend/js/utils.js`, `frontend/js/api.js`, `frontend/js/ui.js`, `frontend/js/app.js`, `frontend/style.css`)**:
+    - Implemented `moveNode(parent, node, referenceNode)` with progressive enhancement using `parent.moveBefore()` when available and `parent.insertBefore()` fallback.
+    - Added frontend API client functions `reorderTabFeeds(tabId, feedIds)` and `moveFeedToTab(feedId, targetTabId, position)`.
+    - Added accessible drag handle (`.feed-drag-handle`, `⋮⋮`, `role="button"`, `aria-grabbed`, `tabindex="0"`) in feed widget headers.
+    - Added HTML5 drag-and-drop support on feed widgets with drag initiation guards protecting links, action buttons, and item lists.
+    - Rendered drop indicators (`.drop-before`, `.drop-after`, `.is-dragging`) and tab header drop target styling (`.tab-drag-over`) across both light and night themes.
+    - Wired drag-over and drop events on tab header buttons to move feeds across tabs with automated cache invalidation, badge updates, and tab switching.
+    - Added optimistic UI error handling and automatic state rollback on reorder failure.
+  - **Testing & Verification**:
+    - Backend unit tests (`tests/unit/test_tabs.py`, `tests/unit/test_feed.py`): Verified ordering retrieval, reorder endpoint, move endpoint, positional insertions, tenant isolation, and error handling.
+    - Frontend unit tests (`frontend/js/utils.test.js`, `frontend/js/api.test.js`, `frontend/js/ui.test.js`): Verified `moveNode`, API requests, drag handle DOM, drag events, and cross-tab drop handling.
+    - Playwright E2E suite (`tests/e2e/test_widget_drag.py`): Verified in-tab drag reordering, cross-tab moves, accessibility attributes, non-interference with action buttons, and reorder failure rollback.
+    - Full test suite validated: Pytest unit (267/267 passed), Vitest (68/68 passed), and Playwright E2E (22 passed, 1 skipped).
 
 - **Feat(logging): Integrate unified log-priority-splitter into pod containers**
   - **Quadlet Logging Stream Alignment (`pod/sheepvibes-app.container`, `pod/sheepvibes-rssbridge.container`)**:
