@@ -367,6 +367,67 @@ def update_feed_url(feed_id):
         )
 
 
+def _move_feed_cross_tab(feed, source_tab_id, target_tab_id, position, user_id):
+    """Moves a feed to a different tab, reindexing both source and target tabs."""
+    feed.tab_id = target_tab_id
+    target_feeds = (
+        Feed.query.filter(Feed.tab_id == target_tab_id, Feed.id != feed.id)
+        .order_by(Feed.order.asc(), Feed.id.asc())
+        .all()
+    )
+    if position is not None and position >= 0:
+        pos = min(position, len(target_feeds))
+        target_feeds.insert(pos, feed)
+    else:
+        target_feeds.append(feed)
+
+    for idx, f in enumerate(target_feeds):
+        f.order = idx
+
+    source_feeds = (
+        Feed.query.filter(Feed.tab_id == source_tab_id, Feed.id != feed.id)
+        .order_by(Feed.order.asc(), Feed.id.asc())
+        .all()
+    )
+    for idx, f in enumerate(source_feeds):
+        f.order = idx
+
+    db.session.commit()
+    invalidate_tab_feeds_cache(source_tab_id, user_id=user_id)
+    invalidate_tab_feeds_cache(target_tab_id, user_id=user_id)
+    logger.info(
+        "Moved feed %s from tab %s to tab %s at position %s for user %s.",
+        feed.id,
+        source_tab_id,
+        target_tab_id,
+        feed.order,
+        user_id,
+    )
+
+
+def _reorder_feed_in_same_tab(feed, tab_id, position, user_id):
+    """Reorders a feed within its current tab."""
+    if position is not None and position >= 0:
+        feeds_in_tab = (
+            Feed.query.filter(Feed.tab_id == tab_id, Feed.id != feed.id)
+            .order_by(Feed.order.asc(), Feed.id.asc())
+            .all()
+        )
+        pos = min(position, len(feeds_in_tab))
+        feeds_in_tab.insert(pos, feed)
+        for idx, f in enumerate(feeds_in_tab):
+            f.order = idx
+        db.session.commit()
+        invalidate_tab_feeds_cache(tab_id, user_id=user_id)
+        logger.info(
+            "Reordered feed %s in tab %s to position %s for user %s.",
+            feed.id,
+            tab_id,
+            feed.order,
+            user_id,
+        )
+
+
 @feeds_bp.route("/<int:feed_id>/move", methods=["PUT"])
 @login_required
 def move_feed(feed_id):
@@ -403,64 +464,9 @@ def move_feed(feed_id):
 
     try:
         if source_tab_id != target_tab.id:
-            feed.tab_id = target_tab.id
-
-            target_feeds = (
-                Feed.query.filter(Feed.tab_id == target_tab.id, Feed.id != feed.id)
-                .order_by(Feed.order.asc(), Feed.id.asc())
-                .all()
-            )
-
-            if position is not None and position >= 0:
-                pos = min(position, len(target_feeds))
-                target_feeds.insert(pos, feed)
-            else:
-                target_feeds.append(feed)
-
-            for idx, f in enumerate(target_feeds):
-                f.order = idx
-
-            source_feeds = (
-                Feed.query.filter(Feed.tab_id == source_tab_id, Feed.id != feed.id)
-                .order_by(Feed.order.asc(), Feed.id.asc())
-                .all()
-            )
-            for idx, f in enumerate(source_feeds):
-                f.order = idx
-
-            db.session.commit()
-
-            invalidate_tab_feeds_cache(source_tab_id, user_id=user.id)
-            invalidate_tab_feeds_cache(target_tab.id, user_id=user.id)
-
-            logger.info(
-                "Moved feed %s from tab %s to tab %s at position %s for user %s.",
-                feed.id,
-                source_tab_id,
-                target_tab.id,
-                feed.order,
-                user.id,
-            )
+            _move_feed_cross_tab(feed, source_tab_id, target_tab.id, position, user.id)
         else:
-            if position is not None and position >= 0:
-                feeds_in_tab = (
-                    Feed.query.filter(Feed.tab_id == source_tab_id, Feed.id != feed.id)
-                    .order_by(Feed.order.asc(), Feed.id.asc())
-                    .all()
-                )
-                pos = min(position, len(feeds_in_tab))
-                feeds_in_tab.insert(pos, feed)
-                for idx, f in enumerate(feeds_in_tab):
-                    f.order = idx
-                db.session.commit()
-                invalidate_tab_feeds_cache(source_tab_id, user_id=user.id)
-                logger.info(
-                    "Reordered feed %s in tab %s to position %s for user %s.",
-                    feed.id,
-                    source_tab_id,
-                    feed.order,
-                    user.id,
-                )
+            _reorder_feed_in_same_tab(feed, source_tab_id, position, user.id)
 
         unread_count = _get_unread_count(feed.id)
         result = feed.to_dict(unread_count=unread_count)

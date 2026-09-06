@@ -325,6 +325,40 @@ def get_feeds_for_tab(tab_id):
     return jsonify(response_data)
 
 
+def _validate_reorder_payload(data, tab_feed_map):
+    """Validates the reorder request payload against feeds present in the tab."""
+    if not data or "feed_ids" not in data or not isinstance(data["feed_ids"], list):
+        return None, ("Missing or invalid feed_ids list", 400)
+
+    feed_ids = data["feed_ids"]
+    if not feed_ids:
+        return feed_ids, None
+
+    if not all(isinstance(fid, int) for fid in feed_ids):
+        return None, ("All feed IDs must be integers", 400)
+
+    if len(feed_ids) != len(set(feed_ids)):
+        return None, ("Duplicate feed IDs provided", 400)
+
+    for fid in feed_ids:
+        if fid not in tab_feed_map:
+            return None, (f"Feed {fid} not found in this tab", 400)
+
+    return feed_ids, None
+
+
+def _apply_feed_order(feed_ids, tab_feed_map):
+    """Applies new order indices to feeds in the tab."""
+    for index, fid in enumerate(feed_ids):
+        tab_feed_map[fid].order = index
+
+    unmentioned_order = len(feed_ids)
+    for fid, feed in tab_feed_map.items():
+        if fid not in feed_ids:
+            feed.order = unmentioned_order
+            unmentioned_order += 1
+
+
 @tabs_bp.route("/<int:tab_id>/feeds/reorder", methods=["PUT"])
 @login_required
 def reorder_feeds(tab_id):
@@ -337,36 +371,17 @@ def reorder_feeds(tab_id):
     if not tab:
         return jsonify({"error": "Tab not found"}), 404
 
-    data = request.get_json()
-    if not data or "feed_ids" not in data or not isinstance(data["feed_ids"], list):
-        return jsonify({"error": "Missing or invalid feed_ids list"}), 400
-
-    feed_ids = data["feed_ids"]
-    if not feed_ids:
-        return jsonify({"message": "No feeds to reorder", "feed_ids": []}), 200
-
-    for fid in feed_ids:
-        if not isinstance(fid, int):
-            return jsonify({"error": "All feed IDs must be integers"}), 400
-
-    if len(feed_ids) != len(set(feed_ids)):
-        return jsonify({"error": "Duplicate feed IDs provided"}), 400
-
     tab_feeds = Feed.query.filter_by(tab_id=tab.id).all()
     tab_feed_map = {feed.id: feed for feed in tab_feeds}
 
-    for fid in feed_ids:
-        if fid not in tab_feed_map:
-            return jsonify({"error": f"Feed {fid} not found in this tab"}), 400
+    feed_ids, error = _validate_reorder_payload(request.get_json(), tab_feed_map)
+    if error:
+        return jsonify({"error": error[0]}), error[1]
 
-    for index, fid in enumerate(feed_ids):
-        tab_feed_map[fid].order = index
+    if not feed_ids:
+        return jsonify({"message": "No feeds to reorder", "feed_ids": []}), 200
 
-    unmentioned_order = len(feed_ids)
-    for fid, feed in tab_feed_map.items():
-        if fid not in feed_ids:
-            feed.order = unmentioned_order
-            unmentioned_order += 1
+    _apply_feed_order(feed_ids, tab_feed_map)
 
     try:
         db.session.commit()

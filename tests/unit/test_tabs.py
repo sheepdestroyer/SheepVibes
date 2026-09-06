@@ -1,6 +1,5 @@
 """Unit tests for tab management, feed ordering, and cross-tab feed movements."""
 
-import pytest
 from backend.app import db
 from backend.models import Feed, Tab, User
 
