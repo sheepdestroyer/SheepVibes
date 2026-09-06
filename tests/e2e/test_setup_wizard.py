@@ -68,6 +68,7 @@ def setup_wizard_e2e_routes(page: Page, setup_initially_required: bool = True):
     page.route("**/api/auth/status", handle_auth_status)
     page.route("**/api/auth/setup", handle_auth_setup)
     page.route("**/api/tabs", lambda r: r.fulfill(status=200, content_type="application/json", json=[{"id": 1, "name": "General", "order": 0, "feeds": []}]))
+    page.route("**/api/tabs/*/feeds", lambda r: r.fulfill(status=200, content_type="application/json", json=[]))
 
 
 @pytest.mark.e2e
