@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { formatDate, throttle, sanitizeUrl, getStorageItem, setStorageItem, removeStorageItem } from './utils.js';
+import { formatDate, throttle, sanitizeUrl, getStorageItem, setStorageItem, removeStorageItem, moveNode } from './utils.js';
 
 describe('formatDate', () => {
     it('returns "No date" for null or empty input', () => {
@@ -144,4 +144,46 @@ describe('localStorage helpers', () => {
         removeItemSpy.mockRestore();
     });
 });
+
+describe('moveNode', () => {
+    it('uses moveBefore when supported by the parent container', () => {
+        const parent = document.createElement('div');
+        const node = document.createElement('span');
+        const ref = document.createElement('span');
+        parent.appendChild(ref);
+
+        parent.moveBefore = vi.fn();
+        moveNode(parent, node, ref);
+
+        expect(parent.moveBefore).toHaveBeenCalledWith(node, ref);
+    });
+
+    it('falls back to insertBefore when moveBefore is undefined', () => {
+        const parent = document.createElement('div');
+        const node = document.createElement('span');
+        const ref = document.createElement('span');
+        parent.appendChild(ref);
+
+        // Ensure moveBefore does not exist
+        delete parent.moveBefore;
+        const insertBeforeSpy = vi.spyOn(parent, 'insertBefore');
+
+        moveNode(parent, node, ref);
+
+        expect(insertBeforeSpy).toHaveBeenCalledWith(node, ref);
+        expect(parent.firstChild).toBe(node);
+    });
+
+    it('appends to end when referenceNode is null', () => {
+        const parent = document.createElement('div');
+        const existing = document.createElement('span');
+        const node = document.createElement('span');
+        parent.appendChild(existing);
+
+        moveNode(parent, node, null);
+
+        expect(parent.lastChild).toBe(node);
+    });
+});
+
 

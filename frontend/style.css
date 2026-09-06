@@ -85,6 +85,15 @@ header h1 {
     font-weight: 600;
 }
 
+#tabs-container button.tab-drag-over {
+    background-color: #e3f2fd;
+    border-bottom: 3px solid #005a9c;
+    color: #005a9c;
+    box-shadow: inset 0 0 8px rgba(0, 90, 156, 0.25);
+    transform: translateY(-2px);
+    transition: all 0.15s ease-in-out;
+}
+
 /* Tab Management Buttons */
 #tab-management-buttons {
     margin-left: 15px;
@@ -328,6 +337,58 @@ header h1 {
 
 .feed-widget h2 a:hover {
     text-decoration: underline;
+}
+
+/* Feed Drag Handle & Draggable Styling */
+.feed-drag-handle {
+    cursor: grab;
+    padding: 0 4px;
+    margin-right: 2px;
+    color: #6c757d;
+    user-select: none;
+    -webkit-user-select: none;
+    font-size: 1.1em;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease-in-out, transform 0.15s ease-in-out;
+}
+
+.feed-drag-handle:hover {
+    color: #005a9c;
+    transform: scale(1.1);
+}
+
+.feed-drag-handle:active,
+.feed-drag-handle[aria-grabbed="true"] {
+    cursor: grabbing;
+}
+
+.feed-widget[draggable="true"] h2 {
+    cursor: grab;
+}
+
+.feed-widget[draggable="true"] h2:active {
+    cursor: grabbing;
+}
+
+.feed-widget.is-dragging {
+    opacity: 0.45;
+    border: 2px dashed #005a9c;
+    box-shadow: 0 4px 12px rgba(0, 90, 156, 0.2);
+    transform: scale(0.98);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.feed-widget.drop-before {
+    border-left: 4px solid #005a9c;
+    box-shadow: -4px 0 10px -2px rgba(0, 90, 156, 0.4);
+}
+
+.feed-widget.drop-after {
+    border-right: 4px solid #005a9c;
+    box-shadow: 4px 0 10px -2px rgba(0, 90, 156, 0.4);
 }
 
 .feed-widget ul {
@@ -906,6 +967,13 @@ body.night-mode #tabs-container button.active {
     border-bottom-color: #4da3ff;
 }
 
+body.night-mode #tabs-container button.tab-drag-over {
+    background-color: #1f293d;
+    border-bottom: 3px solid #58a6ff;
+    color: #58a6ff;
+    box-shadow: inset 0 0 8px rgba(88, 166, 255, 0.35);
+}
+
 /* Settings Menu */
 body.night-mode #settings-menu {
     background-color: #1e1e1e;
@@ -953,6 +1021,29 @@ body.night-mode .feed-widget h2 {
 body.night-mode .feed-widget h2 a,
 body.night-mode .feed-widget h2 .feed-widget-title {
     color: #58a6ff;
+}
+
+body.night-mode .feed-drag-handle {
+    color: #8b949e;
+}
+
+body.night-mode .feed-drag-handle:hover {
+    color: #58a6ff;
+}
+
+body.night-mode .feed-widget.is-dragging {
+    border: 2px dashed #58a6ff;
+    box-shadow: 0 4px 12px rgba(88, 166, 255, 0.25);
+}
+
+body.night-mode .feed-widget.drop-before {
+    border-left: 4px solid #58a6ff;
+    box-shadow: -4px 0 10px -2px rgba(88, 166, 255, 0.5);
+}
+
+body.night-mode .feed-widget.drop-after {
+    border-right: 4px solid #58a6ff;
+    box-shadow: 4px 0 10px -2px rgba(88, 166, 255, 0.5);
 }
 
 body.night-mode .feed-widget li.unread a {
