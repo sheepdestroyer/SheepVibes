@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- Configuration ---
 REPO="sheepdestroyer/sheepvibes"
-BRANCH="main" # Or specify a tag/commit if preferred
+BRANCH="${DEPLOY_BRANCH:-main}" # Or specify a tag/commit if preferred
 SYSTEMD_USER_DIR="${HOME}/.config/containers/systemd"
 # Define the Quadlet files to be downloaded
 QUADLET_FILES=(
@@ -90,7 +90,12 @@ for bridge in "${BRIDGE_FILES[@]}"; do
     bridge_url="${QUADLET_BASE_URL}bridges/${bridge}"
     echo "Downloading ${bridge} from ${bridge_url}..."
     if curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" "${bridge_url}" -o "${SYSTEMD_USER_DIR}/bridges/${bridge}"; then
-        echo "${bridge} downloaded successfully to ${SYSTEMD_USER_DIR}/bridges."
+        if grep -q "class GenericChangelogBridge" "${SYSTEMD_USER_DIR}/bridges/${bridge}"; then
+            echo "${bridge} downloaded and verified successfully in ${SYSTEMD_USER_DIR}/bridges."
+        else
+            echo "Error: Verification failed for ${bridge} (invalid content)."
+            DOWNLOAD_SUCCESS=false
+        fi
     else
         echo "Error downloading ${bridge} from ${bridge_url}."
         DOWNLOAD_SUCCESS=false

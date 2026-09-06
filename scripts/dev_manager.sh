@@ -122,6 +122,9 @@ do_up() {
 
     echo "--- SheepVibes Dev Environment Setup (Runtime: $CMD_BASE) ---"
 
+    local PROJECT_ROOT
+    PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+
     # 1. Check/Build Image
     local BUILD_FLAGS=()
     if [[ "$REBUILD" == true ]]; then
@@ -137,8 +140,6 @@ do_up() {
              echo "Rebuilding image..."
         fi
         
-        local PROJECT_ROOT
-        PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
         (cd "$PROJECT_ROOT" && "$CMD" build "${BUILD_FLAGS[@]}" -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else

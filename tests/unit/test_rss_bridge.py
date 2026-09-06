@@ -119,12 +119,16 @@ def test_validate_and_resolve_url_allows_configured_rss_bridge(monkeypatch):
     monkeypatch.setenv("RSS_BRIDGE_URL", "http://localhost:80")
     monkeypatch.setenv("TESTING", "false")
 
-    # The configured RSS-Bridge URL must be allowed
-    safe_ip, host = feed_service.validate_and_resolve_url("http://localhost:80/?action=display")
+    # The configured RSS-Bridge URL must be allowed when allow_bridge=True
+    safe_ip, host = feed_service.validate_and_resolve_url(
+        "http://localhost:80/?action=display", allow_bridge=True
+    )
     assert safe_ip == "127.0.0.1"
     assert host in ("localhost", "127.0.0.1")
 
-    safe_ip, host = feed_service.validate_and_resolve_url("http://127.0.0.1:80/?action=detect")
+    safe_ip, host = feed_service.validate_and_resolve_url(
+        "http://127.0.0.1:80/?action=detect", allow_bridge=True
+    )
     assert safe_ip == "127.0.0.1"
     assert host in ("localhost", "127.0.0.1")
 
@@ -443,3 +447,65 @@ def test_generic_changelog_bridge_patterns():
     assert "div[data-section-row]" in code
     assert "detectParameters" in code
     assert "changelog" in code
+
+    # Verify PCRE delimiter escaping in date regexes
+    assert r"20\d\d[-\/.]" in code
+
+    # Verify top-level JSON-LD array normalization
+    assert "isset($json[0])" in code
+
+    # Verify SSRF IP filtering
+    assert "FILTER_FLAG_NO_PRIV_RANGE" in code
+
+
+def test_validate_and_resolve_url_restricts_bridge_to_internal_calls(monkeypatch):
+    """Verifies that arbitrary user URLs targeting RSS-Bridge endpoint are rejected by default,
+    while internal bridge requests passing allow_bridge=True succeed."""
+    monkeypatch.setenv("RSS_BRIDGE_URL", "http://localhost:80")
+    monkeypatch.delenv("TESTING", raising=False)
+
+    # User input targeting the bridge directly with allow_bridge=False (default)
+    # should be rejected because localhost is a private/loopback address
+    user_url = "http://localhost:80/?action=detect&url=https://malicious.internal"
+    ip, host = feed_service.validate_and_resolve_url(user_url, allow_bridge=False)
+    assert ip is None
+    assert host is None
+
+    # Internally generated call with allow_bridge=True is permitted
+    ip, host = feed_service.validate_and_resolve_url(user_url, allow_bridge=True)
+    assert ip == "127.0.0.1"
+    assert host == "localhost"
+
+
+def test_autodiscovery_recursion_bounded_against_cycles():
+    """Verifies that autodiscovery cycles (e.g. Page A -> Page B -> Page A) do not cause infinite recursion."""
+    page_a_html = (
+        '<html><head><link rel="alternate" type="application/atom+xml" '
+        'href="https://example.org/page_b"></head><body>Page A</body></html>'
+    )
+    page_b_html = (
+        '<html><head><link rel="alternate" type="application/atom+xml" '
+        'href="https://example.org/page_a"></head><body>Page B</body></html>'
+    )
+
+    fetch_counts = {"a": 0, "b": 0}
+
+    def fake_download(opener, url):
+        if "page_a" in url:
+            fetch_counts["a"] += 1
+            return page_a_html.encode("utf-8")
+        if "page_b" in url:
+            fetch_counts["b"] += 1
+            return page_b_html.encode("utf-8")
+        return b""
+
+    with patch.object(feed_service, "validate_and_resolve_url", return_value=("192.0.2.1", "example.org")), \
+         patch.object(feed_service, "_build_safe_opener", return_value=MagicMock()), \
+         patch.object(feed_service, "_download_feed_content", side_effect=fake_download), \
+         patch.object(feed_service, "fetch_rss_bridge_feed", return_value=None):
+
+        result = feed_service.fetch_feed("https://example.org/page_a")
+        assert result is None
+        # Verify recursion terminated gracefully without infinite loop
+        assert fetch_counts["a"] == 1
+        assert fetch_counts["b"] == 1

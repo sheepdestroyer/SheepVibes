@@ -26,6 +26,21 @@ class GenericChangelogBridge extends BridgeAbstract
             throwClientException('Missing required "url" parameter');
         }
 
+        // Mitigate SSRF: Validate that target resolves only to public, non-reserved IP addresses
+        $parsed = parse_url($url);
+        if (!$parsed || !isset($parsed['host'])) {
+            throwClientException('Invalid target URL');
+        }
+        $host = $parsed['host'];
+        $ips = gethostbynamel($host);
+        if ($ips !== false) {
+            foreach ($ips as $ip) {
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                    throwClientException('Target resolves to a private or reserved IP address');
+                }
+            }
+        }
+
         $html = getSimpleHTMLDOM($url);
         if (!$html) {
             throwServerException('Could not load content from ' . $url);
@@ -56,59 +71,61 @@ class GenericChangelogBridge extends BridgeAbstract
                 continue;
             }
 
-            // Case A: blogPost array (e.g. Lucebox and standard schema.org Blog)
-            if (isset($json['blogPost']) && is_array($json['blogPost'])) {
-                foreach ($json['blogPost'] as $post) {
-                    $item = $this->parseJsonLdItem($post, $baseUrl);
+            // Normalize top-level arrays of JSON-LD objects
+            $nodes = (isset($json[0]) && is_array($json[0])) ? $json : [$json];
+            foreach ($nodes as $node) {
+                if (!is_array($node)) {
+                    continue;
+                }
+
+                // Case A: blogPost array (e.g. Lucebox and standard schema.org Blog)
+                if (isset($node['blogPost']) && is_array($node['blogPost'])) {
+                    foreach ($node['blogPost'] as $post) {
+                        $item = $this->parseJsonLdItem($post, $baseUrl);
+                        if ($item) {
+                            $this->items[] = $item;
+                        }
+                    }
+                }
+
+                // Case B: ItemList with itemListElement array
+                if (isset($node['itemListElement']) && is_array($node['itemListElement'])) {
+                    foreach ($node['itemListElement'] as $element) {
+                        $itemData = $element['item'] ?? $element;
+                        if (is_array($itemData)) {
+                            $item = $this->parseJsonLdItem($itemData, $baseUrl);
+                            if ($item) {
+                                $this->items[] = $item;
+                            }
+                        }
+                    }
+                }
+
+                // Case C: Array in @graph
+                if (isset($node['@graph']) && is_array($node['@graph'])) {
+                    foreach ($node['@graph'] as $graphNode) {
+                        $type = $graphNode['@type'] ?? '';
+                        if (in_array($type, ['BlogPosting', 'Article', 'NewsArticle', 'TechArticle'])) {
+                            $item = $this->parseJsonLdItem($graphNode, $baseUrl);
+                            if ($item) {
+                                $this->items[] = $item;
+                            }
+                        }
+                    }
+                }
+
+                // Case D: Single BlogPosting / Article object
+                $type = $node['@type'] ?? '';
+                if (in_array($type, ['BlogPosting', 'Article', 'NewsArticle', 'TechArticle'])) {
+                    $item = $this->parseJsonLdItem($node, $baseUrl);
                     if ($item) {
                         $this->items[] = $item;
                     }
                 }
-                if (!empty($this->items)) {
-                    return;
-                }
             }
 
-            // Case B: ItemList with itemListElement array
-            if (isset($json['itemListElement']) && is_array($json['itemListElement'])) {
-                foreach ($json['itemListElement'] as $element) {
-                    $itemData = $element['item'] ?? $element;
-                    if (is_array($itemData)) {
-                        $item = $this->parseJsonLdItem($itemData, $baseUrl);
-                        if ($item) {
-                            $this->items[] = $item;
-                        }
-                    }
-                }
-                if (!empty($this->items)) {
-                    return;
-                }
-            }
-
-            // Case C: Array in @graph
-            if (isset($json['@graph']) && is_array($json['@graph'])) {
-                foreach ($json['@graph'] as $node) {
-                    $type = $node['@type'] ?? '';
-                    if (in_array($type, ['BlogPosting', 'Article', 'NewsArticle', 'TechArticle'])) {
-                        $item = $this->parseJsonLdItem($node, $baseUrl);
-                        if ($item) {
-                            $this->items[] = $item;
-                        }
-                    }
-                }
-                if (!empty($this->items)) {
-                    return;
-                }
-            }
-
-            // Case D: Single BlogPosting / Article root object
-            $type = $json['@type'] ?? '';
-            if (in_array($type, ['BlogPosting', 'Article', 'NewsArticle', 'TechArticle'])) {
-                $item = $this->parseJsonLdItem($json, $baseUrl);
-                if ($item) {
-                    $this->items[] = $item;
-                    return;
-                }
+            if (!empty($this->items)) {
+                return;
             }
         }
     }
@@ -259,7 +276,7 @@ class GenericChangelogBridge extends BridgeAbstract
             $matchingHeadings = [];
             foreach ($headings as $h) {
                 $text = trim($h->plaintext);
-                if (preg_match('/(v?\d+\.\d+|\b(20\d\d[-/.][01]\d[-/.][0-3]\d)\b|release|changelog|update)/i', $text)) {
+                if (preg_match('/(v?\d+\.\d+|\b(20\d\d[-\/.][01]\d[-\/.][0-3]\d)\b|release|changelog|update)/i', $text)) {
                     $matchingHeadings[] = $h;
                 }
             }
@@ -326,7 +343,7 @@ class GenericChangelogBridge extends BridgeAbstract
         $textToSearch = $title . ' ' . substr(strip_tags($el->plaintext), 0, 500);
 
         // ISO format YYYY-MM-DD
-        if (preg_match('/\b(20\d\d[-/.][01]\d[-/.][0-3]\d)\b/', $textToSearch, $m)) {
+        if (preg_match('/\b(20\d\d[-\/.][01]\d[-\/.][0-3]\d)\b/', $textToSearch, $m)) {
             $parsed = strtotime($m[1]);
             if ($parsed !== false) {
                 return $parsed;

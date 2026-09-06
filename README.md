@@ -170,7 +170,15 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
     podman run -d --name sheepvibes-valkey-dev --network sheepvibes-dev-network docker.io/valkey/valkey:9.1.1
     ```
 
-3.  **Run the Application Container**:
+3.  **Start RSS-Bridge Container (Optional, for RSS-less page bridging)**:
+    ```bash
+    podman run -d --name sheepvibes-rssbridge-dev \
+        --network sheepvibes-dev-network \
+        -v ./pod/bridges:/config:Z \
+        docker.io/rssbridge/rss-bridge:latest
+    ```
+
+4.  **Run the Application Container**:
     ```bash
     mkdir -p ./dev_data
     podman run -d --name sheepvibes-app-dev \
@@ -179,6 +187,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
         -v ./dev_data:/app/data:Z \
         -e DATABASE_PATH=/app/data/sheepvibes.db \
         -e CACHE_VALKEY_URL=redis://sheepvibes-valkey-dev:6379/0 \
+        -e RSS_BRIDGE_URL=http://sheepvibes-rssbridge-dev:80 \
         -e FLASK_APP=backend.app \
         -e PYTHONPATH=/app \
         -e UPDATE_INTERVAL_MINUTES=15 \
@@ -209,7 +218,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 *   `UPDATE_INTERVAL_MINUTES`: Recurring interval in minutes for background feed update scheduler (default: 15).
 *   `CACHE_VALKEY_URL`: Connection URL for the Valkey caching service (default: `redis://localhost:6379/0`; fallback supported via `CACHE_REDIS_URL`).
 *   `CACHE_VALKEY_PORT`: Dynamic host port override used by automated CI test runners.
-*   `RSS_BRIDGE_URL`: Base URL for the internal RSS-Bridge service (default: `http://localhost:80` inside the container pod).
+*   `RSS_BRIDGE_URL`: Base URL for the internal RSS-Bridge service (default: `http://localhost:80` in the systemd pod, or `http://sheepvibes-rssbridge-dev:80` in custom container networks). If unset or unreachable, RSS-Bridge fallback is skipped.
 *   `FEED_FETCH_TIMEOUT`: Network timeout in seconds for downloading external feed content (default: 20).
 *   `MAX_CONCURRENT_FETCHES`: Maximum concurrent worker threads for fetching feeds in parallel (default: 5, capped at 10).
 *   `FLASK_APP`: Flask application entrypoint (`backend.app`).

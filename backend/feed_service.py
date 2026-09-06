@@ -933,7 +933,7 @@ def discover_feed_url_from_html(html_content, base_url):
 
 def _fetch_from_bridge_url(bridge_endpoint_url, page_url):
     """Internal helper to fetch and parse an Atom/RSS feed from an RSS-Bridge endpoint."""
-    safe_ip, _ = validate_and_resolve_url(bridge_endpoint_url)
+    safe_ip, _ = validate_and_resolve_url(bridge_endpoint_url, allow_bridge=True)
     if not safe_ip:
         return None
 
@@ -1009,14 +1009,14 @@ def fetch_rss_bridge_feed(page_url):
         return None
 
 
-def validate_and_resolve_url(url):
+def validate_and_resolve_url(url, allow_bridge=False):
     """Validates URL and resolves IP to prevent SSRF (returns safe IP or None)."""
     try:
         parsed = urlparse(url)
         if not (parsed.scheme in ("http", "https") and parsed.hostname):
             return None, None
 
-        if is_rss_bridge_url(url):
+        if allow_bridge and is_rss_bridge_url(url):
             return ("127.0.0.1", parsed.hostname or "localhost")
 
         try:
@@ -1391,7 +1391,7 @@ def _parse_and_validate_feed(content, feed_url):
     return parsed_feed
 
 
-def fetch_feed(feed_url):
+def fetch_feed(feed_url, _depth=0, _visited=None):
     """Fetches and parses a feed, preventing SSRF via IP pinning.
     Transparently supports feed autodiscovery from HTML and delegation
     to RSS-Bridge for RSS-less pages.
@@ -1399,6 +1399,9 @@ def fetch_feed(feed_url):
     safe_ip, _ = validate_and_resolve_url(feed_url)
     if not safe_ip:
         return None
+
+    visited = set(_visited or ())
+    visited.add(feed_url)
 
     logger.info("Fetching feed: %s", _sanitize_for_log(feed_url))
     try:
@@ -1421,13 +1424,13 @@ def fetch_feed(feed_url):
         # If content was returned (e.g. HTML), check for <link rel="alternate"> feed autodiscovery
         if content:
             discovered_url = discover_feed_url_from_html(content, feed_url)
-            if discovered_url and discovered_url != feed_url:
+            if discovered_url and discovered_url not in visited and _depth < 2:
                 logger.info(
                     "Autodiscovered alternate feed '%s' from HTML at '%s'",
                     _sanitize_for_log(discovered_url),
                     _sanitize_for_log(feed_url),
                 )
-                discovered_feed = fetch_feed(discovered_url)
+                discovered_feed = fetch_feed(discovered_url, _depth=_depth + 1, _visited=visited)
                 if discovered_feed and discovered_feed.entries:
                     return discovered_feed
 
