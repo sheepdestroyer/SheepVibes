@@ -217,7 +217,7 @@ def test_fetch_feed_delegates_to_rss_bridge(monkeypatch):
 
 def test_add_feed_api_creates_rss_bridged_feed(auth_client, monkeypatch):
     """Verifies POST /api/feeds successfully creates and populates an RSS-less page via RSS-Bridge."""
-    client, user, tab = auth_client
+    client, _user, tab = auth_client
     monkeypatch.setenv("RSS_BRIDGE_URL", "http://localhost:80")
 
     def fake_download(opener, url):
@@ -357,7 +357,13 @@ def test_deployment_configuration_and_bridge_files():
 
     # Custom bridge files
     bridges_dir = os.path.join(project_root, "pod", "bridges")
-    for bridge_name in ("LuceboxBridge.php", "AntigravityChangelogBridge.php", "JulesChangelogBridge.php"):
+    expected_bridges = (
+        "LuceboxBridge.php",
+        "AntigravityChangelogBridge.php",
+        "JulesChangelogBridge.php",
+        "GenericChangelogBridge.php",
+    )
+    for bridge_name in expected_bridges:
         bridge_path = os.path.join(bridges_dir, bridge_name)
         assert os.path.isfile(bridge_path)
         with open(bridge_path, "r", encoding="utf-8") as f:
@@ -371,9 +377,8 @@ def test_deployment_configuration_and_bridge_files():
     with open(deploy_script, "r", encoding="utf-8") as f:
         d_content = f.read()
         assert "sheepvibes-rssbridge.container" in d_content
-        assert "LuceboxBridge.php" in d_content
-        assert "AntigravityChangelogBridge.php" in d_content
-        assert "JulesChangelogBridge.php" in d_content
+        for bridge_name in expected_bridges:
+            assert bridge_name in d_content
 
     # Dev manager script
     dev_script = os.path.join(project_root, "scripts", "dev_manager.sh")
@@ -381,3 +386,62 @@ def test_deployment_configuration_and_bridge_files():
         dev_content = f.read()
         assert "sheepvibes-dev-rssbridge" in dev_content
         assert "RSS_BRIDGE_URL" in dev_content
+
+
+def test_fetch_rss_bridge_feed_cascades_to_generic_changelog(monkeypatch):
+    """Verifies fetch_rss_bridge_feed cascades to GenericChangelogBridge when autodetect yields no results."""
+    monkeypatch.setenv("RSS_BRIDGE_URL", "http://localhost:80")
+
+    generic_atom = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <title type="text">Custom Tool Changelog</title>
+      <link rel="alternate" type="text/html" href="https://example.org/docs/history"/>
+      <entry>
+        <title type="html">[v2.0.0] Major architectural update</title>
+        <published>2026-09-01T12:00:00+00:00</published>
+        <id>https://example.org/docs/history#v2-0-0</id>
+        <link rel="alternate" type="text/html"
+              href="https://example.org/docs/history#v2-0-0"/>
+        <content type="html">Details on the release</content>
+      </entry>
+    </feed>
+    """
+
+    def fake_download(opener, url):
+        # First autodetect call returns no bridge found HTML
+        if "action=detect" in url:
+            return b"<html><body>No bridge found for given URL</body></html>"
+        # Second fallback call to GenericChangelogBridge returns Atom
+        if "bridge=GenericChangelogBridge" in url:
+            return generic_atom.encode("utf-8")
+        return b""
+
+    with patch.object(feed_service, "validate_and_resolve_url", return_value=("127.0.0.1", "localhost")), \
+         patch.object(feed_service, "_build_safe_opener", return_value=MagicMock()), \
+         patch.object(feed_service, "_download_feed_content", side_effect=fake_download):
+
+        parsed = feed_service.fetch_rss_bridge_feed("https://example.org/docs/history")
+        assert parsed is not None
+        assert parsed.feed.get("title") == "Custom Tool Changelog"
+        assert len(parsed.entries) == 1
+        assert "[v2.0.0]" in parsed.entries[0]["title"]
+        assert parsed.entries[0]["link"] == "https://example.org/docs/history#v2-0-0"
+
+
+def test_generic_changelog_bridge_patterns():
+    """Verifies GenericChangelogBridge patterns and selectors in the PHP file."""
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    bridge_path = os.path.join(project_root, "pod", "bridges", "GenericChangelogBridge.php")
+    assert os.path.isfile(bridge_path)
+
+    with open(bridge_path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    # Check key selectors and methods
+    assert "class GenericChangelogBridge extends BridgeAbstract" in code
+    assert "extractFromContainers" in code
+    assert "extractFromHeadings" in code
+    assert "article.changelog-entry" in code
+    assert "div[data-section-row]" in code
+    assert "detectParameters" in code
+    assert "changelog" in code

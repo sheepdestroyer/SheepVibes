@@ -934,8 +934,28 @@ def discover_feed_url_from_html(html_content, base_url):
     return None
 
 
+def _fetch_from_bridge_url(bridge_endpoint_url, page_url):
+    """Internal helper to fetch and parse an Atom/RSS feed from an RSS-Bridge endpoint."""
+    safe_ip, _ = validate_and_resolve_url(bridge_endpoint_url)
+    if not safe_ip:
+        return None
+
+    opener = _build_safe_opener(safe_ip)
+    content = _download_feed_content(opener, bridge_endpoint_url)
+    if not content:
+        return None
+
+    parsed_feed = _parse_and_validate_feed(content, bridge_endpoint_url)
+    if parsed_feed and parsed_feed.entries:
+        if not parsed_feed.feed.get("link") or is_rss_bridge_url(parsed_feed.feed.get("link")):
+            parsed_feed.feed["link"] = page_url
+        return parsed_feed
+    return None
+
+
 def fetch_rss_bridge_feed(page_url):
     """Attempts to fetch an Atom feed from RSS-Bridge for an RSS-less web page.
+    Cascades from automatic bridge detection to generic changelog scraping.
 
     Args:
         page_url (str): The web page URL to generate a feed for.
@@ -947,34 +967,40 @@ def fetch_rss_bridge_feed(page_url):
     if not bridge_base:
         return None
 
-    bridge_query_url = (
-        f"{bridge_base}/?action=detect&url={quote(page_url, safe='')}&format=Atom"
-    )
-    logger.info(
-        "Attempting RSS-Bridge resolution for '%s' via %s",
-        _sanitize_for_log(page_url),
-        _sanitize_for_log(bridge_query_url),
-    )
     try:
-        safe_ip, _ = validate_and_resolve_url(bridge_query_url)
-        if not safe_ip:
-            return None
-
-        opener = _build_safe_opener(safe_ip)
-        content = _download_feed_content(opener, bridge_query_url)
-        if not content:
-            return None
-
-        parsed_feed = _parse_and_validate_feed(content, bridge_query_url)
-        if parsed_feed and parsed_feed.entries:
+        # 1. Attempt automatic bridge detection (?action=detect)
+        detect_url = f"{bridge_base}/?action=detect&url={quote(page_url, safe='')}&format=Atom"
+        logger.info(
+            "Attempting RSS-Bridge autodetect for '%s' via %s",
+            _sanitize_for_log(page_url),
+            _sanitize_for_log(detect_url),
+        )
+        parsed = _fetch_from_bridge_url(detect_url, page_url)
+        if parsed and parsed.entries:
             logger.info(
-                "RSS-Bridge successfully generated %s entries for '%s'",
-                len(parsed_feed.entries),
+                "RSS-Bridge autodetect found %s entries for '%s'",
+                len(parsed.entries),
                 _sanitize_for_log(page_url),
             )
-            if not parsed_feed.feed.get("link") or is_rss_bridge_url(parsed_feed.feed.get("link")):
-                parsed_feed.feed["link"] = page_url
-            return parsed_feed
+            return parsed
+
+        # 2. If autodetect yielded no entries, attempt GenericChangelogBridge
+        generic_url = (
+            f"{bridge_base}/?action=display&bridge=GenericChangelogBridge"
+            f"&url={quote(page_url, safe='')}&format=Atom"
+        )
+        logger.info(
+            "Attempting RSS-Bridge GenericChangelogBridge for '%s'",
+            _sanitize_for_log(page_url),
+        )
+        parsed = _fetch_from_bridge_url(generic_url, page_url)
+        if parsed and parsed.entries:
+            logger.info(
+                "RSS-Bridge GenericChangelogBridge generated %s entries for '%s'",
+                len(parsed.entries),
+                _sanitize_for_log(page_url),
+            )
+            return parsed
 
         return None
     except Exception:  # pylint: disable=broad-exception-caught

@@ -10,12 +10,13 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Implement custom PHP bridge `pod/bridges/LuceboxBridge.php` for Lucebox blog (`https://www.lucebox.com/blog`) with JSON-LD schema parsing and HTML fallback.
     *   [x] Implement custom PHP bridge `pod/bridges/AntigravityChangelogBridge.php` for Google Antigravity changelog (`https://antigravity.google/changelog`).
     *   [x] Implement custom PHP bridge `pod/bridges/JulesChangelogBridge.php` for Google Jules documentation changelog (`https://jules.google/docs/changelog/`).
+    *   [x] Implement generic automatic bridge `pod/bridges/GenericChangelogBridge.php` to extract changelog and release entries from arbitrary web pages via container selectors and heading patterns without site-specific code.
     *   [x] Support GitHub Releases feeds (`https://github.com/NousResearch/hermes-agent/releases`) via RSS-Bridge's built-in `GithubReleaseBridge`.
     *   [x] Update `pod/sheepvibes-app.container` with `Wants`/`After=sheepvibes-rssbridge.container` and `Environment=RSS_BRIDGE_URL=http://localhost:80`.
     *   [x] Update `scripts/dev_manager.sh` to spin up `sheepvibes-dev-rssbridge` alongside App and Valkey, and clean up on teardown.
-    *   [x] Update `scripts/deploy_pod.sh` to install Quadlet configuration and deploy custom bridge files.
-    *   [x] Integrate RSS-Bridge into `backend/feed_service.py` with `RSS_BRIDGE_URL` configuration, safe SSRF loopback routing for trusted RSS-Bridge host, HTML `<link rel="alternate">` autodiscovery, and automatic delegation fallback for RSS-less URLs.
-    *   [x] Add unit test suite in `tests/unit/test_rss_bridge.py` verifying URL validation, SSRF protection, feed delegation, and custom bridge parsing.
+    *   [x] Update `scripts/deploy_pod.sh` to install Quadlet configuration and deploy custom bridge files including `GenericChangelogBridge.php`.
+    *   [x] Integrate RSS-Bridge into `backend/feed_service.py` with `RSS_BRIDGE_URL` configuration, safe SSRF loopback routing for trusted RSS-Bridge host, HTML `<link rel="alternate">` autodiscovery, automatic delegation to matching bridges, and seamless fallback to `GenericChangelogBridge` for RSS-less URLs.
+    *   [x] Add unit test suite in `tests/unit/test_rss_bridge.py` verifying URL validation, SSRF protection, feed delegation, custom bridge parsing, and GenericChangelogBridge fallback.
     *   [x] Validate full test suite (Pytest backend unit, Playwright E2E, Vitest frontend).
 
 ## 2026-09-05 Parallelized Testing

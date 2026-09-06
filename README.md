@@ -37,7 +37,7 @@ A simple, self-hosted RSS/Atom feed aggregator inspired by Netvibes & iGoogle, d
     *   `e2e/`: Playwright end-to-end integration tests.
     *   `frontend/js/*.test.js`: Vitest unit tests for frontend utility functions, API layer, and UI helpers.
 *   `pod/`: Quadlet pod, container, and volume definitions for systemd/Podman deployment (`sheepvibespod.pod`, `sheepvibes-app.container`, `sheepvibes-valkey.container`, `sheepvibes-rssbridge.container`).
-    *   `bridges/`: Custom PHP bridge definitions for RSS-Bridge (`LuceboxBridge.php`, `AntigravityChangelogBridge.php`, `JulesChangelogBridge.php`).
+    *   `bridges/`: Custom PHP bridge definitions for RSS-Bridge (`LuceboxBridge.php`, `AntigravityChangelogBridge.php`, `JulesChangelogBridge.php`, `GenericChangelogBridge.php`).
 *   `scripts/`: Automation and development helper scripts (`dev_manager.sh`, `deploy_pod.sh`, `run_dev.sh`, `rebuild_container.sh`).
 
 ## Production Deployment (Podman Pod with systemd using Quadlet)

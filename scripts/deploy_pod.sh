@@ -18,6 +18,7 @@ BRIDGE_FILES=(
     "LuceboxBridge.php"
     "AntigravityChangelogBridge.php"
     "JulesChangelogBridge.php"
+    "GenericChangelogBridge.php"
 )
 # Base URL for the directory containing the pod file in the repository
 QUADLET_BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/pod/"
