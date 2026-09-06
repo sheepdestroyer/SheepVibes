@@ -2535,7 +2535,6 @@ def test_get_feed_items_and_tab_feeds_include_comments_url(client, setup_tabs_an
 def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disable=unused-argument
     """Directly test _get_top_items_for_feeds in backend.blueprints.tabs for comments_url."""
     from backend.blueprints.tabs import _get_top_items_for_feeds
-    from datetime import datetime, timezone
 
     with app.app_context():
         tab = Tab(name="Serialization Tab", order=1)
@@ -2551,7 +2550,7 @@ def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disabl
             link="https://example.com/article1",
             comments_url="https://news.ycombinator.com/item?id=101",
             guid="guid-101",
-            published_time=datetime(2026, 8, 14, 1, 0, 0, tzinfo=timezone.utc),
+            published_time=datetime.datetime(2026, 8, 14, 1, 0, 0, tzinfo=timezone.utc),
         )
         item2 = FeedItem(
             feed_id=feed.id,
@@ -2559,7 +2558,7 @@ def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disabl
             link="https://example.com/article2",
             comments_url=None,
             guid="guid-102",
-            published_time=datetime(2026, 8, 14, 0, 50, 0, tzinfo=timezone.utc),
+            published_time=datetime.datetime(2026, 8, 14, 0, 50, 0, tzinfo=timezone.utc),
         )
         item3 = FeedItem(
             feed_id=feed.id,
@@ -2567,7 +2566,7 @@ def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disabl
             link="https://news.ycombinator.com/item?id=103",
             comments_url="https://news.ycombinator.com/item?id=103",
             guid="guid-103",
-            published_time=datetime(2026, 8, 14, 0, 40, 0, tzinfo=timezone.utc),
+            published_time=datetime.datetime(2026, 8, 14, 0, 40, 0, tzinfo=timezone.utc),
         )
         db.session.add_all([item1, item2, item3])
         db.session.commit()
@@ -2592,7 +2591,6 @@ def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disabl
 
 def test_feed_items_pagination_comments_url_preservation(client, setup_tabs_and_feeds):
     """Test pagination limits and offsets in /api/feeds/<feed_id>/items preserving comments_url."""
-    from datetime import datetime, timezone
 
     feed_id = setup_tabs_and_feeds["feed1_id"]
     with app.app_context():
@@ -2606,7 +2604,7 @@ def test_feed_items_pagination_comments_url_preservation(client, setup_tabs_and_
                     link=f"https://example.com/item-{i}",
                     comments_url=f"https://news.ycombinator.com/item?id={i + 1000}" if i % 2 == 0 else None,
                     guid=f"paginated-guid-{i}",
-                    published_time=datetime(2026, 8, 14, 0, 50 - i, 0, tzinfo=timezone.utc),
+                    published_time=datetime.datetime(2026, 8, 14, 0, 50 - i, 0, tzinfo=timezone.utc),
                 )
             )
         db.session.commit()
