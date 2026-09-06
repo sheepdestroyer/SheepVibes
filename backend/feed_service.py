@@ -861,32 +861,29 @@ def get_rss_bridge_url():
     return bridge_url.rstrip("/")
 
 
+def _normalize_endpoint(parsed_url):
+    """Extracts (scheme, normalized_host, port) for trusted endpoint comparison."""
+    host = (parsed_url.hostname or "").lower()
+    if not host:
+        return None
+    if host == "127.0.0.1":
+        host = "localhost"
+    scheme = parsed_url.scheme.lower()
+    default_port = 443 if scheme == "https" else 80
+    return scheme, host, parsed_url.port or default_port
+
+
 def is_rss_bridge_url(url):
     """Checks if a URL targets the trusted internal RSS-Bridge service."""
-    if not url or not isinstance(url, str):
+    if not isinstance(url, str) or not url:
         return False
     bridge_url = get_rss_bridge_url()
     if not bridge_url:
         return False
     try:
-        parsed_bridge = urlparse(bridge_url)
-        parsed_target = urlparse(url)
-        if parsed_bridge.scheme != parsed_target.scheme:
-            return False
-
-        target_host = (parsed_target.hostname or "").lower()
-        bridge_host = (parsed_bridge.hostname or "").lower()
-        if not target_host or not bridge_host:
-            return False
-
-        if target_host in ("localhost", "127.0.0.1") and bridge_host in ("localhost", "127.0.0.1"):
-            hosts_match = True
-        else:
-            hosts_match = (target_host == bridge_host)
-
-        target_port = parsed_target.port or (443 if parsed_target.scheme == "https" else 80)
-        bridge_port = parsed_bridge.port or (443 if parsed_bridge.scheme == "https" else 80)
-        return hosts_match and (target_port == bridge_port)
+        target_ep = _normalize_endpoint(urlparse(url))
+        bridge_ep = _normalize_endpoint(urlparse(bridge_url))
+        return target_ep is not None and target_ep == bridge_ep
     except Exception:
         return False
 
@@ -1364,13 +1361,7 @@ def _download_feed_content(opener, feed_url):
 
         return content
 
-    except (
-        urllib.error.URLError,
-        TimeoutError,
-        socket.timeout,
-        OSError,
-        http.client.HTTPException,
-    ) as exc:
+    except (OSError, http.client.HTTPException) as exc:
         logger.warning(
             "Failed to fetch feed %s: %s",
             _sanitize_for_log(feed_url),

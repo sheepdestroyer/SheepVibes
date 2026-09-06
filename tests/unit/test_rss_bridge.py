@@ -217,7 +217,7 @@ def test_fetch_feed_delegates_to_rss_bridge(monkeypatch):
 
 def test_add_feed_api_creates_rss_bridged_feed(auth_client, monkeypatch):
     """Verifies POST /api/feeds successfully creates and populates an RSS-less page via RSS-Bridge."""
-    client, _user, tab = auth_client
+    client, _, tab = auth_client
     monkeypatch.setenv("RSS_BRIDGE_URL", "http://localhost:80")
 
     def fake_download(opener, url):
