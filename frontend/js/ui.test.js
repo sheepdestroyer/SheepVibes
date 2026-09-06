@@ -21,7 +21,9 @@ import {
     showChangePasswordModal,
     closeChangePasswordModal,
     renderUserState,
-    clearUserState
+    clearUserState,
+    getDraggedWidget,
+    setDraggedWidget
 } from './ui.js';
 
 describe('createBadge', () => {
@@ -691,3 +693,185 @@ describe('Modals and Progress helpers', () => {
         expect(document.getElementById('setup-wizard-error').classList.contains('hidden')).toBe(true);
     });
 });
+
+describe('drag and drop widgets and tabs', () => {
+    function createMockDataTransfer() {
+        const data = {};
+        return {
+            effectAllowed: 'none',
+            dropEffect: 'none',
+            setData: (type, val) => { data[type] = val; },
+            getData: (type) => data[type] || ''
+        };
+    }
+
+    it('renders drag handle and sets draggable attribute on feed widget', () => {
+        const feed = { id: 10, tab_id: 1, name: 'Tech Feed', url: 'https://example.com', unread_count: 0, items: [] };
+        const callbacks = {
+            onEdit: vi.fn(),
+            onDelete: vi.fn(),
+            onMarkItemRead: vi.fn(),
+            onLoadMore: vi.fn(),
+            onReorderFeeds: vi.fn()
+        };
+
+        const widget = createFeedWidget(feed, callbacks);
+        expect(widget.getAttribute('draggable')).toBe('true');
+
+        const dragHandle = widget.querySelector('.feed-drag-handle');
+        expect(dragHandle).not.toBeNull();
+        expect(dragHandle.getAttribute('role')).toBe('button');
+        expect(dragHandle.getAttribute('aria-grabbed')).toBe('false');
+        expect(dragHandle.textContent).toBe('⋮⋮');
+    });
+
+    it('initiates dragstart from handle or header and sets dragging state', () => {
+        const feed = { id: 20, tab_id: 1, name: 'News Feed', url: 'https://example.com', unread_count: 0, items: [] };
+        const widget = createFeedWidget(feed, {
+            onEdit: vi.fn(),
+            onDelete: vi.fn(),
+            onMarkItemRead: vi.fn(),
+            onLoadMore: vi.fn(),
+            onReorderFeeds: vi.fn()
+        });
+
+        const dt = createMockDataTransfer();
+        const dragHandle = widget.querySelector('.feed-drag-handle');
+        const dragEvent = new Event('dragstart', { bubbles: true, cancelable: true });
+        dragEvent.dataTransfer = dt;
+
+        dragHandle.dispatchEvent(dragEvent);
+
+        expect(widget.classList.contains('is-dragging')).toBe(true);
+        expect(dragHandle.getAttribute('aria-grabbed')).toBe('true');
+        expect(dt.effectAllowed).toBe('move');
+        expect(dt.getData('text/plain')).toBe('20');
+        expect(getDraggedWidget()).toBe(widget);
+
+        // dragend resets state
+        widget.dispatchEvent(new Event('dragend', { bubbles: true }));
+        expect(widget.classList.contains('is-dragging')).toBe(false);
+        expect(dragHandle.getAttribute('aria-grabbed')).toBe('false');
+        expect(getDraggedWidget()).toBeNull();
+    });
+
+    it('cancels dragstart when initiated on an action button or link', () => {
+        const feed = { id: 30, tab_id: 1, name: 'Blog Feed', url: 'https://example.com', unread_count: 0, items: [] };
+        const widget = createFeedWidget(feed, {
+            onEdit: vi.fn(),
+            onDelete: vi.fn(),
+            onMarkItemRead: vi.fn(),
+            onLoadMore: vi.fn(),
+            onReorderFeeds: vi.fn()
+        });
+
+        const editBtn = widget.querySelector('.edit-feed-button');
+        const dt = createMockDataTransfer();
+        const dragEvent = new Event('dragstart', { bubbles: true, cancelable: true });
+        dragEvent.dataTransfer = dt;
+
+        editBtn.dispatchEvent(dragEvent);
+
+        expect(dragEvent.defaultPrevented).toBe(true);
+        expect(widget.classList.contains('is-dragging')).toBe(false);
+    });
+
+    it('handles dragover and drop between widgets in the same tab and triggers onReorderFeeds', () => {
+        const onReorderFeeds = vi.fn();
+        const feedA = { id: 1, tab_id: 100, name: 'Feed A', url: 'https://a.com', unread_count: 0, items: [] };
+        const feedB = { id: 2, tab_id: 100, name: 'Feed B', url: 'https://b.com', unread_count: 0, items: [] };
+
+        const grid = document.createElement('div');
+        grid.id = 'feed-grid';
+        document.body.appendChild(grid);
+
+        const widgetA = createFeedWidget(feedA, { onEdit: vi.fn(), onDelete: vi.fn(), onMarkItemRead: vi.fn(), onLoadMore: vi.fn(), onReorderFeeds });
+        const widgetB = createFeedWidget(feedB, { onEdit: vi.fn(), onDelete: vi.fn(), onMarkItemRead: vi.fn(), onLoadMore: vi.fn(), onReorderFeeds });
+        grid.appendChild(widgetA);
+        grid.appendChild(widgetB);
+
+        // Start dragging widgetA
+        setDraggedWidget(widgetA);
+
+        // Mock bounding rect for widgetB: left 100, width 200 (midpoint 200)
+        widgetB.getBoundingClientRect = () => ({
+            left: 100,
+            right: 300,
+            top: 0,
+            bottom: 200,
+            width: 200,
+            height: 200
+        });
+
+        // Dragover to the right of midpoint (clientX: 250) -> drop-after
+        const dragoverEvent = new Event('dragover', { bubbles: true, cancelable: true });
+        dragoverEvent.clientX = 250;
+        dragoverEvent.clientY = 50;
+        dragoverEvent.dataTransfer = createMockDataTransfer();
+        widgetB.dispatchEvent(dragoverEvent);
+
+        expect(widgetB.classList.contains('drop-after')).toBe(true);
+        expect(dragoverEvent.defaultPrevented).toBe(true);
+
+        // Drop on widgetB
+        const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+        dropEvent.dataTransfer = createMockDataTransfer();
+        widgetB.dispatchEvent(dropEvent);
+
+        expect(widgetB.classList.contains('drop-after')).toBe(false);
+        expect(onReorderFeeds).toHaveBeenCalledWith(100, [2, 1]);
+
+        // Cleanup
+        setDraggedWidget(null);
+        grid.remove();
+    });
+
+    it('supports dragging widgets onto tab buttons to move feeds across tabs', () => {
+        document.body.innerHTML = `
+            <div id="tabs-container"></div>
+            <div id="feed-grid"></div>
+            <button id="rename-tab-button"></button>
+            <button id="delete-tab-button"></button>
+        `;
+
+        const tabs = [
+            { id: 1, name: 'Tab 1', order: 0, unread_count: 0 },
+            { id: 2, name: 'Tab 2', order: 1, unread_count: 0 }
+        ];
+        const onMoveFeedToTab = vi.fn();
+        renderTabs(tabs, 1, { onSwitchTab: vi.fn(), onMoveFeedToTab });
+
+        const tabButtons = document.querySelectorAll('#tabs-container button');
+        expect(tabButtons.length).toBe(2);
+
+        // Create a dragged widget belonging to tab 1
+        const feed = { id: 77, tab_id: 1, name: 'Feed 77', url: 'https://77.com', unread_count: 0, items: [] };
+        const widget = createFeedWidget(feed, { onEdit: vi.fn(), onDelete: vi.fn(), onMarkItemRead: vi.fn(), onLoadMore: vi.fn() });
+        setDraggedWidget(widget);
+
+        // Dragover on Tab 2 button
+        const tab2Btn = tabButtons[1];
+        const dragoverEvent = new Event('dragover', { bubbles: true, cancelable: true });
+        dragoverEvent.dataTransfer = createMockDataTransfer();
+        tab2Btn.dispatchEvent(dragoverEvent);
+
+        expect(tab2Btn.classList.contains('tab-drag-over')).toBe(true);
+        expect(dragoverEvent.defaultPrevented).toBe(true);
+
+        // Dragleave removes class
+        tab2Btn.dispatchEvent(new Event('dragleave', { bubbles: true }));
+        expect(tab2Btn.classList.contains('tab-drag-over')).toBe(false);
+
+        // Drop on Tab 2 button
+        tab2Btn.classList.add('tab-drag-over');
+        const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+        dropEvent.dataTransfer = createMockDataTransfer();
+        tab2Btn.dispatchEvent(dropEvent);
+
+        expect(tab2Btn.classList.contains('tab-drag-over')).toBe(false);
+        expect(onMoveFeedToTab).toHaveBeenCalledWith(77, 2);
+
+        setDraggedWidget(null);
+    });
+});
+

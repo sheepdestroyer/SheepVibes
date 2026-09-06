@@ -1,4 +1,14 @@
-import { formatDate, throttle, sanitizeUrl } from './utils.js';
+import { formatDate, throttle, sanitizeUrl, moveNode } from './utils.js';
+
+let draggedWidget = null;
+
+export function getDraggedWidget() {
+    return draggedWidget;
+}
+
+export function setDraggedWidget(widget) {
+    draggedWidget = widget;
+}
 
 const SCROLL_BUFFER = 200; // Pixels from bottom to trigger load
 const SCROLL_THROTTLE = 200; // ms
@@ -118,11 +128,12 @@ function createFeedItemElement(item, clickHandler) {
 // --- Feed Widget ---
 
 export function createFeedWidget(feed, callbacks) {
-    const { onEdit, onDelete, onMarkItemRead, onLoadMore } = callbacks;
+    const { onEdit, onDelete, onMarkItemRead, onLoadMore, onReorderFeeds } = callbacks;
     const widget = document.createElement('div');
     widget.classList.add('feed-widget');
     widget.dataset.feedId = feed.id;
     widget.dataset.tabId = feed.tab_id;
+    widget.setAttribute('draggable', 'true');
 
     // Header with buttons
     const buttonContainer = document.createElement('div');
@@ -151,6 +162,18 @@ export function createFeedWidget(feed, callbacks) {
     buttonContainer.appendChild(deleteButton);
 
     const titleElement = document.createElement('h2');
+
+    // Drag Handle
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'feed-drag-handle';
+    dragHandle.setAttribute('role', 'button');
+    dragHandle.setAttribute('aria-grabbed', 'false');
+    dragHandle.setAttribute('aria-label', `Drag handle for feed ${feed.name}`);
+    dragHandle.setAttribute('tabindex', '0');
+    dragHandle.title = 'Drag to reorder or move to another tab';
+    dragHandle.textContent = '⋮⋮';
+    titleElement.appendChild(dragHandle);
+
     const titleTextNode = document.createTextNode(feed.name);
     const feedLinkUrl = feed.site_link || feed.url;
 
@@ -178,6 +201,90 @@ export function createFeedWidget(feed, callbacks) {
 
     titleElement.appendChild(buttonContainer);
     widget.appendChild(titleElement);
+
+    // Drag & Drop Event Listeners
+    widget.addEventListener('dragstart', (e) => {
+        if (e.target.closest('button, a, ul, input, .feed-widget-buttons')) {
+            e.preventDefault();
+            return;
+        }
+        draggedWidget = widget;
+        dragHandle.setAttribute('aria-grabbed', 'true');
+        widget.classList.add('is-dragging');
+        if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(feed.id));
+        }
+    });
+
+    widget.addEventListener('dragover', (e) => {
+        if (!draggedWidget || draggedWidget === widget) return;
+        if (draggedWidget.dataset.tabId !== widget.dataset.tabId) return;
+
+        e.preventDefault();
+        if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        const rect = widget.getBoundingClientRect();
+        const midX = rect.left + rect.width / 2;
+        if (e.clientX > midX) {
+            widget.classList.add('drop-after');
+            widget.classList.remove('drop-before');
+        } else {
+            widget.classList.add('drop-before');
+            widget.classList.remove('drop-after');
+        }
+    });
+
+    widget.addEventListener('dragleave', (e) => {
+        const rect = widget.getBoundingClientRect();
+        if (e.clientX < rect.left || e.clientX >= rect.right || e.clientY < rect.top || e.clientY >= rect.bottom) {
+            widget.classList.remove('drop-before', 'drop-after');
+        }
+    });
+
+    widget.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const isAfter = widget.classList.contains('drop-after');
+        widget.classList.remove('drop-before', 'drop-after');
+
+        if (!draggedWidget || draggedWidget === widget) return;
+        if (draggedWidget.dataset.tabId !== widget.dataset.tabId) return;
+
+        const parent = widget.parentElement;
+        const referenceNode = isAfter ? widget.nextElementSibling : widget;
+
+        if (draggedWidget !== referenceNode) {
+            moveNode(parent, draggedWidget, referenceNode);
+
+            const tabId = parseInt(draggedWidget.dataset.tabId, 10);
+            const widgetsInTab = Array.from(parent.querySelectorAll(`.feed-widget[data-tab-id="${tabId}"]`));
+            const feedIds = widgetsInTab.map(w => parseInt(w.dataset.feedId, 10)).filter(id => !isNaN(id));
+
+            if (typeof onReorderFeeds === 'function') {
+                onReorderFeeds(tabId, feedIds);
+            }
+        }
+    });
+
+    widget.addEventListener('dragend', () => {
+        widget.classList.remove('is-dragging');
+        dragHandle.setAttribute('aria-grabbed', 'false');
+        const feedGrid = widget.parentElement;
+        if (feedGrid) {
+            feedGrid.querySelectorAll('.feed-widget').forEach(w => {
+                w.classList.remove('drop-before', 'drop-after');
+            });
+        }
+        const tabsContainer = document.getElementById('tabs-container');
+        if (tabsContainer) {
+            tabsContainer.querySelectorAll('button').forEach(b => {
+                b.classList.remove('tab-drag-over');
+            });
+        }
+        draggedWidget = null;
+    });
 
     // List
     const itemList = document.createElement('ul');
@@ -251,7 +358,7 @@ export function appendItemsToFeedWidget(widgetList, items, callbacks) {
 // --- Tabs ---
 
 export function renderTabs(tabs, activeTabId, callbacks) {
-    const { onSwitchTab } = callbacks;
+    const { onSwitchTab, onMoveFeedToTab } = callbacks;
     const tabsContainer = document.getElementById('tabs-container');
     const feedGrid = document.getElementById('feed-grid');
     const renameTabButton = document.getElementById('rename-tab-button');
@@ -278,6 +385,37 @@ export function renderTabs(tabs, activeTabId, callbacks) {
         button.setAttribute('aria-selected', isActive ? 'true' : 'false');
         button.setAttribute('aria-controls', 'feed-grid');
         button.addEventListener('click', () => onSwitchTab(tab.id));
+
+        // Drag & Drop onto tab headers to move feeds between tabs
+        button.addEventListener('dragover', (e) => {
+            if (draggedWidget) {
+                const sourceTabId = parseInt(draggedWidget.dataset.tabId, 10);
+                if (sourceTabId !== tab.id) {
+                    e.preventDefault();
+                    if (e.dataTransfer) {
+                        e.dataTransfer.dropEffect = 'move';
+                    }
+                    button.classList.add('tab-drag-over');
+                }
+            }
+        });
+
+        button.addEventListener('dragleave', () => {
+            button.classList.remove('tab-drag-over');
+        });
+
+        button.addEventListener('drop', (e) => {
+            button.classList.remove('tab-drag-over');
+            if (draggedWidget) {
+                const targetTabId = parseInt(button.dataset.tabId, 10);
+                const sourceTabId = parseInt(draggedWidget.dataset.tabId, 10);
+                const feedId = parseInt(draggedWidget.dataset.feedId, 10);
+                if (targetTabId !== sourceTabId && typeof onMoveFeedToTab === 'function') {
+                    e.preventDefault();
+                    onMoveFeedToTab(feedId, targetTabId);
+                }
+            }
+        });
 
         const badge = createBadge(tab.unread_count);
         if (badge) {

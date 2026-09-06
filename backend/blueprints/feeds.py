@@ -101,11 +101,18 @@ def _get_feed_metadata(feed_url):
 def _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed, user_id):
     """Creates a new feed in the database and processes its initial items."""
     try:
+        max_order = (
+            db.session.query(db.func.max(Feed.order))
+            .filter(Feed.tab_id == tab_id)
+            .scalar()
+        )
+        new_order = (max_order or -1) + 1
         new_feed = Feed(
             tab_id=tab_id,
             name=feed_name,
             url=feed_url,
             site_link=site_link,
+            order=new_order,
         )
         db.session.add(new_feed)
         db.session.commit()
@@ -358,6 +365,112 @@ def update_feed_url(feed_id):
             jsonify({"error": "An internal error occurred while updating the feed."}),
             500,
         )
+
+
+@feeds_bp.route("/<int:feed_id>/move", methods=["PUT"])
+@login_required
+def move_feed(feed_id):
+    """Moves a feed to another tab (or updates its position) for the authenticated user.
+
+    Expects JSON payload: {"tab_id": target_tab_id, "position": optional_int}
+    """
+    user = get_current_user()
+    feed = (
+        Feed.query.join(Tab)
+        .filter(Feed.id == feed_id, Tab.user_id == user.id)
+        .first()
+    )
+    if not feed:
+        return jsonify({"error": "Feed not found"}), 404
+
+    data = request.get_json()
+    if not data or "tab_id" not in data:
+        return jsonify({"error": "Missing target tab_id"}), 400
+
+    target_tab_id = data.get("tab_id")
+    if not isinstance(target_tab_id, int):
+        return jsonify({"error": "tab_id must be an integer"}), 400
+
+    target_tab = Tab.query.filter_by(id=target_tab_id, user_id=user.id).first()
+    if not target_tab:
+        return jsonify({"error": "Target tab not found"}), 404
+
+    position = data.get("position")
+    if position is not None and not isinstance(position, int):
+        return jsonify({"error": "position must be an integer if provided"}), 400
+
+    source_tab_id = feed.tab_id
+
+    try:
+        if source_tab_id != target_tab.id:
+            feed.tab_id = target_tab.id
+
+            target_feeds = (
+                Feed.query.filter(Feed.tab_id == target_tab.id, Feed.id != feed.id)
+                .order_by(Feed.order.asc(), Feed.id.asc())
+                .all()
+            )
+
+            if position is not None and position >= 0:
+                pos = min(position, len(target_feeds))
+                target_feeds.insert(pos, feed)
+            else:
+                target_feeds.append(feed)
+
+            for idx, f in enumerate(target_feeds):
+                f.order = idx
+
+            source_feeds = (
+                Feed.query.filter(Feed.tab_id == source_tab_id, Feed.id != feed.id)
+                .order_by(Feed.order.asc(), Feed.id.asc())
+                .all()
+            )
+            for idx, f in enumerate(source_feeds):
+                f.order = idx
+
+            db.session.commit()
+
+            invalidate_tab_feeds_cache(source_tab_id, user_id=user.id)
+            invalidate_tab_feeds_cache(target_tab.id, user_id=user.id)
+
+            logger.info(
+                "Moved feed %s from tab %s to tab %s at position %s for user %s.",
+                feed.id,
+                source_tab_id,
+                target_tab.id,
+                feed.order,
+                user.id,
+            )
+        else:
+            if position is not None and position >= 0:
+                feeds_in_tab = (
+                    Feed.query.filter(Feed.tab_id == source_tab_id, Feed.id != feed.id)
+                    .order_by(Feed.order.asc(), Feed.id.asc())
+                    .all()
+                )
+                pos = min(position, len(feeds_in_tab))
+                feeds_in_tab.insert(pos, feed)
+                for idx, f in enumerate(feeds_in_tab):
+                    f.order = idx
+                db.session.commit()
+                invalidate_tab_feeds_cache(source_tab_id, user_id=user.id)
+                logger.info(
+                    "Reordered feed %s in tab %s to position %s for user %s.",
+                    feed.id,
+                    source_tab_id,
+                    feed.order,
+                    user.id,
+                )
+
+        unread_count = _get_unread_count(feed.id)
+        result = feed.to_dict(unread_count=unread_count)
+        result["message"] = "Feed moved successfully"
+        return jsonify(result), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error moving feed %s: %s", feed_id, e, exc_info=True)
+        return jsonify({"error": "An internal error occurred while moving the feed."}), 500
 
 
 @feeds_bp.route("/update-all", methods=["POST"])

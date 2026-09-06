@@ -39,12 +39,30 @@ describe('api parameter encoding and endpoints', () => {
         expect(fetch).toHaveBeenCalledWith('/api/tabs/tab%2F1', expect.any(Object));
     });
 
+    it('encodes tabId and formats payload in reorderTabFeeds', async () => {
+        await api.reorderTabFeeds('tab/1', [3, 1, 2]);
+        expect(fetch).toHaveBeenCalledWith('/api/tabs/tab%2F1/feeds/reorder', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ feed_ids: [3, 1, 2] })
+        });
+    });
+
     it('encodes feedId in updateFeed and deleteFeed', async () => {
         await api.updateFeed('feed/2', 'http://example.com', 'Name');
         expect(fetch).toHaveBeenCalledWith('/api/feeds/feed%2F2', expect.any(Object));
 
         await api.deleteFeed('feed/2');
         expect(fetch).toHaveBeenCalledWith('/api/feeds/feed%2F2', expect.any(Object));
+    });
+
+    it('encodes feedId and formats payload in moveFeedToTab', async () => {
+        await api.moveFeedToTab('feed/5', 2, 0);
+        expect(fetch).toHaveBeenCalledWith('/api/feeds/feed%2F5/move', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tab_id: 2, position: 0 })
+        });
     });
 
     it('sends getAuthStatus request', async () => {

@@ -1522,3 +1522,24 @@ def test_process_fetch_result_none_parsed_feed_logs_warning(db_setup, caplog):  
     assert any("failed (None returned)" in r.message for r in warning_records)
     assert len(error_records) == 0
 
+
+def test_feed_order_column_and_serialization(db_setup):
+    """Test that Feed model stores order and serializes it in to_dict."""
+    tab = Tab(name="Order Tab", order=0)
+    db.session.add(tab)
+    db.session.commit()
+
+    feed1 = Feed(name="First Feed", url="https://first.example.com/rss", tab_id=tab.id, order=5)
+    feed2 = Feed(name="Default Feed", url="https://second.example.com/rss", tab_id=tab.id)
+    db.session.add_all([feed1, feed2])
+    db.session.commit()
+
+    assert feed1.order == 5
+    assert feed2.order == 0
+
+    d1 = feed1.to_dict()
+    assert d1["order"] == 5
+    d2 = feed2.to_dict()
+    assert d2["order"] == 0
+
+
