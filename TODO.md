@@ -18,6 +18,16 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
     *   [x] Add Playwright E2E test suite in `tests/e2e/test_edit_feed.py`.
     *   [x] Validate test suites across Pytest unit, Vitest, and Playwright E2E.
 
+## 2026-09-06 Playwright E2E Server Startup Diagnostics (Issue #543)
+
+*   [x] **Harden Playwright E2E live server startup diagnostics and fast abort:**
+    *   [x] Capture server subprocess stdout and stderr to worker-isolated log files (`data/e2e_server_{worker}.log`) instead of `subprocess.DEVNULL`.
+    *   [x] In `_wait_for_server()`, periodically check `proc.poll()`. Fast-abort polling immediately if the subprocess exits prematurely and fail with the process exit code and captured server logs.
+    *   [x] Include captured server stdout and stderr traceback in `pytest.fail(...)` message if server startup fails or times out.
+    *   [x] Ensure robust port flexibility: support `PORT` / `E2E_SERVER_PORT` environment variable overrides alongside `pytest-xdist` worker offset isolation.
+    *   [x] Add comprehensive unit test suite in `tests/unit/test_e2e_conftest.py` covering fast abort on early process exit, startup failure diagnostics, port override precedence, and worker log paths.
+    *   [x] Validate full test suite (Pytest unit tests, Vitest frontend tests, Playwright E2E tests).
+
 ## 2026-09-06 Draggable Widgets (Issue #551)
 
 *   [x] **Widget reordering within tabs and moving feeds across tabs via drag and drop:**

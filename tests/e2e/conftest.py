@@ -59,7 +59,14 @@ def _get_worker_offset() -> int:
 
 def _get_server_port() -> int:
     """Return the server port for this worker process."""
-    base_port = int(os.environ.get("E2E_SERVER_PORT", E2E_SERVER_PORT))
+    env_port = os.environ.get("E2E_SERVER_PORT") or os.environ.get("PORT")
+    if env_port:
+        try:
+            base_port = int(env_port)
+        except ValueError:
+            base_port = E2E_SERVER_PORT
+    else:
+        base_port = E2E_SERVER_PORT
     return base_port + _get_worker_offset()
 
 
@@ -71,16 +78,90 @@ def _get_db_path(data_dir: Path) -> Path:
     return data_dir / "e2e_test.db"
 
 
-def _wait_for_server(host: str, port: int, timeout: int) -> bool:
-    """Poll until the server is accepting TCP connections or timeout expires."""
+def _get_log_path(data_dir: Path) -> Path:
+    """Return an isolated server log path for this worker process."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    if worker:
+        return data_dir / f"e2e_server_{worker}.log"
+    return data_dir / "e2e_server.log"
+
+
+def _read_server_logs(log_path: Path | None) -> str:
+    """Read captured server logs if available."""
+    if log_path is not None and log_path.exists():
+        try:
+            content = log_path.read_text(encoding="utf-8", errors="replace").strip()
+            return content if content else "(no server output captured)"
+        except OSError as exc:
+            return f"(failed to read server logs: {exc})"
+    return "(no server log file found)"
+
+
+def _wait_for_server(
+    host: str,
+    port: int,
+    timeout: int,
+    proc: subprocess.Popen | None = None,
+    log_path: Path | None = None,
+) -> bool:
+    """Poll until the server is accepting TCP connections or timeout expires.
+
+    Periodically checks if the subprocess terminated prematurely. If so, aborts
+    polling immediately and fails with the exit code and captured server logs.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        if proc is not None and proc.poll() is not None:
+            logs = _read_server_logs(log_path)
+            pytest.fail(
+                f"Flask server terminated prematurely with exit code {proc.poll()} "
+                f"on port {port}.\nServer Output:\n{logs}".rstrip()
+            )
         try:
             with socket.create_connection((host, port), timeout=1):
                 return True
         except OSError:
             time.sleep(0.3)
     return False
+
+
+def _terminate_server(
+    proc: subprocess.Popen | None,
+    log_file,
+    e2e_db_path: Path,
+    server_log_path: Path,
+    started: bool,
+) -> None:
+    """Clean up server process and temporary files."""
+    if proc is not None:
+        try:
+            if hasattr(os, "killpg"):
+                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            else:
+                proc.terminate()
+            proc.wait(timeout=5)
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            try:
+                if hasattr(os, "killpg"):
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                else:
+                    proc.kill()
+            except ProcessLookupError:
+                pass
+    try:
+        log_file.flush()
+    except (ValueError, OSError):
+        pass
+    log_file.close()
+    try:
+        e2e_db_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    if started:
+        try:
+            server_log_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -106,11 +187,13 @@ def live_server():
     server_port = _get_server_port()
     server_base_url = f"http://127.0.0.1:{server_port}"
     e2e_db_path = _get_db_path(data_dir)
-    if e2e_db_path.exists():
-        try:
-            e2e_db_path.unlink()
-        except OSError:
-            pass
+    server_log_path = _get_log_path(data_dir)
+
+    try:
+        e2e_db_path.unlink(missing_ok=True)
+        server_log_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
     # Use the same Python interpreter that is running pytest
     python = sys.executable
@@ -125,47 +208,39 @@ def live_server():
         "TEST_DATABASE_URI": f"sqlite:///{e2e_db_path}",
     })
 
-    # Start Flask via `python -m backend.app` from the project root
-    proc = subprocess.Popen(
-        [python, "-m", "backend.app"],
-        cwd=str(project_root),
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-
-    # Wait for server to accept connections
-    if not _wait_for_server("127.0.0.1", server_port, E2E_SERVER_TIMEOUT):
-        proc.terminate()
-        pytest.fail(
-            f"Flask server failed to start on port {server_port} "
-            f"within {E2E_SERVER_TIMEOUT}s."
+    log_file = open(server_log_path, "w+", encoding="utf-8")
+    proc = None
+    started = False
+    try:
+        # Start Flask via `python -m backend.app` from the project root
+        proc = subprocess.Popen(
+            [python, "-m", "backend.app"],
+            cwd=str(project_root),
+            env=env,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
         )
 
-    yield server_base_url
+        # Wait for server to accept connections
+        if not _wait_for_server(
+            "127.0.0.1",
+            server_port,
+            E2E_SERVER_TIMEOUT,
+            proc=proc,
+            log_path=server_log_path,
+        ):
+            logs = _read_server_logs(server_log_path)
+            pytest.fail(
+                f"Flask server failed to start on port {server_port} "
+                f"within {E2E_SERVER_TIMEOUT}s.\n"
+                f"Server Output:\n{logs}".rstrip()
+            )
 
-    # Teardown: kill the entire process group
-    try:
-        if hasattr(os, "killpg"):
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-        else:
-            proc.terminate()
-        proc.wait(timeout=5)
-    except (ProcessLookupError, subprocess.TimeoutExpired):
-        try:
-            if hasattr(os, "killpg"):
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            else:
-                proc.kill()
-        except ProcessLookupError:
-            pass
+        started = True
+        yield server_base_url
     finally:
-        if e2e_db_path.exists():
-            try:
-                e2e_db_path.unlink()
-            except OSError:
-                pass
+        _terminate_server(proc, log_file, e2e_db_path, server_log_path, started)
 
 
 @pytest.fixture(scope="function", autouse=True)
