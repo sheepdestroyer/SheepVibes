@@ -709,6 +709,126 @@ def test_update_feed_url_not_found(client):
     assert response.status_code == 404
 
 
+# --- Tests for PUT /api/feeds/<feed_id> Feed Name Updates ---
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_name_custom_name_same_url_no_fetch(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test updating feed name with same URL does not trigger network fetch."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    with app.app_context():
+        feed = db.session.get(Feed, feed_id)
+        original_url = feed.url
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"url": original_url, "name": "Custom Tech Digest"},
+    )
+
+    assert response.status_code == 200
+    data = response.json
+    assert data["name"] == "Custom Tech Digest"
+    assert data["url"] == original_url
+
+    # Verify fetch_feed was NEVER called
+    mock_fetch_feed.assert_not_called()
+
+    # Verify DB persistence
+    with app.app_context():
+        updated_feed = db.session.get(Feed, feed_id)
+        assert updated_feed.name == "Custom Tech Digest"
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_name_only_in_payload(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test updating feed name when URL is omitted from request body."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"name": "Omitted URL New Name"},
+    )
+
+    assert response.status_code == 200
+    assert response.json["name"] == "Omitted URL New Name"
+    mock_fetch_feed.assert_not_called()
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_name_empty_rederives_from_feed(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test that submitting an empty/whitespace name re-derives title from feed."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    with app.app_context():
+        feed = db.session.get(Feed, feed_id)
+        original_url = feed.url
+
+    mock_feed = MagicMock()
+    mock_feed.feed = {"title": "Auto Derived Title", "link": "https://example.com/site"}
+    mock_fetch_feed.return_value = mock_feed
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"url": original_url, "name": "   "},
+    )
+
+    assert response.status_code == 200
+    assert response.json["name"] == "Auto Derived Title"
+    mock_fetch_feed.assert_called_once_with(original_url)
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_name_empty_fetch_fails_preserves_name(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test that when re-deriving title fails on network error, existing name is preserved."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    with app.app_context():
+        feed = db.session.get(Feed, feed_id)
+        original_url = feed.url
+        original_name = feed.name
+
+    mock_fetch_feed.return_value = None
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"url": original_url, "name": ""},
+    )
+
+    assert response.status_code == 200
+    assert response.json["name"] == original_name
+
+
+def test_update_feed_name_invalid_types_and_length(client, setup_tabs_and_feeds):
+    """Test validation rejecting invalid name types and exceeding max length."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    # Non-string name (int)
+    resp1 = client.put(f"/api/feeds/{feed_id}", json={"name": 12345})
+    assert resp1.status_code == 400
+    assert "Invalid feed name: must be a string" in resp1.json["error"]
+
+    # Non-string name (list)
+    resp2 = client.put(f"/api/feeds/{feed_id}", json={"name": ["bad"]})
+    assert resp2.status_code == 400
+    assert "Invalid feed name: must be a string" in resp2.json["error"]
+
+    # Exceeds max length (201 chars)
+    resp3 = client.put(f"/api/feeds/{feed_id}", json={"name": "a" * 201})
+    assert resp3.status_code == 400
+    assert "exceeds maximum length of 200 characters" in resp3.json["error"]
+
+
+def test_update_feed_name_sanitization(client, setup_tabs_and_feeds):
+    """Test that custom feed name HTML entities and control chars are sanitized."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"name": "  &lt;b&gt;Tech&nbsp;News&lt;/b&gt;\x00\x08  \n\t  "},
+    )
+
+    assert response.status_code == 200
+    assert response.json["name"] == "<b>Tech News</b>"
+
+
 # --- Tests for Frontend Serving Routes ---
 
 

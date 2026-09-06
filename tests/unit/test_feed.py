@@ -1522,3 +1522,65 @@ def test_process_fetch_result_none_parsed_feed_logs_warning(db_setup, caplog):  
     assert any("failed (None returned)" in r.message for r in warning_records)
     assert len(error_records) == 0
 
+
+
+def test_sanitize_feed_name_various_inputs():
+    """Test sanitize_feed_name handles HTML entities, control chars, whitespace, and truncation."""
+    from backend.blueprints.feeds import sanitize_feed_name
+    assert sanitize_feed_name(None) == ""
+    assert sanitize_feed_name("") == ""
+    assert sanitize_feed_name("   ") == ""
+    assert sanitize_feed_name(12345) == ""
+
+    # HTML entity unescaping
+    assert sanitize_feed_name("Tom &amp; Jerry &quot;Show&quot;") == 'Tom & Jerry "Show"'
+    assert sanitize_feed_name("&lt;b&gt;Tech&lt;/b&gt;") == "<b>Tech</b>"
+
+    # Stripping control characters
+    assert sanitize_feed_name("Clean\x00\x08Name\x1F") == "CleanName"
+
+    # Whitespace normalization
+    assert sanitize_feed_name("  Multiple   spaces \t and \n newlines  ") == "Multiple spaces and newlines"
+
+    # Max length truncation at 200 chars
+    long_name = "A" * 250
+    sanitized = sanitize_feed_name(long_name)
+    assert len(sanitized) == 200
+    assert sanitized == "A" * 200
+
+
+def test_apply_feed_updates_same_url_custom_name_no_fetch(db_setup, mocker):
+    """Test _apply_feed_updates with same URL and custom name updates feed without network fetch."""
+    from backend.blueprints.feeds import _apply_feed_updates
+    mock_fetch = mocker.patch("backend.blueprints.feeds.fetch_feed")
+    tab = Tab(name="Custom Tab", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Old Name", url="https://example.com/feed.xml", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    _apply_feed_updates(feed_obj, "https://example.com/feed.xml", "Brand New Custom Name", user_id=1)
+
+    mock_fetch.assert_not_called()
+    assert feed_obj.name == "Brand New Custom Name"
+
+
+def test_apply_feed_updates_empty_name_rederives_from_feed(db_setup, mocker):
+    """Test _apply_feed_updates with empty custom name fetches feed and re-derives title."""
+    from backend.blueprints.feeds import _apply_feed_updates
+    mock_feed = MagicMock()
+    mock_feed.feed = {"title": "Upstream Channel Title", "link": "https://example.com"}
+    mock_fetch = mocker.patch("backend.blueprints.feeds.fetch_feed", return_value=mock_feed)
+
+    tab = Tab(name="Custom Tab 2", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(name="Custom Overridden Name", url="https://example.com/feed.xml", tab_id=tab.id)
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    _apply_feed_updates(feed_obj, "https://example.com/feed.xml", "   ", user_id=1)
+
+    mock_fetch.assert_called_once_with("https://example.com/feed.xml")
+    assert feed_obj.name == "Upstream Channel Title"

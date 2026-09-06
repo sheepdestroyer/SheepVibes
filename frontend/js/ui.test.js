@@ -12,8 +12,10 @@ import {
     showProgress,
     updateProgress,
     hideProgress,
+    openEditFeedModal,
     showEditFeedModal,
     closeEditFeedModal,
+    updateFeedWidgetTitle,
     showLoginModal,
     closeLoginModal,
     showSetupWizardModal,
@@ -554,24 +556,65 @@ describe('renderTabs', () => {
 });
 
 describe('Modals and Progress helpers', () => {
-    it('opens and closes edit feed modal', () => {
+    it('opens and closes edit feed modal with editable custom name', () => {
         document.body.innerHTML = `
             <div id="edit-feed-modal">
                 <input id="edit-feed-id" />
                 <input id="edit-feed-url" />
                 <input id="edit-feed-name" />
+                <small>Enter a custom name, or leave empty to auto-derive from the feed title</small>
                 <div id="edit-feed-error" class="hidden"></div>
             </div>
         `;
 
-        showEditFeedModal('12', 'https://example.com/feed.xml', 'Example Feed');
+        const nameInput = document.getElementById('edit-feed-name');
+        expect(nameInput.hasAttribute('readonly')).toBe(false);
+
+        openEditFeedModal('12', 'https://example.com/feed.xml', 'Custom Feed Name');
         expect(document.getElementById('edit-feed-id').value).toBe('12');
         expect(document.getElementById('edit-feed-url').value).toBe('https://example.com/feed.xml');
-        expect(document.getElementById('edit-feed-name').value).toBe('Example Feed');
+        expect(document.getElementById('edit-feed-name').value).toBe('Custom Feed Name');
         expect(document.getElementById('edit-feed-modal').classList.contains('is-active')).toBe(true);
 
         closeEditFeedModal();
         expect(document.getElementById('edit-feed-modal').classList.contains('is-active')).toBe(false);
+
+        // Test with null/undefined name defaults to empty string
+        openEditFeedModal('13', 'https://example.com/feed2.xml', null);
+        expect(document.getElementById('edit-feed-name').value).toBe('');
+        closeEditFeedModal();
+    });
+
+    it('updates feed widget title in DOM immediately with updateFeedWidgetTitle', () => {
+        document.body.innerHTML = `
+            <div class="feed-widget" data-feed-id="42">
+                <h2>
+                    <a class="feed-widget-title" href="https://old.example.com" title="Old Title">Old Title</a>
+                </h2>
+            </div>
+            <div class="feed-widget" data-feed-id="43">
+                <h2>
+                    <span class="feed-widget-title" title="Old Span Title">Old Span Title</span>
+                </h2>
+            </div>
+        `;
+
+        const updatedWidget = updateFeedWidgetTitle('42', 'New Custom Title', 'https://new.example.com');
+        expect(updatedWidget).not.toBeNull();
+        const link = document.querySelector('.feed-widget[data-feed-id="42"] h2 a.feed-widget-title');
+        expect(link.textContent).toBe('New Custom Title');
+        expect(link.getAttribute('title')).toBe('New Custom Title');
+        expect(link.getAttribute('href')).toBe('https://new.example.com');
+
+        // Test span widget without site link
+        const updatedSpan = updateFeedWidgetTitle('43', 'New Span Title');
+        expect(updatedSpan).not.toBeNull();
+        const span = document.querySelector('.feed-widget[data-feed-id="43"] h2 span.feed-widget-title');
+        expect(span.textContent).toBe('New Span Title');
+        expect(span.getAttribute('title')).toBe('New Span Title');
+
+        // Test non-existent widget
+        expect(updateFeedWidgetTitle('999', 'Ghost')).toBeNull();
     });
 
     it('shows, updates, and hides progress bar', () => {

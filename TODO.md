@@ -2,6 +2,22 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-06 Custom Feed Names (Issue #552)
+
+*   [x] **Feat: Ability to edit feed name and assign custom names:**
+    *   [x] Remove `readonly` attribute from `#edit-feed-name` in `#edit-feed-modal` in `frontend/index.html`.
+    *   [x] Update modal help text to explain that entering a name sets a custom name, or leaving empty auto-derives from the feed title.
+    *   [x] Update `frontend/js/ui.js` (`openEditFeedModal`, `updateFeedWidgetTitle`) and `frontend/js/app.js` (`handleEditFeedSubmit`) to populate `#edit-feed-name`, send payload `{ url, name }` to `api.updateFeed`, and immediately update the widget's title in the DOM.
+    *   [x] Update `frontend/js/api.js` to support both object `{ url, name }` and separate arguments in `api.updateFeed`.
+    *   [x] Update `backend/blueprints/feeds.py` (`PUT /api/feeds/<feed_id>`):
+        *   [x] Validate and sanitize custom feed names (`sanitize_feed_name`: HTML entity unescaping, control char removal, whitespace normalization, 200 char truncation).
+        *   [x] Allow updating feed name without unnecessary network refetches if the feed URL has not changed.
+        *   [x] If custom name is empty or whitespace, re-derive from feed (or preserve existing name if fetch fails).
+        *   [x] Invalidate cache (`invalidate_tab_feeds_cache`) and enforce tenant isolation.
+    *   [x] Add unit test suites in `frontend/js/ui.test.js`, `frontend/js/api.test.js`, `tests/unit/test_feed.py`, and `tests/unit/test_app.py`.
+    *   [x] Add Playwright E2E test suite in `tests/e2e/test_edit_feed.py`.
+    *   [x] Validate test suites across Pytest unit (267/267), Vitest (60/60), and Playwright E2E (17 passed, 1 skipped).
+
 ## 2026-09-06 Container Log Priority Splitter Integration
 
 *   [x] **Align container stderr logging with syslog priority via unified splitter:**

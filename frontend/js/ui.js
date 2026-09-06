@@ -295,19 +295,41 @@ export function renderTabs(tabs, activeTabId, callbacks) {
 
 // --- Modals ---
 
-export function showEditFeedModal(feedId, currentUrl, currentName) {
+export function openEditFeedModal(feedId, currentUrl, currentName) {
     const modal = document.getElementById('edit-feed-modal');
     if (!modal) return;
     document.getElementById('edit-feed-id').value = feedId;
     document.getElementById('edit-feed-url').value = currentUrl;
-    document.getElementById('edit-feed-name').value = currentName;
+    document.getElementById('edit-feed-name').value = currentName || '';
     document.getElementById('edit-feed-error').classList.add('hidden');
     modal.classList.add('is-active');
 }
 
+export const showEditFeedModal = openEditFeedModal;
+
 export function closeEditFeedModal() {
     const modal = document.getElementById('edit-feed-modal');
     if (modal) modal.classList.remove('is-active');
+}
+
+export function updateFeedWidgetTitle(feedId, newName, siteLink = null) {
+    const widget = document.querySelector(`.feed-widget[data-feed-id="${feedId}"]`);
+    if (!widget) return null;
+    const titleLink = widget.querySelector('h2 a.feed-widget-title');
+    const titleSpan = widget.querySelector('h2 span.feed-widget-title');
+    const titleTarget = titleLink || titleSpan;
+    if (titleTarget) {
+        if (titleTarget.firstChild && titleTarget.firstChild.nodeType === 3) {
+            titleTarget.firstChild.nodeValue = newName;
+        } else {
+            titleTarget.textContent = newName;
+        }
+        titleTarget.title = newName;
+        if (titleLink && siteLink) {
+            titleLink.href = sanitizeUrl(siteLink);
+        }
+    }
+    return widget;
 }
 
 export function showLoginModal(errorMessage = null) {

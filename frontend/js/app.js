@@ -5,8 +5,10 @@ import {
     showToast,
     createFeedWidget,
     renderTabs,
+    openEditFeedModal,
     showEditFeedModal,
     closeEditFeedModal,
+    updateFeedWidgetTitle,
     showLoginModal,
     closeLoginModal,
     showSetupWizardModal,
@@ -393,7 +395,7 @@ async function loadFeedsForTab(tabId) {
         if (feeds && feeds.length > 0) {
             feeds.forEach(feed => {
                 const widget = createFeedWidget(feed, {
-                    onEdit: (id, url, name) => showEditFeedModal(id, url, name),
+                    onEdit: (id, url, name) => openEditFeedModal(id, url, name),
                     onDelete: handleDeleteFeed,
                     onMarkItemRead: handleMarkItemRead,
                     onLoadMore: handleLoadMoreItems
@@ -523,11 +525,12 @@ async function handleEditFeedSubmit(e) {
     const url = document.getElementById('edit-feed-url').value;
     const name = document.getElementById('edit-feed-name').value;
     try {
-        const updatedFeed = await api.updateFeed(id, url, name);
+        const updatedFeed = await api.updateFeed(id, { url, name });
+        updateFeedWidgetTitle(id, updatedFeed.name, updatedFeed.site_link);
         const oldWidget = document.querySelector(`.feed-widget[data-feed-id="${id}"]`);
         if (oldWidget) {
             const newWidget = createFeedWidget(updatedFeed, {
-                onEdit: (fid, furl, fname) => showEditFeedModal(fid, furl, fname),
+                onEdit: (fid, furl, fname) => openEditFeedModal(fid, furl, fname),
                 onDelete: handleDeleteFeed,
                 onMarkItemRead: handleMarkItemRead,
                 onLoadMore: handleLoadMoreItems

@@ -1,8 +1,10 @@
 """Blueprint for managing feeds and feed items in SheepVibes."""
 
 import datetime
+import html
 import json
 import logging
+import re
 
 from flask import Blueprint, jsonify, request
 
@@ -226,10 +228,25 @@ def delete_feed(feed_id):
         )
 
 
+def sanitize_feed_name(name: str | None) -> str:
+    """Validates and sanitizes a custom feed name.
+
+    Strips control characters, unescapes HTML entities, normalizes whitespace,
+    and caps the length to 200 characters to match the Feed.name database column.
+    """
+    if not name or not isinstance(name, str):
+        return ""
+    cleaned = html.unescape(name.strip())
+    cleaned = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned[:200]
+
+
 def _determine_feed_metadata(new_url, custom_name, parsed_feed):
     """Determines the appropriate name and site link for a feed."""
-    if custom_name and custom_name.strip():
-        new_name = custom_name.strip()
+    sanitized_custom = sanitize_feed_name(custom_name) if custom_name else ""
+    if sanitized_custom:
+        new_name = sanitized_custom
         new_site_link = (
             validate_link_structure(parsed_feed.feed.get("link"))
             if parsed_feed and parsed_feed.feed
@@ -261,9 +278,53 @@ def _determine_feed_metadata(new_url, custom_name, parsed_feed):
 def _apply_feed_updates(feed, new_url, custom_name, user_id):
     """Applies URL and metadata updates to a feed, handles cache and item processing."""
     original_url = feed.url
+    url_changed = (new_url != original_url)
+    sanitized_name = sanitize_feed_name(custom_name) if custom_name is not None else None
+
+    if not url_changed:
+        # Avoid unnecessary network refetches when URL remains the same
+        if sanitized_name:
+            feed.name = sanitized_name
+            feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
+            db.session.commit()
+            invalidate_tab_feeds_cache(feed.tab_id, user_id=user_id)
+            logger.info(
+                "Updated feed %s name to '%s' without URL refetch for user %s.",
+                feed.id,
+                sanitized_name,
+                user_id,
+            )
+            return
+
+        if custom_name is not None and not sanitized_name:
+            # Custom name explicitly passed as empty/whitespace: re-derive from feed
+            parsed_feed = fetch_feed(feed.url)
+            if parsed_feed and parsed_feed.feed:
+                derived_name, new_site_link = _determine_feed_metadata(
+                    feed.url, None, parsed_feed
+                )
+                feed.name = derived_name or feed.name
+                if new_site_link:
+                    feed.site_link = new_site_link
+            # If fetch failed, preserve existing feed.name
+            feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
+            db.session.commit()
+            invalidate_tab_feeds_cache(feed.tab_id, user_id=user_id)
+            logger.info(
+                "Re-derived feed %s name '%s' from feed for user %s.",
+                feed.id,
+                feed.name,
+                user_id,
+            )
+            return
+
+        # Neither URL nor name changed; nothing to update
+        return
+
+    # URL has changed: fetch new feed and process entries
     parsed_feed = fetch_feed(new_url)
     new_name, new_site_link = _determine_feed_metadata(
-        new_url, custom_name, parsed_feed
+        new_url, sanitized_name, parsed_feed
     )
 
     feed.url = new_url
@@ -316,12 +377,15 @@ def update_feed_url(feed_id):
     data = request.get_json()
     if (
         not data
-        or "url" not in data
-        or not (isinstance(data["url"], str) and data["url"].strip())
+        or not isinstance(data, dict)
+        or ("url" not in data and "name" not in data)
     ):
         return jsonify({"error": "Missing or invalid feed URL"}), 400
 
-    new_url = data["url"].strip()
+    if "url" in data and (not isinstance(data["url"], str) or not data["url"].strip()):
+        return jsonify({"error": "Missing or invalid feed URL"}), 400
+
+    new_url = data["url"].strip() if "url" in data else feed.url
 
     if not is_valid_feed_url(new_url):
         return jsonify({"error": "Invalid feed URL scheme"}), 400
@@ -337,7 +401,16 @@ def update_feed_url(feed_id):
             409,
         )
 
-    custom_name = data.get("name", "").strip()
+    if "name" in data and data["name"] is not None:
+        if not isinstance(data["name"], str):
+            return jsonify({"error": "Invalid feed name: must be a string"}), 400
+        if len(data["name"].strip()) > 200:
+            return (
+                jsonify({"error": "Invalid feed name: exceeds maximum length of 200 characters"}),
+                400,
+            )
+
+    custom_name = data.get("name") if "name" in data else None
 
     try:
         _apply_feed_updates(feed, new_url, custom_name, user_id=user.id)

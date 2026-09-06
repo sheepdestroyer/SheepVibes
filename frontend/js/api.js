@@ -111,11 +111,22 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, tab_id: tabId })
     }),
-    updateFeed: (feedId, url, name) => fetchData(`/api/feeds/${encodeURIComponent(feedId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, name })
-    }),
+    updateFeed: (feedId, urlOrData, maybeName) => {
+        let url;
+        let name;
+        if (urlOrData && typeof urlOrData === 'object') {
+            url = urlOrData.url;
+            name = urlOrData.name;
+        } else {
+            url = urlOrData;
+            name = maybeName;
+        }
+        return fetchData(`/api/feeds/${encodeURIComponent(feedId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, name })
+        });
+    },
     deleteFeed: (feedId) => fetchData(`/api/feeds/${encodeURIComponent(feedId)}`, { method: 'DELETE' }),
     updateAllFeeds: () => fetchData('/api/feeds/update-all', { method: 'POST' }),
 
