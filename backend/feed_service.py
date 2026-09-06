@@ -1391,6 +1391,24 @@ def _parse_and_validate_feed(content, feed_url):
     return parsed_feed
 
 
+def _try_autodiscover_feed(content, feed_url, depth, visited):
+    """Attempts to find and fetch an alternate feed from HTML link tags."""
+    if not content or depth >= 2:
+        return None
+    discovered_url = discover_feed_url_from_html(content, feed_url)
+    if not discovered_url or discovered_url in visited:
+        return None
+    logger.info(
+        "Autodiscovered alternate feed '%s' from HTML at '%s'",
+        _sanitize_for_log(discovered_url),
+        _sanitize_for_log(feed_url),
+    )
+    discovered_feed = fetch_feed(discovered_url, _depth=depth + 1, _visited=visited)
+    if discovered_feed and discovered_feed.entries:
+        return discovered_feed
+    return None
+
+
 def fetch_feed(feed_url, _depth=0, _visited=None):
     """Fetches and parses a feed, preventing SSRF via IP pinning.
     Transparently supports feed autodiscovery from HTML and delegation
@@ -1409,9 +1427,7 @@ def fetch_feed(feed_url, _depth=0, _visited=None):
         opener = _build_safe_opener(safe_ip)
 
         content = _download_feed_content(opener, feed_url)
-        parsed_feed = None
-        if content:
-            parsed_feed = _parse_and_validate_feed(content, feed_url)
+        parsed_feed = _parse_and_validate_feed(content, feed_url) if content else None
 
         # If feed has valid entries, return immediately
         if parsed_feed and parsed_feed.entries:
@@ -1421,18 +1437,9 @@ def fetch_feed(feed_url, _depth=0, _visited=None):
         if is_rss_bridge_url(feed_url):
             return parsed_feed
 
-        # If content was returned (e.g. HTML), check for <link rel="alternate"> feed autodiscovery
-        if content:
-            discovered_url = discover_feed_url_from_html(content, feed_url)
-            if discovered_url and discovered_url not in visited and _depth < 2:
-                logger.info(
-                    "Autodiscovered alternate feed '%s' from HTML at '%s'",
-                    _sanitize_for_log(discovered_url),
-                    _sanitize_for_log(feed_url),
-                )
-                discovered_feed = fetch_feed(discovered_url, _depth=_depth + 1, _visited=visited)
-                if discovered_feed and discovered_feed.entries:
-                    return discovered_feed
+        discovered = _try_autodiscover_feed(content, feed_url, _depth, visited)
+        if discovered:
+            return discovered
 
         # If no entries found natively or via autodiscovery, query RSS-Bridge
         bridged_feed = fetch_rss_bridge_feed(feed_url)
