@@ -457,6 +457,57 @@ def test_generic_changelog_bridge_patterns():
     # Verify SSRF IP filtering
     assert "FILTER_FLAG_NO_PRIV_RANGE" in code
 
+    # Verify dynamic title, URI and absolute link conversion
+    assert "function getName()" in code
+    assert "function getURI()" in code
+    assert "extractFeedMetadata" in code
+    assert "og:site_name" in code
+    assert "urljoin($baseUrl" in code
+
+
+def test_fetch_rss_bridge_canonicalizes_generic_title_and_resolves_relative_links(monkeypatch):
+    """Verifies that bridged feeds with generic titles and relative/missing entry links
+    have canonical titles derived and all entry links properly resolved to absolute URLs."""
+    monkeypatch.setenv("RSS_BRIDGE_URL", "http://localhost:80")
+
+    bridged_atom_with_issues = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <title type="text">Generic Changelog &amp; Release Bridge</title>
+      <link rel="alternate" type="text/html" href="http://localhost:80/?action=display&amp;bridge=GenericChangelogBridge"/>
+      <entry>
+        <title type="html">[2.12.2] Gemini 3.8 Flash</title>
+        <id>urn:sha1:abc123</id>
+        <link rel="alternate" type="text/html" href="/releases?tab=hub&amp;version=2.12.2"/>
+        <content type="html">Release details</content>
+      </entry>
+      <entry>
+        <title type="html">[2.12.1] Minor Fixes</title>
+        <id>urn:sha1:def456</id>
+        <content type="html">No link tag in this entry</content>
+      </entry>
+    </feed>
+    """
+
+    def fake_download(opener, url):
+        return bridged_atom_with_issues.encode("utf-8")
+
+    with patch.object(feed_service, "validate_and_resolve_url", return_value=("127.0.0.1", "localhost")), \
+         patch.object(feed_service, "_build_safe_opener", return_value=MagicMock()), \
+         patch.object(feed_service, "_download_feed_content", side_effect=fake_download):
+
+        page_url = "https://antigravity.google/changelog"
+        parsed = feed_service.fetch_rss_bridge_feed(page_url)
+        assert parsed is not None
+        # Verify title was canonicalized away from the generic bridge placeholder
+        assert parsed.feed.get("title") == "Google Antigravity"
+        assert parsed.feed.get("link") == page_url
+
+        # Verify entry links were resolved to absolute URLs
+        assert len(parsed.entries) == 2
+        assert parsed.entries[0]["link"] == "https://antigravity.google/releases?tab=hub&version=2.12.2"
+        assert parsed.entries[1]["link"] == page_url
+
+
 
 def test_validate_and_resolve_url_restricts_bridge_to_internal_calls(monkeypatch):
     """Verifies that arbitrary user URLs targeting RSS-Bridge endpoint are rejected by default,

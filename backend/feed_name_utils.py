@@ -42,7 +42,16 @@ KNOWN_DOMAIN_BRANDS: dict[str, str] = {
     "kguttag.com": "KGOnTech",
     "stallman.org": "Richard Stallman",
     "slate.fr": "Slate.fr",
+    "antigravity.google": "Google Antigravity",
+    "jules.google": "Jules",
+    "lucebox.com": "Lucebox",
 }
+
+# Regex to detect generic RSS-Bridge and GenericChangelog bridge artifact titles
+_GENERIC_BRIDGE_TITLE_PATTERN = re.compile(
+    r"^(?:generic\s+changelog.*|rss-bridge|bridge)\s*$",
+    re.IGNORECASE,
+)
 
 # Regex to strip common boilerplate suffixes from feed titles
 _BOILERPLATE_SUFFIX_PATTERN = re.compile(
@@ -68,14 +77,18 @@ _BOILERPLATE_SUFFIX_PATTERN = re.compile(
     r"posts|"
     r"une|"
     r"actualit[ée]s.*|"
-    r"graphics card & processor news"
+    r"graphics card & processor news|"
+    r"changelog|"
+    r"releases?|"
+    r"updates?"
     r")\s*$",
     re.IGNORECASE,
 )
 
 # Regex to strip common boilerplate prefixes from feed titles
 _BOILERPLATE_PREFIX_PATTERN = re.compile(
-    r"^(?:latest from|rss feed for|news from|rss:\s*|feed:\s*)\s*",
+    r"^(?:latest from|rss feed for|news from|rss:\s*|feed:\s*|"
+    r"(?:changelog|releases?|updates?|blog)\s*[-|:—–»•~]\s*)\s*",
     re.IGNORECASE,
 )
 
@@ -123,6 +136,136 @@ def _format_domain_as_name(domain: str) -> str:
     return domain.capitalize()
 
 
+def _clean_raw_title(raw_title: str | None) -> str:
+    """Unescapes and normalizes whitespace in raw title string."""
+    if not raw_title or not isinstance(raw_title, str):
+        return ""
+    cleaned = html.unescape(raw_title.strip())
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _is_generic_bridge_title(title: str) -> bool:
+    """Checks if a title matches generic RSS-Bridge or bridge fallback names."""
+    return bool(_GENERIC_BRIDGE_TITLE_PATTERN.match(title))
+
+
+def _strip_title_boilerplate(title: str) -> str:
+    """Strips leading and trailing boilerplate prefixes/suffixes from title."""
+    title = _BOILERPLATE_PREFIX_PATTERN.sub("", title).strip()
+    return _BOILERPLATE_SUFFIX_PATTERN.sub("", title).strip()
+
+
+def _match_domain_in_title(title: str) -> str | None:
+    """Checks if title begins with a recognized domain name."""
+    domain_match = _DOMAIN_IN_TITLE_PATTERN.match(title)
+    if domain_match:
+        extracted = domain_match.group(1).lower()
+        return KNOWN_DOMAIN_BRANDS.get(extracted)
+    return None
+
+
+def _match_brand_heuristics(title: str, brand: str) -> bool:
+    """Checks whether title matches known brand heuristics (TLDs or taglines)."""
+    clean_no_tld = re.sub(
+        r"\.(?:fr|com|org|net|co\.uk|io|de|eu)$",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    ).strip()
+    brand_lower = brand.lower()
+
+    if clean_no_tld.lower() == brand_lower:
+        return True
+    if clean_no_tld.lower().startswith(brand_lower) and len(clean_no_tld) <= len(brand_lower) + 4:
+        return True
+
+    brand_no_spaces = brand_lower.replace(" ", "")
+    title_no_spaces = title.lower().replace(" ", "")
+    if (
+        brand_no_spaces not in title_no_spaces
+        and len(title) >= 30
+        and ("," in title or bool(_GENERIC_TAGLINE_PATTERN.search(title)))
+    ):
+        return True
+    return False
+
+
+_DELIMITERS = (" – ", " — ", " - ", " | ", " :: ", " » ", " • ")
+_SECTION_KEYWORDS = frozenset({
+    "changelog",
+    "releases",
+    "release",
+    "updates",
+    "blog",
+    "news",
+    "articles",
+    "documentation",
+    "docs",
+})
+
+
+def _match_parts_brand(parts: list[str], brand: str | None) -> str | None:
+    """Checks if first or last delimited part matches known brand."""
+    if not brand:
+        return None
+    brand_lower = brand.lower()
+    if parts[-1].lower() == brand_lower or parts[0].lower() == brand_lower:
+        return brand
+    left_no_tld = re.sub(
+        r"\.(?:fr|com|org|net|co\.uk|io|de|eu)$", "", parts[0], flags=re.IGNORECASE
+    ).strip()
+    if left_no_tld.lower() == brand_lower:
+        return brand
+    return None
+
+
+def _extract_delimited_brand(title: str, brand: str | None) -> str | None:
+    """Checks delimited parts (e.g. 'Site - Section' or 'Changelog | Brand') for brands."""
+    for sep in _DELIMITERS:
+        if sep not in title:
+            continue
+        parts = [p.strip() for p in title.split(sep) if p.strip()]
+        if len(parts) < 2:
+            continue
+
+        brand_match = _match_parts_brand(parts, brand)
+        if brand_match:
+            return brand_match
+
+        if len(parts[0]) <= 30 and not _BOILERPLATE_SUFFIX_PATTERN.search(parts[0]):
+            if parts[0].lower() in _SECTION_KEYWORDS:
+                return brand or parts[-1]
+            return parts[0]
+    return None
+
+
+def _clean_known_tld_suffix(title: str, brand: str | None) -> str | None:
+    """Strips recognized TLD suffixes if matching a known brand or tech site."""
+    clean_no_tld = re.sub(
+        r"\.(?:fr|com|org|net|co\.uk|io|de|eu)$", "", title, flags=re.IGNORECASE
+    ).strip()
+    if brand and clean_no_tld.lower() == brand.lower():
+        return brand
+    if title.lower().endswith(".com") and len(title) > 4:
+        name = title[:-4]
+        if name.lower() in ("distrowatch", "slashdot", "phoronix"):
+            return name.capitalize()
+    return None
+
+
+def _find_title_candidate(title: str, brand: str | None) -> str | None:
+    """Evaluates title against domain matching, brand heuristics, delimiters, and TLD rules."""
+    domain_title = _match_domain_in_title(title)
+    if domain_title:
+        return domain_title
+    if brand and _match_brand_heuristics(title, brand):
+        return brand
+    delimited = _extract_delimited_brand(title, brand)
+    if delimited:
+        return delimited
+    return _clean_known_tld_suffix(title, brand)
+
+
 def derive_canonical_feed_name(
     raw_title: str | None,
     site_url: str | None = None,
@@ -139,109 +282,18 @@ def derive_canonical_feed_name(
         A cleaned, canonical short feed name.
     """
     domain = _extract_domain(site_url) or _extract_domain(feed_url)
-    brand_from_domain = KNOWN_DOMAIN_BRANDS.get(domain) if domain else None
+    brand = KNOWN_DOMAIN_BRANDS.get(domain) if domain else None
+    fallback = brand or _format_domain_as_name(domain or "")
 
-    if not raw_title or not isinstance(raw_title, str):
-        cleaned_title = ""
-    else:
-        cleaned_title = html.unescape(raw_title.strip())
-    # Normalize excessive internal whitespace
-    cleaned_title = re.sub(r"\s+", " ", cleaned_title).strip()
+    title = _clean_raw_title(raw_title)
+    if not title or _is_generic_bridge_title(title):
+        return fallback
 
-    if not cleaned_title:
-        if brand_from_domain:
-            return brand_from_domain
-        if domain:
-            return _format_domain_as_name(domain)
-        return ""
+    title = _strip_title_boilerplate(title)
+    candidate = _find_title_candidate(title, brand)
+    if candidate:
+        return candidate
 
-    # Check if cleaned_title starts with a domain name
-    domain_match = _DOMAIN_IN_TITLE_PATTERN.match(cleaned_title)
-    if domain_match:
-        extracted_domain = domain_match.group(1).lower()
-        if extracted_domain in KNOWN_DOMAIN_BRANDS:
-            return KNOWN_DOMAIN_BRANDS[extracted_domain]
+    title = title.strip(" -|:—–»•~").strip()
+    return title or fallback
 
-    # Strip common boilerplate prefixes (e.g., "Latest from Tom's Hardware" -> "Tom's Hardware")
-    cleaned_title = _BOILERPLATE_PREFIX_PATTERN.sub("", cleaned_title).strip()
-
-    # Strip common boilerplate suffixes (e.g., "Ars Technica - All content" -> "Ars Technica")
-    cleaned_title = _BOILERPLATE_SUFFIX_PATTERN.sub("", cleaned_title).strip()
-
-    # If title starts with or equals domain brand (e.g. "Le Monde.fr" -> "Le Monde")
-    if brand_from_domain:
-        # If title is equal to brand with a TLD suffix like ".fr", ".com"
-        clean_no_tld = re.sub(
-            r"\.(?:fr|com|org|net|co\.uk|io|de|eu)$",
-            "",
-            cleaned_title,
-            flags=re.IGNORECASE,
-        ).strip()
-        if clean_no_tld.lower() == brand_from_domain.lower():
-            return brand_from_domain
-
-        # If title starts with brand name + delimiter/TLD
-        brand_lower = brand_from_domain.lower()
-        if (
-            clean_no_tld.lower().startswith(brand_lower)
-            and len(clean_no_tld) <= len(brand_lower) + 4
-        ):
-            return brand_from_domain
-
-        # If the title is a pure tagline or marketing slogan that does not contain the brand name
-        brand_no_spaces = brand_lower.replace(" ", "")
-        title_no_spaces = cleaned_title.lower().replace(" ", "")
-        if brand_no_spaces not in title_no_spaces:
-            # Check if title looks like a generic tagline (e.g., long keyword list)
-            if len(cleaned_title) >= 30 and (
-                "," in cleaned_title or bool(_GENERIC_TAGLINE_PATTERN.search(cleaned_title))
-            ):
-                return brand_from_domain
-
-    # If title still has delimiters like " - ", " | ", " — ", " – ", check if one side is the brand
-    for sep in (" – ", " — ", " - ", " | ", " :: ", " » ", " • "):
-        if sep in cleaned_title:
-            parts = [p.strip() for p in cleaned_title.split(sep) if p.strip()]
-            if len(parts) >= 2:
-                # Check if right part matches known brand or domain
-                # e.g., "Artificial intelligence – MIT Technology Review"
-                if (
-                    brand_from_domain
-                    and parts[-1].lower() == brand_from_domain.lower()
-                ):
-                    return brand_from_domain
-                # If left part matches known brand (e.g. "Ars Technica - Articles")
-                if brand_from_domain and parts[0].lower() == brand_from_domain.lower():
-                    return brand_from_domain
-                # If left part is a clean short name, strip trailing TLDs if present
-                left_part = re.sub(
-                    r"\.(?:fr|com|org|net|co\.uk|io|de|eu)$",
-                    "",
-                    parts[0],
-                    flags=re.IGNORECASE,
-                ).strip()
-                if brand_from_domain and left_part.lower() == brand_from_domain.lower():
-                    return brand_from_domain
-                if len(parts[0]) <= 30 and not _BOILERPLATE_SUFFIX_PATTERN.search(parts[0]):
-                    return parts[0]
-
-    # Strip domain suffix like ".com", ".fr" if it was "DistroWatch.com" or "Le Monde.fr"
-    cleaned_no_tld = re.sub(
-        r"\.(?:fr|com|org|net|co\.uk|io|de|eu)$",
-        "",
-        cleaned_title,
-        flags=re.IGNORECASE,
-    ).strip()
-    if brand_from_domain and cleaned_no_tld.lower() == brand_from_domain.lower():
-        return brand_from_domain
-    if cleaned_title.lower().endswith(".com") and len(cleaned_title) > 4:
-        name_without_tld = cleaned_title[:-4]
-        if name_without_tld.lower() in ("distrowatch", "slashdot", "phoronix"):
-            return name_without_tld.capitalize()
-
-    # Strip any dangling delimiters at ends
-    cleaned_title = cleaned_title.strip(" -|:—–»•~").strip()
-
-    return cleaned_title if cleaned_title else (
-        brand_from_domain or _format_domain_as_name(domain or "") or ""
-    )
