@@ -6,13 +6,13 @@ class GenericChangelogBridge extends BridgeAbstract
 {
     const NAME = 'Generic Changelog & Release Bridge';
     const URI = 'https://github.com/sheepdestroyer/SheepVibes';
-    const DESCRIPTION = 'Automatically extracts changelog and release entries from arbitrary web pages';
+    const DESCRIPTION = 'Automatically extracts changelog, release, and blog entries from arbitrary web pages';
     const MAINTAINER = 'SheepVibes';
     const CACHE_TIMEOUT = 1800;
 
     const PARAMETERS = [[
         'url' => [
-            'name' => 'Changelog Page URL',
+            'name' => 'Page URL',
             'type' => 'text',
             'required' => true,
             'exampleValue' => 'https://example.com/changelog',
@@ -31,13 +31,118 @@ class GenericChangelogBridge extends BridgeAbstract
             throwServerException('Could not load content from ' . $url);
         }
 
-        // Try container-based entry extraction first
-        $this->extractFromContainers($html, $url);
-
-        // Fallback to heading-delimited extraction if no items were extracted
-        if (empty($this->items)) {
-            $this->extractFromHeadings($html, $url);
+        // 1. Try structured JSON-LD schema (common in blogs and semantic documentation)
+        $this->extractFromJsonLd($html, $url);
+        if (!empty($this->items)) {
+            return;
         }
+
+        // 2. Try container-based entry extraction
+        $this->extractFromContainers($html, $url);
+        if (!empty($this->items)) {
+            return;
+        }
+
+        // 3. Fallback to heading-delimited extraction
+        $this->extractFromHeadings($html, $url);
+    }
+
+    private function extractFromJsonLd($html, string $baseUrl): void
+    {
+        foreach ($html->find('script[type="application/ld+json"]') as $script) {
+            $raw = trim($script->innertext);
+            $json = json_decode($raw, true);
+            if (!$json || !is_array($json)) {
+                continue;
+            }
+
+            // Case A: blogPost array (e.g. Lucebox and standard schema.org Blog)
+            if (isset($json['blogPost']) && is_array($json['blogPost'])) {
+                foreach ($json['blogPost'] as $post) {
+                    $item = $this->parseJsonLdItem($post, $baseUrl);
+                    if ($item) {
+                        $this->items[] = $item;
+                    }
+                }
+                if (!empty($this->items)) {
+                    return;
+                }
+            }
+
+            // Case B: ItemList with itemListElement array
+            if (isset($json['itemListElement']) && is_array($json['itemListElement'])) {
+                foreach ($json['itemListElement'] as $element) {
+                    $itemData = $element['item'] ?? $element;
+                    if (is_array($itemData)) {
+                        $item = $this->parseJsonLdItem($itemData, $baseUrl);
+                        if ($item) {
+                            $this->items[] = $item;
+                        }
+                    }
+                }
+                if (!empty($this->items)) {
+                    return;
+                }
+            }
+
+            // Case C: Array in @graph
+            if (isset($json['@graph']) && is_array($json['@graph'])) {
+                foreach ($json['@graph'] as $node) {
+                    $type = $node['@type'] ?? '';
+                    if (in_array($type, ['BlogPosting', 'Article', 'NewsArticle', 'TechArticle'])) {
+                        $item = $this->parseJsonLdItem($node, $baseUrl);
+                        if ($item) {
+                            $this->items[] = $item;
+                        }
+                    }
+                }
+                if (!empty($this->items)) {
+                    return;
+                }
+            }
+
+            // Case D: Single BlogPosting / Article root object
+            $type = $json['@type'] ?? '';
+            if (in_array($type, ['BlogPosting', 'Article', 'NewsArticle', 'TechArticle'])) {
+                $item = $this->parseJsonLdItem($json, $baseUrl);
+                if ($item) {
+                    $this->items[] = $item;
+                    return;
+                }
+            }
+        }
+    }
+
+    private function parseJsonLdItem(array $data, string $baseUrl): ?array
+    {
+        $title = trim((string)($data['headline'] ?? $data['name'] ?? ''));
+        if (empty($title)) {
+            return null;
+        }
+
+        $uri = (string)($data['url'] ?? $baseUrl);
+        $dateStr = $data['datePublished'] ?? $data['dateCreated'] ?? $data['dateModified'] ?? null;
+        $timestamp = $dateStr ? strtotime((string)$dateStr) : time();
+        $content = (string)($data['description'] ?? $data['articleBody'] ?? $title);
+
+        $item = [
+            'title' => $title,
+            'uri' => defaultLinkTo($uri, $baseUrl),
+            'timestamp' => $timestamp ?: time(),
+            'content' => defaultLinkTo($content, $baseUrl),
+            'uid' => defaultLinkTo($uri, $baseUrl),
+        ];
+
+        if (isset($data['image'])) {
+            $img = is_array($data['image']) ? ($data['image']['url'] ?? '') : (string)$data['image'];
+            if ($img) {
+                $imgUrl = defaultLinkTo($img, $baseUrl);
+                $item['enclosures'] = [$imgUrl];
+                $item['content'] = '<p><img src="' . $imgUrl . '" /></p>' . $item['content'];
+            }
+        }
+
+        return $item;
     }
 
     private function extractFromContainers($html, string $baseUrl): void
@@ -46,6 +151,9 @@ class GenericChangelogBridge extends BridgeAbstract
             'article.changelog-entry',
             'div[data-section-row]',
             'div.section-row-wrapper',
+            'a.post-card',
+            'article.post-card',
+            'div.post-card',
             'article[class*="changelog"]',
             'div[class*="changelog-entry"]',
             'div[class*="changelog-item"]',
@@ -53,6 +161,9 @@ class GenericChangelogBridge extends BridgeAbstract
             'div[class*="release-entry"]',
             'div[class*="release-item"]',
             'div[class*="release-card"]',
+            '[class*="post-card"]',
+            '[class*="article-card"]',
+            '[class*="blog-card"]',
             'section[class*="changelog"]',
             'section[class*="release"]',
             'div[data-changelog-entry]',
@@ -84,8 +195,8 @@ class GenericChangelogBridge extends BridgeAbstract
 
     private function parseContainerElement($el, string $baseUrl): ?array
     {
-        // Find title heading
-        $headingEl = $el->find('h1, h2, h3, h4, h5, [class*="title"], [class*="heading"], [class*="version"]', 0);
+        // Find title heading or post-title class
+        $headingEl = $el->find('h1, h2, h3, h4, h5, [class*="title"], [class*="heading"], [class*="version"], .post-title', 0);
         if (!$headingEl) {
             return null;
         }
@@ -109,18 +220,31 @@ class GenericChangelogBridge extends BridgeAbstract
         $uri = $this->extractUri($el, $headingEl, $baseUrl, $title);
 
         // Extract Content
-        $content = trim($el->innertext);
+        $excerptEl = $el->find('.post-excerpt, [class*="excerpt"], [class*="summary"], [class*="description"]', 0);
+        $content = $excerptEl ? trim($excerptEl->plaintext) : trim($el->innertext);
         if (empty($content)) {
             $content = htmlspecialchars($title);
         }
 
-        return [
+        $item = [
             'title' => $title,
             'uri' => defaultLinkTo($uri, $baseUrl),
             'timestamp' => $timestamp ?: time(),
             'content' => defaultLinkTo($content, $baseUrl),
             'uid' => defaultLinkTo($uri, $baseUrl),
         ];
+
+        // Check for card images
+        $img = $el->find('img.post-card-img, img[class*="card"], img', 0);
+        if ($img && $img->src) {
+            $imgSrc = defaultLinkTo($img->src, $baseUrl);
+            $item['enclosures'] = [$imgSrc];
+            if (strpos($item['content'], $imgSrc) === false) {
+                $item['content'] = '<p><img src="' . $imgSrc . '" /></p>' . $item['content'];
+            }
+        }
+
+        return $item;
     }
 
     private function extractFromHeadings($html, string $baseUrl): void
@@ -230,6 +354,11 @@ class GenericChangelogBridge extends BridgeAbstract
 
     private function extractUri($el, $headingEl, string $baseUrl, string $title): string
     {
+        // Check if element itself is an anchor link (e.g. a.post-card)
+        if ($el->tag === 'a' && $el->href) {
+            return $el->href;
+        }
+
         // Check for anchor inside heading
         if ($headingEl) {
             $anchor = $headingEl->find('a', 0);
@@ -268,8 +397,8 @@ class GenericChangelogBridge extends BridgeAbstract
         $path = strtolower($parsed['path'] ?? '');
         $query = strtolower($parsed['query'] ?? '');
 
-        // Match paths or query params indicating changelogs or releases
-        if (preg_match('/(changelog|release|updates|whats-new|what-is-new|versions|history|announcements)/i', $path . '?' . $query)) {
+        // Match paths or query params indicating changelogs, releases, blogs, or articles
+        if (preg_match('/(changelog|release|updates|whats-new|what-is-new|versions|history|announcements|blog|news|articles|posts)/i', $path . '?' . $query)) {
             return ['url' => $url];
         }
 

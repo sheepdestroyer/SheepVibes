@@ -15,9 +15,6 @@ QUADLET_FILES=(
     "sheepvibes-valkey.volume"
 )
 BRIDGE_FILES=(
-    "LuceboxBridge.php"
-    "AntigravityChangelogBridge.php"
-    "JulesChangelogBridge.php"
     "GenericChangelogBridge.php"
 )
 # Base URL for the directory containing the pod file in the repository

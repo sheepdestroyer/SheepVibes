@@ -2,11 +2,9 @@
 
 - **Feat(bridge): Deploy RSS-Bridge in pod and support RSS-less page feed bridging (Issue #550)**
   - **Quadlet & Pod Orchestration (`pod/sheepvibes-rssbridge.container`, `pod/sheepvibes-app.container`)**: Added `sheepvibes-rssbridge.container` based on `docker.io/rssbridge/rss-bridge:latest` running on the shared pod network. Mounted custom bridges directory into `/config:Z` so custom bridges are automatically copied to `/app/bridges/` by RSS-Bridge's entrypoint. Wired `sheepvibes-app` with `Wants`/`After=sheepvibes-rssbridge.container` and injected `Environment=RSS_BRIDGE_URL=http://localhost:80`.
-  - **Custom & Generic PHP Bridges (`pod/bridges/`)**:
-    - `LuceboxBridge.php`: Extracts blog posts from `https://www.lucebox.com/blog` using `application/ld+json` schema metadata with DOM fallback.
-    - `AntigravityChangelogBridge.php`: Extracts changelog entries from `https://antigravity.google/changelog` (`div[data-section-row]`).
-    - `JulesChangelogBridge.php`: Extracts documentation updates from `https://jules.google/docs/changelog/` (`article.changelog-entry`).
-    - `GenericChangelogBridge.php`: Automatically extracts changelog and release entries from arbitrary web pages by detecting container selectors (`article`, `section`, `[class*="changelog"]`, `[class*="release"]`) and heading patterns (`h2`, `h3` with version or date stamps) without site-specific PHP code.
+  - **Generic Bridge & Archive (`pod/bridges/`, `pod/bridges_backup/`)**:
+    - `GenericChangelogBridge.php`: Automatically extracts changelog, release, and blog entries from arbitrary web pages by combining structured JSON-LD schema parsing (`BlogPosting`, `Article`, `ItemList`), container selectors (`article`, `section`, `[class*="changelog"]`, `[class*="release"]`, `[class*="post-card"]`), and heading patterns (`h2`, `h3` with version or date stamps) without site-specific PHP code.
+    - Archived earlier site-specific bridges (`LuceboxBridge.php.bak`, `AntigravityChangelogBridge.php.bak`, `JulesChangelogBridge.php.bak`) to `pod/bridges_backup/` to test and standardize on generic dynamic extraction.
     - Native support for GitHub Releases (`https://github.com/NousResearch/hermes-agent/releases`) via RSS-Bridge's built-in `GithubReleaseBridge`.
   - **Backend Feed Service Integration (`backend/feed_service.py`)**:
     - Added `RSS_BRIDGE_URL` environment configuration, loopback SSRF allowlisting specifically for trusted `RSS_BRIDGE_URL` (while retaining strict rejection of all other loopback ports), and HTML `<link rel="alternate">` autodiscovery.

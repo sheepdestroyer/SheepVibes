@@ -355,30 +355,28 @@ def test_deployment_configuration_and_bridge_files():
         assert "docker.io/rssbridge/rss-bridge:latest" in content
         assert "Pod=sheepvibespod.pod" in content
 
-    # Custom bridge files
+    # Generic bridge file
     bridges_dir = os.path.join(project_root, "pod", "bridges")
-    expected_bridges = (
-        "LuceboxBridge.php",
-        "AntigravityChangelogBridge.php",
-        "JulesChangelogBridge.php",
-        "GenericChangelogBridge.php",
-    )
-    for bridge_name in expected_bridges:
-        bridge_path = os.path.join(bridges_dir, bridge_name)
-        assert os.path.isfile(bridge_path)
-        with open(bridge_path, "r", encoding="utf-8") as f:
-            b_content = f.read()
-            assert "extends BridgeAbstract" in b_content
-            assert "function collectData()" in b_content
-            assert "function detectParameters($url)" in b_content
+    generic_bridge = os.path.join(bridges_dir, "GenericChangelogBridge.php")
+    assert os.path.isfile(generic_bridge)
+    with open(generic_bridge, "r", encoding="utf-8") as f:
+        b_content = f.read()
+        assert "extends BridgeAbstract" in b_content
+        assert "function collectData()" in b_content
+        assert "function detectParameters($url)" in b_content
+
+    # Backed up custom bridge files
+    backup_dir = os.path.join(project_root, "pod", "bridges_backup")
+    for backup_name in ("LuceboxBridge.php.bak", "AntigravityChangelogBridge.php.bak", "JulesChangelogBridge.php.bak"):
+        backup_path = os.path.join(backup_dir, backup_name)
+        assert os.path.isfile(backup_path)
 
     # Deploy pod script
     deploy_script = os.path.join(project_root, "scripts", "deploy_pod.sh")
     with open(deploy_script, "r", encoding="utf-8") as f:
         d_content = f.read()
         assert "sheepvibes-rssbridge.container" in d_content
-        for bridge_name in expected_bridges:
-            assert bridge_name in d_content
+        assert "GenericChangelogBridge.php" in d_content
 
     # Dev manager script
     dev_script = os.path.join(project_root, "scripts", "dev_manager.sh")

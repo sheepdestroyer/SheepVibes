@@ -7,10 +7,8 @@ This document outlines the steps to build the SheepVibes RSS aggregator.
 *   [x] **Deploy RSS-Bridge in pod and support RSS-less pages:**
     *   [x] Define Podman Quadlet container `pod/sheepvibes-rssbridge.container` running `docker.io/rssbridge/rss-bridge:latest` on the shared pod network.
     *   [x] Mount custom PHP bridges from `pod/bridges/` into `/config` in the RSS-Bridge container.
-    *   [x] Implement custom PHP bridge `pod/bridges/LuceboxBridge.php` for Lucebox blog (`https://www.lucebox.com/blog`) with JSON-LD schema parsing and HTML fallback.
-    *   [x] Implement custom PHP bridge `pod/bridges/AntigravityChangelogBridge.php` for Google Antigravity changelog (`https://antigravity.google/changelog`).
-    *   [x] Implement custom PHP bridge `pod/bridges/JulesChangelogBridge.php` for Google Jules documentation changelog (`https://jules.google/docs/changelog/`).
-    *   [x] Implement generic automatic bridge `pod/bridges/GenericChangelogBridge.php` to extract changelog and release entries from arbitrary web pages via container selectors and heading patterns without site-specific code.
+    *   [x] Implement generic automatic bridge `pod/bridges/GenericChangelogBridge.php` to extract changelog, release, and blog entries from arbitrary web pages via JSON-LD schema, container selectors, and heading patterns without site-specific code.
+    *   [x] Archive earlier site-specific custom bridges into `pod/bridges_backup/` (`LuceboxBridge.php.bak`, `AntigravityChangelogBridge.php.bak`, `JulesChangelogBridge.php.bak`) to standardize on the single dynamic `GenericChangelogBridge.php`.
     *   [x] Support GitHub Releases feeds (`https://github.com/NousResearch/hermes-agent/releases`) via RSS-Bridge's built-in `GithubReleaseBridge`.
     *   [x] Update `pod/sheepvibes-app.container` with `Wants`/`After=sheepvibes-rssbridge.container` and `Environment=RSS_BRIDGE_URL=http://localhost:80`.
     *   [x] Update `scripts/dev_manager.sh` to spin up `sheepvibes-dev-rssbridge` alongside App and Valkey, and clean up on teardown.
