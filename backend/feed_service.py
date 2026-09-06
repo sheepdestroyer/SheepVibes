@@ -931,6 +931,46 @@ def discover_feed_url_from_html(html_content, base_url):
     return None
 
 
+def _resolve_bridge_entry_link(entry, page_url: str) -> None:
+    """Ensures an RSS-Bridge feed entry has a valid absolute link."""
+    raw_entry_link = entry.get("link")
+    entry_link = validate_link_structure(raw_entry_link)
+    if entry_link:
+        return
+
+    if raw_entry_link and isinstance(raw_entry_link, str):
+        joined = validate_link_structure(urljoin(page_url, raw_entry_link))
+        if joined:
+            entry["link"] = joined
+            return
+
+    if entry.get("id"):
+        id_link = validate_link_structure(entry.get("id"))
+        if id_link:
+            entry["link"] = id_link
+            return
+
+    entry["link"] = page_url
+
+
+def _canonicalize_bridge_feed_metadata(parsed_feed, page_url: str) -> None:
+    """Canonicalizes bridge feed link, title, and entry URLs."""
+    if not parsed_feed.feed.get("link") or is_rss_bridge_url(parsed_feed.feed.get("link")):
+        parsed_feed.feed["link"] = page_url
+
+    feed_title = parsed_feed.feed.get("title")
+    canonical_title = derive_canonical_feed_name(
+        feed_title or "",
+        site_url=page_url,
+        feed_url=page_url,
+    )
+    if canonical_title:
+        parsed_feed.feed["title"] = canonical_title
+
+    for entry in parsed_feed.entries:
+        _resolve_bridge_entry_link(entry, page_url)
+
+
 def _fetch_from_bridge_url(bridge_endpoint_url, page_url):
     """Internal helper to fetch and parse an Atom/RSS feed from an RSS-Bridge endpoint."""
     safe_ip, _ = validate_and_resolve_url(bridge_endpoint_url, allow_bridge=True)
@@ -944,36 +984,7 @@ def _fetch_from_bridge_url(bridge_endpoint_url, page_url):
 
     parsed_feed = _parse_and_validate_feed(content, bridge_endpoint_url)
     if parsed_feed and parsed_feed.entries:
-        if not parsed_feed.feed.get("link") or is_rss_bridge_url(parsed_feed.feed.get("link")):
-            parsed_feed.feed["link"] = page_url
-
-        # Canonicalize generic bridge feed title if needed
-        feed_title = parsed_feed.feed.get("title")
-        canonical_title = derive_canonical_feed_name(
-            feed_title or "",
-            site_url=page_url,
-            feed_url=page_url,
-        )
-        if canonical_title:
-            parsed_feed.feed["title"] = canonical_title
-
-        # Ensure all entries have valid absolute links
-        for entry in parsed_feed.entries:
-            raw_entry_link = entry.get("link")
-            entry_link = validate_link_structure(raw_entry_link)
-            if not entry_link:
-                if raw_entry_link and isinstance(raw_entry_link, str):
-                    joined = validate_link_structure(urljoin(page_url, raw_entry_link))
-                    if joined:
-                        entry["link"] = joined
-                        continue
-                if entry.get("id"):
-                    id_link = validate_link_structure(entry.get("id"))
-                    if id_link:
-                        entry["link"] = id_link
-                        continue
-                entry["link"] = page_url
-
+        _canonicalize_bridge_feed_metadata(parsed_feed, page_url)
         return parsed_feed
     return None
 
@@ -1572,6 +1583,39 @@ def _preprocess_entries(parsed_feed, feed_name):
     return entries_with_dates
 
 
+def _resolve_entry_link_with_fallback(raw_link, base_link) -> str | None:
+    """Validates entry link, falling back to urljoin with base_link for relative links."""
+    entry_link = validate_link_structure(raw_link)
+    if not entry_link and raw_link and isinstance(raw_link, str) and raw_link.strip():
+        if base_link:
+            entry_link = validate_link_structure(urljoin(base_link, raw_link.strip()))
+    return entry_link
+
+
+def _get_entry_guid(entry, entry_link: str) -> str:
+    """Calculates or retrieves a unique GUID string for a feed entry."""
+    entry_id = entry.get("id")
+    if entry_id:
+        return str(entry_id)
+    unique_string = f"{entry_link}{entry.get('title', '')}"
+    return hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
+
+
+def _find_existing_item_match(
+    db_guid: str,
+    entry_link: str,
+    existing_items_by_guid: dict,
+    existing_items_by_link: dict,
+):
+    """Finds existing FeedItem match by GUID or fallback link match."""
+    match = existing_items_by_guid.get(db_guid)
+    if not match:
+        candidate = existing_items_by_link.get(entry_link)
+        if candidate and (candidate.guid is None or candidate.guid in (entry_link, db_guid)):
+            return candidate
+    return match
+
+
 def _process_single_entry(
     entry,
     parsed_published,
@@ -1581,14 +1625,8 @@ def _process_single_entry(
     batch_processed_guids
 ):
     """Processes a single entry, checking for duplicates and updating existing."""
-    raw_link = entry.get("link")
-    entry_link = validate_link_structure(raw_link)
-
-    # If raw_link is a relative URL (e.g. "/releases/1"), resolve against base site/feed link
-    if not entry_link and raw_link and isinstance(raw_link, str) and raw_link.strip():
-        base_link = feed_db_obj.site_link or feed_db_obj.url
-        if base_link:
-            entry_link = validate_link_structure(urljoin(base_link, raw_link.strip()))
+    base_link = feed_db_obj.site_link or feed_db_obj.url
+    entry_link = _resolve_entry_link_with_fallback(entry.get("link"), base_link)
 
     if not entry_link:
         logger.warning(
@@ -1599,18 +1637,10 @@ def _process_single_entry(
         return None
 
     entry_comments_url = _extract_comments_url(entry)
-
-    if entry.get("id"):
-        db_guid = entry.get("id")
-    else:
-        unique_string = f"{entry_link}{entry.get('title', '')}"
-        db_guid = hashlib.sha256(unique_string.encode("utf-8")).hexdigest()
-
-    existing_match = existing_items_by_guid.get(db_guid)
-    if not existing_match:
-        candidate = existing_items_by_link.get(entry_link)
-        if candidate and (candidate.guid is None or candidate.guid == entry_link or candidate.guid == db_guid):
-            existing_match = candidate
+    db_guid = _get_entry_guid(entry, entry_link)
+    existing_match = _find_existing_item_match(
+        db_guid, entry_link, existing_items_by_guid, existing_items_by_link
+    )
 
     if existing_match:
         _update_existing_item(
