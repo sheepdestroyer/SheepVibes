@@ -1,3 +1,21 @@
+## 2026-09-06
+
+- **Feat(bridge): Deploy RSS-Bridge in pod and support RSS-less page feed bridging (Issue #550)**
+  - **Quadlet & Pod Orchestration (`pod/sheepvibes-rssbridge.container`, `pod/sheepvibes-app.container`)**: Added `sheepvibes-rssbridge.container` based on `docker.io/rssbridge/rss-bridge:latest` running on the shared pod network. Mounted custom bridges directory into `/config:Z` so custom bridges are automatically copied to `/app/bridges/` by RSS-Bridge's entrypoint. Wired `sheepvibes-app` with `Wants`/`After=sheepvibes-rssbridge.container` and injected `Environment=RSS_BRIDGE_URL=http://localhost:80`.
+  - **Generic Bridge & Archive (`pod/bridges/`, `pod/bridges_backup/`)**:
+    - `GenericChangelogBridge.php`: Automatically extracts changelog, release, and blog entries from arbitrary web pages by combining structured JSON-LD schema parsing (`BlogPosting`, `Article`, `ItemList`), container selectors (`article`, `section`, `[class*="changelog"]`, `[class*="release"]`, `[class*="post-card"]`), and heading patterns (`h2`, `h3` with version or date stamps) without site-specific PHP code.
+    - Archived earlier site-specific bridges (`LuceboxBridge.php.bak`, `AntigravityChangelogBridge.php.bak`, `JulesChangelogBridge.php.bak`) to `pod/bridges_backup/` to test and standardize on generic dynamic extraction.
+    - Native support for GitHub Releases (`https://github.com/NousResearch/hermes-agent/releases`) via RSS-Bridge's built-in `GithubReleaseBridge`.
+  - **Backend Feed Service Integration (`backend/feed_service.py`)**:
+    - Added `RSS_BRIDGE_URL` environment configuration, loopback SSRF allowlisting specifically for trusted `RSS_BRIDGE_URL` (while retaining strict rejection of all other loopback ports), and HTML `<link rel="alternate">` autodiscovery.
+    - Cascaded `fetch_feed` and `fetch_rss_bridge_feed` to automatically delegate non-RSS URLs: native XML $\rightarrow$ HTML `<link rel="alternate">` $\rightarrow$ RSS-Bridge autodetection (`?action=detect`) $\rightarrow$ `GenericChangelogBridge` fallback, preserving canonical page URLs for frontend presentation and OPML exports.
+  - **Tooling & Deployment (`scripts/dev_manager.sh`, `scripts/deploy_pod.sh`)**:
+    - Updated `scripts/dev_manager.sh` to manage `sheepvibes-dev-rssbridge` alongside App and Valkey during local development.
+    - Updated `scripts/deploy_pod.sh` to install Quadlet configuration and deploy custom PHP bridges including `GenericChangelogBridge.php` into `~/.config/containers/systemd/bridges/`.
+  - **Unit Test Suite (`tests/unit/test_rss_bridge.py`)**: Added 16 unit tests verifying URL resolution, SSRF protection, HTML autodiscovery cycle bounds, RSS-Bridge autodetect delegation, GenericChangelogBridge fallback, custom bridge Atom feed parsing, and Quadlet/script configuration.
+  - **Code Review Hardening**: Resolved all automated code review findings across Codacy, DeepSource, Sourcery, and CodeRabbit (restricted internal bridge IP routing, bound recursive autodiscovery, supported top-level JSON-LD arrays, fixed PCRE regex delimiter escaping, initialized `PROJECT_ROOT` across all paths in `dev_manager.sh`, added bridge verification in `deploy_pod.sh`, and documented manual Podman workflow in `README.md`).
+  - **Verification**: Full backend unit tests pass (249/249), frontend Vitest tests pass (58/58), and Playwright E2E browser tests pass (16 passed, 1 skipped). All automated checks green.
+
 ## 2026-09-05
 
 - **Feat(test): Default pytest runs to parallelized execution with -n auto**

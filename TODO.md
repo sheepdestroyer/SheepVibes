@@ -2,6 +2,21 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-06 RSS-Bridge Deployment & RSS-Less Page Feed Bridging (Issue #550)
+
+*   [x] **Deploy RSS-Bridge in pod and support RSS-less pages:**
+    *   [x] Define Podman Quadlet container `pod/sheepvibes-rssbridge.container` running `docker.io/rssbridge/rss-bridge:latest` on the shared pod network.
+    *   [x] Mount custom PHP bridges from `pod/bridges/` into `/config` in the RSS-Bridge container.
+    *   [x] Implement generic automatic bridge `pod/bridges/GenericChangelogBridge.php` to extract changelog, release, and blog entries from arbitrary web pages via JSON-LD schema, container selectors, and heading patterns without site-specific code.
+    *   [x] Archive earlier site-specific custom bridges into `pod/bridges_backup/` (`LuceboxBridge.php.bak`, `AntigravityChangelogBridge.php.bak`, `JulesChangelogBridge.php.bak`) to standardize on the single dynamic `GenericChangelogBridge.php`.
+    *   [x] Support GitHub Releases feeds (`https://github.com/NousResearch/hermes-agent/releases`) via RSS-Bridge's built-in `GithubReleaseBridge`.
+    *   [x] Update `pod/sheepvibes-app.container` with `Wants`/`After=sheepvibes-rssbridge.container` and `Environment=RSS_BRIDGE_URL=http://localhost:80`.
+    *   [x] Update `scripts/dev_manager.sh` to spin up `sheepvibes-dev-rssbridge` alongside App and Valkey, and clean up on teardown.
+    *   [x] Update `scripts/deploy_pod.sh` to install Quadlet configuration and deploy custom bridge files including `GenericChangelogBridge.php`.
+    *   [x] Integrate RSS-Bridge into `backend/feed_service.py` with `RSS_BRIDGE_URL` configuration, safe SSRF loopback routing for trusted RSS-Bridge host, HTML `<link rel="alternate">` autodiscovery, automatic delegation to matching bridges, and seamless fallback to `GenericChangelogBridge` for RSS-less URLs.
+    *   [x] Add unit test suite in `tests/unit/test_rss_bridge.py` verifying URL validation, SSRF protection, feed delegation, custom bridge parsing, and GenericChangelogBridge fallback.
+    *   [x] Validate full test suite (Pytest backend unit, Playwright E2E, Vitest frontend).
+
 ## 2026-09-05 Parallelized Testing
 
 *   [x] **Parallelize pytest runs by default with `-n auto`:**

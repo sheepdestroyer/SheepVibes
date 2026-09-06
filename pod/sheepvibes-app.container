@@ -1,7 +1,8 @@
 [Unit]
 Description=SheepVibes App Container
-After=sheepvibes-valkey.container
+After=sheepvibes-valkey.container sheepvibes-rssbridge.container
 Requires=sheepvibes-valkey.container
+Wants=sheepvibes-rssbridge.container
 
 [Container]
 ContainerName=sheepvibes-app
@@ -17,6 +18,7 @@ HealthTimeout=10s
 HealthRetries=3
 Environment=CACHE_VALKEY_URL=redis://localhost:6379/0
 Environment=CACHE_REDIS_URL=redis://localhost:6379/0
+Environment=RSS_BRIDGE_URL=http://localhost:80
 Environment=FLASK_APP=backend.app
 Environment=PYTHONPATH=/app
 Environment=UPDATE_INTERVAL_MINUTES=15

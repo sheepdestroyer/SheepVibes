@@ -8,6 +8,9 @@ readonly VALKEY_CONTAINER_NAME="${DEV_VALKEY_CONTAINER:-${DEV_REDIS_CONTAINER:-s
 readonly APP_IMAGE_NAME="${DEV_APP_IMAGE:-localhost/sheepvibes-app}"
 readonly VALKEY_IMAGE="${DEV_VALKEY_IMAGE:-${DEV_REDIS_IMAGE:-docker.io/valkey/valkey:9.1.1}}"
 readonly VALKEY_URL_INTERNAL="${DEV_VALKEY_URL_INTERNAL:-${DEV_REDIS_URL_INTERNAL:-redis://localhost:6379/0}}"
+readonly RSSBRIDGE_CONTAINER_NAME="${DEV_RSSBRIDGE_CONTAINER:-sheepvibes-dev-rssbridge}"
+readonly RSSBRIDGE_IMAGE="${DEV_RSSBRIDGE_IMAGE:-docker.io/rssbridge/rss-bridge:latest}"
+readonly RSSBRIDGE_URL_INTERNAL="${DEV_RSSBRIDGE_URL_INTERNAL:-http://localhost:80}"
 readonly VOLUME_NAME="${DEV_DATA_VOLUME:-sheepvibes-dev-data}"
 readonly CONTAINER_PORT="${DEV_CONTAINER_PORT:-5000}"
 readonly DEFAULT_HOST_PORT="${DEV_DEFAULT_HOST_PORT:-5002}"
@@ -67,9 +70,9 @@ remove_containers() {
     echo "Ensuring containers are removed..."
     # Attempt using --ignore if supported (Podman 4.0+)
     if "$CMD" rm --help 2>&1 | grep -q -w "\-\-ignore"; then
-        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$VALKEY_CONTAINER_NAME"
+        "$CMD" rm -f --ignore "$APP_CONTAINER_NAME" "$VALKEY_CONTAINER_NAME" "$RSSBRIDGE_CONTAINER_NAME"
     else
-        "$CMD" rm -f "$APP_CONTAINER_NAME" "$VALKEY_CONTAINER_NAME" 2>/dev/null || true
+        "$CMD" rm -f "$APP_CONTAINER_NAME" "$VALKEY_CONTAINER_NAME" "$RSSBRIDGE_CONTAINER_NAME" 2>/dev/null || true
     fi
 }
 
@@ -119,6 +122,9 @@ do_up() {
 
     echo "--- SheepVibes Dev Environment Setup (Runtime: $CMD_BASE) ---"
 
+    local PROJECT_ROOT
+    PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+
     # 1. Check/Build Image
     local BUILD_FLAGS=()
     if [[ "$REBUILD" == true ]]; then
@@ -134,8 +140,6 @@ do_up() {
              echo "Rebuilding image..."
         fi
         
-        local PROJECT_ROOT
-        PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
         echo "Building image $APP_IMAGE_NAME from $CONTAINERFILE in $PROJECT_ROOT (Context: $BUILD_CONTEXT)..."
         (cd "$PROJECT_ROOT" && "$CMD" build "${BUILD_FLAGS[@]}" -t "$APP_IMAGE_NAME" -f "$CONTAINERFILE" "$BUILD_CONTEXT")
     else
@@ -158,6 +162,11 @@ do_up() {
     echo "Starting Valkey ($VALKEY_IMAGE)..."
     "$CMD" run -d --pod "$POD_NAME" --name "$VALKEY_CONTAINER_NAME" "$VALKEY_IMAGE"
 
+    echo "Starting RSS-Bridge ($RSSBRIDGE_IMAGE)..."
+    "$CMD" run -d --pod "$POD_NAME" --name "$RSSBRIDGE_CONTAINER_NAME" \
+        -v "$PROJECT_ROOT/pod/bridges:/config:Z" \
+        "$RSSBRIDGE_IMAGE"
+
     local DEBUG_VAL=1
     local MODE_MSG="DEVELOPMENT mode (Flask Debug)..."
     if [[ "$PRODUCTION_MODE" == true ]]; then
@@ -170,6 +179,7 @@ do_up() {
     "$CMD" run -d --pod "$POD_NAME" --name "$APP_CONTAINER_NAME" \
         -e CACHE_VALKEY_URL="$VALKEY_URL_INTERNAL" \
         -e CACHE_REDIS_URL="$VALKEY_URL_INTERNAL" \
+        -e RSS_BRIDGE_URL="$RSSBRIDGE_URL_INTERNAL" \
         -e FLASK_DEBUG="$DEBUG_VAL" \
         -e CORS_ALLOWED_ORIGINS="http://localhost:${HOST_PORT},http://127.0.0.1:${HOST_PORT}" \
         -v "${VOLUME_NAME}:/app/data:Z" \
