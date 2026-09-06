@@ -206,7 +206,10 @@ def test_live_server_startup_failure_premature_exit(mocker, tmp_path):
         os.environ.pop("TEST_BASE_URL", None)
         gen = live_server.__wrapped__()
         with pytest.raises(pytest.fail.Exception) as exc_info:
-            next(gen)
+            try:
+                next(gen)
+            except StopIteration:
+                pass
 
         msg = str(exc_info.value)
         assert "terminated prematurely with exit code 1" in msg
@@ -237,7 +240,10 @@ def test_live_server_startup_failure_timeout(mocker, tmp_path):
         os.environ.pop("TEST_BASE_URL", None)
         gen = live_server.__wrapped__()
         with pytest.raises(pytest.fail.Exception) as exc_info:
-            next(gen)
+            try:
+                next(gen)
+            except StopIteration:
+                pass
 
         msg = str(exc_info.value)
         assert "failed to start on port 5099 within" in msg
