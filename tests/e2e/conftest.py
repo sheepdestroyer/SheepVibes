@@ -125,6 +125,45 @@ def _wait_for_server(
     return False
 
 
+def _terminate_server(
+    proc: subprocess.Popen | None,
+    log_file,
+    e2e_db_path: Path,
+    server_log_path: Path,
+    started: bool,
+) -> None:
+    """Clean up server process and temporary files."""
+    if proc is not None:
+        try:
+            if hasattr(os, "killpg"):
+                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            else:
+                proc.terminate()
+            proc.wait(timeout=5)
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            try:
+                if hasattr(os, "killpg"):
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                else:
+                    proc.kill()
+            except ProcessLookupError:
+                pass
+    try:
+        log_file.flush()
+    except (ValueError, OSError):
+        pass
+    log_file.close()
+    try:
+        e2e_db_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    if started:
+        try:
+            server_log_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -150,17 +189,11 @@ def live_server():
     e2e_db_path = _get_db_path(data_dir)
     server_log_path = _get_log_path(data_dir)
 
-    if e2e_db_path.exists():
-        try:
-            e2e_db_path.unlink()
-        except OSError:
-            pass
-
-    if server_log_path.exists():
-        try:
-            server_log_path.unlink()
-        except OSError:
-            pass
+    try:
+        e2e_db_path.unlink(missing_ok=True)
+        server_log_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
     # Use the same Python interpreter that is running pytest
     python = sys.executable
@@ -207,37 +240,7 @@ def live_server():
         started = True
         yield server_base_url
     finally:
-        # Teardown: kill the entire process group
-        if proc is not None:
-            try:
-                if hasattr(os, "killpg"):
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                else:
-                    proc.terminate()
-                proc.wait(timeout=5)
-            except (ProcessLookupError, subprocess.TimeoutExpired):
-                try:
-                    if hasattr(os, "killpg"):
-                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                    else:
-                        proc.kill()
-                except ProcessLookupError:
-                    pass
-        try:
-            log_file.flush()
-        except (ValueError, OSError):
-            pass
-        log_file.close()
-        if e2e_db_path.exists():
-            try:
-                e2e_db_path.unlink()
-            except OSError:
-                pass
-        if started and server_log_path.exists():
-            try:
-                server_log_path.unlink()
-            except OSError:
-                pass
+        _terminate_server(proc, log_file, e2e_db_path, server_log_path, started)
 
 
 @pytest.fixture(scope="function", autouse=True)

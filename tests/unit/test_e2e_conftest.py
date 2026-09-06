@@ -25,7 +25,10 @@ def test_live_server_uses_existing_test_base_url():
     custom_url = "http://custom-test-server:8080"
     with patch.dict(os.environ, {"TEST_BASE_URL": custom_url}):
         gen = live_server.__wrapped__()
-        url = next(gen)
+        try:
+            url = next(gen)
+        except StopIteration:
+            pytest.fail("live_server generator stopped prematurely")
         assert url == custom_url
         # Clean exit generator
         try:
@@ -45,7 +48,10 @@ def test_live_server_popen_args(mocker):
         # Ensure TEST_BASE_URL is not set
         os.environ.pop("TEST_BASE_URL", None)
         gen = live_server.__wrapped__()
-        url = next(gen)
+        try:
+            url = next(gen)
+        except StopIteration:
+            pytest.fail("live_server generator stopped prematurely")
         assert url == "http://127.0.0.1:5099"
 
         # Verify subprocess.Popen call parameters
@@ -259,7 +265,10 @@ def test_live_server_popen_args_with_xdist_worker(mocker):
 
     with patch.dict(os.environ, {"PYTEST_XDIST_WORKER": "gw4"}, clear=True):
         gen = live_server.__wrapped__()
-        url = next(gen)
+        try:
+            url = next(gen)
+        except StopIteration:
+            pytest.fail("live_server generator stopped prematurely")
         # Port should be 5099 + 4 = 5103
         assert url == "http://127.0.0.1:5103"
 
