@@ -394,8 +394,14 @@ class GenericChangelogBridge extends BridgeAbstract
     public function detectParameters($url)
     {
         $parsed = parse_url($url);
+        $host = strtolower($parsed['host'] ?? '');
         $path = strtolower($parsed['path'] ?? '');
         $query = strtolower($parsed['query'] ?? '');
+
+        // Defer to official specialized bridges for major platforms
+        if (in_array($host, ['github.com', 'www.github.com', 'gitlab.com', 'www.gitlab.com', 'youtube.com', 'www.youtube.com', 'reddit.com', 'www.reddit.com'])) {
+            return null;
+        }
 
         // Match paths or query params indicating changelogs, releases, blogs, or articles
         if (preg_match('/(changelog|release|updates|whats-new|what-is-new|versions|history|announcements|blog|news|articles|posts)/i', $path . '?' . $query)) {
