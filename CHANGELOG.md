@@ -1,5 +1,23 @@
 ## 2026-09-06
  
+- **Feat: Ability to edit Feed name and set custom names (Issue #552)**
+  - **Editable Feed Name UI (`frontend/index.html`, `frontend/js/ui.js`, `frontend/js/app.js`)**:
+    - Removed `readonly` restriction on `#edit-feed-name` input within `#edit-feed-modal`.
+    - Added explanatory help text clarifying that entering a name sets a custom name, or leaving it blank auto-derives from the feed title.
+    - Exported `openEditFeedModal` (populating current feed name or defaulting to empty string) and `updateFeedWidgetTitle` in `frontend/js/ui.js`.
+    - Updated `handleEditFeedSubmit` in `frontend/js/app.js` to dispatch `{ url, name }` payload to `api.updateFeed` and immediately reflect title changes in the DOM.
+  - **API Client Layer (`frontend/js/api.js`)**:
+    - Updated `api.updateFeed` to support both structured payload `{ url, name }` and positional arguments while preserving parameter encoding.
+  - **Backend Custom Feed Name Validation & Caching (`backend/blueprints/feeds.py`)**:
+    - Implemented `sanitize_feed_name` to unescape HTML entities, strip control characters, normalize whitespace, and constrain length to 200 characters.
+    - Optimized `PUT /api/feeds/<feed_id>` to update custom names without performing redundant network fetches when the feed URL remains unchanged.
+    - Handled empty or whitespace custom names by re-deriving title from feed (or preserving existing name upon fetch failure).
+    - Enforced tenant isolation and cache invalidation via `invalidate_tab_feeds_cache`.
+  - **Unit & E2E Testing**:
+    - Added unit test coverage in `frontend/js/ui.test.js`, `frontend/js/api.test.js`, `tests/unit/test_app.py`, and `tests/unit/test_feed.py` for custom names, URL preservation without fetch, invalid types/length, sanitization, and tenant isolation.
+    - Implemented Playwright E2E browser test in `tests/e2e/test_edit_feed.py` verifying full editing flow, payload verification, immediate DOM update, and persistence.
+  - **Verification**: 100% test pass rate across Vitest, Pytest unit, and Playwright E2E suites.
+
 - **Fix(test): Capture E2E Flask server startup diagnostics and fast abort on failure (Issue #543)**
   - **Subprocess Log Capture (`tests/e2e/conftest.py`)**: Replaced `subprocess.DEVNULL` with worker-isolated log files (`data/e2e_server_{worker}.log`) combining stdout and stderr (`stderr=subprocess.STDOUT`), preventing silent startup errors, port collisions, or import exceptions from being masked.
   - **Fast Abort & Diagnostics (`tests/e2e/conftest.py`)**: Updated `_wait_for_server()` to poll `proc.poll()` on every check. If the Flask server terminates prematurely, polling aborts immediately without waiting for the 30-second timeout, failing with the exit code and captured server logs and tracebacks in the `pytest.fail(...)` message.

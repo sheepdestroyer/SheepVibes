@@ -56,6 +56,22 @@ describe('api parameter encoding and endpoints', () => {
         expect(fetch).toHaveBeenCalledWith('/api/feeds/feed%2F2', expect.any(Object));
     });
 
+    it('supports updateFeed with payload object { url, name } and separate parameters', async () => {
+        await api.updateFeed(42, { url: 'https://example.com/rss', name: 'Custom Name' });
+        expect(fetch).toHaveBeenCalledWith('/api/feeds/42', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: 'https://example.com/rss', name: 'Custom Name' })
+        });
+
+        await api.updateFeed(43, 'https://example.com/feed', 'Another Name');
+        expect(fetch).toHaveBeenCalledWith('/api/feeds/43', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: 'https://example.com/feed', name: 'Another Name' })
+        });
+    });
+
     it('encodes feedId and formats payload in moveFeedToTab', async () => {
         await api.moveFeedToTab('feed/5', 2, 0);
         expect(fetch).toHaveBeenCalledWith('/api/feeds/feed%2F5/move', {

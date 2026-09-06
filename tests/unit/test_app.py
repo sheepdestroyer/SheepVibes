@@ -709,6 +709,126 @@ def test_update_feed_url_not_found(client):
     assert response.status_code == 404
 
 
+# --- Tests for PUT /api/feeds/<feed_id> Feed Name Updates ---
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_name_custom_name_same_url_no_fetch(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test updating feed name with same URL does not trigger network fetch."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    with app.app_context():
+        feed = db.session.get(Feed, feed_id)
+        original_url = feed.url
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"url": original_url, "name": "Custom Tech Digest"},
+    )
+
+    assert response.status_code == 200
+    data = response.json
+    assert data["name"] == "Custom Tech Digest"
+    assert data["url"] == original_url
+
+    # Verify fetch_feed was NEVER called
+    mock_fetch_feed.assert_not_called()
+
+    # Verify DB persistence
+    with app.app_context():
+        updated_feed = db.session.get(Feed, feed_id)
+        assert updated_feed.name == "Custom Tech Digest"
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_name_only_in_payload(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test updating feed name when URL is omitted from request body."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"name": "Omitted URL New Name"},
+    )
+
+    assert response.status_code == 200
+    assert response.json["name"] == "Omitted URL New Name"
+    mock_fetch_feed.assert_not_called()
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_name_empty_rederives_from_feed(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test that submitting an empty/whitespace name re-derives title from feed."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    with app.app_context():
+        feed = db.session.get(Feed, feed_id)
+        original_url = feed.url
+
+    mock_feed = MagicMock()
+    mock_feed.feed = {"title": "Auto Derived Title", "link": "https://example.com/site"}
+    mock_fetch_feed.return_value = mock_feed
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"url": original_url, "name": "   "},
+    )
+
+    assert response.status_code == 200
+    assert response.json["name"] == "Auto Derived Title"
+    mock_fetch_feed.assert_called_once_with(original_url)
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_name_empty_fetch_fails_preserves_name(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test that when re-deriving title fails on network error, existing name is preserved."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    with app.app_context():
+        feed = db.session.get(Feed, feed_id)
+        original_url = feed.url
+        original_name = feed.name
+
+    mock_fetch_feed.return_value = None
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"url": original_url, "name": ""},
+    )
+
+    assert response.status_code == 200
+    assert response.json["name"] == original_name
+
+
+def test_update_feed_name_invalid_types_and_length(client, setup_tabs_and_feeds):
+    """Test validation rejecting invalid name types and exceeding max length."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    # Non-string name (int)
+    resp1 = client.put(f"/api/feeds/{feed_id}", json={"name": 12345})
+    assert resp1.status_code == 400
+    assert "Invalid feed name: must be a string" in resp1.json["error"]
+
+    # Non-string name (list)
+    resp2 = client.put(f"/api/feeds/{feed_id}", json={"name": ["bad"]})
+    assert resp2.status_code == 400
+    assert "Invalid feed name: must be a string" in resp2.json["error"]
+
+    # Exceeds max length (201 chars)
+    resp3 = client.put(f"/api/feeds/{feed_id}", json={"name": "a" * 201})
+    assert resp3.status_code == 400
+    assert "exceeds maximum length of 200 characters" in resp3.json["error"]
+
+
+def test_update_feed_name_sanitization(client, setup_tabs_and_feeds):
+    """Test that custom feed name HTML entities and control chars are sanitized."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+
+    response = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"name": "  &lt;b&gt;Tech&nbsp;News&lt;/b&gt;\x00\x08  \n\t  "},
+    )
+
+    assert response.status_code == 200
+    assert response.json["name"] == "<b>Tech News</b>"
+
+
 # --- Tests for Frontend Serving Routes ---
 
 
@@ -2415,7 +2535,6 @@ def test_get_feed_items_and_tab_feeds_include_comments_url(client, setup_tabs_an
 def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disable=unused-argument
     """Directly test _get_top_items_for_feeds in backend.blueprints.tabs for comments_url."""
     from backend.blueprints.tabs import _get_top_items_for_feeds
-    from datetime import datetime, timezone
 
     with app.app_context():
         tab = Tab(name="Serialization Tab", order=1)
@@ -2431,7 +2550,7 @@ def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disabl
             link="https://example.com/article1",
             comments_url="https://news.ycombinator.com/item?id=101",
             guid="guid-101",
-            published_time=datetime(2026, 8, 14, 1, 0, 0, tzinfo=timezone.utc),
+            published_time=datetime.datetime(2026, 8, 14, 1, 0, 0, tzinfo=timezone.utc),
         )
         item2 = FeedItem(
             feed_id=feed.id,
@@ -2439,7 +2558,7 @@ def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disabl
             link="https://example.com/article2",
             comments_url=None,
             guid="guid-102",
-            published_time=datetime(2026, 8, 14, 0, 50, 0, tzinfo=timezone.utc),
+            published_time=datetime.datetime(2026, 8, 14, 0, 50, 0, tzinfo=timezone.utc),
         )
         item3 = FeedItem(
             feed_id=feed.id,
@@ -2447,7 +2566,7 @@ def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disabl
             link="https://news.ycombinator.com/item?id=103",
             comments_url="https://news.ycombinator.com/item?id=103",
             guid="guid-103",
-            published_time=datetime(2026, 8, 14, 0, 40, 0, tzinfo=timezone.utc),
+            published_time=datetime.datetime(2026, 8, 14, 0, 40, 0, tzinfo=timezone.utc),
         )
         db.session.add_all([item1, item2, item3])
         db.session.commit()
@@ -2472,7 +2591,6 @@ def test_get_top_items_for_feeds_direct_serialization(client):  # pylint: disabl
 
 def test_feed_items_pagination_comments_url_preservation(client, setup_tabs_and_feeds):
     """Test pagination limits and offsets in /api/feeds/<feed_id>/items preserving comments_url."""
-    from datetime import datetime, timezone
 
     feed_id = setup_tabs_and_feeds["feed1_id"]
     with app.app_context():
@@ -2486,7 +2604,7 @@ def test_feed_items_pagination_comments_url_preservation(client, setup_tabs_and_
                     link=f"https://example.com/item-{i}",
                     comments_url=f"https://news.ycombinator.com/item?id={i + 1000}" if i % 2 == 0 else None,
                     guid=f"paginated-guid-{i}",
-                    published_time=datetime(2026, 8, 14, 0, 50 - i, 0, tzinfo=timezone.utc),
+                    published_time=datetime.datetime(2026, 8, 14, 0, 50 - i, 0, tzinfo=timezone.utc),
                 )
             )
         db.session.commit()
