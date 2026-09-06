@@ -103,6 +103,11 @@ export const api = {
         body: JSON.stringify({ name })
     }),
     deleteTab: (tabId) => fetchData(`/api/tabs/${encodeURIComponent(tabId)}`, { method: 'DELETE' }),
+    reorderTabFeeds: (tabId, feedIds) => fetchData(`/api/tabs/${encodeURIComponent(tabId)}/feeds/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feed_ids: feedIds })
+    }),
 
     // Feeds
     getFeedsForTab: (tabId) => fetchData(`/api/tabs/${encodeURIComponent(tabId)}/feeds`),
@@ -127,6 +132,11 @@ export const api = {
             body: JSON.stringify({ url, name })
         });
     },
+    moveFeedToTab: (feedId, targetTabId, position = null) => fetchData(`/api/feeds/${encodeURIComponent(feedId)}/move`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tab_id: targetTabId, position })
+    }),
     deleteFeed: (feedId) => fetchData(`/api/feeds/${encodeURIComponent(feedId)}`, { method: 'DELETE' }),
     updateAllFeeds: () => fetchData('/api/feeds/update-all', { method: 'POST' }),
 

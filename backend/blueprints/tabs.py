@@ -304,7 +304,11 @@ def get_feeds_for_tab(tab_id):
     limit = request.args.get("limit", DEFAULT_FEED_ITEMS_LIMIT, type=int)
     limit = max(0, min(limit, MAX_PAGINATION_LIMIT))
 
-    feeds = Feed.query.filter_by(tab_id=tab_id).all()
+    feeds = (
+        Feed.query.filter_by(tab_id=tab_id)
+        .order_by(Feed.order.asc(), Feed.id.asc())
+        .all()
+    )
     if not feeds:
         return jsonify([])
 
@@ -319,3 +323,80 @@ def get_feeds_for_tab(tab_id):
         response_data.append(feed_dict)
 
     return jsonify(response_data)
+
+
+def _validate_reorder_payload(data, tab_feed_map):
+    """Validates the reorder request payload against feeds present in the tab."""
+    if not data or "feed_ids" not in data or not isinstance(data["feed_ids"], list):
+        return None, ("Missing or invalid feed_ids list", 400)
+
+    feed_ids = data["feed_ids"]
+    if not feed_ids:
+        return feed_ids, None
+
+    if not all(isinstance(fid, int) for fid in feed_ids):
+        return None, ("All feed IDs must be integers", 400)
+
+    if len(feed_ids) != len(set(feed_ids)):
+        return None, ("Duplicate feed IDs provided", 400)
+
+    for fid in feed_ids:
+        if fid not in tab_feed_map:
+            return None, (f"Feed {fid} not found in this tab", 400)
+
+    return feed_ids, None
+
+
+def _apply_feed_order(feed_ids, tab_feed_map):
+    """Applies new order indices to feeds in the tab."""
+    for index, fid in enumerate(feed_ids):
+        tab_feed_map[fid].order = index
+
+    unmentioned_order = len(feed_ids)
+    for fid, feed in tab_feed_map.items():
+        if fid not in feed_ids:
+            feed.order = unmentioned_order
+            unmentioned_order += 1
+
+
+@tabs_bp.route("/<int:tab_id>/feeds/reorder", methods=["PUT"])
+@login_required
+def reorder_feeds(tab_id):
+    """Updates the display order of feeds within a tab owned by the user.
+
+    Expects JSON payload: {"feed_ids": [id1, id2, ...]}
+    """
+    user = get_current_user()
+    tab = Tab.query.filter_by(id=tab_id, user_id=user.id).first()
+    if not tab:
+        return jsonify({"error": "Tab not found"}), 404
+
+    tab_feeds = Feed.query.filter_by(tab_id=tab.id).all()
+    tab_feed_map = {feed.id: feed for feed in tab_feeds}
+
+    feed_ids, error = _validate_reorder_payload(request.get_json(), tab_feed_map)
+    if error:
+        return jsonify({"error": error[0]}), error[1]
+
+    if not feed_ids:
+        return jsonify({"message": "No feeds to reorder", "feed_ids": []}), 200
+
+    _apply_feed_order(feed_ids, tab_feed_map)
+
+    try:
+        db.session.commit()
+        invalidate_tab_feeds_cache(tab.id, user_id=user.id)
+        logger.info(
+            "Reordered %d feeds in tab %s for user %s.",
+            len(feed_ids),
+            tab.id,
+            user.id,
+        )
+        return jsonify({"message": "Feeds reordered successfully", "feed_ids": feed_ids}), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error reordering feeds in tab %s: %s", tab.id, e, exc_info=True)
+        return (
+            jsonify({"error": "An internal error occurred while reordering feeds."}),
+            500,
+        )

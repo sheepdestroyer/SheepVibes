@@ -132,3 +132,21 @@ export function removeStorageItem(key) {
     }
 }
 
+/**
+ * Reparents or moves a DOM element using moveBefore if supported, falling back to insertBefore.
+ * Preserves internal element state (focus, iframe, animations).
+ * @param {Element} parent - The parent container.
+ * @param {Node} node - The element to move.
+ * @param {Node|null} referenceNode - The reference node before which to insert, or null to append.
+ */
+export function moveNode(parent, node, referenceNode = null) {
+    if (parent && node) {
+        if (typeof parent.moveBefore === 'function') {
+            parent.moveBefore(node, referenceNode);
+        } else {
+            parent.insertBefore(node, referenceNode);
+        }
+    }
+}
+
+

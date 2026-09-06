@@ -337,7 +337,10 @@ async function initializeTabs() {
             activeTabId = allTabs.length > 0 ? allTabs[0].id : null;
         }
 
-        renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
+        renderTabs(allTabs, activeTabId, {
+            onSwitchTab: switchTab,
+            onMoveFeedToTab: handleMoveFeedToTab
+        });
 
         if (activeTabId) {
             if (!loadedTabs.has(activeTabId)) {
@@ -359,7 +362,10 @@ async function switchTab(tabId) {
     activeTabId = tabId;
     setStorageItem('activeTabId', tabId);
 
-    renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
+    renderTabs(allTabs, activeTabId, {
+        onSwitchTab: switchTab,
+        onMoveFeedToTab: handleMoveFeedToTab
+    });
     toggleWidgetsVisibility();
 
     if (!loadedTabs.has(tabId)) {
@@ -398,7 +404,9 @@ async function loadFeedsForTab(tabId) {
                     onEdit: (id, url, name) => openEditFeedModal(id, url, name),
                     onDelete: handleDeleteFeed,
                     onMarkItemRead: handleMarkItemRead,
-                    onLoadMore: handleLoadMoreItems
+                    onLoadMore: handleLoadMoreItems,
+                    onReorderFeeds: handleReorderFeeds,
+                    onMoveFeedToTab: handleMoveFeedToTab
                 });
                 feedGrid.appendChild(widget);
             });
@@ -533,7 +541,9 @@ async function handleEditFeedSubmit(e) {
                 onEdit: (fid, furl, fname) => openEditFeedModal(fid, furl, fname),
                 onDelete: handleDeleteFeed,
                 onMarkItemRead: handleMarkItemRead,
-                onLoadMore: handleLoadMoreItems
+                onLoadMore: handleLoadMoreItems,
+                onReorderFeeds: handleReorderFeeds,
+                onMoveFeedToTab: handleMoveFeedToTab
             });
             oldWidget.replaceWith(newWidget);
         }
@@ -645,6 +655,52 @@ async function handleLoadMoreItems(listElement) {
 
 // Helpers
 
+async function handleReorderFeeds(tabId, feedIds) {
+    try {
+        await api.reorderTabFeeds(tabId, feedIds);
+        showToast('Feeds reordered!', 'info');
+    } catch (error) {
+        console.error('Error reordering feeds:', error);
+        showToast('Failed to save feed order.', 'error');
+        await reloadTab(tabId);
+    }
+}
+
+async function handleMoveFeedToTab(feedId, targetTabId) {
+    try {
+        await api.moveFeedToTab(feedId, targetTabId);
+        showToast('Feed moved to tab!', 'success');
+
+        const feedGrid = document.getElementById('feed-grid');
+        const widget = feedGrid ? feedGrid.querySelector(`.feed-widget[data-feed-id="${feedId}"]`) : null;
+        const sourceTabId = widget ? parseInt(widget.dataset.tabId, 10) : activeTabId;
+
+        if (widget) {
+            widget.remove();
+        }
+
+        loadedTabs.delete(sourceTabId);
+        loadedTabs.delete(targetTabId);
+
+        if (feedGrid) {
+            const remainingWidgets = feedGrid.querySelectorAll(`.feed-widget[data-tab-id="${sourceTabId}"]`);
+            if (remainingWidgets.length === 0) {
+                const msg = document.createElement('div');
+                msg.className = 'feed-widget empty-tab-message';
+                msg.dataset.tabId = sourceTabId;
+                msg.innerHTML = '<p>No feeds found for this tab. Add one using the form above!</p>';
+                feedGrid.appendChild(msg);
+            }
+        }
+
+        allTabs = await api.getTabs();
+        await switchTab(targetTabId);
+    } catch (error) {
+        console.error('Error moving feed to tab:', error);
+        showToast('Failed to move feed to tab.', 'error');
+    }
+}
+
 async function reloadTab(tabId) {
     if (activeTabId === tabId) {
         document.querySelectorAll(`.feed-widget[data-tab-id="${tabId}"]`).forEach(w => w.remove());
@@ -680,7 +736,10 @@ function initializeSSE() {
             if (data.new_items > 0) {
                 showToast(`Updates: ${data.new_items} new items`, 'info');
                 allTabs = await api.getTabs();
-                renderTabs(allTabs, activeTabId, { onSwitchTab: switchTab });
+                renderTabs(allTabs, activeTabId, {
+                    onSwitchTab: switchTab,
+                    onMoveFeedToTab: handleMoveFeedToTab
+                });
 
                 const affectedIds = data.affected_tab_ids || [];
                 affectedIds.forEach(id => {
