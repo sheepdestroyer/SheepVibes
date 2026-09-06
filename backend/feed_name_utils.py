@@ -181,9 +181,12 @@ def _match_brand_heuristics(title: str, brand: str) -> bool:
 
     brand_no_spaces = brand_lower.replace(" ", "")
     title_no_spaces = title.lower().replace(" ", "")
-    if brand_no_spaces not in title_no_spaces:
-        if len(title) >= 30 and ("," in title or bool(_GENERIC_TAGLINE_PATTERN.search(title))):
-            return True
+    if (
+        brand_no_spaces not in title_no_spaces
+        and len(title) >= 30
+        and ("," in title or bool(_GENERIC_TAGLINE_PATTERN.search(title)))
+    ):
+        return True
     return False
 
 
