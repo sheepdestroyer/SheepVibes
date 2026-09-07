@@ -1,3 +1,18 @@
+## 2026-09-07
+
+- **Feat(pod): Adopt floating Valkey tag and enable WUD digest tracking for sidecar containers**
+  - **Valkey Floating Tag Alignment (`pod/sheepvibes-valkey.container`, `.github/workflows/run-tests.yml`, `scripts/dev_manager.sh`, `scripts/run_dev.sh`)**:
+    - Switched Valkey container image from pinned `docker.io/valkey/valkey:9.1.1` to floating minor tag `docker.io/valkey/valkey:9.1-alpine`.
+    - Automatically ingests patch and security updates (e.g. 9.1.2) while maintaining lightweight Alpine footprint and wire compatibility.
+  - **What's Up Docker (WUD) Digest Tracking (`pod/sheepvibes-valkey.container`, `pod/sheepvibes-rssbridge.container`)**:
+    - Added `Label=wud.watch.digest=true` to `sheepvibes-valkey.container` and `sheepvibes-rssbridge.container` Quadlets, ensuring compliance with rule S5 so What's Up Docker monitors digest changes on floating/latest tags.
+  - **Pod Deployment Automation (`scripts/deploy_pod.sh`)**:
+    - Added `podman pull docker.io/valkey/valkey:9.1-alpine || true` alongside the app and rss-bridge pulls during stack deployment.
+  - **Testing & Verification**:
+    - Added unit test suite in `tests/unit/test_pod_configs.py` validating Quadlet container definitions, CI workflow image configuration, and development script defaults.
+    - Synchronized documentation across `AGENTS.md`, `README.md`, `TESTING.md`, and `TODO.md`.
+    - Full test suite verified: Pytest unit tests, Vitest frontend tests, and Playwright E2E tests.
+
 ## 2026-09-06
  
 - **Feat: Ability to edit Feed name and set custom names (Issue #552)**

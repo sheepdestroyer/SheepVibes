@@ -117,6 +117,7 @@ echo ""
 
 echo "Pulling latest container images..."
 podman pull ghcr.io/${REPO}:latest || true
+podman pull docker.io/valkey/valkey:9.1-alpine || true
 podman pull docker.io/rssbridge/rss-bridge:latest || true
 if systemctl --user is-active --quiet "sheepvibespod-pod.service"; then
     echo "Restarting sheepvibespod-pod.service..."
