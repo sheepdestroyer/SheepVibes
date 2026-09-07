@@ -2,6 +2,17 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-07 Valkey 9.1-Alpine & RSS-Bridge WUD Digest Tracking
+
+*   [x] **Infrastructure: Adopt floating Valkey tag and enable WUD digest watching for sidecars:**
+    *   [x] Update `pod/sheepvibes-valkey.container` image to `docker.io/valkey/valkey:9.1-alpine` and add `Label=wud.watch.digest=true`.
+    *   [x] Update `pod/sheepvibes-rssbridge.container` to add `Label=wud.watch.digest=true`.
+    *   [x] Update `.github/workflows/run-tests.yml` valkey service container to `docker.io/valkey/valkey:9.1-alpine`.
+    *   [x] Update `scripts/dev_manager.sh` and `scripts/run_dev.sh` to default to `docker.io/valkey/valkey:9.1-alpine`.
+    *   [x] Update `scripts/deploy_pod.sh` to pull `docker.io/valkey/valkey:9.1-alpine` alongside app and rss-bridge images.
+    *   [x] Add unit test suite in `tests/unit/test_pod_configs.py` validating quadlets, CI workflow, and dev scripts.
+    *   [x] Synchronize documentation across `AGENTS.md`, `README.md`, `TESTING.md`, `TODO.md`, and `CHANGELOG.md`.
+
 ## 2026-09-06 Custom Feed Names (Issue #552)
 
 *   [x] **Feat: Ability to edit feed name and assign custom names:**

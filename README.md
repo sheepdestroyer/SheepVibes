@@ -167,7 +167,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 
 2.  **Start Valkey Container**:
     ```bash
-    podman run -d --name sheepvibes-valkey-dev --network sheepvibes-dev-network docker.io/valkey/valkey:9.1.1
+    podman run -d --name sheepvibes-valkey-dev --network sheepvibes-dev-network docker.io/valkey/valkey:9.1-alpine
     ```
 
 3.  **Start RSS-Bridge Container (Optional, for RSS-less page bridging)**:
@@ -199,7 +199,7 @@ The `scripts/dev_manager.sh` script simplifies managing the development environm
 ### Direct Backend/Frontend Development
 
 1.  **Prerequisites**:
-    *   A running Valkey server (e.g. `docker.io/valkey/valkey:9.1.1` on port 6379).
+    *   A running Valkey server (e.g. `docker.io/valkey/valkey:9.1-alpine` on port 6379).
 
 2.  **Set up Backend Virtual Environment**:
     *   Create and activate a virtual environment from project root: `python -m venv venv && source venv/bin/activate`

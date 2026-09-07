@@ -36,7 +36,7 @@ Backend tests require a running Valkey service container for caching checks.
 
 1. **Start Valkey**:
    ```bash
-   podman run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1.1
+   podman run -d --rm --name sheepvibes-test-valkey -p 6379:6379 docker.io/valkey/valkey:9.1-alpine
    ```
 
 2. **Run Pytest Unit Suite**:
