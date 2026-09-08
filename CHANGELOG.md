@@ -1,3 +1,13 @@
+## 2026-09-08
+
+- **Feat(pod): Enable Podman AutoUpdate for Valkey and RSS-Bridge sidecars**
+  - **Quadlet AutoUpdate Alignment (`pod/sheepvibes-valkey.container`, `pod/sheepvibes-rssbridge.container`)**:
+    - Added `AutoUpdate=registry` to both sidecar Quadlet container definitions.
+    - Enables Podman's daily systemd timer (`podman-auto-update.timer`) to automatically pull new image digests and restart the sidecar containers on registry updates.
+  - **Testing & Verification**:
+    - Updated `tests/unit/test_pod_configs.py` to assert `AutoUpdate=registry` in both container configurations.
+    - Full test suite verified (Pytest unit, Vitest frontend, Playwright E2E).
+
 ## 2026-09-07
 
 - **Feat(pod): Adopt floating Valkey tag and enable WUD digest tracking for sidecar containers**

@@ -9,6 +9,7 @@ def test_quadlet_valkey_configuration():
     content = valkey_container.read_text(encoding="utf-8")
 
     assert "Image=docker.io/valkey/valkey:9.1-alpine" in content
+    assert "AutoUpdate=registry" in content
     assert "Label=wud.watch.digest=true" in content
 
 
@@ -20,6 +21,7 @@ def test_quadlet_rssbridge_configuration():
     content = rssbridge_container.read_text(encoding="utf-8")
 
     assert "Image=docker.io/rssbridge/rss-bridge:latest" in content
+    assert "AutoUpdate=registry" in content
     assert "Label=wud.watch.digest=true" in content
 
 
