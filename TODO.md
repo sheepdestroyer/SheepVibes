@@ -2,6 +2,13 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-08 Podman Quadlet AutoUpdate for Sidecars
+
+*   [x] **Infrastructure: Enable automatic registry updates for Valkey and RSS-Bridge:**
+    *   [x] Add `AutoUpdate=registry` to `pod/sheepvibes-valkey.container` and `pod/sheepvibes-rssbridge.container`.
+    *   [x] Update unit tests in `tests/unit/test_pod_configs.py`.
+    *   [x] Tag release `v0.43` and deploy updated pod to production.
+
 ## 2026-09-07 Valkey 9.1-Alpine & RSS-Bridge WUD Digest Tracking
 
 *   [x] **Infrastructure: Adopt floating Valkey tag and enable WUD digest watching for sidecars:**

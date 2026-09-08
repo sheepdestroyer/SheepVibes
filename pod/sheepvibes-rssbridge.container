@@ -4,6 +4,7 @@ Description=SheepVibes RSS-Bridge Container
 [Container]
 ContainerName=sheepvibes-rssbridge
 Image=docker.io/rssbridge/rss-bridge:latest
+AutoUpdate=registry
 Label=wud.watch.digest=true
 Pod=sheepvibespod.pod
 Volume=%h/.config/containers/systemd/bridges:/config:Z
