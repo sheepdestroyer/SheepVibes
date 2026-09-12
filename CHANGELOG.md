@@ -1,3 +1,13 @@
+## 2026-09-12
+
+- **Fix(pod): Restrict WUD tag resolution for Valkey to Alpine releases**
+  - **Quadlet WUD Filtering (`pod/sheepvibes-valkey.container`)**:
+    - Added `Label="wud.tag.include=^[0-9]+[.][0-9]+-alpine$"` and `Label="wud.tag.exclude=.*(trixie|bookworm|bullseye).*"` to the Valkey Quadlet definition.
+    - Resolves What's Up Docker (WUD) false-positive upgrade notifications proposing Debian variant tags (e.g. `9.1-alpine -> 9.1-trixie`) due to semver coercion tie-breaking via string comparisons.
+  - **Testing & Verification**:
+    - Updated `tests/unit/test_pod_configs.py` to validate `wud.tag.include` and `wud.tag.exclude` Quadlet labels.
+    - Verified all unit tests pass with 100% test coverage.
+
 ## 2026-09-08
 
 - **Feat(pod): Enable Podman AutoUpdate for Valkey and RSS-Bridge sidecars**

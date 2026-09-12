@@ -2,6 +2,13 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-12 Valkey WUD Tag Include/Exclude Regex Filtering
+
+*   [x] **Infrastructure: Restrict WUD tag resolution for Valkey to Alpine releases:**
+    *   [x] Add `Label="wud.tag.include=^[0-9]+[.][0-9]+-alpine$"` and `Label="wud.tag.exclude=.*(trixie|bookworm|bullseye).*"` to `pod/sheepvibes-valkey.container`.
+    *   [x] Update unit tests in `tests/unit/test_pod_configs.py`.
+    *   [x] Update `TODO.md` and `CHANGELOG.md`.
+
 ## 2026-09-08 Podman Quadlet AutoUpdate for Sidecars
 
 *   [x] **Infrastructure: Enable automatic registry updates for Valkey and RSS-Bridge:**

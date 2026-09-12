@@ -11,6 +11,8 @@ def test_quadlet_valkey_configuration():
     assert "Image=docker.io/valkey/valkey:9.1-alpine" in content
     assert "AutoUpdate=registry" in content
     assert "Label=wud.watch.digest=true" in content
+    assert 'Label="wud.tag.include=^[0-9]+[.][0-9]+-alpine$"' in content
+    assert 'Label="wud.tag.exclude=.*(trixie|bookworm|bullseye).*"' in content
 
 
 def test_quadlet_rssbridge_configuration():

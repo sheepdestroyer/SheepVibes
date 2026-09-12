@@ -6,6 +6,8 @@ ContainerName=sheepvibes-valkey
 Image=docker.io/valkey/valkey:9.1-alpine
 AutoUpdate=registry
 Label=wud.watch.digest=true
+Label="wud.tag.include=^[0-9]+[.][0-9]+-alpine$"
+Label="wud.tag.exclude=.*(trixie|bookworm|bullseye).*"
 Pod=sheepvibespod.pod
 Volume=sheepvibes-valkey.volume:/data
 
