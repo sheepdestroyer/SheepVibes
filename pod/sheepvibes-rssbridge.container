@@ -7,6 +7,7 @@ Image=docker.io/rssbridge/rss-bridge:latest
 AutoUpdate=registry
 Label=wud.watch.digest=true
 Pod=sheepvibespod.pod
+Environment=RSSBRIDGE_ERROR_OUTPUT=http
 Volume=%h/.config/containers/systemd/bridges:/config:Z
 Volume=/mnt/DATA/boy/prod/infra/bin/log-priority-splitter.sh:/usr/local/bin/log-priority-splitter.sh:ro,z
 Entrypoint=/usr/local/bin/log-priority-splitter.sh

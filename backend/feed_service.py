@@ -888,6 +888,48 @@ def is_rss_bridge_url(url):
         return False
 
 
+def is_bridge_error_text(text: str | None) -> bool:
+    """Detects whether a title or string represents an RSS-Bridge error report."""
+    if not text or not isinstance(text, str):
+        return False
+    return bool(re.search(r"\bBridge returned error\b", text, re.IGNORECASE))
+
+
+def is_bridge_error_entry(entry) -> bool:
+    """Detects whether a parsed feed entry represents an RSS-Bridge error report."""
+    if not entry:
+        return False
+    title = entry.get("title") or ""
+    return is_bridge_error_text(title)
+
+
+def _is_html_content(content: bytes) -> bool:
+    """Checks whether the downloaded byte payload appears to be an HTML document.
+    Explicitly rejects XML/Atom/RSS feeds and non-HTML data to avoid erroneous bridge fallback.
+    """
+    if not content or not isinstance(content, (bytes, bytearray)):
+        return False
+    sample = bytes(content[:1024]).lstrip()
+    if (
+        sample.startswith(b"<?xml")
+        or sample.startswith(b"<rss")
+        or sample.startswith(b"<feed")
+        or sample.startswith(b"<rdf:RDF")
+        or sample.startswith(b"{\n")
+        or sample.startswith(b"{\"")
+        or sample.startswith(b"[\n")
+        or sample.startswith(b"[{")
+    ):
+        return False
+    lower_sample = sample.lower()
+    return bool(
+        lower_sample.startswith(b"<!doctype html")
+        or b"<html" in lower_sample
+        or b"<body" in lower_sample
+        or b"<head" in lower_sample
+    )
+
+
 def discover_feed_url_from_html(html_content, base_url):
     """Searches HTML content for RSS/Atom <link rel="alternate"> tags."""
     if not html_content or not isinstance(html_content, (str, bytes)):
@@ -983,10 +1025,33 @@ def _fetch_from_bridge_url(bridge_endpoint_url, page_url):
         return None
 
     parsed_feed = _parse_and_validate_feed(content, bridge_endpoint_url)
-    if parsed_feed and parsed_feed.entries:
-        _canonicalize_bridge_feed_metadata(parsed_feed, page_url)
-        return parsed_feed
-    return None
+    if not parsed_feed or not parsed_feed.entries:
+        return None
+
+    feed_title = parsed_feed.feed.get("title") or ""
+    if is_bridge_error_text(feed_title):
+        logger.warning(
+            "RSS-Bridge returned error feed title '%s' for '%s'; rejecting feed.",
+            _sanitize_for_log(feed_title),
+            _sanitize_for_log(page_url),
+        )
+        return None
+
+    # Discard any RSS-Bridge error reports formatted as feed entries
+    valid_entries = [e for e in parsed_feed.entries if not is_bridge_error_entry(e)]
+    if len(valid_entries) != len(parsed_feed.entries):
+        logger.warning(
+            "Filtered %d RSS-Bridge error entries for '%s'",
+            len(parsed_feed.entries) - len(valid_entries),
+            _sanitize_for_log(page_url),
+        )
+        parsed_feed.entries = valid_entries
+
+    if not parsed_feed.entries:
+        return None
+
+    _canonicalize_bridge_feed_metadata(parsed_feed, page_url)
+    return parsed_feed
 
 
 def fetch_rss_bridge_feed(page_url):
@@ -1476,14 +1541,19 @@ def fetch_feed(feed_url, _depth=0, _visited=None):
         if is_rss_bridge_url(feed_url):
             return parsed_feed
 
+        # If download failed or depth limit reached, do NOT attempt autodiscovery or bridge fallback
+        if not content or _depth > 0:
+            return parsed_feed
+
         discovered = _try_autodiscover_feed(content, feed_url, _depth, visited)
         if discovered:
             return discovered
 
-        # If no entries found natively or via autodiscovery, query RSS-Bridge
-        bridged_feed = fetch_rss_bridge_feed(feed_url)
-        if bridged_feed and bridged_feed.entries:
-            return bridged_feed
+        # Fallback to RSS-Bridge ONLY for HTML web pages (RSS-less pages)
+        if _is_html_content(content):
+            bridged_feed = fetch_rss_bridge_feed(feed_url)
+            if bridged_feed and bridged_feed.entries:
+                return bridged_feed
 
         return parsed_feed
 
@@ -1503,6 +1573,9 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
         parsed_feed (feedparser.FeedParserDict): The parsed feed result.
     """
     raw_title = parsed_feed.feed.get("title")
+    if is_bridge_error_text(raw_title):
+        return
+
     raw_site_link = parsed_feed.feed.get("link")
     new_site_link = validate_link_structure(raw_site_link)
 
@@ -1630,6 +1703,14 @@ def _process_single_entry(
     batch_processed_guids
 ):
     """Processes a single entry, checking for duplicates and updating existing."""
+    if is_bridge_error_entry(entry):
+        logger.warning(
+            "Skipping RSS-Bridge error entry '%s' for feed '%s'.",
+            _sanitize_for_log(entry.get("title", "[No Title]")[:100]),
+            _sanitize_for_log(feed_db_obj.name),
+        )
+        return None
+
     base_link = feed_db_obj.site_link or feed_db_obj.url
     entry_link = _resolve_entry_link_with_fallback(entry.get("link"), base_link)
 

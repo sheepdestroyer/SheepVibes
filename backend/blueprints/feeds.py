@@ -18,6 +18,7 @@ from ..constants import (
 from ..extensions import db
 from ..feed_name_utils import derive_canonical_feed_name
 from ..feed_service import (
+    is_bridge_error_text,
     is_valid_feed_url,
     fetch_and_update_feed,
     fetch_feed,
@@ -85,6 +86,8 @@ def _get_feed_metadata(feed_url):
         return feed_url, None, parsed_feed
 
     raw_title = parsed_feed.feed.get("title", feed_url)
+    if is_bridge_error_text(raw_title):
+        raw_title = feed_url
     site_link = parsed_feed.feed.get("link")
     valid_site_link = validate_link_structure(site_link)
     feed_name = (

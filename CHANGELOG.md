@@ -1,3 +1,20 @@
+## 2026-09-13
+
+- **Fix(bridge): Guard against RSS-Bridge error ingestion and prevent erroneous bridge fallback**
+  - **Erroneous Fallback Prevention (`backend/feed_service.py`)**:
+    - Restricted RSS-Bridge fallback in `fetch_feed()` strictly to successfully downloaded HTML payloads (`_is_html_content()`).
+    - Prevented cascading to `fetch_rss_bridge_feed()` when downloads fail (network timeouts, DNS errors, HTTP 5xx) or on native XML/Atom/RSS feeds.
+  - **Bridge Error Filtering & Ingestion Guards (`backend/feed_service.py`, `backend/blueprints/feeds.py`)**:
+    - Implemented `is_bridge_error_text()` and `is_bridge_error_entry()` to detect RSS-Bridge failure notices (e.g. `Bridge returned error 500! (20706)`, `Bridge returned error 0! (20703)`).
+    - Filtered error entries in `_fetch_from_bridge_url()`, rejecting feeds whose title or entries are bridge errors.
+    - Added defense-in-depth checks in `_process_single_entry()` to skip error entries from being inserted into the database.
+    - Protected feed title metadata in `_update_feed_metadata()` and `_get_feed_metadata()` to prevent overwriting existing feed names with error strings.
+  - **Sidecar Container Configuration (`pod/sheepvibes-rssbridge.container`, `scripts/dev_manager.sh`)**:
+    - Added `Environment=RSSBRIDGE_ERROR_OUTPUT=http` to `sheepvibes-rssbridge.container` and `dev_manager.sh` so RSS-Bridge reports errors as HTTP error responses rather than embedding them as feed items.
+  - **Testing & Verification**:
+    - Added unit tests in `tests/unit/test_rss_bridge.py` and `tests/unit/test_pod_configs.py` covering error text detection, HTML payload checks, download failure fallback prevention, bridge error entry filtering, and metadata protection.
+    - Full test suite verified (Pytest unit, Vitest frontend, Playwright E2E).
+
 ## 2026-09-12
 
 - **Fix(pod): Restrict WUD tag resolution for Valkey to Alpine releases**

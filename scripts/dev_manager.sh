@@ -164,6 +164,7 @@ do_up() {
 
     echo "Starting RSS-Bridge ($RSSBRIDGE_IMAGE)..."
     "$CMD" run -d --pod "$POD_NAME" --name "$RSSBRIDGE_CONTAINER_NAME" \
+        -e RSSBRIDGE_ERROR_OUTPUT=http \
         -v "$PROJECT_ROOT/pod/bridges:/config:Z" \
         "$RSSBRIDGE_IMAGE"
 
