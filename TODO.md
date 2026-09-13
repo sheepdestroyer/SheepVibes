@@ -2,6 +2,17 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-13 RSS-Bridge Error Ingestion & Erroneous Fallback Guards
+
+*   [x] **Fix: Prevent RSS-Bridge fallback on download failures and filter bridge error entries:**
+    *   [x] Restrict `fetch_feed` fallback to `fetch_rss_bridge_feed` strictly to successfully downloaded HTML content (`_is_html_content`), preventing fallback when downloads fail or on native XML/RSS/Atom feeds.
+    *   [x] Implement `is_bridge_error_text` and `is_bridge_error_entry` to detect and filter out RSS-Bridge error reports (e.g. `Bridge returned error 500! (20706)`, `Bridge returned error 0! (20703)`).
+    *   [x] Filter bridge error entries in `_fetch_from_bridge_url` and reject feeds whose title or entries are bridge errors.
+    *   [x] Guard `_process_single_entry`, `_update_feed_metadata`, and `_get_feed_metadata` against saving or updating with bridge error text.
+    *   [x] Configure `Environment=RSSBRIDGE_ERROR_OUTPUT=http` in `pod/sheepvibes-rssbridge.container` and `scripts/dev_manager.sh`.
+    *   [x] Add unit tests in `tests/unit/test_rss_bridge.py` and `tests/unit/test_pod_configs.py`.
+    *   [x] Update documentation across `TODO.md` and `CHANGELOG.md`.
+
 ## 2026-09-12 Valkey WUD Tag Include/Exclude Regex Filtering
 
 *   [x] **Infrastructure: Restrict WUD tag resolution for Valkey to Alpine releases:**

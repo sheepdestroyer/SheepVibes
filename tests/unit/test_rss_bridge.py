@@ -361,6 +361,7 @@ def test_deployment_configuration_and_bridge_files():
         assert "Entrypoint=/usr/local/bin/log-priority-splitter.sh" in content
         assert "Exec=/app/docker-entrypoint.sh" in content
         assert "log-priority-splitter.sh:/usr/local/bin/log-priority-splitter.sh:ro,z" in content
+        assert "Environment=RSSBRIDGE_ERROR_OUTPUT=http" in content
 
     # App Quadlet container
     app_quadlet = os.path.join(project_root, "pod", "sheepvibes-app.container")
@@ -573,3 +574,179 @@ def test_autodiscovery_recursion_bounded_against_cycles():
         # Verify recursion terminated gracefully without infinite loop
         assert fetch_counts["a"] == 1
         assert fetch_counts["b"] == 1
+
+
+def test_is_bridge_error_text_and_entry():
+    """Verifies identification of RSS-Bridge error report titles and entries."""
+    assert feed_service.is_bridge_error_text("Bridge returned error 500! (20706)")
+    assert feed_service.is_bridge_error_text("Bridge returned error 0! (20703)")
+    assert feed_service.is_bridge_error_text("Bridge returned error 502! (20702)")
+    assert feed_service.is_bridge_error_text("Notice: Bridge returned error 404!")
+    assert not feed_service.is_bridge_error_text("The Perry Bible Fellowship")
+    assert not feed_service.is_bridge_error_text("Bridge over troubled water")
+    assert not feed_service.is_bridge_error_text("")
+    assert not feed_service.is_bridge_error_text(None)
+    assert not feed_service.is_bridge_error_text(123)
+
+    assert feed_service.is_bridge_error_entry({"title": "Bridge returned error 500! (20706)"})
+    assert not feed_service.is_bridge_error_entry({"title": "Valid Article"})
+    assert not feed_service.is_bridge_error_entry({})
+    assert not feed_service.is_bridge_error_entry(None)
+
+
+def test_is_html_content():
+    """Verifies that HTML content is distinguished from XML feeds, JSON feeds, and binaries."""
+    assert feed_service._is_html_content(b"<!DOCTYPE html><html><body>Test</body></html>")
+    assert feed_service._is_html_content(b"<!doctype html>\n<html><body>Test</body></html>")
+    assert feed_service._is_html_content(b"<html><head><title>Test</title></head></html>")
+    assert feed_service._is_html_content(b"   <BODY><h1>Hello</h1></BODY>")
+    assert not feed_service._is_html_content(b"<?xml version='1.0'?><rss version='2.0'></rss>")
+    assert not feed_service._is_html_content(b"<?xml version='1.0'?><feed xmlns='http://www.w3.org/2005/Atom'></feed>")
+    assert not feed_service._is_html_content(b"<rss version='2.0'><channel></channel></rss>")
+    assert not feed_service._is_html_content(b"<feed xmlns='http://www.w3.org/2005/Atom'></feed>")
+    assert not feed_service._is_html_content(b"<rdf:RDF></rdf:RDF>")
+    assert not feed_service._is_html_content(b'{"version": "https://jsonfeed.org/version/1"}')
+    assert not feed_service._is_html_content(b'[{"title": "json"}]')
+    assert not feed_service._is_html_content(b"plain text only")
+    assert not feed_service._is_html_content(b"")
+    assert not feed_service._is_html_content(None)
+
+
+def test_fetch_feed_does_not_fallback_to_rss_bridge_on_failed_download():
+    """Verifies that when a feed download fails (network error, timeout, 5xx),
+    fetch_feed does NOT erroneously fallback to querying RSS-Bridge."""
+    with patch.object(feed_service, "validate_and_resolve_url", return_value=("192.0.2.1", "pbfcomics.com")), \
+         patch.object(feed_service, "_build_safe_opener", return_value=MagicMock()), \
+         patch.object(feed_service, "_download_feed_content", return_value=None), \
+         patch.object(feed_service, "fetch_rss_bridge_feed") as mock_bridge:
+
+        result = feed_service.fetch_feed("http://www.pbfcomics.com/feed/feed.xml")
+        assert result is None
+        mock_bridge.assert_not_called()
+
+
+def test_fetch_feed_does_not_fallback_to_rss_bridge_for_xml_feeds_with_zero_entries():
+    """Verifies that an XML feed with 0 entries does not query RSS-Bridge."""
+    empty_xml = b"<?xml version='1.0'?><rss version='2.0'><channel><title>Empty Feed</title></channel></rss>"
+    with patch.object(feed_service, "validate_and_resolve_url", return_value=("192.0.2.1", "example.com")), \
+         patch.object(feed_service, "_build_safe_opener", return_value=MagicMock()), \
+         patch.object(feed_service, "_download_feed_content", return_value=empty_xml), \
+         patch.object(feed_service, "fetch_rss_bridge_feed") as mock_bridge:
+
+        result = feed_service.fetch_feed("https://example.com/feed.xml")
+        assert result is not None
+        assert result.feed.get("title") == "Empty Feed"
+        assert len(result.entries) == 0
+        mock_bridge.assert_not_called()
+
+
+def test_fetch_rss_bridge_feed_filters_and_rejects_bridge_error_entries(monkeypatch):
+    """Verifies that RSS-Bridge responses containing error entries are rejected."""
+    monkeypatch.setenv("RSS_BRIDGE_URL", "http://localhost:80")
+
+    error_atom = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <title type="text">Generic Changelog &amp; Release Bridge</title>
+      <link rel="alternate" type="text/html" href="http://localhost:80/?action=display&amp;bridge=GenericChangelogBridge"/>
+      <entry>
+        <title type="html">Bridge returned error 500! (20706)</title>
+        <id>urn:sha1:4cfb2262dc1d5c6ee78e35cc40455fd2063e88b9</id>
+        <link rel="alternate" type="text/html" href="http://localhost:80/?action=display&amp;bridge=GenericChangelogBridge&amp;url=http%3A%2F%2Fwww.pbfcomics.com%2Ffeed%2Ffeed.xml&amp;format=Atom"/>
+        <content type="html">Server returned 500 Internal Server Error</content>
+      </entry>
+    </feed>
+    """
+
+    def fake_download(opener, url):
+        return error_atom.encode("utf-8")
+
+    with patch.object(feed_service, "validate_and_resolve_url", return_value=("127.0.0.1", "localhost")), \
+         patch.object(feed_service, "_build_safe_opener", return_value=MagicMock()), \
+         patch.object(feed_service, "_download_feed_content", side_effect=fake_download):
+
+        result = feed_service.fetch_rss_bridge_feed("https://example.com/failed-page")
+        assert result is None
+
+
+def test_fetch_rss_bridge_feed_rejects_bridge_error_feed_title(monkeypatch):
+    """Verifies that RSS-Bridge responses with error feed titles are rejected."""
+    monkeypatch.setenv("RSS_BRIDGE_URL", "http://localhost:80")
+
+    error_title_atom = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <title type="text">Bridge returned error 502! (20702)</title>
+      <entry>
+        <title type="html">Some item</title>
+        <id>urn:sha1:123</id>
+        <link rel="alternate" type="text/html" href="https://example.com/item"/>
+      </entry>
+    </feed>
+    """
+
+    def fake_download(opener, url):
+        return error_title_atom.encode("utf-8")
+
+    with patch.object(feed_service, "validate_and_resolve_url", return_value=("127.0.0.1", "localhost")), \
+         patch.object(feed_service, "_build_safe_opener", return_value=MagicMock()), \
+         patch.object(feed_service, "_download_feed_content", side_effect=fake_download):
+
+        result = feed_service.fetch_rss_bridge_feed("https://example.com/failed-page")
+        assert result is None
+
+
+def test_process_single_entry_skips_bridge_error_entry():
+    """Verifies that _process_single_entry skips any item titled 'Bridge returned error...'."""
+    mock_feed = MagicMock()
+    mock_feed.id = 1
+    mock_feed.name = "Test Feed"
+    mock_feed.url = "https://example.com/feed.xml"
+    mock_feed.site_link = "https://example.com"
+
+    error_entry = {
+        "title": "Bridge returned error 0! (20703)",
+        "link": "http://localhost:80/?action=display&bridge=GenericChangelogBridge",
+        "id": "urn:sha1:error",
+    }
+
+    result = feed_service._process_single_entry(
+        entry=error_entry,
+        parsed_published=None,
+        feed_db_obj=mock_feed,
+        existing_items_by_guid={},
+        existing_items_by_link={},
+        batch_processed_guids=set(),
+    )
+    assert result is None
+
+
+def test_update_feed_metadata_ignores_bridge_error_title():
+    """Verifies that _update_feed_metadata will not update feed name with an error title."""
+    mock_feed = MagicMock()
+    mock_feed.name = "Original Feed Name"
+    mock_feed.site_link = "https://example.com"
+    mock_feed.url = "https://example.com/feed.xml"
+
+    error_parsed = MagicMock()
+    error_parsed.feed.get.side_effect = lambda k, default=None: {
+        "title": "Bridge returned error 500! (20706)",
+        "link": "https://example.com",
+    }.get(k, default)
+
+    feed_service._update_feed_metadata(mock_feed, error_parsed)
+    assert mock_feed.name == "Original Feed Name"
+
+
+def test_feeds_blueprint_get_feed_metadata_fallbacks_on_bridge_error():
+    """Verifies that _get_feed_metadata falls back to the feed URL if title contains bridge error."""
+    from backend.blueprints.feeds import _get_feed_metadata
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed.get.side_effect = lambda k, default=None: {
+        "title": "Bridge returned error 500! (20706)",
+        "link": "https://example.com",
+    }.get(k, default)
+
+    with patch("backend.blueprints.feeds.fetch_feed", return_value=mock_parsed):
+        feed_name, _, _ = _get_feed_metadata("https://example.com/failed.xml")
+        assert feed_name == "https://example.com/failed.xml"
+

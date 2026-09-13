@@ -25,6 +25,7 @@ def test_quadlet_rssbridge_configuration():
     assert "Image=docker.io/rssbridge/rss-bridge:latest" in content
     assert "AutoUpdate=registry" in content
     assert "Label=wud.watch.digest=true" in content
+    assert "Environment=RSSBRIDGE_ERROR_OUTPUT=http" in content
 
 
 def test_ci_workflow_valkey_image():
