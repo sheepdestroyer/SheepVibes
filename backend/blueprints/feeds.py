@@ -18,10 +18,10 @@ from ..constants import (
 from ..extensions import db
 from ..feed_name_utils import derive_canonical_feed_name
 from ..feed_service import (
-    is_bridge_error_text,
-    is_valid_feed_url,
     fetch_and_update_feed,
     fetch_feed,
+    is_bridge_error_text,
+    is_valid_feed_url,
     process_feed_entries,
     update_all_feeds,
     validate_link_structure,
@@ -103,7 +103,9 @@ def _get_feed_metadata(feed_url):
     return feed_name, valid_site_link, parsed_feed
 
 
-def _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed, user_id):
+def _create_and_process_feed(
+    tab_id, feed_url, feed_name, site_link, parsed_feed, user_id, is_custom_name=False
+):
     """Creates a new feed in the database and processes its initial items."""
     try:
         max_order = (
@@ -118,6 +120,7 @@ def _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed
             url=feed_url,
             site_link=site_link,
             order=new_order,
+            is_custom_name=is_custom_name,
         )
         db.session.add(new_feed)
         db.session.commit()
@@ -145,13 +148,14 @@ def _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed
             invalidate_tabs_cache(user_id=user_id)
 
         logger.info(
-            "Added new feed '%s' with id %s to tab %s for user %s.",
+            "Added new feed '%s' with id %s to tab %s for user %s (is_custom_name=%s).",
             new_feed.name,
             new_feed.id,
             tab_id,
             user_id,
+            new_feed.is_custom_name,
         )
-        return jsonify(new_feed.to_dict(unread_count=num_new_items if num_new_items > 0 else 0)), 201
+        return jsonify(new_feed.to_dict(unread_count=max(0, num_new_items))), 201
 
     except Exception as e:
         db.session.rollback()
@@ -193,9 +197,24 @@ def add_feed():
     if error_response:
         return error_response
 
-    feed_name, site_link, parsed_feed = _get_feed_metadata(feed_url)
+    custom_name = data.get("name")
+    sanitized_custom = sanitize_feed_name(custom_name) if custom_name else ""
+    if sanitized_custom:
+        parsed_feed = fetch_feed(feed_url)
+        site_link = (
+            validate_link_structure(parsed_feed.feed.get("link"))
+            if parsed_feed and parsed_feed.feed
+            else None
+        )
+        feed_name = sanitized_custom
+        is_custom = True
+    else:
+        feed_name, site_link, parsed_feed = _get_feed_metadata(feed_url)
+        is_custom = False
 
-    return _create_and_process_feed(tab_id, feed_url, feed_name, site_link, parsed_feed, user_id=user.id)
+    return _create_and_process_feed(
+        tab_id, feed_url, feed_name, site_link, parsed_feed, user_id=user.id, is_custom_name=is_custom
+    )
 
 
 @feeds_bp.route("/<int:feed_id>", methods=["DELETE"])
@@ -295,6 +314,7 @@ def _apply_feed_updates(feed, new_url, custom_name, user_id):
         # Avoid unnecessary network refetches when URL remains the same
         if sanitized_name:
             feed.name = sanitized_name
+            feed.is_custom_name = True
             feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
             db.session.commit()
             invalidate_tab_feeds_cache(feed.tab_id, user_id=user_id)
@@ -317,6 +337,7 @@ def _apply_feed_updates(feed, new_url, custom_name, user_id):
                 if new_site_link:
                     feed.site_link = new_site_link
             # If fetch failed, preserve existing feed.name
+            feed.is_custom_name = False
             feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
             db.session.commit()
             invalidate_tab_feeds_cache(feed.tab_id, user_id=user_id)
@@ -340,6 +361,7 @@ def _apply_feed_updates(feed, new_url, custom_name, user_id):
     feed.url = new_url
     feed.name = new_name
     feed.site_link = new_site_link
+    feed.is_custom_name = bool(sanitized_name)
     feed.last_updated_time = datetime.datetime.now(datetime.timezone.utc)
 
     db.session.commit()
@@ -363,11 +385,12 @@ def _apply_feed_updates(feed, new_url, custom_name, user_id):
         )
 
     logger.info(
-        "Updated feed %s from '%s' to '%s' for user %s.",
+        "Updated feed %s from '%s' to '%s' for user %s (is_custom_name=%s).",
         feed.id,
         original_url,
         new_url,
         user_id,
+        feed.is_custom_name,
     )
 
 
