@@ -168,6 +168,9 @@ class Feed(db.Model):
         db.DateTime, default=lambda: datetime.datetime.now(timezone.utc)
     )  # Last time feed was successfully fetched
     order = db.Column(db.Integer, default=0, nullable=False, server_default="0")
+    is_custom_name = db.Column(
+        db.Boolean, default=False, nullable=False, server_default="0"
+    )
     # Relationship to FeedItems: One-to-Many (one Feed has many FeedItems)
     # cascade='all, delete-orphan' means deleting a Feed also deletes its associated FeedItems.
     # lazy='dynamic' allows for further querying on the relationship.
@@ -198,6 +201,7 @@ class Feed(db.Model):
             ),
             "unread_count": unread_count,
             "order": self.order if self.order is not None else 0,
+            "is_custom_name": bool(self.is_custom_name) if self.is_custom_name is not None else False,
         }
 
 

@@ -737,6 +737,8 @@ def test_update_feed_name_custom_name_same_url_no_fetch(mock_fetch_feed, client,
     with app.app_context():
         updated_feed = db.session.get(Feed, feed_id)
         assert updated_feed.name == "Custom Tech Digest"
+        assert updated_feed.is_custom_name is True
+        assert data["is_custom_name"] is True
 
 
 @patch("backend.blueprints.feeds.fetch_feed")
@@ -751,7 +753,64 @@ def test_update_feed_name_only_in_payload(mock_fetch_feed, client, setup_tabs_an
 
     assert response.status_code == 200
     assert response.json["name"] == "Omitted URL New Name"
+    assert response.json["is_custom_name"] is True
     mock_fetch_feed.assert_not_called()
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_update_feed_custom_name_persists_across_refresh(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test that a custom feed name does not revert when the feed is subsequently updated/refreshed."""
+    feed_id = setup_tabs_and_feeds["feed1_id"]
+    with app.app_context():
+        feed = db.session.get(Feed, feed_id)
+        original_url = feed.url
+
+    # 1. Set custom name
+    resp_put = client.put(
+        f"/api/feeds/{feed_id}",
+        json={"url": original_url, "name": "Persistent Custom Title"},
+    )
+    assert resp_put.status_code == 200
+    assert resp_put.json["name"] == "Persistent Custom Title"
+    assert resp_put.json["is_custom_name"] is True
+
+    # 2. Mock upstream feed fetch returning a completely different channel title
+    mock_feed = MagicMock()
+    mock_feed.feed = {"title": "Upstream Original Publisher - Latest", "link": "https://example.com/new"}
+    mock_feed.entries = []
+
+    with patch("backend.feed_service._fetch_feed_content", return_value=mock_feed):
+        # 3. Trigger manual update check (which refreshes feed metadata and entries)
+        resp_update = client.post(f"/api/feeds/{feed_id}/update")
+        assert resp_update.status_code == 200
+        # The custom title MUST stick and not revert!
+        assert resp_update.json["name"] == "Persistent Custom Title"
+        assert resp_update.json["is_custom_name"] is True
+        # Site link can still be updated
+        assert resp_update.json["site_link"] == "https://example.com/new"
+
+
+@patch("backend.blueprints.feeds.fetch_feed")
+def test_add_feed_with_custom_name(mock_fetch_feed, client, setup_tabs_and_feeds):
+    """Test adding a new feed with an explicit custom name sets is_custom_name=True."""
+    tab_id = setup_tabs_and_feeds["tab1_id"]
+    mock_feed = MagicMock()
+    mock_feed.feed = {"title": "Upstream Feed Title", "link": "https://customadd.com"}
+    mock_feed.entries = []
+    mock_fetch_feed.return_value = mock_feed
+
+    resp = client.post(
+        "/api/feeds",
+        json={
+            "url": "https://customadd.com/rss.xml",
+            "name": "My Handcrafted Initial Name",
+            "tab_id": tab_id,
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json
+    assert data["name"] == "My Handcrafted Initial Name"
+    assert data["is_custom_name"] is True
 
 
 @patch("backend.blueprints.feeds.fetch_feed")
@@ -773,6 +832,7 @@ def test_update_feed_name_empty_rederives_from_feed(mock_fetch_feed, client, set
 
     assert response.status_code == 200
     assert response.json["name"] == "Auto Derived Title"
+    assert response.json["is_custom_name"] is False
     mock_fetch_feed.assert_called_once_with(original_url)
 
 

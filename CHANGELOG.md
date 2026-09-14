@@ -1,3 +1,21 @@
+## 2026-09-14
+
+- **Fix(feeds): Prevent custom feed names from being reverted during background refreshes**
+  - **Database Schema & Migration (`backend/models.py`, `backend/migrations/versions/d4e5f6a7b8c9_add_is_custom_name_to_feeds.py`)**:
+    - Added `is_custom_name` boolean column (`default=False`, `nullable=False`, `server_default="0"`) to `Feed` model and included `is_custom_name` in `Feed.to_dict()`.
+    - Added Alembic database migration `d4e5f6a7b8c9_add_is_custom_name_to_feeds.py` to add `is_custom_name` to the `feeds` table.
+  - **Metadata Protection in Feed Service (`backend/feed_service.py`)**:
+    - Guarded `_update_feed_metadata()` to only re-derive and update canonical feed titles when `not getattr(feed_db_obj, "is_custom_name", False)`.
+    - Prevents background periodic update workers (`update_all_feeds()`), manual feed updates (`/api/feeds/<id>/update`), and pod restarts from overwriting custom feed names with upstream RSS titles, while still keeping `site_link` synchronized.
+    - Set default `is_custom_name=False` on OPML feed imports.
+  - **Custom Name Lifecycle in Feed Blueprint (`backend/blueprints/feeds.py`)**:
+    - Updated `_apply_feed_updates()` to mark `feed.is_custom_name = True` when a custom name is supplied, and reset `feed.is_custom_name = False` when the name input is explicitly cleared (triggering title re-derivation from the upstream feed).
+    - Preserved `feed.is_custom_name = True` when feed URLs are updated with custom names, avoiding title overwrites during subsequent `process_feed_entries()`.
+    - Supported optional initial custom names in `POST /api/feeds`.
+  - **Testing & Verification**:
+    - Added backend unit tests in `tests/unit/test_feed.py` and `tests/unit/test_app.py` verifying custom name preservation during metadata updates, refresh persistence across remote fetches, empty name reset, URL changes, `to_dict` serialization, and Alembic migration upgrade/downgrade.
+    - Validated full test suites across Vitest frontend unit tests (70/70 passed), Pytest backend unit tests (305/305 passed), and Playwright E2E browser tests (23 passed, 1 skipped).
+
 ## 2026-09-13
 
 - **Fix(bridge): Guard against RSS-Bridge error ingestion and prevent erroneous bridge fallback**

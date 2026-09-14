@@ -1583,6 +1583,7 @@ def test_apply_feed_updates_same_url_custom_name_no_fetch(db_setup, mocker):
 
     mock_fetch.assert_not_called()
     assert feed_obj.name == "Brand New Custom Name"
+    assert feed_obj.is_custom_name is True
 
 
 def test_apply_feed_updates_empty_name_rederives_from_feed(db_setup, mocker):
@@ -1595,11 +1596,223 @@ def test_apply_feed_updates_empty_name_rederives_from_feed(db_setup, mocker):
     tab = Tab(name="Custom Tab 2", order=1)
     db.session.add(tab)
     db.session.commit()
-    feed_obj = Feed(name="Custom Overridden Name", url="https://example.com/feed.xml", tab_id=tab.id)
+    feed_obj = Feed(
+        name="Custom Overridden Name",
+        url="https://example.com/feed.xml",
+        tab_id=tab.id,
+        is_custom_name=True,
+    )
     db.session.add(feed_obj)
     db.session.commit()
 
     _apply_feed_updates(feed_obj, "https://example.com/feed.xml", "   ", user_id=1)
 
     mock_fetch.assert_called_once_with("https://example.com/feed.xml")
-    assert feed_obj.name == "Upstream Channel Title"""
+    assert feed_obj.name == "Upstream Channel Title"
+    assert feed_obj.is_custom_name is False
+
+
+def test_update_feed_metadata_preserves_custom_name(db_setup):
+    """Test that _update_feed_metadata never overwrites custom feed names."""
+    from backend.feed_service import _update_feed_metadata
+
+    tab = Tab(name="Custom Tab 3", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(
+        name="My Handcrafted Name",
+        url="https://example.com/rss",
+        tab_id=tab.id,
+        is_custom_name=True,
+        site_link="https://old-link.com",
+    )
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed = {
+        "title": "Upstream Divergent Title - All News",
+        "link": "https://new-link.com",
+    }
+
+    _update_feed_metadata(feed_obj, mock_parsed)
+
+    # Name must NOT be overwritten
+    assert feed_obj.name == "My Handcrafted Name"
+    assert feed_obj.is_custom_name is True
+    # Site link must still be updated
+    assert feed_obj.site_link == "https://new-link.com"
+
+
+def test_update_feed_metadata_updates_non_custom_name(db_setup):
+    """Test that _update_feed_metadata updates canonical title for non-custom feeds."""
+    from backend.feed_service import _update_feed_metadata
+
+    tab = Tab(name="Custom Tab 4", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(
+        name="Old Upstream Name",
+        url="https://example.com/rss",
+        tab_id=tab.id,
+        is_custom_name=False,
+    )
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed = {
+        "title": "Fresh Canonical Title - Articles",
+        "link": "https://example.com",
+    }
+
+    _update_feed_metadata(feed_obj, mock_parsed)
+
+    assert feed_obj.name == "Fresh Canonical Title"
+    assert feed_obj.is_custom_name is False
+
+
+def test_apply_feed_updates_url_change_with_custom_name(db_setup, mocker):
+    """Test that URL change with a custom name sets is_custom_name=True and preserves name."""
+    from backend.blueprints.feeds import _apply_feed_updates
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed = {"title": "Brand New Remote Title", "link": "https://example2.com"}
+    mock_parsed.entries = []
+    mocker.patch("backend.blueprints.feeds.fetch_feed", return_value=mock_parsed)
+    mocker.patch("backend.blueprints.feeds.process_feed_entries", return_value=0)
+
+    tab = Tab(name="Custom Tab 5", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(
+        name="Old Feed Name",
+        url="https://example1.com/feed.xml",
+        tab_id=tab.id,
+        is_custom_name=False,
+    )
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    _apply_feed_updates(
+        feed_obj,
+        "https://example2.com/feed.xml",
+        "My Persistent Custom Name",
+        user_id=1,
+    )
+
+    assert feed_obj.url == "https://example2.com/feed.xml"
+    assert feed_obj.name == "My Persistent Custom Name"
+    assert feed_obj.is_custom_name is True
+
+
+def test_apply_feed_updates_url_change_without_custom_name(db_setup, mocker):
+    """Test that URL change with empty custom name resets is_custom_name=False."""
+    from backend.blueprints.feeds import _apply_feed_updates
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed = {"title": "New Source Official Title", "link": "https://example2.com"}
+    mock_parsed.entries = []
+    mocker.patch("backend.blueprints.feeds.fetch_feed", return_value=mock_parsed)
+    mocker.patch("backend.blueprints.feeds.process_feed_entries", return_value=0)
+
+    tab = Tab(name="Custom Tab 6", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(
+        name="Previously Custom Name",
+        url="https://example1.com/feed.xml",
+        tab_id=tab.id,
+        is_custom_name=True,
+    )
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    _apply_feed_updates(
+        feed_obj,
+        "https://example2.com/feed.xml",
+        "",
+        user_id=1,
+    )
+
+    assert feed_obj.url == "https://example2.com/feed.xml"
+    assert feed_obj.name == "New Source Official Title"
+    assert feed_obj.is_custom_name is False
+
+
+def test_fetch_and_update_feed_preserves_custom_name(db_setup, mocker):
+    """Test that full fetch_and_update_feed keeps custom feed names intact."""
+    from backend.feed_service import fetch_and_update_feed
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed = {"title": "Upstream Divergent Name", "link": "https://example.com"}
+    mock_parsed.entries = []
+    mocker.patch("backend.feed_service._fetch_feed_content", return_value=mock_parsed)
+
+    tab = Tab(name="Custom Tab 7", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed_obj = Feed(
+        name="Sticky Custom Name",
+        url="https://example.com/feed.xml",
+        tab_id=tab.id,
+        is_custom_name=True,
+    )
+    db.session.add(feed_obj)
+    db.session.commit()
+
+    success, _new_items, _ = fetch_and_update_feed(feed_obj.id)
+    assert success is True
+
+    db.session.refresh(feed_obj)
+    assert feed_obj.name == "Sticky Custom Name"
+    assert feed_obj.is_custom_name is True
+
+
+def test_feed_to_dict_includes_is_custom_name(db_setup):
+    """Test that Feed.to_dict includes is_custom_name boolean."""
+    tab = Tab(name="Custom Tab 8", order=1)
+    db.session.add(tab)
+    db.session.commit()
+    feed1 = Feed(
+        name="Feed 1",
+        url="https://example.com/1.xml",
+        tab_id=tab.id,
+        is_custom_name=False,
+    )
+    feed2 = Feed(
+        name="Feed 2",
+        url="https://example.com/2.xml",
+        tab_id=tab.id,
+        is_custom_name=True,
+    )
+    db.session.add_all([feed1, feed2])
+    db.session.commit()
+
+    d1 = feed1.to_dict()
+    assert d1["is_custom_name"] is False
+
+    d2 = feed2.to_dict()
+    assert d2["is_custom_name"] is True
+
+
+def test_migration_d4e5f6a7b8c9(mocker):
+    """Test Alembic migration upgrade and downgrade functions."""
+    from backend.migrations.versions import (
+        d4e5f6a7b8c9_add_is_custom_name_to_feeds as migration,
+    )
+
+    mock_batch = MagicMock()
+    mock_alter = MagicMock()
+    mock_alter.__enter__.return_value = mock_batch
+    mock_alter.__exit__.return_value = False
+    mocker.patch("alembic.op.batch_alter_table", return_value=mock_alter)
+
+    migration.upgrade()
+    assert mock_batch.add_column.called
+    col = mock_batch.add_column.call_args[0][0]
+    assert col.name == "is_custom_name"
+
+    mock_batch.reset_mock()
+    migration.downgrade()
+    mock_batch.drop_column.assert_called_once_with("is_custom_name")

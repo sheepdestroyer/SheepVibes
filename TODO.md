@@ -2,6 +2,16 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-14 Custom Feed Names Persistence & Reversion Prevention
+
+*   [x] **Fix: Prevent background updates and feed refreshes from reverting custom feed names:**
+    *   [x] Add `is_custom_name` boolean column (`default=False`, `server_default="0"`) to `Feed` model and serialize in `Feed.to_dict()`.
+    *   [x] Create Alembic database migration `d4e5f6a7b8c9_add_is_custom_name_to_feeds.py`.
+    *   [x] Guard `_update_feed_metadata()` in `backend/feed_service.py` to only update feed titles when `not feed_db_obj.is_custom_name`, preserving user-assigned custom names across background updates and refreshes while continuing to update site links.
+    *   [x] Update `backend/blueprints/feeds.py` to set `feed.is_custom_name = True` when custom names are assigned, reset `is_custom_name = False` when names are explicitly cleared, and handle initial feed creation custom names.
+    *   [x] Add unit tests in `tests/unit/test_feed.py` and `tests/unit/test_app.py` covering metadata protection, persistence across refresh, empty-name reset, URL updates with custom names, and database migrations.
+    *   [x] Update documentation across `TODO.md` and `CHANGELOG.md`.
+
 ## 2026-09-13 RSS-Bridge Error Ingestion & Erroneous Fallback Guards
 
 *   [x] **Fix: Prevent RSS-Bridge fallback on download failures and filter bridge error entries:**

@@ -174,7 +174,12 @@ def _process_opml_feed_node(
         return
 
     try:
-        new_feed = Feed(tab_id=current_tab_id, name=feed_name, url=xml_url)
+        new_feed = Feed(
+            tab_id=current_tab_id,
+            name=feed_name,
+            url=xml_url,
+            is_custom_name=False,
+        )
         db.session.add(new_feed)
         state.newly_added_feeds_list.append(new_feed)
         state.all_existing_feed_urls_set.add(xml_url)
@@ -1579,23 +1584,25 @@ def _update_feed_metadata(feed_db_obj, parsed_feed):
     raw_site_link = parsed_feed.feed.get("link")
     new_site_link = validate_link_structure(raw_site_link)
 
-    new_title = (
-        derive_canonical_feed_name(
-            raw_title,
-            site_url=new_site_link or feed_db_obj.site_link,
-            feed_url=feed_db_obj.url,
+    # Only update feed title if the user has not assigned a custom name
+    if not getattr(feed_db_obj, "is_custom_name", False):
+        new_title = (
+            derive_canonical_feed_name(
+                raw_title,
+                site_url=new_site_link or feed_db_obj.site_link,
+                feed_url=feed_db_obj.url,
+            )
+            if raw_title
+            else None
         )
-        if raw_title
-        else None
-    )
 
-    if new_title and new_title != feed_db_obj.name:
-        logger.info(
-            "Updating canonical feed title for '%s' to '%s'",
-            _sanitize_for_log(feed_db_obj.name),
-            _sanitize_for_log(new_title),
-        )
-        feed_db_obj.name = new_title
+        if new_title and new_title != feed_db_obj.name:
+            logger.info(
+                "Updating canonical feed title for '%s' to '%s'",
+                _sanitize_for_log(feed_db_obj.name),
+                _sanitize_for_log(new_title),
+            )
+            feed_db_obj.name = new_title
 
     if not new_site_link and raw_site_link:
         logger.warning(
