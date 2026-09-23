@@ -8,10 +8,10 @@ def test_quadlet_valkey_configuration():
     assert valkey_container.exists(), "sheepvibes-valkey.container must exist"
     content = valkey_container.read_text(encoding="utf-8")
 
-    assert "Image=docker.io/valkey/valkey:9.1-alpine" in content
+    assert "Image=docker.io/valkey/valkey:9-alpine" in content
     assert "AutoUpdate=registry" in content
     assert "Label=wud.watch.digest=true" in content
-    assert 'Label="wud.tag.include=^[0-9]+[.][0-9]+-alpine$"' in content
+    assert 'Label="wud.tag.include=^[0-9]+-alpine$"' in content
     assert 'Label="wud.tag.exclude=.*(trixie|bookworm|bullseye).*"' in content
 
 
@@ -35,7 +35,7 @@ def test_ci_workflow_valkey_image():
     assert workflow.exists(), "run-tests.yml workflow must exist"
     content = workflow.read_text(encoding="utf-8")
 
-    assert "image: docker.io/valkey/valkey:9.1-alpine" in content
+    assert "image: docker.io/valkey/valkey:9-alpine" in content
 
 
 def test_dev_scripts_valkey_image():
@@ -44,6 +44,6 @@ def test_dev_scripts_valkey_image():
     deploy_pod = repo_root / "scripts" / "deploy_pod.sh"
     run_dev = repo_root / "scripts" / "run_dev.sh"
 
-    assert "docker.io/valkey/valkey:9.1-alpine" in dev_manager.read_text(encoding="utf-8")
-    assert "docker.io/valkey/valkey:9.1-alpine" in deploy_pod.read_text(encoding="utf-8")
-    assert "docker.io/valkey/valkey:9.1-alpine" in run_dev.read_text(encoding="utf-8")
+    assert "docker.io/valkey/valkey:9-alpine" in dev_manager.read_text(encoding="utf-8")
+    assert "docker.io/valkey/valkey:9-alpine" in deploy_pod.read_text(encoding="utf-8")
+    assert "docker.io/valkey/valkey:9-alpine" in run_dev.read_text(encoding="utf-8")
