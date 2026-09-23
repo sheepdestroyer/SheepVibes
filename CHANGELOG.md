@@ -1,3 +1,14 @@
+## 2026-09-23
+
+- **Feat(pod): Adopt floating valkey 9-alpine for automatic minor updates**
+  - **Quadlet & Scripts Alignment (`pod/sheepvibes-valkey.container`, `scripts/deploy_pod.sh`, `scripts/dev_manager.sh`, `scripts/run_dev.sh`)**:
+    - Switched Valkey container image from pinned minor `docker.io/valkey/valkey:9.1-alpine` to floating major `docker.io/valkey/valkey:9-alpine`.
+    - Enables `podman auto-update` to automatically pick up minor release upgrades (e.g. 9.1 -> 9.2) without requiring manual Quadlet modification.
+    - Updated WUD tag inclusion filter from `^[0-9]+[.][0-9]+-alpine$` to `^[0-9]+-alpine$` while retaining exclusion for Debian codenames (`trixie|bookworm|bullseye`), alerting on future major version transitions (e.g. 10-alpine).
+  - **CI & Development Setup (`.github/workflows/run-tests.yml`, `README.md`, `TESTING.md`, `AGENTS.md`)**:
+    - Updated GitHub Actions CI test workflow service container and local documentation to `valkey:9-alpine`.
+    - Updated unit tests in `tests/unit/test_pod_configs.py`.
+
 ## 2026-09-14
 
 - **Fix(feeds): Prevent custom feed names from being reverted during background refreshes**
