@@ -1506,8 +1506,12 @@ def _execute_http2_request(client, req_url, headers, hostname, scheme, feed_url)
         response.close()
 
 
+class HTTP2TransportError(Exception):
+    """Raised when HTTP/2 transport or protocol negotiation fails."""
+
+
 def _download_feed_content_http2(feed_url, safe_ip=None, max_redirects=5):
-    """Executes network request via HTTP/2 when server requires protocol upgrade (HTTP 426).
+    """Executes network request via HTTP/2 (ALPN).
 
     Pins connections to validated safe IPs and enforces SSL verification against hostname via SNI.
     """
@@ -1546,13 +1550,13 @@ def _download_feed_content_http2(feed_url, safe_ip=None, max_redirects=5):
                     continue
 
                 return content
-        except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.warning(
                 "HTTP/2 fetch failed for %s: %s",
                 _sanitize_for_log(feed_url),
                 _sanitize_for_log(str(exc)),
             )
-            return None
+            raise HTTP2TransportError(str(exc)) from exc
 
     return None
 
@@ -1601,7 +1605,9 @@ def _read_urllib_response(response, feed_url):
     return content
 
 
-def _download_feed_content_urllib(opener, feed_url, safe_ip=None):
+def _download_feed_content_urllib(
+    opener, feed_url, safe_ip=None, allow_http2_retry=True
+):
     """Fallback download using legacy urllib opener with error handling."""
     try:
         req = urllib.request.Request(
@@ -1617,12 +1623,15 @@ def _download_feed_content_urllib(opener, feed_url, safe_ip=None):
             return _read_urllib_response(response, feed_url)
 
     except urllib.error.HTTPError as exc:
-        if exc.code == 426:
+        if exc.code == 426 and allow_http2_retry:
             logger.info(
                 "Feed %s returned HTTP 426 (Upgrade Required); retrying with HTTP/2",
                 _sanitize_for_log(feed_url),
             )
-            return _download_feed_content_http2(feed_url, safe_ip=safe_ip)
+            try:
+                return _download_feed_content_http2(feed_url, safe_ip=safe_ip)
+            except HTTP2TransportError:
+                return None
         logger.warning(
             "Failed to fetch feed %s: %s",
             _sanitize_for_log(feed_url),
@@ -1643,15 +1652,24 @@ def _download_feed_content(opener, feed_url):
     """Executes network request via HTTP/2 (ALPN) as primary transport, falling back to urllib."""
     safe_ip = getattr(opener, "safe_ip", None)
     if isinstance(safe_ip, str):
-        content = _download_feed_content_http2(feed_url, safe_ip=safe_ip)
-        if content is not None:
-            return content
-        logger.info(
-            "HTTP/2 fetch returned None for %s; falling back to legacy urllib",
-            _sanitize_for_log(feed_url),
-        )
+        try:
+            content = _download_feed_content_http2(feed_url, safe_ip=safe_ip)
+            if content is not None:
+                return content
+            return None
+        except HTTP2TransportError as exc:
+            logger.info(
+                "HTTP/2 transport failed for %s (%s); falling back to legacy urllib",
+                _sanitize_for_log(feed_url),
+                _sanitize_for_log(str(exc)),
+            )
+            return _download_feed_content_urllib(
+                opener, feed_url, safe_ip=safe_ip, allow_http2_retry=False
+            )
 
-    return _download_feed_content_urllib(opener, feed_url, safe_ip=safe_ip)
+    return _download_feed_content_urllib(
+        opener, feed_url, safe_ip=safe_ip, allow_http2_retry=True
+    )
 
 
 def _parse_and_validate_feed(content, feed_url):

@@ -9,6 +9,7 @@ import urllib.error
 from unittest.mock import MagicMock
 
 import httpx
+import pytest
 
 from backend import feed_service
 from backend.feed_service import MAX_FEED_RESPONSE_BYTES
@@ -43,8 +44,8 @@ def test_download_feed_content_primary_http2(mocker):
     mock_opener.open.assert_not_called()
 
 
-def test_download_feed_content_fallback_to_urllib_when_http2_fails(mocker):
-    """Test fallback to urllib opener when primary HTTP/2 download returns None."""
+def test_download_feed_content_fallback_to_urllib_on_transport_failure(mocker):
+    """Test fallback to urllib opener when primary HTTP/2 download fails due to transport error."""
     mock_opener = MagicMock()
     mock_opener.safe_ip = "107.167.83.50"
 
@@ -58,7 +59,7 @@ def test_download_feed_content_fallback_to_urllib_when_http2_fails(mocker):
 
     mock_h2_download = mocker.patch(
         "backend.feed_service._download_feed_content_http2",
-        return_value=None,
+        side_effect=feed_service.HTTP2TransportError("Connection reset"),
     )
 
     result = feed_service._download_feed_content(
@@ -72,8 +73,29 @@ def test_download_feed_content_fallback_to_urllib_when_http2_fails(mocker):
     mock_opener.open.assert_called_once()
 
 
+def test_download_feed_content_definitive_rejection_no_urllib_fallback(mocker):
+    """Test that definitive HTTP/2 rejection (None) aborts without falling back to urllib."""
+    mock_opener = MagicMock()
+    mock_opener.safe_ip = "107.167.83.50"
+
+    mock_h2_download = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        return_value=None,
+    )
+
+    result = feed_service._download_feed_content(
+        mock_opener, "https://example.com/feed"
+    )
+    assert result is None
+    mock_h2_download.assert_called_once_with(
+        "https://example.com/feed",
+        safe_ip="107.167.83.50",
+    )
+    mock_opener.open.assert_not_called()
+
+
 def test_download_feed_content_urllib_fallback_on_426(mocker):
-    """Test that urllib fallback delegates to HTTP/2 if server returns HTTP 426."""
+    """Test that urllib fallback delegates to HTTP/2 if server returns HTTP 426 when HTTP/2 was not yet tried."""
     mock_opener = MagicMock()
     mock_opener.safe_ip = None
 
@@ -102,6 +124,67 @@ def test_download_feed_content_urllib_fallback_on_426(mocker):
     mock_opener.open.assert_called_once()
 
 
+def test_download_feed_content_urllib_426_retry_handles_transport_error(mocker):
+    """Test that urllib 426 retry handles HTTP2TransportError gracefully and returns None."""
+    mock_opener = MagicMock()
+    mock_opener.safe_ip = None
+
+    http_error_426 = urllib.error.HTTPError(
+        url="https://example.com/feed",
+        code=426,
+        msg="Upgrade Required",
+        hdrs={},
+        fp=io.BytesIO(b""),
+    )
+    mock_opener.open.side_effect = http_error_426
+
+    mock_h2_download = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        side_effect=feed_service.HTTP2TransportError("Network error"),
+    )
+
+    result = feed_service._download_feed_content(
+        mock_opener, "https://example.com/feed"
+    )
+    assert result is None
+    mock_h2_download.assert_called_once_with(
+        "https://example.com/feed",
+        safe_ip=None,
+    )
+    mock_opener.open.assert_called_once()
+
+
+def test_download_feed_content_urllib_does_not_retry_http2_if_already_attempted(mocker):
+    """Test that urllib 426 does not trigger HTTP/2 retry if HTTP/2 was already attempted."""
+    mock_opener = MagicMock()
+    mock_opener.safe_ip = "107.167.83.50"
+
+    http_error_426 = urllib.error.HTTPError(
+        url="https://example.com/feed",
+        code=426,
+        msg="Upgrade Required",
+        hdrs={},
+        fp=io.BytesIO(b""),
+    )
+    mock_opener.open.side_effect = http_error_426
+
+    mock_h2_download = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        side_effect=feed_service.HTTP2TransportError("Connection failed"),
+    )
+
+    result = feed_service._download_feed_content(
+        mock_opener, "https://example.com/feed"
+    )
+    assert result is None
+    # HTTP/2 was only called once initially, not retried from urllib
+    mock_h2_download.assert_called_once_with(
+        "https://example.com/feed",
+        safe_ip="107.167.83.50",
+    )
+    mock_opener.open.assert_called_once()
+
+
 def test_download_feed_content_non_426_http_error(mocker):
     """Test that urllib errors other than 426 return None without retrying HTTP/2."""
     mock_opener = MagicMock()
@@ -118,7 +201,7 @@ def test_download_feed_content_non_426_http_error(mocker):
 
     mock_h2_download = mocker.patch(
         "backend.feed_service._download_feed_content_http2",
-        return_value=None,
+        side_effect=feed_service.HTTP2TransportError("Protocol error"),
     )
 
     result = feed_service._download_feed_content(
@@ -462,7 +545,7 @@ def test_download_feed_content_http2_zip_bomb_protection(mocker):
 
 
 def test_download_feed_content_http2_network_exception(mocker):
-    """Test that httpx network exceptions (Timeout, ConnectError) are logged and return None."""
+    """Test that httpx network exceptions (Timeout, ConnectError) raise HTTP2TransportError."""
     mock_client = _create_mock_httpx_client()
     mock_client.send.side_effect = httpx.ConnectTimeout("Connection timed out")
     mock_req = MagicMock()
@@ -471,11 +554,11 @@ def test_download_feed_content_http2_network_exception(mocker):
 
     mocker.patch("backend.feed_service.httpx.Client", return_value=mock_client)
 
-    result = feed_service._download_feed_content_http2(
-        "https://example.com/feed",
-        safe_ip="93.184.216.34",
-    )
-    assert result is None
+    with pytest.raises(feed_service.HTTP2TransportError, match="Connection timed out"):
+        feed_service._download_feed_content_http2(
+            "https://example.com/feed",
+            safe_ip="93.184.216.34",
+        )
 
 
 def test_fetch_feed_end_to_end_primary_http2(mocker):
@@ -520,7 +603,7 @@ def test_fetch_feed_end_to_end_primary_http2(mocker):
 
 
 def test_fetch_feed_end_to_end_fallback_to_urllib_success(mocker):
-    """Test that fetch_feed falls back to urllib when primary HTTP/2 download returns None."""
+    """Test that fetch_feed falls back to urllib when primary HTTP/2 download suffers transport error."""
     mocker.patch(
         "backend.feed_service.validate_and_resolve_url",
         return_value=("107.167.83.50", "www.dumbingofage.com"),
@@ -550,7 +633,7 @@ def test_fetch_feed_end_to_end_fallback_to_urllib_success(mocker):
 
     mock_h2 = mocker.patch(
         "backend.feed_service._download_feed_content_http2",
-        return_value=None,
+        side_effect=feed_service.HTTP2TransportError("Connection reset"),
     )
 
     feed = feed_service.fetch_feed("https://www.dumbingofage.com/feed/")
@@ -561,8 +644,8 @@ def test_fetch_feed_end_to_end_fallback_to_urllib_success(mocker):
     mock_opener.open.assert_called_once()
 
 
-def test_fetch_feed_end_to_end_with_426_fallback(mocker):
-    """Test that fetch_feed falls back to urllib and handles 426 retry to HTTP/2."""
+def test_fetch_feed_end_to_end_definitive_rejection(mocker):
+    """Test that fetch_feed cleanly aborts if primary HTTP/2 receives a definitive rejection (None)."""
     mocker.patch(
         "backend.feed_service.validate_and_resolve_url",
         return_value=("107.167.83.50", "www.dumbingofage.com"),
@@ -570,6 +653,31 @@ def test_fetch_feed_end_to_end_with_426_fallback(mocker):
 
     mock_opener = MagicMock()
     mock_opener.safe_ip = "107.167.83.50"
+    mocker.patch("backend.feed_service._build_safe_opener", return_value=mock_opener)
+
+    mock_h2 = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        return_value=None,
+    )
+
+    feed = feed_service.fetch_feed("https://www.dumbingofage.com/feed/")
+    assert feed is None
+    mock_h2.assert_called_once_with(
+        "https://www.dumbingofage.com/feed/",
+        safe_ip="107.167.83.50",
+    )
+    mock_opener.open.assert_not_called()
+
+
+def test_fetch_feed_end_to_end_with_426_fallback(mocker):
+    """Test that fetch_feed falls back to urllib and handles 426 retry to HTTP/2 when opener has no safe_ip."""
+    mocker.patch(
+        "backend.feed_service.validate_and_resolve_url",
+        return_value=("107.167.83.50", "www.dumbingofage.com"),
+    )
+
+    mock_opener = MagicMock()
+    mock_opener.safe_ip = None
     mocker.patch("backend.feed_service._build_safe_opener", return_value=mock_opener)
 
     http_error_426 = urllib.error.HTTPError(
@@ -596,7 +704,7 @@ def test_fetch_feed_end_to_end_with_426_fallback(mocker):
 
     mock_h2 = mocker.patch(
         "backend.feed_service._download_feed_content_http2",
-        side_effect=[None, sample_feed_xml],
+        return_value=sample_feed_xml,
     )
 
     feed = feed_service.fetch_feed("https://www.dumbingofage.com/feed/")
@@ -604,7 +712,10 @@ def test_fetch_feed_end_to_end_with_426_fallback(mocker):
     assert feed.feed.title == "Dumbing of Age"
     assert len(feed.entries) == 1
     assert feed.entries[0].title == "Dozing"
-    assert mock_h2.call_count == 2
+    mock_h2.assert_called_once_with(
+        "https://www.dumbingofage.com/feed/",
+        safe_ip=None,
+    )
     mock_opener.open.assert_called_once()
 
 
