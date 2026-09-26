@@ -1,5 +1,19 @@
 ## 2026-09-26
  
+- **Feat(feeds): Promote HTTP/2 via ALPN to primary feed download transport with urllib fallback (Issue #573)**
+  - **HTTP/2 Primary Transport (`backend/feed_service.py`)**:
+    - Promoted HTTP/2 via ALPN to be the default primary feed download transport in `_download_feed_content()` when a validated `safe_ip` is attached to the opener.
+    - Eliminates redundant round trips and HTTP 426 (Upgrade Required) errors on modern servers enforcing HTTP/2.
+    - Introduced `HTTP2TransportError` to cleanly differentiate transport/protocol negotiation failures from definitive response rejections (non-200 HTTP status, size limit overruns, zip bombs, or policy blocks).
+    - Prevents duplicate requests: definitive rejections return `None` immediately without invoking urllib fallback; urllib fallback is only invoked upon transport/protocol errors.
+    - Added `allow_http2_retry` guard to `_download_feed_content_urllib()` to prevent redundant HTTP/2 retry loops if urllib encounters HTTP 426 after HTTP/2 was already attempted.
+    - Factored urllib response processing (`_read_urllib_response`) and download execution (`_download_feed_content_urllib`) into focused routines, maintaining cyclomatic complexity <= 9 across all routines for DeepSource and Codacy compliance.
+    - Maintained all SSRF protections, IP pinning, SNI host verification, non-standard port handling, streaming response size limits (`MAX_FEED_RESPONSE_BYTES`), and zip bomb guards.
+  - **Testing & Verification**:
+    - Expanded unit test suite in `tests/unit/test_http2_feed.py` to 26 tests verifying HTTP/2 primary download, urllib fallback on transport errors, prevention of urllib fallback on definitive rejections, urllib 426 retry prevention when HTTP/2 was already attempted, non-426 error handling, and end-to-end `fetch_feed` execution.
+    - Verified all existing feed service unit tests in `tests/unit/test_feed.py` (including `test_download_feed_content_timeout`) and `tests/unit/test_rss_bridge.py` pass cleanly.
+    - Validated full test suites: Vitest frontend tests (70/70 passed), Pytest backend unit tests (331/331 passed), and Playwright E2E browser tests (23 passed, 1 skipped).
+
 - **Fix(feeds): Support HTTP/2 download fallback on HTTP 426 Upgrade Required**
   - **HTTP/2 Transport & Fallback (`backend/feed_service.py`, `backend/requirements.txt`)**:
     - Added `httpx[http2]>=0.28.1` to enable ALPN HTTP/2 protocol negotiation for web servers that reject HTTP/1.1 connections.
