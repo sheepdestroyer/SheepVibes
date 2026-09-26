@@ -2,6 +2,18 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-26 HTTP/2 ALPN as Primary Feed Transport (Issue #573)
+
+*   [x] **Feat(feeds): Promote HTTP/2 via ALPN to primary feed download transport with urllib fallback (Issue #573):**
+    *   [x] Update `_download_feed_content(opener, feed_url)` in `backend/feed_service.py` to attempt `_download_feed_content_http2(feed_url, safe_ip=safe_ip)` first when `safe_ip` is present on the opener.
+    *   [x] If HTTP/2 download succeeds, return content immediately, avoiding round trips and HTTP 426 on modern HTTP/2 enforcing servers.
+    *   [x] If HTTP/2 download returns None, log an info message and proceed to legacy urllib opener as secondary fallback.
+    *   [x] Factor out legacy urllib response processing (`_read_urllib_response`) and request execution (`_download_feed_content_urllib`) to keep cyclomatic complexity <= 9 across all routines for DeepSource and Codacy compliance.
+    *   [x] Maintain all SSRF protections, IP pinning, SNI validation, non-standard port handling, streaming size caps, and zip bomb guards across HTTP/2 routines.
+    *   [x] Update unit test suite in `tests/unit/test_http2_feed.py` with 22 comprehensive unit tests covering HTTP/2 primary download, urllib fallback when HTTP/2 returns None, urllib 426 retry, non-426 error handling, and end-to-end `fetch_feed` primary and fallback execution.
+    *   [x] Validate full test suites across Vitest frontend unit tests (70/70 passed), Pytest backend unit tests (327/327 passed), and Playwright E2E browser tests (23 passed, 1 skipped).
+    *   [x] Update documentation across `TODO.md` and `CHANGELOG.md`.
+
 ## 2026-09-26 HTTP/2 Protocol Fallback on HTTP 426 Upgrade Required
 
 *   [x] **Fix: Resolve feed update failures when servers enforce HTTP/2 (HTTP 426 Upgrade Required):**

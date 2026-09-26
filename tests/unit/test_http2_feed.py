@@ -22,10 +22,60 @@ def _create_mock_httpx_client():
     return client
 
 
-def test_download_feed_content_fallback_on_426(mocker):
-    """Test that _download_feed_content catches HTTP 426 and delegates to HTTP/2."""
+def test_download_feed_content_primary_http2(mocker):
+    """Test that _download_feed_content uses HTTP/2 as primary transport when safe_ip is available."""
     mock_opener = MagicMock()
     mock_opener.safe_ip = "107.167.83.50"
+
+    mock_h2_download = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        return_value=b"<rss><channel><title>H2 Feed</title></channel></rss>",
+    )
+
+    result = feed_service._download_feed_content(
+        mock_opener, "https://example.com/feed"
+    )
+    assert result == b"<rss><channel><title>H2 Feed</title></channel></rss>"
+    mock_h2_download.assert_called_once_with(
+        "https://example.com/feed",
+        safe_ip="107.167.83.50",
+    )
+    mock_opener.open.assert_not_called()
+
+
+def test_download_feed_content_fallback_to_urllib_when_http2_fails(mocker):
+    """Test fallback to urllib opener when primary HTTP/2 download returns None."""
+    mock_opener = MagicMock()
+    mock_opener.safe_ip = "107.167.83.50"
+
+    mock_response = MagicMock()
+    mock_response.getheader.return_value = None
+    mock_response.read.return_value = (
+        b"<rss><channel><title>Urllib Feed</title></channel></rss>"
+    )
+    mock_response.__enter__.return_value = mock_response
+    mock_opener.open.return_value = mock_response
+
+    mock_h2_download = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        return_value=None,
+    )
+
+    result = feed_service._download_feed_content(
+        mock_opener, "https://example.com/feed"
+    )
+    assert result == b"<rss><channel><title>Urllib Feed</title></channel></rss>"
+    mock_h2_download.assert_called_once_with(
+        "https://example.com/feed",
+        safe_ip="107.167.83.50",
+    )
+    mock_opener.open.assert_called_once()
+
+
+def test_download_feed_content_urllib_fallback_on_426(mocker):
+    """Test that urllib fallback delegates to HTTP/2 if server returns HTTP 426."""
+    mock_opener = MagicMock()
+    mock_opener.safe_ip = None
 
     http_error_426 = urllib.error.HTTPError(
         url="https://example.com/feed",
@@ -47,13 +97,16 @@ def test_download_feed_content_fallback_on_426(mocker):
     assert result == b"<rss><channel><title>H2 Feed</title></channel></rss>"
     mock_h2_download.assert_called_once_with(
         "https://example.com/feed",
-        safe_ip="107.167.83.50",
+        safe_ip=None,
     )
+    mock_opener.open.assert_called_once()
 
 
 def test_download_feed_content_non_426_http_error(mocker):
-    """Test that _download_feed_content does not trigger HTTP/2 fallback on other HTTP errors."""
+    """Test that urllib errors other than 426 return None without retrying HTTP/2."""
     mock_opener = MagicMock()
+    mock_opener.safe_ip = "107.167.83.50"
+
     http_error_500 = urllib.error.HTTPError(
         url="https://example.com/feed",
         code=500,
@@ -63,13 +116,20 @@ def test_download_feed_content_non_426_http_error(mocker):
     )
     mock_opener.open.side_effect = http_error_500
 
-    mock_h2_download = mocker.patch("backend.feed_service._download_feed_content_http2")
+    mock_h2_download = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        return_value=None,
+    )
 
     result = feed_service._download_feed_content(
         mock_opener, "https://example.com/feed"
     )
     assert result is None
-    mock_h2_download.assert_not_called()
+    mock_h2_download.assert_called_once_with(
+        "https://example.com/feed",
+        safe_ip="107.167.83.50",
+    )
+    mock_opener.open.assert_called_once()
 
 
 def test_download_feed_content_http2_success(mocker):
@@ -418,8 +478,91 @@ def test_download_feed_content_http2_network_exception(mocker):
     assert result is None
 
 
+def test_fetch_feed_end_to_end_primary_http2(mocker):
+    """Test that fetch_feed uses HTTP/2 as primary transport without calling opener.open."""
+    mocker.patch(
+        "backend.feed_service.validate_and_resolve_url",
+        return_value=("107.167.83.50", "www.dumbingofage.com"),
+    )
+
+    mock_opener = MagicMock()
+    mock_opener.safe_ip = "107.167.83.50"
+    mocker.patch("backend.feed_service._build_safe_opener", return_value=mock_opener)
+
+    sample_feed_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+        <channel>
+            <title>Dumbing of Age</title>
+            <link>https://www.dumbingofage.com</link>
+            <item>
+                <title>Dozing</title>
+                <link>https://www.dumbingofage.com/2026/comic/dozing/</link>
+                <pubDate>Sat, 26 Sep 2026 04:01:00 +0000</pubDate>
+            </item>
+        </channel>
+    </rss>"""
+
+    mock_h2 = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        return_value=sample_feed_xml,
+    )
+
+    feed = feed_service.fetch_feed("https://www.dumbingofage.com/feed/")
+    assert feed is not None
+    assert feed.feed.title == "Dumbing of Age"
+    assert len(feed.entries) == 1
+    assert feed.entries[0].title == "Dozing"
+    mock_h2.assert_called_once_with(
+        "https://www.dumbingofage.com/feed/",
+        safe_ip="107.167.83.50",
+    )
+    mock_opener.open.assert_not_called()
+
+
+def test_fetch_feed_end_to_end_fallback_to_urllib_success(mocker):
+    """Test that fetch_feed falls back to urllib when primary HTTP/2 download returns None."""
+    mocker.patch(
+        "backend.feed_service.validate_and_resolve_url",
+        return_value=("107.167.83.50", "www.dumbingofage.com"),
+    )
+
+    sample_feed_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+        <channel>
+            <title>Dumbing of Age</title>
+            <link>https://www.dumbingofage.com</link>
+            <item>
+                <title>Dozing</title>
+                <link>https://www.dumbingofage.com/2026/comic/dozing/</link>
+                <pubDate>Sat, 26 Sep 2026 04:01:00 +0000</pubDate>
+            </item>
+        </channel>
+    </rss>"""
+
+    mock_opener = MagicMock()
+    mock_opener.safe_ip = "107.167.83.50"
+    mock_response = MagicMock()
+    mock_response.getheader.return_value = None
+    mock_response.read.return_value = sample_feed_xml
+    mock_response.__enter__.return_value = mock_response
+    mock_opener.open.return_value = mock_response
+    mocker.patch("backend.feed_service._build_safe_opener", return_value=mock_opener)
+
+    mock_h2 = mocker.patch(
+        "backend.feed_service._download_feed_content_http2",
+        return_value=None,
+    )
+
+    feed = feed_service.fetch_feed("https://www.dumbingofage.com/feed/")
+    assert feed is not None
+    assert feed.feed.title == "Dumbing of Age"
+    assert len(feed.entries) == 1
+    mock_h2.assert_called_once()
+    mock_opener.open.assert_called_once()
+
+
 def test_fetch_feed_end_to_end_with_426_fallback(mocker):
-    """Test that fetch_feed seamlessly falls back to HTTP/2 when server returns 426."""
+    """Test that fetch_feed falls back to urllib and handles 426 retry to HTTP/2."""
     mocker.patch(
         "backend.feed_service.validate_and_resolve_url",
         return_value=("107.167.83.50", "www.dumbingofage.com"),
@@ -451,9 +594,9 @@ def test_fetch_feed_end_to_end_with_426_fallback(mocker):
         </channel>
     </rss>"""
 
-    mocker.patch(
+    mock_h2 = mocker.patch(
         "backend.feed_service._download_feed_content_http2",
-        return_value=sample_feed_xml,
+        side_effect=[None, sample_feed_xml],
     )
 
     feed = feed_service.fetch_feed("https://www.dumbingofage.com/feed/")
@@ -461,6 +604,8 @@ def test_fetch_feed_end_to_end_with_426_fallback(mocker):
     assert feed.feed.title == "Dumbing of Age"
     assert len(feed.entries) == 1
     assert feed.entries[0].title == "Dozing"
+    assert mock_h2.call_count == 2
+    mock_opener.open.assert_called_once()
 
 
 def test_download_feed_content_http2_custom_port(mocker):

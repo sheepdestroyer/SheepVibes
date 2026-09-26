@@ -1557,9 +1557,52 @@ def _download_feed_content_http2(feed_url, safe_ip=None, max_redirects=5):
     return None
 
 
-def _download_feed_content(opener, feed_url):
-    """Executes the network request safely, enforcing size limits and basic zip bomb checks."""
-    safe_ip = getattr(opener, "safe_ip", None)
+def _read_urllib_response(response, feed_url):
+    """Validates and reads response from urllib opener against size and compression limits."""
+    content_length = response.getheader("Content-Length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                logger.warning(
+                    "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                    _sanitize_for_log(content_length),
+                    MAX_FEED_RESPONSE_BYTES,
+                    _sanitize_for_log(feed_url),
+                )
+                return None
+        except (ValueError, TypeError):
+            # Malformed header; ignore and rely on read limit
+            logger.warning(
+                "Ignored invalid Content-Length (%s) for feed %s",
+                _sanitize_for_log(content_length),
+                _sanitize_for_log(feed_url),
+            )
+
+    # Read limited amount + 1 byte to detect overflow
+    content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
+    if len(content) > MAX_FEED_RESPONSE_BYTES:
+        logger.warning(
+            "Feed rejected: Response size exceeds limit (%s) for %s",
+            MAX_FEED_RESPONSE_BYTES,
+            _sanitize_for_log(feed_url),
+        )
+        return None
+
+    # ZIP BOMB PROTECTION
+    # Even with 'Accept-Encoding: identity', some servers might send GZIP.
+    # We manually check for the GZIP magic header (\x1f\x8b) and reject.
+    if content.startswith(b"\x1f\x8b"):
+        logger.warning(
+            "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+            _sanitize_for_log(feed_url),
+        )
+        return None
+
+    return content
+
+
+def _download_feed_content_urllib(opener, feed_url, safe_ip=None):
+    """Fallback download using legacy urllib opener with error handling."""
     try:
         req = urllib.request.Request(
             feed_url,
@@ -1571,47 +1614,7 @@ def _download_feed_content(opener, feed_url):
         url_opener = opener.open(req, timeout=DEFAULT_FEED_FETCH_TIMEOUT)
 
         with url_opener as response:
-            # Check Content-Length header first
-            content_length = response.getheader("Content-Length")
-            if content_length:
-                try:
-                    if int(content_length) > MAX_FEED_RESPONSE_BYTES:
-                        logger.warning(
-                            "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
-                            _sanitize_for_log(content_length),
-                            MAX_FEED_RESPONSE_BYTES,
-                            _sanitize_for_log(feed_url),
-                        )
-                        return None
-                except (ValueError, TypeError):
-                    # Malformed header; ignore and rely on read limit
-                    logger.warning(
-                        "Ignored invalid Content-Length (%s) for feed %s",
-                        _sanitize_for_log(content_length),
-                        _sanitize_for_log(feed_url),
-                    )
-
-            # Read limited amount + 1 byte to detect overflow
-            content = response.read(MAX_FEED_RESPONSE_BYTES + 1)
-            if len(content) > MAX_FEED_RESPONSE_BYTES:
-                logger.warning(
-                    "Feed rejected: Response size exceeds limit (%s) for %s",
-                    MAX_FEED_RESPONSE_BYTES,
-                    _sanitize_for_log(feed_url),
-                )
-                return None
-
-        # ZIP BOMB PROTECTION
-        # Even with 'Accept-Encoding: identity', some servers might send GZIP.
-        # We manually check for the GZIP magic header (\x1f\x8b) and reject.
-        if content.startswith(b"\x1f\x8b"):
-            logger.warning(
-                "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
-                _sanitize_for_log(feed_url),
-            )
-            return None
-
-        return content
+            return _read_urllib_response(response, feed_url)
 
     except urllib.error.HTTPError as exc:
         if exc.code == 426:
@@ -1634,6 +1637,21 @@ def _download_feed_content(opener, feed_url):
             _sanitize_for_log(str(exc)),
         )
         return None
+
+
+def _download_feed_content(opener, feed_url):
+    """Executes network request via HTTP/2 (ALPN) as primary transport, falling back to urllib."""
+    safe_ip = getattr(opener, "safe_ip", None)
+    if isinstance(safe_ip, str):
+        content = _download_feed_content_http2(feed_url, safe_ip=safe_ip)
+        if content is not None:
+            return content
+        logger.info(
+            "HTTP/2 fetch returned None for %s; falling back to legacy urllib",
+            _sanitize_for_log(feed_url),
+        )
+
+    return _download_feed_content_urllib(opener, feed_url, safe_ip=safe_ip)
 
 
 def _parse_and_validate_feed(content, feed_url):
