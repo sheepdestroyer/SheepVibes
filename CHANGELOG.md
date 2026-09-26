@@ -1,3 +1,15 @@
+## 2026-09-26
+ 
+- **Fix(feeds): Support HTTP/2 download fallback on HTTP 426 Upgrade Required**
+  - **HTTP/2 Transport & Fallback (`backend/feed_service.py`, `backend/requirements.txt`)**:
+    - Added `httpx[http2]>=0.28.1` to enable ALPN HTTP/2 protocol negotiation for web servers that reject HTTP/1.1 connections.
+    - Implemented `_download_feed_content_http2()` with strict SSRF protection via pre-resolved IP pinning (`validate_and_resolve_url`), TLS SNI verification against the target hostname (`sni_hostname`), streamed chunk size limits (`MAX_FEED_RESPONSE_BYTES`), and gzip bomb protection.
+    - Updated `_download_feed_content()` to intercept `urllib.error.HTTPError` with status code 426 (Upgrade Required) and seamlessly retry using `_download_feed_content_http2()`.
+    - Stored validated `safe_ip` on opener instances in `_build_safe_opener()` to avoid redundant DNS lookups while preserving backward compatibility with existing mock signatures.
+  - **Testing & Verification**:
+    - Added unit test suite in `tests/unit/test_http2_feed.py` covering HTTP 426 interception, HTTP/2 download success, IPv6 URL formatting, plain HTTP compatibility, redirect loops, response size enforcement, zip bomb rejection, and network timeouts.
+    - Verified full test suites: Vitest frontend tests (70/70 passed), Pytest backend unit tests (322/322 passed), and Playwright E2E browser tests (23 passed, 1 skipped).
+
 ## 2026-09-23
 
 - **Feat(pod): Adopt floating valkey 9-alpine for automatic minor updates**

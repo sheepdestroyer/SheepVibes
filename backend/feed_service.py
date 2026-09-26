@@ -28,6 +28,7 @@ from xml.sax.handler import ContentHandler
 import defusedxml.ElementTree as SafeET
 import defusedxml.sax
 import feedparser
+import httpx
 import sqlalchemy.exc
 from dateutil import parser as date_parser
 from defusedxml.common import (
@@ -1409,14 +1410,156 @@ def _build_safe_opener(safe_ip):
     http_handler = SafeHTTPHandler(safe_ip=safe_ip)
     https_handler = SafeHTTPSHandler(safe_ip=safe_ip)
     redirect_handler = SafeRedirectHandler()
-    return urllib.request.build_opener(http_handler, https_handler, redirect_handler)
+    opener = urllib.request.build_opener(http_handler, https_handler, redirect_handler)
+    opener.safe_ip = safe_ip
+    return opener
 
 
 DEFAULT_FEED_FETCH_TIMEOUT = int(os.environ.get("FEED_FETCH_TIMEOUT", 20))
 
 
+def _build_http2_target(current_url, current_safe_ip):
+    """Constructs the pinned IP target URL, host header, and SNI hostname for HTTP/2 fetch."""
+    parsed = urlparse(current_url)
+    hostname = parsed.hostname
+    if not hostname or parsed.scheme not in ("http", "https"):
+        return None
+
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    target_host = f"[{current_safe_ip}]" if ":" in current_safe_ip else current_safe_ip
+    req_url = f"{parsed.scheme}://{target_host}:{port}{parsed.path or '/'}"
+    if parsed.query:
+        req_url += f"?{parsed.query}"
+
+    is_standard_port = (port == 80 and parsed.scheme == "http") or (port == 443 and parsed.scheme == "https")
+    host_header = hostname if is_standard_port else f"{hostname}:{port}"
+
+    headers = {
+        "Host": host_header,
+        "User-Agent": "SheepVibes/1.0",
+        "Accept-Encoding": "identity",
+    }
+    return req_url, headers, hostname, parsed.scheme
+
+
+def _read_http2_response_stream(response, feed_url):
+    """Streams and validates HTTP/2 response body against size limits and zip bombs."""
+    content_length = response.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                logger.warning(
+                    "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                    _sanitize_for_log(content_length),
+                    MAX_FEED_RESPONSE_BYTES,
+                    _sanitize_for_log(feed_url),
+                )
+                return None
+        except (ValueError, TypeError):
+            pass
+
+    chunks = []
+    total = 0
+    for chunk in response.iter_bytes():
+        total += len(chunk)
+        if total > MAX_FEED_RESPONSE_BYTES:
+            logger.warning(
+                "Feed rejected: Response size exceeds limit (%s) for %s",
+                MAX_FEED_RESPONSE_BYTES,
+                _sanitize_for_log(feed_url),
+            )
+            return None
+        chunks.append(chunk)
+
+    content = b"".join(chunks)
+    if content.startswith(b"\x1f\x8b"):
+        logger.warning(
+            "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+            _sanitize_for_log(feed_url),
+        )
+        return None
+
+    return content
+
+
+def _execute_http2_request(client, req_url, headers, hostname, scheme, feed_url):
+    """Executes a single HTTP/2 request and returns (content, redirect_location)."""
+    req = client.build_request("GET", req_url, headers=headers)
+    if scheme == "https":
+        req.extensions["sni_hostname"] = hostname
+
+    response = client.send(req, stream=True)
+    try:
+        if response.is_redirect:
+            return None, response.headers.get("location")
+
+        if response.status_code != 200:
+            logger.warning(
+                "HTTP/2 fetch returned status %s for %s",
+                response.status_code,
+                _sanitize_for_log(feed_url),
+            )
+            return None, None
+
+        return _read_http2_response_stream(response, feed_url), None
+    finally:
+        response.close()
+
+
+def _download_feed_content_http2(feed_url, safe_ip=None, max_redirects=5):
+    """Executes network request via HTTP/2 when server requires protocol upgrade (HTTP 426).
+
+    Pins connections to validated safe IPs and enforces SSL verification against hostname via SNI.
+    """
+    current_url = feed_url
+    current_safe_ip = safe_ip
+
+    for redirect_count in range(max_redirects + 1):
+        if not current_safe_ip:
+            current_safe_ip, _ = validate_and_resolve_url(current_url)
+            if not current_safe_ip:
+                logger.warning(
+                    "Blocked unsafe URL/redirect in HTTP/2 fetch: %s",
+                    _sanitize_for_log(current_url),
+                )
+                return None
+
+        target = _build_http2_target(current_url, current_safe_ip)
+        if not target:
+            return None
+        req_url, headers, hostname, scheme = target
+
+        try:
+            with httpx.Client(http2=True, timeout=DEFAULT_FEED_FETCH_TIMEOUT) as client:
+                content, redirect_loc = _execute_http2_request(
+                    client, req_url, headers, hostname, scheme, feed_url
+                )
+                if redirect_loc:
+                    if redirect_count >= max_redirects:
+                        logger.warning(
+                            "HTTP/2 fetch exceeded max redirects for %s",
+                            _sanitize_for_log(feed_url),
+                        )
+                        return None
+                    current_url = urljoin(current_url, redirect_loc)
+                    current_safe_ip = None
+                    continue
+
+                return content
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+            logger.warning(
+                "HTTP/2 fetch failed for %s: %s",
+                _sanitize_for_log(feed_url),
+                _sanitize_for_log(str(exc)),
+            )
+            return None
+
+    return None
+
+
 def _download_feed_content(opener, feed_url):
     """Executes the network request safely, enforcing size limits and basic zip bomb checks."""
+    safe_ip = getattr(opener, "safe_ip", None)
     try:
         req = urllib.request.Request(
             feed_url,
@@ -1469,6 +1612,20 @@ def _download_feed_content(opener, feed_url):
             return None
 
         return content
+
+    except urllib.error.HTTPError as exc:
+        if exc.code == 426:
+            logger.info(
+                "Feed %s returned HTTP 426 (Upgrade Required); retrying with HTTP/2",
+                _sanitize_for_log(feed_url),
+            )
+            return _download_feed_content_http2(feed_url, safe_ip=safe_ip)
+        logger.warning(
+            "Failed to fetch feed %s: %s",
+            _sanitize_for_log(feed_url),
+            _sanitize_for_log(str(exc)),
+        )
+        return None
 
     except (OSError, http.client.HTTPException) as exc:
         logger.warning(
