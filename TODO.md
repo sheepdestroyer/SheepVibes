@@ -2,6 +2,17 @@
 
 This document outlines the steps to build the SheepVibes RSS aggregator.
 
+## 2026-09-26 HTTP/2 Protocol Fallback on HTTP 426 Upgrade Required
+
+*   [x] **Fix: Resolve feed update failures when servers enforce HTTP/2 (HTTP 426 Upgrade Required):**
+    *   [x] Add `httpx[http2]>=0.28.1` to `backend/requirements.txt` to enable HTTP/2 protocol support with pure-Python dependencies (`h2`, `hpack`, `hyperframe`).
+    *   [x] Implement `_download_feed_content_http2(feed_url, safe_ip=None, max_redirects=5)` in `backend/feed_service.py` with strict SSRF prevention via IP pinning (`validate_and_resolve_url`), SNI validation (`sni_hostname`), streamed chunk size capping (`MAX_FEED_RESPONSE_BYTES`), and gzip bomb protection.
+    *   [x] Update `_download_feed_content()` to intercept `urllib.error.HTTPError` with code 426 ("Upgrade Required") and automatically retry with `_download_feed_content_http2()`, resolving feeds like `https://www.dumbingofage.com/feed/` that enforce HTTP/2.
+    *   [x] Attach validated `safe_ip` to urllib opener in `_build_safe_opener()` to avoid redundant DNS lookups while preserving 2-argument signature compatibility with test mocks.
+    *   [x] Add unit test suite in `tests/unit/test_http2_feed.py` covering fallback on HTTP 426, IP pinning, IPv6 bracket formatting, plain HTTP, redirect loops, size limits, gzip bombs, and network exceptions.
+    *   [x] Validate full test suite across Vitest frontend unit tests (70/70 passed), Pytest backend unit tests (322/322 passed), and Playwright E2E integration tests (23 passed, 1 skipped).
+    *   [x] Update documentation across `TODO.md` and `CHANGELOG.md`.
+
 ## 2026-09-14 Custom Feed Names Persistence & Reversion Prevention
 
 *   [x] **Fix: Prevent background updates and feed refreshes from reverting custom feed names:**
