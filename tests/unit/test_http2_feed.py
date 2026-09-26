@@ -461,3 +461,39 @@ def test_fetch_feed_end_to_end_with_426_fallback(mocker):
     assert feed.feed.title == "Dumbing of Age"
     assert len(feed.entries) == 1
     assert feed.entries[0].title == "Dozing"
+
+
+def test_download_feed_content_http2_custom_port(mocker):
+    """Test HTTP/2 fetch with non-standard port formats Host header with port."""
+    mock_response = MagicMock()
+    mock_response.is_redirect = False
+    mock_response.status_code = 200
+    mock_response.headers = {}
+    mock_response.iter_bytes.return_value = [b"<rss></rss>"]
+
+    mock_client = _create_mock_httpx_client()
+    mock_client.send.return_value = mock_response
+
+    captured_req = []
+
+    def fake_build_request(method, url, headers=None):
+        req = MagicMock()
+        req.extensions = {}
+        req.url = url
+        req.headers = headers or {}
+        captured_req.append(req)
+        return req
+
+    mock_client.build_request.side_effect = fake_build_request
+    mocker.patch("backend.feed_service.httpx.Client", return_value=mock_client)
+
+    result = feed_service._download_feed_content_http2(
+        "https://example.com:8443/feed",
+        safe_ip="93.184.216.34",
+    )
+
+    assert result == b"<rss></rss>"
+    assert len(captured_req) == 1
+    assert captured_req[0].url == "https://93.184.216.34:8443/feed"
+    assert captured_req[0].headers["Host"] == "example.com:8443"
+    assert captured_req[0].extensions.get("sni_hostname") == "example.com"

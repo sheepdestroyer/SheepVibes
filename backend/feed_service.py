@@ -1418,8 +1418,95 @@ def _build_safe_opener(safe_ip):
 DEFAULT_FEED_FETCH_TIMEOUT = int(os.environ.get("FEED_FETCH_TIMEOUT", 20))
 
 
+def _build_http2_target(current_url, current_safe_ip):
+    """Constructs the pinned IP target URL, host header, and SNI hostname for HTTP/2 fetch."""
+    parsed = urlparse(current_url)
+    hostname = parsed.hostname
+    if not hostname or parsed.scheme not in ("http", "https"):
+        return None
+
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    target_host = f"[{current_safe_ip}]" if ":" in current_safe_ip else current_safe_ip
+    req_url = f"{parsed.scheme}://{target_host}:{port}{parsed.path or '/'}"
+    if parsed.query:
+        req_url += f"?{parsed.query}"
+
+    is_standard_port = (port == 80 and parsed.scheme == "http") or (port == 443 and parsed.scheme == "https")
+    host_header = hostname if is_standard_port else f"{hostname}:{port}"
+
+    headers = {
+        "Host": host_header,
+        "User-Agent": "SheepVibes/1.0",
+        "Accept-Encoding": "identity",
+    }
+    return req_url, headers, hostname, parsed.scheme
+
+
+def _read_http2_response_stream(response, feed_url):
+    """Streams and validates HTTP/2 response body against size limits and zip bombs."""
+    content_length = response.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_FEED_RESPONSE_BYTES:
+                logger.warning(
+                    "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
+                    _sanitize_for_log(content_length),
+                    MAX_FEED_RESPONSE_BYTES,
+                    _sanitize_for_log(feed_url),
+                )
+                return None
+        except (ValueError, TypeError):
+            pass
+
+    chunks = []
+    total = 0
+    for chunk in response.iter_bytes():
+        total += len(chunk)
+        if total > MAX_FEED_RESPONSE_BYTES:
+            logger.warning(
+                "Feed rejected: Response size exceeds limit (%s) for %s",
+                MAX_FEED_RESPONSE_BYTES,
+                _sanitize_for_log(feed_url),
+            )
+            return None
+        chunks.append(chunk)
+
+    content = b"".join(chunks)
+    if content.startswith(b"\x1f\x8b"):
+        logger.warning(
+            "Feed rejected: Compressed content detected (Zip Bomb protection) for %s",
+            _sanitize_for_log(feed_url),
+        )
+        return None
+
+    return content
+
+
+def _execute_http2_request(client, req_url, headers, hostname, scheme, feed_url):
+    """Executes a single HTTP/2 request and returns (content, redirect_location)."""
+    req = client.build_request("GET", req_url, headers=headers)
+    if scheme == "https":
+        req.extensions["sni_hostname"] = hostname
+
+    response = client.send(req, stream=True)
+    try:
+        if response.is_redirect:
+            return None, response.headers.get("location")
+
+        if response.status_code != 200:
+            logger.warning(
+                "HTTP/2 fetch returned status %s for %s",
+                response.status_code,
+                _sanitize_for_log(feed_url),
+            )
+            return None, None
+
+        return _read_http2_response_stream(response, feed_url), None
+    finally:
+        response.close()
+
+
 def _download_feed_content_http2(feed_url, safe_ip=None, max_redirects=5):
-    # pylint: disable=too-many-locals,too-many-return-statements,too-many-branches,too-many-statements
     """Executes network request via HTTP/2 when server requires protocol upgrade (HTTP 426).
 
     Pins connections to validated safe IPs and enforces SSL verification against hostname via SNI.
@@ -1437,93 +1524,28 @@ def _download_feed_content_http2(feed_url, safe_ip=None, max_redirects=5):
                 )
                 return None
 
-        parsed = urlparse(current_url)
-        hostname = parsed.hostname
-        if not hostname or parsed.scheme not in ("http", "https"):
+        target = _build_http2_target(current_url, current_safe_ip)
+        if not target:
             return None
-
-        port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        target_host = f"[{current_safe_ip}]" if ":" in current_safe_ip else current_safe_ip
-        req_url = f"{parsed.scheme}://{target_host}:{port}{parsed.path or '/'}"
-        if parsed.query:
-            req_url += f"?{parsed.query}"
-
-        headers = {
-            "Host": hostname,
-            "User-Agent": "SheepVibes/1.0",
-            "Accept-Encoding": "identity",
-        }
+        req_url, headers, hostname, scheme = target
 
         try:
             with httpx.Client(http2=True, timeout=DEFAULT_FEED_FETCH_TIMEOUT) as client:
-                req = client.build_request("GET", req_url, headers=headers)
-                if parsed.scheme == "https":
-                    req.extensions["sni_hostname"] = hostname
-
-                response = client.send(req, stream=True)
-                try:
-                    if response.is_redirect:
-                        if redirect_count >= max_redirects:
-                            logger.warning(
-                                "HTTP/2 fetch exceeded max redirects for %s",
-                                _sanitize_for_log(feed_url),
-                            )
-                            return None
-                        location = response.headers.get("location")
-                        if not location:
-                            return None
-                        current_url = urljoin(current_url, location)
-                        current_safe_ip = None
-                        continue
-
-                    if response.status_code != 200:
+                content, redirect_loc = _execute_http2_request(
+                    client, req_url, headers, hostname, scheme, feed_url
+                )
+                if redirect_loc:
+                    if redirect_count >= max_redirects:
                         logger.warning(
-                            "HTTP/2 fetch returned status %s for %s",
-                            response.status_code,
+                            "HTTP/2 fetch exceeded max redirects for %s",
                             _sanitize_for_log(feed_url),
                         )
                         return None
+                    current_url = urljoin(current_url, redirect_loc)
+                    current_safe_ip = None
+                    continue
 
-                    content_length = response.headers.get("content-length")
-                    if content_length:
-                        try:
-                            if int(content_length) > MAX_FEED_RESPONSE_BYTES:
-                                logger.warning(
-                                    "Feed rejected: Content-Length (%s) exceeds limit (%s) for %s",
-                                    _sanitize_for_log(content_length),
-                                    MAX_FEED_RESPONSE_BYTES,
-                                    _sanitize_for_log(feed_url),
-                                )
-                                return None
-                        except (ValueError, TypeError):
-                            pass
-
-                    chunks = []
-                    total = 0
-                    for chunk in response.iter_bytes():
-                        total += len(chunk)
-                        if total > MAX_FEED_RESPONSE_BYTES:
-                            logger.warning(
-                                "Feed rejected: Response size exceeds limit (%s) for %s",
-                                MAX_FEED_RESPONSE_BYTES,
-                                _sanitize_for_log(feed_url),
-                            )
-                            return None
-                        chunks.append(chunk)
-                    content = b"".join(chunks)
-
-                    if content.startswith(b"\x1f\x8b"):
-                        logger.warning(
-                            "Feed rejected: Compressed content detected (Zip Bomb protection) "
-                            "for %s",
-                            _sanitize_for_log(feed_url),
-                        )
-                        return None
-
-                    return content
-                finally:
-                    response.close()
-
+                return content
         except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
             logger.warning(
                 "HTTP/2 fetch failed for %s: %s",
