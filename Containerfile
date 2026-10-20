@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 # Set environment variables to prevent Python from writing .pyc files and to run in unbuffered mode
 ENV PYTHONUNBUFFERED=1 \
