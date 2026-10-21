@@ -750,3 +750,18 @@ def test_feeds_blueprint_get_feed_metadata_fallbacks_on_bridge_error():
         feed_name, _, _ = _get_feed_metadata("https://example.com/failed.xml")
         assert feed_name == "https://example.com/failed.xml"
 
+
+
+def test_pod_ephemeral_port_range_off_host_range():
+    """Verifies the pod moves its ephemeral ports off the host's range (32768-60999).
+
+    pasta binds each outbound UDP flow on the host with the container's source port;
+    a port already held by a host-network process makes the bind fail and the
+    datagram (usually a DNS query) is dropped. Quadlet [Pod] has no Sysctl= key,
+    so the sysctl goes through PodmanArgs.
+    """
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    pod_file = os.path.join(project_root, "pod", "sheepvibespod.pod")
+    with open(pod_file, "r", encoding="utf-8") as f:
+        content = f.read()
+    assert 'PodmanArgs="--sysctl=net.ipv4.ip_local_port_range=62000 65000"' in content
