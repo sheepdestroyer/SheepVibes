@@ -764,4 +764,4 @@ def test_pod_ephemeral_port_range_off_host_range():
     pod_file = os.path.join(project_root, "pod", "sheepvibespod.pod")
     with open(pod_file, "r", encoding="utf-8") as f:
         content = f.read()
-    assert 'PodmanArgs="--sysctl=net.ipv4.ip_local_port_range=62000 65000"' in content
+    assert 'PodmanArgs="--sysctl=net.ipv4.ip_local_port_range=62000 65001"' in content
